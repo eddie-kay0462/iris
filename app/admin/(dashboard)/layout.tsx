@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { Header } from "./components/Header";
-import { Sidebar } from "./components/Sidebar";
+import { Header } from "../components/Header";
+import { Sidebar } from "../components/Sidebar";
 
 type AdminLayoutProps = {
   children: ReactNode;

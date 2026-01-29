@@ -1,4 +1,4 @@
-import { StatsCard } from "./components/StatsCard";
+import { StatsCard } from "../components/StatsCard";
 
 const stats = [
   { label: "Total sales", value: "$24,120" },

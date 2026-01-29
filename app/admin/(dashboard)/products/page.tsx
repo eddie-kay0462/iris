@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { DataTable } from "../components/DataTable";
+import { DataTable } from "../../components/DataTable";
 
 const columns = [
   { key: "name", header: "Product" },
