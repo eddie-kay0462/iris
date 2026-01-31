@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Iris
+
+E-commerce platform with an "Inner Circle" subscription membership tier.
+
+## Tech Stack
+
+- **Framework:** Next.js 16 (App Router) + React 19 + TypeScript
+- **Database/Auth:** Supabase (PostgreSQL)
+- **State:** Zustand + React Query
+- **Forms:** React Hook Form + Zod
+- **Payments:** Paystack
+- **SMS:** Termii API
+- **Styling:** Tailwind CSS 4
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev      # Start development server at localhost:3000
+npm run build    # Production build
+npm run lint     # Run ESLint
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SMS_PROVIDER_API_KEY=
+SMS_SENDER_ID=
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Architecture
 
-## Learn More
+### Route Groups
 
-To learn more about Next.js, take a look at the following resources:
+| Route Group | Purpose |
+|-------------|---------|
+| `app/(auth)/` | User authentication (login, signup) |
+| `app/(dashboard)/` | Customer dashboard (inner-circle, waitlist) |
+| `app/(shop)/` | Shop pages (products, cart, checkout) |
+| `app/admin/(auth)/` | Admin login |
+| `app/admin/(dashboard)/` | Admin management panel |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Supabase Clients
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Three client patterns in `lib/supabase/`:
 
-## Deploy on Vercel
+- `client.ts` - Browser client for client components
+- `server.ts` - Server client for Server Components and Route Handlers
+- `middleware.ts` - Auth cookie management
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Database Schema
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Key tables in `types/database.types.ts`:
+
+- `profiles` - Users with subscription info
+- `products` - Dual pricing (`public_price`, `inner_circle_price`)
+- `orders` / `order_items` - Order management
+- `waitlist` - Inner Circle waitlist with priority scoring
+- `inner_circle_invitations` - Invitation tokens
+
+### External Integrations
+
+- **Paystack** - Webhook at `app/api/webhooks/paystack/route.ts`
+- **Termii SMS** - Templates in `lib/sms/termii.ts`
