@@ -4,11 +4,20 @@ E-commerce platform with an "Inner Circle" subscription membership tier.
 
 ## Repository Layout
 
-- `apps/frontend` - Next.js UI app
-- `apps/backend` - API/services app
- 
-Current Next.js code is still at the repo root and can be moved into
-`apps/frontend` as the split progresses.
+```
+iris/
+├── apps/
+│   ├── frontend/     # Next.js UI app
+│   │   ├── app/      # App Router pages
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── lib/
+│   │   ├── store/
+│   │   └── types/
+│   └── backend/      # API/services
+│       └── db/       # Database schemas
+└── README.md
+```
 
 ## Tech Stack
 
@@ -23,6 +32,7 @@ Current Next.js code is still at the repo root and can be moved into
 ## Getting Started
 
 ```bash
+cd apps/frontend
 npm install
 npm run dev      # Start development server at localhost:3000
 npm run build    # Production build
@@ -44,15 +54,17 @@ SMS_SENDER_ID=
 
 | Route Group | Purpose |
 |-------------|---------|
-| `app/(auth)/` | User authentication (login, signup) |
-| `app/(dashboard)/` | Customer dashboard (inner-circle, waitlist) |
-| `app/(shop)/` | Shop pages (products, cart, checkout) |
-| `app/admin/(auth)/` | Admin login |
-| `app/admin/(dashboard)/` | Admin management panel |
+| `(auth)/` | User authentication (login, signup) |
+| `(dashboard)/` | Customer dashboard (inner-circle, waitlist) |
+| `(shop)/` | Shop pages (products, cart, checkout) |
+| `admin/(auth)/` | Admin login |
+| `admin/(dashboard)/` | Admin management panel |
+
+All routes are under `apps/frontend/app/`.
 
 ### Supabase Clients
 
-Three client patterns in `lib/supabase/`:
+Three client patterns in `apps/frontend/lib/supabase/`:
 
 - `client.ts` - Browser client for client components
 - `server.ts` - Server client for Server Components and Route Handlers
@@ -60,7 +72,7 @@ Three client patterns in `lib/supabase/`:
 
 ### Database Schema
 
-Key tables in `types/database.types.ts`:
+Key tables defined in `apps/frontend/types/database.types.ts`:
 
 - `profiles` - Users with subscription info
 - `products` - Dual pricing (`public_price`, `inner_circle_price`)
@@ -70,5 +82,5 @@ Key tables in `types/database.types.ts`:
 
 ### External Integrations
 
-- **Paystack** - Webhook at `app/api/webhooks/paystack/route.ts`
-- **Termii SMS** - Templates in `lib/sms/termii.ts`
+- **Paystack** - Webhook at `apps/frontend/app/api/webhooks/paystack/route.ts`
+- **Termii SMS** - Templates in `apps/frontend/lib/sms/termii.ts`
