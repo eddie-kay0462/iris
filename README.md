@@ -2,6 +2,14 @@
 
 E-commerce platform with an "Inner Circle" subscription membership tier.
 
+## Repository Layout
+
+- `apps/frontend` - Next.js UI app
+- `apps/backend` - API/services app
+ 
+Current Next.js code is still at the repo root and can be moved into
+`apps/frontend` as the split progresses.
+
 ## Tech Stack
 
 - **Framework:** Next.js 16 (App Router) + React 19 + TypeScript
