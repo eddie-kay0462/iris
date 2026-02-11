@@ -235,4 +235,49 @@ You should see all 27 tests pass.
 
 ---
 
+## Week 2, Day 1 (Feb 2025)
+
+### What Got Done
+
+**Fixed two major issues: slow admin dashboard and customer login flow.**
+
+1. **Admin dashboard was unreasonably slow** — Every time you clicked a sidebar link, it took 1-2 seconds to navigate. The root cause: the proxy (middleware) was making **two network round-trips to Supabase on every page navigation** — one to verify the auth token, and another to query the `profiles` table for the user's role. We fixed this by caching the role in a short-lived HttpOnly cookie (`x-iris-role`, 5-minute TTL). Now only the first navigation after login hits the database; subsequent clicks read the role from the cookie.
+
+2. **Customer login was sending magic links instead of OTP codes** — The login page UI asks the user to enter a 6-digit code, but Supabase was emailing a clickable link instead. This was a **Supabase dashboard configuration issue**, not a code issue. The fix: in Supabase Dashboard → Authentication → Email Templates, replace `{{ .ConfirmationURL }}` with `{{ .Token }}` in both the **Confirm signup** and **Magic Link** templates.
+
+3. **Customer OTP login flow verified working** — Tested the full flow: enter email → receive OTP code → enter code → land on `/products`. Works end-to-end.
+
+### Files Modified
+
+- `apps/frontend/lib/supabase/proxy.ts` — Added role caching in a cookie to eliminate the DB query on every navigation
+- `apps/frontend/app/api/auth/admin/logout/route.ts` — Clears the role cookie on admin logout
+- `apps/frontend/app/api/auth/logout/route.ts` — Clears the role cookie on customer logout
+
+### Supabase Dashboard Changes (Not in Code)
+
+**Someone on the team needs to do this if setting up a new environment:**
+
+1. Go to **Authentication → Configuration → Email Templates**
+2. In both the **Confirm signup** and **Magic Link** templates, replace `{{ .ConfirmationURL }}` with `{{ .Token }}`
+3. Example template:
+   ```html
+   <h2>Your verification code</h2>
+   <p>Enter this code to continue:</p>
+   <h1>{{ .Token }}</h1>
+   <p>This code expires in 1 hour.</p>
+   ```
+
+### Something Not Working?
+
+**Admin pages still slow after this update** — Clear your cookies or open an incognito window. The old session may not have the role cookie yet; it gets set on the first navigation.
+
+**Customer login still sends a link instead of a code** — You need to update both email templates in the Supabase dashboard (see above). This is a dashboard setting, not a code change.
+
+### Next Up
+
+- Build out the `/products` page (customer-facing product browsing)
+- Week 2: Products & Inventory API
+
+---
+
 *Last updated: February 2025*

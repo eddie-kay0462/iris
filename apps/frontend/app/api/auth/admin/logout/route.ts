@@ -25,7 +25,10 @@ export async function POST() {
       );
     }
 
-    return NextResponse.json({ success: true });
+    const res = NextResponse.json({ success: true });
+    // Clear cached role cookie
+    res.cookies.delete("x-iris-role");
+    return res;
   } catch (error) {
     console.error("Admin logout error:", error);
     return NextResponse.json(
