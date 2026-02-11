@@ -142,14 +142,7 @@ supabase --version
    npm run db:link
    ```
 
-**Step 4: Apply migrations.**
-
-The migration for the profile INSERT policy needs to be applied:
-```bash
-npm run db:push
-```
-
-**Step 5: Start the server and run the tests.**
+**Step 4: Start the server and run the tests.**
 
 ```bash
 # Terminal 1: Start the dev server
@@ -163,14 +156,22 @@ bash scripts/test-auth-api.sh
 
 You should see 16 tests pass.
 
-### Supabase CLI Commands Reference
+### About Database Migrations
 
-For future reference, here are the migration commands:
+**You probably don't need to do anything.** Migrations are applied once to the shared Supabase database, not by every developer. If someone already ran `db:push`, the database is ready.
+
+The CLI is only needed when:
+- You're **creating** a new migration (`npm run db:new my_change`)
+- You need to **apply** new migrations that someone else created and hasn't pushed yet
+
+Commands for reference:
 ```bash
-npm run db:push:dry   # Preview what would be applied
-npm run db:push       # Apply migrations to remote database
-npm run db:new xyz    # Create a new migration file called xyz
+npm run db:push:dry   # Preview what would be applied (if anything)
+npm run db:push       # Apply any pending migrations
+npm run db:new xyz    # Create a new migration file
 ```
+
+If you run `db:push` and everything is already applied, it just says "nothing to do."
 
 ### What the Test Script Checks
 
@@ -198,21 +199,14 @@ If any test fails, the script will show you exactly what went wrong.
 
 ### Something Not Working?
 
-**"supabase: command not found"** — You need to install the Supabase CLI. See Step 2 above.
-
-**"You need to be logged in"** or **"Not logged in"** when running migrations — Your access token isn't loaded. Run:
-```bash
-set -a && source .env.local && set +a
-```
-Then try again.
-
-**"Project ref is required"** — The project isn't linked. Run `npm run db:link` first.
-
-**"new row violates row-level security policy"** — The migration hasn't been applied. Run `npm run db:push`.
-
-**Profile not being created during signup** — Same issue. Run `npm run db:push`.
-
 **"Authentication required" on profile route** — You need to be logged in. Make sure your login request succeeded and you're including cookies in your curl request (`-b cookies.txt`).
+
+**"new row violates row-level security policy"** — This would only happen if someone added a new migration file but didn't push it to the database. Check if there are pending migrations with `npm run db:push:dry`.
+
+**Supabase CLI issues** (only relevant if you're working with migrations):
+- **"supabase: command not found"** — Install the CLI (see Step 2)
+- **"Not logged in"** — Load your token: `set -a && source .env.local && set +a`
+- **"Project ref is required"** — Link the project: `npm run db:link`
 
 ### Next Up
 
