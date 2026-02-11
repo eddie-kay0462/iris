@@ -521,6 +521,7 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "phone_number" "text",
     "first_name" "text",
     "last_name" "text",
+    "role" "public"."user_role" DEFAULT 'public'::"public"."user_role",
     "email_notifications" boolean DEFAULT true,
     "sms_notifications" boolean DEFAULT false,
     "created_at" timestamp with time zone DEFAULT "now"(),

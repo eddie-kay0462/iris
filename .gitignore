@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code & Planning
+CLAUDE.md
+FORDAVID.md
+PLAN_FOR_DAVID.md
+PROGRESS.md
