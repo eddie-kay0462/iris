@@ -168,4 +168,71 @@ Just like how you can already test admin login at `/admin/login`.
 
 ---
 
+## Week 1, Day 5 (Feb 2025)
+
+### What Got Done
+
+**Verified the permissions system works.** We ran 27 tests to confirm that admins, managers, staff, and customers all have exactly the access they should—no more, no less.
+
+### Want to Test It Yourself?
+
+Two steps:
+
+**1. Create test users (one-time):**
+```bash
+cd apps/frontend
+set -a && source .env.local && set +a && npx tsx scripts/setup-rbac-test-users.ts
+```
+
+**2. Run the tests:**
+```bash
+# Terminal 1 - start the server
+npm run dev
+
+# Terminal 2 - run the tests
+bash scripts/test-rbac.sh
+```
+
+You should see all 27 tests pass.
+
+### Test Accounts
+
+| Email | Role | Password |
+|-------|------|----------|
+| `admin@iris.test` | admin | `TestUser123!` |
+| `manager@iris.test` | manager | `TestUser123!` |
+| `staff@iris.test` | staff | `TestUser123!` |
+| `customer@iris.test` | public | `TestUser123!` |
+
+### Files Created
+
+- `apps/frontend/scripts/setup-rbac-test-users.ts` — Creates all test users
+- `apps/frontend/scripts/test-rbac.sh` — Runs the test suite
+- `apps/frontend/app/api/test/rbac/*/route.ts` — Test endpoints (5 files)
+
+### What's Missing
+
+- **Test endpoints are dev-only** — The `/api/test/rbac/*` routes should be removed before production. They exist purely to verify RBAC works.
+- **No CI integration** — Tests run manually. No automated testing on push yet.
+- **Manual browser verification** — To test in a browser, you'd need to log in as each user and try accessing different pages.
+
+### Something Not Working?
+
+**"User not found" errors** — Run the setup script to create test users.
+
+**Tests failing with 401** — Make sure the dev server is running and test users were created.
+
+**Tests failing with 500** — Check the dev server console for error details.
+
+### Next Up
+
+**Week 1 is complete!** We now have:
+- Admin authentication (login/logout)
+- Customer authentication (signup/login/logout/password reset)
+- RBAC permissions system (verified with 27 tests)
+
+**Week 2: Products & Inventory API** — Building the endpoints for managing products, categories, and inventory.
+
+---
+
 *Last updated: February 2025*
