@@ -74,77 +74,96 @@ set -a && source .env.local && set +a && npx tsx scripts/setup-admin-test.ts
 
 ### What Got Done
 
-**Built the customer authentication API.** Here's what we added:
+**Built the customer authentication API.** The backend is ready — you can create accounts, log in, manage profiles, and reset passwords. All through API endpoints:
 
-1. **User signup** (`/api/auth/signup`) — New users can create accounts with email and password. Also stores their name and optional phone number.
+- **Signup** (`POST /api/auth/signup`) — Create an account with email and password
+- **Login** (`POST /api/auth/login`) — Log in and get a session
+- **Logout** (`POST /api/auth/logout`) — End your session
+- **Password reset** (`POST /api/auth/reset-password`) — Request a reset email
+- **Profile** (`GET/PUT /api/profile`) — View and update your profile
 
-2. **User login** (`/api/auth/login`) — Returns the user's info including their role. Sets the session cookie so they stay logged in.
+### The API Works — Here's Proof
 
-3. **User logout** (`/api/auth/logout`) — Signs out the current user. Works for both regular users and admins.
+We wrote a test script that checks everything. It runs **16 tests** covering:
 
-4. **Password reset** (`/api/auth/reset-password`) — Sends a password reset email. Security feature: always returns success (doesn't reveal if email exists).
+- Signup with valid data works
+- Signup rejects bad emails and weak passwords
+- Login works with correct credentials
+- Login rejects wrong passwords
+- Profile is protected (must be logged in to access)
+- Profile updates work
+- Users can't change their own role (security check)
+- Logout clears the session
 
-5. **Auth callback** (`/api/auth/callback`) — Handles redirects from Supabase after email confirmation or password reset.
-
-6. **Profile management** (`/api/profile`) — GET to read your profile, PUT to update it. Protected route — only works when logged in.
-
-### Files Created
-
-- `apps/frontend/app/api/auth/signup/route.ts` — User registration
-- `apps/frontend/app/api/auth/login/route.ts` — User login
-- `apps/frontend/app/api/auth/logout/route.ts` — User logout
-- `apps/frontend/app/api/auth/reset-password/route.ts` — Password reset request
-- `apps/frontend/app/api/auth/callback/route.ts` — Auth redirect handler
-- `apps/frontend/app/api/profile/route.ts` — Profile GET/PUT
-- `apps/frontend/scripts/test-auth-api.sh` — Test script
-
-### Want to Verify It Works?
-
-**Prerequisites:** You need `.env.local` set up from Day 1-2. If you don't have that yet, go back and do that first.
-
-**Run the tests:**
+**To run the tests yourself:**
 ```bash
-# Terminal 1: Start the dev server
+# Terminal 1 — start the server
 cd apps/frontend
 npm run dev
 
-# Terminal 2: Run the test script
+# Terminal 2 — run the tests
 cd apps/frontend
 bash scripts/test-auth-api.sh
 ```
 
-You should see **16 tests pass**. That's it — the auth API is working.
+You should see all 16 tests pass.
 
-### What the Tests Cover
+**Want to understand exactly what's being tested?** Open `apps/frontend/scripts/test-auth-api.sh` in your editor. It's written to be readable — each test shows the API call being made and what response we expect. You can trace through the logic to see exactly what's happening.
 
-- Signup with valid/invalid data
-- Login with correct/wrong credentials
-- Profile access with/without authentication
-- Profile updates (and verifies you can't escalate your own role)
-- Password reset flow
-- Logout and session invalidation
+### What's Missing: The UI
 
-### API Quick Reference
+**There's no way to test this in a browser yet.**
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/auth/signup` | POST | Create new user |
-| `/api/auth/login` | POST | Log in existing user |
-| `/api/auth/logout` | POST | Sign out current user |
+Unlike the admin login (which has a real page at `/admin/login`), the customer auth doesn't have UI pages connected to these API routes:
+
+- The `/signup` page is just a placeholder
+- The `/login` page exists but uses OTP codes, not email/password
+
+**Someone needs to build:**
+1. A signup page with email/password fields that calls `POST /api/auth/signup`
+2. A login page (or update the existing one) that calls `POST /api/auth/login`
+3. A profile page that calls `GET /api/profile` and `PUT /api/profile`
+
+Once those pages exist, testing becomes simple:
+- Go to `/signup`, create an account
+- Go to `/login`, log in
+- See your profile, update it
+- Log out
+
+Just like how you can already test admin login at `/admin/login`.
+
+**The API is ready and waiting. It just needs a face.**
+
+### Files Created
+
+- `apps/frontend/app/api/auth/signup/route.ts`
+- `apps/frontend/app/api/auth/login/route.ts`
+- `apps/frontend/app/api/auth/logout/route.ts`
+- `apps/frontend/app/api/auth/reset-password/route.ts`
+- `apps/frontend/app/api/auth/callback/route.ts`
+- `apps/frontend/app/api/profile/route.ts`
+- `apps/frontend/scripts/test-auth-api.sh`
+
+### API Reference
+
+| Endpoint | Method | What it does |
+|----------|--------|--------------|
+| `/api/auth/signup` | POST | Create a new account |
+| `/api/auth/login` | POST | Log in |
+| `/api/auth/logout` | POST | Log out |
 | `/api/auth/reset-password` | POST | Request password reset email |
-| `/api/auth/callback` | GET | Handle Supabase redirects |
-| `/api/profile` | GET | Get current user's profile |
-| `/api/profile` | PUT | Update current user's profile |
+| `/api/profile` | GET | Get your profile |
+| `/api/profile` | PUT | Update your profile |
 
 ### Something Not Working?
 
 **Tests failing with connection errors** — Make sure the dev server is running in another terminal.
 
-**"Authentication required" on profile route** — The login step failed. Check the test output to see what went wrong with login.
+**Tests failing for other reasons** — Check the test output. It shows exactly which test failed and why.
 
 ### Next Up
 
-- Week 1, Day 5: Test the full auth flow end-to-end
+- Build the signup/login UI pages to connect to this API
 - Week 2: Start building Products & Inventory API
 
 ---
