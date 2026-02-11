@@ -56,22 +56,123 @@ Head to http://localhost:3000/admin/login, enter the test credentials, and you s
 
 ### Something Not Working?
 
-**"Role column does not exist"** — Your database is missing the role column. Just re-run the schema file in SQL Editor and it'll add what's missing.
+**"Role column does not exist"** — Your database schema is outdated. Re-run `apps/backend/db/iris_new_schema.sql` in Supabase SQL Editor (this is for initial setup, not migrations).
 
-**"Permission denied for table profiles"** — Supabase needs permission to access the table. Run this in SQL Editor:
+**"Permission denied for table profiles"** — Run this in Supabase SQL Editor:
 ```sql
 GRANT ALL ON public.profiles TO authenticated, service_role, anon;
 ```
 
-**Scripts complaining about missing environment variables** — The script can't see your `.env.local` file. Load it first, then run the script:
+**Scripts complaining about missing environment variables** — Load the env file first:
 ```bash
 set -a && source .env.local && set +a && npx tsx scripts/setup-admin-test.ts
 ```
 
+---
+
+## Week 1, Day 3-4 (Feb 2025)
+
+### What Got Done
+
+**Built the customer authentication API.** Here's what we added:
+
+1. **User signup** (`/api/auth/signup`) — New users can create accounts with email and password. Also stores their name and optional phone number.
+
+2. **User login** (`/api/auth/login`) — Returns the user's info including their role. Sets the session cookie so they stay logged in.
+
+3. **User logout** (`/api/auth/logout`) — Signs out the current user. Works for both regular users and admins.
+
+4. **Password reset** (`/api/auth/reset-password`) — Sends a password reset email. Security feature: always returns success (doesn't reveal if email exists).
+
+5. **Auth callback** (`/api/auth/callback`) — Handles redirects from Supabase after email confirmation or password reset.
+
+6. **Profile management** (`/api/profile`) — GET to read your profile, PUT to update it. Protected route — only works when logged in.
+
+### Files Created
+
+- `apps/frontend/app/api/auth/signup/route.ts` — User registration
+- `apps/frontend/app/api/auth/login/route.ts` — User login
+- `apps/frontend/app/api/auth/logout/route.ts` — User logout
+- `apps/frontend/app/api/auth/reset-password/route.ts` — Password reset request
+- `apps/frontend/app/api/auth/callback/route.ts` — Auth redirect handler
+- `apps/frontend/app/api/profile/route.ts` — Profile GET/PUT
+- `apps/frontend/scripts/test-auth-api.sh` — Test script
+- `supabase/migrations/` — Database migrations (managed via CLI)
+
+### Also Set Up: Supabase CLI Migrations
+
+We set up proper database migrations using the Supabase CLI. No more pasting SQL into the web editor!
+
+**One-time setup** (if you haven't done this):
+```bash
+cd apps/frontend
+
+# Add your access token to .env.local (get one from https://supabase.com/dashboard/account/tokens)
+# SUPABASE_ACCESS_TOKEN=your_token_here
+
+# Link to the project
+npm run db:link
+```
+
+**Running migrations:**
+```bash
+# See what would be applied
+npm run db:push:dry
+
+# Apply migrations
+npm run db:push
+
+# Create a new migration
+npm run db:new my_migration_name
+```
+
+The migration for the profile INSERT policy has already been applied.
+
+### Testing the Auth API
+
+We created a test script that checks all the endpoints. Run it while the dev server is running:
+
+```bash
+cd apps/frontend
+npm run dev
+
+# In another terminal:
+bash scripts/test-auth-api.sh
+```
+
+The script tests 16 scenarios:
+- Login with valid/invalid credentials
+- Profile access with/without authentication
+- Profile updates (and verifies role can't be changed)
+- Password reset flow
+- Logout and session invalidation
+
+### API Quick Reference
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/signup` | POST | Create new user |
+| `/api/auth/login` | POST | Log in existing user |
+| `/api/auth/logout` | POST | Sign out current user |
+| `/api/auth/reset-password` | POST | Request password reset email |
+| `/api/auth/callback` | GET | Handle Supabase redirects |
+| `/api/profile` | GET | Get current user's profile |
+| `/api/profile` | PUT | Update current user's profile |
+
+### Something Not Working?
+
+**"new row violates row-level security policy"** — The migration hasn't been applied. Run `npm run db:push` from the frontend folder.
+
+**Profile not being created during signup** — Same issue. Run the migrations.
+
+**"Authentication required" on profile route** — You need to be logged in. Make sure your login request succeeded and you're including cookies.
+
+**Migration commands failing** — Make sure you've linked the project first with `npm run db:link`. You'll need your `SUPABASE_ACCESS_TOKEN` in `.env.local`.
+
 ### Next Up
 
-- Week 1, Day 3-4: Build the remaining auth API routes (signup, profile)
-- Week 1, Day 5: Hook up the frontend and verify the whole flow works
+- Week 1, Day 5: Test the full auth flow end-to-end
+- Week 2: Start building Products & Inventory API
 
 ---
 

@@ -1,9 +1,15 @@
-import { createBrowserClient } from "@supabase/auth-helpers-nextjs";
+import { createBrowserClient } from "@supabase/ssr";
 
 import type { Database } from "../../types/database.types";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-
+/**
+ * Create a Supabase client for use in Client Components.
+ *
+ * This follows the modern @supabase/ssr pattern for Next.js App Router.
+ * The browser client handles cookie management automatically.
+ */
 export const createClient = () =>
-  createBrowserClient<Database>(supabaseUrl, supabaseAnonKey);
+  createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
