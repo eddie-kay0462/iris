@@ -99,53 +99,90 @@ set -a && source .env.local && set +a && npx tsx scripts/setup-admin-test.ts
 - `apps/frontend/scripts/test-auth-api.sh` — Test script
 - `supabase/migrations/` — Database migrations (managed via CLI)
 
-### Also Set Up: Supabase CLI Migrations
+### Want to Test It Yourself?
 
-We set up proper database migrations using the Supabase CLI. No more pasting SQL into the web editor!
+**Step 1: Make sure you have the basics from Day 1-2.**
 
-**One-time setup** (if you haven't done this):
+You need `.env.local` in `apps/frontend/` with your Supabase credentials. If you don't have this yet, go back to Day 1-2's setup instructions.
+
+**Step 2: Install the Supabase CLI.**
+
+We switched from pasting SQL in the web editor to using proper migrations. You'll need the Supabase CLI:
+
 ```bash
-cd apps/frontend
+# macOS
+brew install supabase/tap/supabase
 
-# Add your access token to .env.local (get one from https://supabase.com/dashboard/account/tokens)
-# SUPABASE_ACCESS_TOKEN=your_token_here
+# Windows (via scoop)
+scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+scoop install supabase
 
-# Link to the project
-npm run db:link
+# npm (works everywhere)
+npm install -g supabase
 ```
 
-**Running migrations:**
+Verify it's installed:
 ```bash
-# See what would be applied
-npm run db:push:dry
+supabase --version
+```
 
-# Apply migrations
+**Step 3: Get an access token and link the project.**
+
+1. Go to https://supabase.com/dashboard/account/tokens
+2. Click "Generate new token", give it a name like "iris-dev"
+3. Copy the token and add it to your `.env.local`:
+   ```
+   SUPABASE_ACCESS_TOKEN=your_token_here
+   ```
+
+4. Link to the project:
+   ```bash
+   cd apps/frontend
+   set -a && source .env.local && set +a
+   npm run db:link
+   ```
+
+**Step 4: Apply migrations.**
+
+The migration for the profile INSERT policy needs to be applied:
+```bash
 npm run db:push
-
-# Create a new migration
-npm run db:new my_migration_name
 ```
 
-The migration for the profile INSERT policy has already been applied.
-
-### Testing the Auth API
-
-We created a test script that checks all the endpoints. Run it while the dev server is running:
+**Step 5: Start the server and run the tests.**
 
 ```bash
+# Terminal 1: Start the dev server
 cd apps/frontend
 npm run dev
 
-# In another terminal:
+# Terminal 2: Run the auth API tests
+cd apps/frontend
 bash scripts/test-auth-api.sh
 ```
 
-The script tests 16 scenarios:
-- Login with valid/invalid credentials
+You should see 16 tests pass.
+
+### Supabase CLI Commands Reference
+
+For future reference, here are the migration commands:
+```bash
+npm run db:push:dry   # Preview what would be applied
+npm run db:push       # Apply migrations to remote database
+npm run db:new xyz    # Create a new migration file called xyz
+```
+
+### What the Test Script Checks
+
+The `scripts/test-auth-api.sh` script runs 16 tests:
+- Signup with valid/invalid data
+- Login with correct/wrong credentials
 - Profile access with/without authentication
-- Profile updates (and verifies role can't be changed)
+- Profile updates (and verifies you can't change your own role)
 - Password reset flow
 - Logout and session invalidation
+
+If any test fails, the script will show you exactly what went wrong.
 
 ### API Quick Reference
 
@@ -161,13 +198,21 @@ The script tests 16 scenarios:
 
 ### Something Not Working?
 
-**"new row violates row-level security policy"** — The migration hasn't been applied. Run `npm run db:push` from the frontend folder.
+**"supabase: command not found"** — You need to install the Supabase CLI. See Step 2 above.
 
-**Profile not being created during signup** — Same issue. Run the migrations.
+**"You need to be logged in"** or **"Not logged in"** when running migrations — Your access token isn't loaded. Run:
+```bash
+set -a && source .env.local && set +a
+```
+Then try again.
 
-**"Authentication required" on profile route** — You need to be logged in. Make sure your login request succeeded and you're including cookies.
+**"Project ref is required"** — The project isn't linked. Run `npm run db:link` first.
 
-**Migration commands failing** — Make sure you've linked the project first with `npm run db:link`. You'll need your `SUPABASE_ACCESS_TOKEN` in `.env.local`.
+**"new row violates row-level security policy"** — The migration hasn't been applied. Run `npm run db:push`.
+
+**Profile not being created during signup** — Same issue. Run `npm run db:push`.
+
+**"Authentication required" on profile route** — You need to be logged in. Make sure your login request succeeded and you're including cookies in your curl request (`-b cookies.txt`).
 
 ### Next Up
 
