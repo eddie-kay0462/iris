@@ -97,93 +97,32 @@ set -a && source .env.local && set +a && npx tsx scripts/setup-admin-test.ts
 - `apps/frontend/app/api/auth/callback/route.ts` — Auth redirect handler
 - `apps/frontend/app/api/profile/route.ts` — Profile GET/PUT
 - `apps/frontend/scripts/test-auth-api.sh` — Test script
-- `supabase/migrations/` — Database migrations (managed via CLI)
 
-### Want to Test It Yourself?
+### Want to Verify It Works?
 
-**Step 1: Make sure you have the basics from Day 1-2.**
+**Prerequisites:** You need `.env.local` set up from Day 1-2. If you don't have that yet, go back and do that first.
 
-You need `.env.local` in `apps/frontend/` with your Supabase credentials. If you don't have this yet, go back to Day 1-2's setup instructions.
-
-**Step 2: Install the Supabase CLI.**
-
-We switched from pasting SQL in the web editor to using proper migrations. You'll need the Supabase CLI:
-
-```bash
-# macOS
-brew install supabase/tap/supabase
-
-# Windows (via scoop)
-scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
-scoop install supabase
-
-# npm (works everywhere)
-npm install -g supabase
-```
-
-Verify it's installed:
-```bash
-supabase --version
-```
-
-**Step 3: Get an access token and link the project.**
-
-1. Go to https://supabase.com/dashboard/account/tokens
-2. Click "Generate new token", give it a name like "iris-dev"
-3. Copy the token and add it to your `.env.local`:
-   ```
-   SUPABASE_ACCESS_TOKEN=your_token_here
-   ```
-
-4. Link to the project:
-   ```bash
-   cd apps/frontend
-   set -a && source .env.local && set +a
-   npm run db:link
-   ```
-
-**Step 4: Start the server and run the tests.**
-
+**Run the tests:**
 ```bash
 # Terminal 1: Start the dev server
 cd apps/frontend
 npm run dev
 
-# Terminal 2: Run the auth API tests
+# Terminal 2: Run the test script
 cd apps/frontend
 bash scripts/test-auth-api.sh
 ```
 
-You should see 16 tests pass.
+You should see **16 tests pass**. That's it — the auth API is working.
 
-### About Database Migrations
+### What the Tests Cover
 
-**You probably don't need to do anything.** Migrations are applied once to the shared Supabase database, not by every developer. If someone already ran `db:push`, the database is ready.
-
-The CLI is only needed when:
-- You're **creating** a new migration (`npm run db:new my_change`)
-- You need to **apply** new migrations that someone else created and hasn't pushed yet
-
-Commands for reference:
-```bash
-npm run db:push:dry   # Preview what would be applied (if anything)
-npm run db:push       # Apply any pending migrations
-npm run db:new xyz    # Create a new migration file
-```
-
-If you run `db:push` and everything is already applied, it just says "nothing to do."
-
-### What the Test Script Checks
-
-The `scripts/test-auth-api.sh` script runs 16 tests:
 - Signup with valid/invalid data
 - Login with correct/wrong credentials
 - Profile access with/without authentication
-- Profile updates (and verifies you can't change your own role)
+- Profile updates (and verifies you can't escalate your own role)
 - Password reset flow
 - Logout and session invalidation
-
-If any test fails, the script will show you exactly what went wrong.
 
 ### API Quick Reference
 
@@ -199,14 +138,9 @@ If any test fails, the script will show you exactly what went wrong.
 
 ### Something Not Working?
 
-**"Authentication required" on profile route** — You need to be logged in. Make sure your login request succeeded and you're including cookies in your curl request (`-b cookies.txt`).
+**Tests failing with connection errors** — Make sure the dev server is running in another terminal.
 
-**"new row violates row-level security policy"** — This would only happen if someone added a new migration file but didn't push it to the database. Check if there are pending migrations with `npm run db:push:dry`.
-
-**Supabase CLI issues** (only relevant if you're working with migrations):
-- **"supabase: command not found"** — Install the CLI (see Step 2)
-- **"Not logged in"** — Load your token: `set -a && source .env.local && set +a`
-- **"Project ref is required"** — Link the project: `npm run db:link`
+**"Authentication required" on profile route** — The login step failed. Check the test output to see what went wrong with login.
 
 ### Next Up
 
