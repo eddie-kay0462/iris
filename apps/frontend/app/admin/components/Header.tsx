@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Menu } from "lucide-react";
+import { apiClient, clearToken } from "@/lib/api/client";
 
 type HeaderProps = {
   onMenuToggle?: () => void;
@@ -15,12 +16,12 @@ export function Header({ onMenuToggle }: HeaderProps) {
   async function handleLogout() {
     setLoggingOut(true);
     try {
-      const res = await fetch("/api/auth/admin/logout", { method: "POST" });
-      if (res.ok) {
-        router.push("/admin/login");
-      }
+      await apiClient("/auth/logout", { method: "POST" });
     } catch {
-      setLoggingOut(false);
+      // Ignore errors — clear token regardless
+    } finally {
+      clearToken();
+      router.push("/admin/login");
     }
   }
 

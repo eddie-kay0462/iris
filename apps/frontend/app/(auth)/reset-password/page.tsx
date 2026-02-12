@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { apiClient } from "@/lib/api/client";
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState("");
@@ -15,21 +16,14 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/reset-password", {
+      await apiClient("/auth/reset-password", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: { email },
       });
 
-      if (!res.ok) {
-        const body = await res.json();
-        setError(body.error || "Something went wrong");
-        return;
-      }
-
       setSubmitted(true);
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err: any) {
+      setError(err?.data?.message || err?.data?.error || "Something went wrong");
     } finally {
       setLoading(false);
     }

@@ -448,4 +448,157 @@ npm run dev
 
 ---
 
+## Week 2, Day 3 — NestJS Backend Migration (Feb 2025)
+
+### What Got Done
+
+**Migrated the entire backend from Next.js API routes to a proper NestJS application.** The old approach (handler functions in `app/api/`) worked for prototyping, but had no dependency injection, no service layer, and no real module boundaries. The new backend is a standalone NestJS app at `apps/backend/` with proper architecture.
+
+### Why This Matters
+
+- **Clean separation** — Frontend is just a frontend now. Backend has its own process, its own port (4000), its own dependency tree.
+- **Dependency injection** — Services are injectable, testable, and swappable. No more importing Supabase directly in every route handler.
+- **Module boundaries** — Auth, Profile, SMS, Payments are separate NestJS modules. Adding new features means adding a new module, not a new folder of loose files.
+- **JWT-based auth** — Instead of Supabase session cookies, the backend now issues its own JWTs. Frontend stores the token and sends `Authorization: Bearer <token>` on every request. This is more standard and makes the backend stateless.
+
+### Architecture
+
+```
+Frontend (Next.js, port 3000)      Backend (NestJS, port 4000)
+  ├── Pages / UI                     ├── AuthModule (login, signup, logout, reset)
+  ├── API client (lib/api/client.ts) ├── ProfileModule (GET/PUT profile)
+  ├── Proxy (route protection)       ├── SmsModule (Termii integration)
+  └── Auth callback (stays here)     ├── PaymentsModule (Paystack webhooks)
+                                     ├── SupabaseModule (shared DB access)
+                                     └── RBAC Guards + Decorators
+```
+
+### How Auth Works Now
+
+1. User submits email + password on frontend
+2. Frontend calls `POST http://localhost:4000/api/auth/login`
+3. NestJS validates credentials against Supabase, fetches the user's role
+4. NestJS signs a JWT with `{ sub: userId, email, role }` and returns it
+5. Frontend stores the JWT in localStorage + a cookie (cookie is for proxy route protection)
+6. All subsequent API requests include `Authorization: Bearer <token>`
+7. NestJS verifies the JWT on every request (global guard)
+
+**Important change for customer login:** Customer login now uses email + password (same as admin), not OTP codes. The OTP flow was removed from the login page.
+
+### Running the Backend
+
+```bash
+# Terminal 1 — NestJS backend
+cd apps/backend
+npm install
+npm run start:dev
+# Runs on http://localhost:4000
+
+# Terminal 2 — Next.js frontend
+cd apps/frontend
+npm run dev
+# Runs on http://localhost:3000
+```
+
+**Both must be running for the app to work.** The frontend calls the backend for all auth and data operations.
+
+### Backend Environment Variables
+
+Create `apps/backend/.env` with:
+```
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+JWT_SECRET=pick-a-strong-secret
+JWT_EXPIRATION=24h
+
+PAYSTACK_SECRET_KEY=your-paystack-secret
+
+FRONTEND_URL=http://localhost:3000
+PORT=4000
+```
+
+Also add to `apps/frontend/.env.local`:
+```
+NEXT_PUBLIC_API_URL=http://localhost:4000/api
+```
+
+### API Endpoints (NestJS)
+
+| Endpoint | Method | Auth | What it does |
+|----------|--------|------|--------------|
+| `/api/auth/login` | POST | Public | Login, returns JWT |
+| `/api/auth/signup` | POST | Public | Create account |
+| `/api/auth/logout` | POST | JWT | End session |
+| `/api/auth/reset-password` | POST | Public | Send reset email |
+| `/api/auth/admin/login` | POST | Public | Admin login (checks role), returns JWT |
+| `/api/profile` | GET | JWT | Get your profile |
+| `/api/profile` | PUT | JWT | Update your profile |
+| `/api/webhooks/paystack` | POST | Signature | Paystack webhook (stub) |
+| `/api/test/rbac/auth-only` | GET | JWT | Test: any authenticated user |
+| `/api/test/rbac/admin-only` | GET | JWT + Role | Test: admin/manager/staff only |
+| `/api/test/rbac/manager-only` | GET | JWT + Role | Test: admin/manager only |
+| `/api/test/rbac/products-create` | GET | JWT + Permission | Test: products:create |
+| `/api/test/rbac/orders-refund` | GET | JWT + Permission | Test: orders:refund |
+
+### Files Created (Backend)
+
+| File | What |
+|------|------|
+| `apps/backend/package.json` | NestJS dependencies |
+| `apps/backend/tsconfig.json` | TypeScript config |
+| `apps/backend/nest-cli.json` | NestJS CLI config |
+| `apps/backend/src/main.ts` | Bootstrap, CORS, global pipes, `/api` prefix |
+| `apps/backend/src/app.module.ts` | Root module wiring everything together |
+| `apps/backend/src/common/supabase/` | SupabaseModule + SupabaseService |
+| `apps/backend/src/common/guards/` | JwtAuthGuard, RolesGuard, PermissionsGuard |
+| `apps/backend/src/common/decorators/` | @Public, @Roles, @RequirePermission, @CurrentUser |
+| `apps/backend/src/common/rbac/permissions.ts` | Permissions matrix (mirror of frontend) |
+| `apps/backend/src/auth/` | AuthModule, AuthController, AuthService, DTOs |
+| `apps/backend/src/profile/` | ProfileModule, ProfileController, ProfileService, DTO |
+| `apps/backend/src/sms/` | SmsModule, SmsService (Termii) |
+| `apps/backend/src/payments/` | PaymentsModule, PaymentsController, PaymentsService |
+| `apps/backend/src/test-rbac/` | RBAC test endpoints |
+
+### Files Modified (Frontend)
+
+| File | What Changed |
+|------|-------------|
+| `lib/api/client.ts` | **New** — fetch wrapper with JWT auth |
+| `app/(auth)/login/page.tsx` | Switched from OTP to email/password via NestJS |
+| `app/(auth)/signup/page.tsx` | Calls NestJS instead of Next.js API |
+| `app/(auth)/reset-password/page.tsx` | Calls NestJS instead of Next.js API |
+| `app/admin/(auth)/login/page.tsx` | Calls NestJS, stores JWT |
+| `app/(dashboard)/profile/page.tsx` | Calls NestJS for profile GET/PUT |
+| `app/(dashboard)/layout.tsx` | Logout calls NestJS + clears JWT |
+| `app/admin/components/Header.tsx` | Logout calls NestJS + clears JWT |
+| `app/admin/(dashboard)/layout.tsx` | Reads role from JWT cookie instead of x-iris-role |
+| `lib/supabase/proxy.ts` | Route protection via JWT cookie (no more Supabase session) |
+| `.env.local` | Added NEXT_PUBLIC_API_URL |
+
+### What Stayed in Next.js
+
+- **`/api/auth/callback`** — This handles browser OAuth redirects from Supabase and must stay in the frontend.
+- **Proxy (route protection)** — Still runs in Next.js, but now reads the JWT cookie instead of Supabase session cookies.
+- **All the old `/api/*` routes** — Still exist in the codebase but are no longer called by the frontend. Can be removed in a future cleanup.
+
+### Something Not Working?
+
+**"Login failed" with no details** — The NestJS backend isn't running. Start it with `cd apps/backend && npm run start:dev`.
+
+**Port 4000 already in use** — Kill the old process: find it with `netstat -ano | grep :4000` then `taskkill /PID <id> /F` (Windows) or `kill <pid>` (Mac/Linux).
+
+**CORS errors in browser console** — Make sure `FRONTEND_URL` in the backend `.env` matches your frontend URL exactly (including port).
+
+**Admin login says "Account does not have admin access"** — Your account's role in the `profiles` table isn't `admin`, `manager`, or `staff`. Check it in Supabase.
+
+### Next Up
+
+- Remove old Next.js API routes (cleanup)
+- Week 2: Products & Inventory API (now on NestJS)
+- Add e2e tests for the new backend
+
+---
+
 *Last updated: February 2025*

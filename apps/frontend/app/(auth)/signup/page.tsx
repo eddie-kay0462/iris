@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@/lib/validation";
+import { apiClient } from "@/lib/api/client";
 
 const signupSchema = z
   .object({
@@ -41,28 +42,22 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/signup", {
+      await apiClient("/auth/signup", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: {
           email: data.email,
           password: data.password,
           first_name: data.first_name || undefined,
           last_name: data.last_name || undefined,
           phone_number: data.phone_number || undefined,
-        }),
+        },
       });
 
-      const body = await res.json();
-
-      if (res.status === 201) {
-        router.push("/login?registered=true");
-        return;
-      }
-
-      setServerError(body.error || "Something went wrong");
-    } catch {
-      setServerError("Network error. Please try again.");
+      router.push("/login?registered=true");
+    } catch (err: any) {
+      setServerError(
+        err?.data?.message || err?.data?.error || "Something went wrong"
+      );
     } finally {
       setLoading(false);
     }
