@@ -280,4 +280,55 @@ You should see all 27 tests pass.
 
 ---
 
+## Week 2, Day 2 (Feb 2025)
+
+### What Got Done
+
+**Rebuilt the admin sidebar and polished the dashboard.** The admin panel now looks and feels like a real dashboard (think Supabase-style).
+
+1. **Collapsible sidebar with icons** — The sidebar now sits flush against the left edge of the screen and spans the full viewport height. Each nav item has an icon (Dashboard, Products, Orders, etc.). When collapsed, you only see the icons. Hover over it and it smoothly expands to show the labels. Click the pin button at the top to keep it expanded.
+
+2. **Active route highlighting** — Whichever page you're on gets highlighted in the sidebar automatically. No more guessing which page you're looking at.
+
+3. **Dark sidebar, light content** — The sidebar uses a dark `slate-900` background with light text, matching the Supabase aesthetic. The content area stays light.
+
+4. **Full-height layout** — The entire page structure changed. Instead of a centered card layout, the sidebar now stretches edge-to-edge from top to bottom. The header and main content sit to the right of it, with the content area scrollable independently.
+
+5. **StatsCards got icons** — Each stat card on the dashboard now has a small icon in the top-right corner (dollar sign for sales, shopping cart for orders, etc.) plus helper text for context.
+
+### Files Modified
+
+- `apps/frontend/package.json` — Added `lucide-react` for icons
+- `apps/frontend/app/admin/components/Sidebar.tsx` — Full rewrite: client component with icons, collapse/expand, pin toggle, active state, dark theme
+- `apps/frontend/app/admin/(dashboard)/layout.tsx` — Restructured to full-height flex layout (sidebar left, header+content right)
+- `apps/frontend/app/admin/components/Header.tsx` — Removed max-width centering so it fills its container
+- `apps/frontend/app/admin/components/StatsCard.tsx` — Added optional icon prop
+- `apps/frontend/app/admin/(dashboard)/page.tsx` — Added icons and helper text to stat cards
+
+### Want to See It?
+
+```bash
+cd apps/frontend
+npm install --legacy-peer-deps
+npm run dev
+```
+
+Go to http://localhost:3000/admin/login, log in, and you'll see the new sidebar.
+
+- **Hover** over the sidebar — it expands smoothly
+- **Click the pin icon** (top of sidebar) — it stays expanded
+- **Click different nav items** — the active one is highlighted
+- **Look at the stat cards** — each has an icon and helper text
+
+### Something Not Working?
+
+**`npm install` fails with peer dependency errors** — Use `npm install --legacy-peer-deps`. This is because `react-paystack` hasn't updated its peer deps to support React 19 yet.
+
+### Next Up
+
+- Build out the `/products` page (customer-facing product browsing)
+- Products & Inventory API
+
+---
+
 *Last updated: February 2025*

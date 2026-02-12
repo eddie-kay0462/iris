@@ -1,10 +1,11 @@
+import { DollarSign, ShoppingCart, Users, AlertTriangle } from "lucide-react";
 import { StatsCard } from "../components/StatsCard";
 
 const stats = [
-  { label: "Total sales", value: "$24,120" },
-  { label: "Orders", value: "312" },
-  { label: "Customers", value: "189" },
-  { label: "Low stock", value: "7 items" },
+  { label: "Total sales", value: "$24,120", icon: DollarSign, helperText: "Lifetime revenue" },
+  { label: "Orders", value: "312", icon: ShoppingCart, helperText: "All-time orders" },
+  { label: "Customers", value: "189", icon: Users, helperText: "Registered accounts" },
+  { label: "Low stock", value: "7 items", icon: AlertTriangle, helperText: "Below reorder threshold" },
 ];
 
 export default function AdminDashboardPage() {
@@ -18,7 +19,13 @@ export default function AdminDashboardPage() {
       </header>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
-          <StatsCard key={stat.label} label={stat.label} value={stat.value} />
+          <StatsCard
+            key={stat.label}
+            label={stat.label}
+            value={stat.value}
+            icon={stat.icon}
+            helperText={stat.helperText}
+          />
         ))}
       </div>
     </section>

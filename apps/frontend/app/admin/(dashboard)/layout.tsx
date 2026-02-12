@@ -8,11 +8,11 @@ type AdminLayoutProps = {
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <Header />
-      <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6">
-        <Sidebar />
-        <main className="flex-1 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+    <div className="flex h-screen bg-slate-50 text-slate-900">
+      <Sidebar />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Header />
+        <main className="flex-1 overflow-y-auto p-6">
           {children}
         </main>
       </div>
