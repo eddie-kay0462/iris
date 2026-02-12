@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 /**
@@ -13,7 +13,7 @@ import { useRouter, useSearchParams } from "next/navigation";
  * - "unauthorized" query param: Shows message that account doesn't have admin access
  * - Form submission errors: Shows inline error message
  */
-export default function AdminLoginPage() {
+function AdminLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -121,5 +121,13 @@ export default function AdminLoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense>
+      <AdminLoginForm />
+    </Suspense>
   );
 }

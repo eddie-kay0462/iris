@@ -1,21 +1,20 @@
+import { cookies } from "next/headers";
 import type { ReactNode } from "react";
-import { Header } from "../components/Header";
-import { Sidebar } from "../components/Sidebar";
+import { AdminShell } from "../components/AdminShell";
+import type { UserRole } from "@/lib/rbac/permissions";
 
-type AdminLayoutProps = {
+export default async function AdminLayout({
+  children,
+}: {
   children: ReactNode;
-};
+}) {
+  const cookieStore = await cookies();
+  const roleCookie = cookieStore.get("x-iris-role")?.value;
+  const role: UserRole =
+    roleCookie &&
+    (["public", "staff", "manager", "admin"] as string[]).includes(roleCookie)
+      ? (roleCookie as UserRole)
+      : "admin";
 
-export default function AdminLayout({ children }: AdminLayoutProps) {
-  return (
-    <div className="flex h-screen bg-slate-50 text-slate-900">
-      <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Header />
-        <main className="flex-1 overflow-y-auto p-6">
-          {children}
-        </main>
-      </div>
-    </div>
-  );
+  return <AdminShell role={role}>{children}</AdminShell>;
 }

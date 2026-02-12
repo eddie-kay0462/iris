@@ -331,4 +331,121 @@ Go to http://localhost:3000/admin/login, log in, and you'll see the new sidebar.
 
 ---
 
+## Week 1, Wrap-Up — Frontend Gaps (Feb 2025)
+
+### What Got Done
+
+**Closed all the frontend gaps from Week 1.** The backend was 100% complete but the UI was missing pieces — signup was a stub, no password reset page, no profile page, no customer dashboard, no route protection, no mobile nav for admin. All fixed now.
+
+Here's the full list:
+
+1. **Signup page works** — Full form with email, password, confirm password, first name, last name, and phone number. Validates everything client-side (Zod + react-hook-form) before hitting the API. On success, redirects to `/login?registered=true` with a green success banner.
+
+2. **Password reset page** — Simple email form at `/reset-password`. Submits to the existing API, shows a generic "check your inbox" message (doesn't reveal if the email exists — security best practice).
+
+3. **Login page updated** — Now has links to signup and password reset at the bottom. Shows "Account created successfully" banner when arriving from signup.
+
+4. **Auth layout** — All auth pages (login, signup, reset-password) share a centered layout with "Iris" branding at top and copyright at bottom. Cleaner than each page managing its own centering.
+
+5. **Customer dashboard layout** — Horizontal header nav with Waitlist, Inner Circle, and Profile links. "Iris" brand links back to `/products`. Has a hamburger menu on mobile that drops down. Logout button included.
+
+6. **Profile page** — Loads your profile from the API, lets you edit first name, last name, phone number, and notification preferences (email/SMS checkboxes). Shows success/error messages inline.
+
+7. **Route protection** — Unauthenticated users get redirected:
+   - `/profile`, `/inner-circle`, `/waitlist` → redirected to `/login`
+   - `/admin/*` → redirected to `/admin/login` (this already worked, now unified in the same proxy)
+
+8. **Admin mobile nav** — The sidebar now has a mobile overlay mode. On small screens, a hamburger button appears in the header. Tap it and the sidebar slides in over a dark backdrop. Tap the backdrop or a nav link to close it.
+
+9. **Admin role-based menu filtering** — Sidebar nav items now have permission requirements. Staff only see Dashboard, Products, Orders, Inventory, and Customers. Managers see those plus Waitlist and Analytics. Admins see everything including Settings. The role is read from the `x-iris-role` cookie (set by the proxy).
+
+10. **Breadcrumb component** — Reusable `<Breadcrumb />` component that auto-generates from the current URL path, or accepts manual items. Uses ChevronRight separators, slate color scheme. Exported from `components/ui`.
+
+11. **Custom Zod resolver** — Small utility at `lib/validation/zod-resolver.ts` that bridges Zod schemas with react-hook-form, so we don't need the `@hookform/resolvers` package.
+
+### Test Suite Added
+
+**Set up Vitest + Testing Library from scratch** — the project had no test framework before this. Now has 82 tests across 10 files, all passing.
+
+| Test File | Tests | Covers |
+|-----------|-------|--------|
+| `zod-resolver.test.ts` | 6 | Valid/invalid input, refine schemas |
+| `login/page.test.tsx` | 9 | OTP flow, method toggle, registered banner, nav links |
+| `signup/page.test.tsx` | 8 | Validation errors, 201 redirect, 409 conflict, network errors |
+| `reset-password/page.test.tsx` | 6 | Submit success, API error, network error |
+| `(dashboard)/layout.test.tsx` | 5 | Nav links, hamburger toggle, logout |
+| `profile/page.test.tsx` | 6 | Loading state, data population, save/error, checkboxes |
+| `Sidebar.test.tsx` | 8 | Role filtering (admin/manager/staff), mobile overlay, active state |
+| `Header.test.tsx` | 6 | Hamburger visibility, logout |
+| `Breadcrumb.test.tsx` | 6 | Auto-generate, manual items, separators, kebab-to-title |
+| `proxy.test.ts` | 22 | Route protection logic, permission matrix, matcher regex |
+
+**To run the tests:**
+```bash
+cd apps/frontend
+npm test
+```
+
+### Files Created
+
+| File | What |
+|------|------|
+| `lib/validation/zod-resolver.ts` | Custom Zod ↔ react-hook-form resolver |
+| `lib/validation/index.ts` | Barrel export |
+| `app/(auth)/layout.tsx` | Shared auth page layout |
+| `app/(auth)/reset-password/page.tsx` | Password reset page |
+| `app/(dashboard)/layout.tsx` | Customer dashboard layout with nav |
+| `app/(dashboard)/profile/page.tsx` | Profile edit page |
+| `components/ui/Breadcrumb.tsx` | Breadcrumb navigation component |
+| `app/admin/components/AdminShell.tsx` | Client wrapper for admin layout (manages mobile state) |
+| `vitest.config.ts` | Test framework config |
+| `vitest.setup.ts` | Test setup (jest-dom matchers) |
+| 10 test files | See table above |
+
+### Files Modified
+
+| File | What Changed |
+|------|-------------|
+| `app/(auth)/login/page.tsx` | Removed outer wrapper, added registered banner + nav links, added Suspense boundary |
+| `app/(auth)/signup/page.tsx` | Full rewrite — real form with validation |
+| `app/admin/(auth)/login/page.tsx` | Added Suspense boundary (build fix) |
+| `app/admin/(dashboard)/layout.tsx` | Now reads role cookie server-side, passes to AdminShell |
+| `app/admin/components/Sidebar.tsx` | Mobile overlay, permission filtering, role/mobileOpen/onClose props |
+| `app/admin/components/Header.tsx` | Hamburger menu button on mobile, onMenuToggle prop |
+| `components/ui/index.ts` | Exports Breadcrumb |
+| `lib/supabase/proxy.ts` | Added customer route protection (/profile, /inner-circle, /waitlist) |
+| `package.json` | Added test deps + scripts |
+
+### Want to Test It?
+
+```bash
+cd apps/frontend
+npm install --legacy-peer-deps
+npm run dev
+```
+
+- Go to `/signup` — fill the form, submit, you'll land on `/login` with a success message
+- Go to `/login` — see the links to signup and reset-password
+- Go to `/reset-password` — enter an email, see the success message
+- Open an incognito window, go to `/profile` — you'll be redirected to `/login`
+- Log in, go to `/profile` — edit your name, save it
+- Resize to mobile — see the hamburger menu in the customer dashboard
+- Log in as admin, resize to mobile — hamburger toggles the sidebar overlay
+- Log in as staff — sidebar only shows items you have permission for
+
+### Something Not Working?
+
+**`npm install` fails** — Use `npm install --legacy-peer-deps` (react-paystack peer dep issue).
+
+**Tests failing** — Run `npm test` and check the output. All 82 should pass.
+
+**Build failing** — Run `npm run build`. Should complete with 0 errors.
+
+### Next Up
+
+- Week 2: Products & Inventory API
+- Build out the `/products` page (customer-facing product browsing)
+
+---
+
 *Last updated: February 2025*

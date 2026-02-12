@@ -18,7 +18,8 @@ const ROLE_COOKIE_MAX_AGE = 300; // 5 minutes
  *
  * This proxy runs on every request and handles:
  * 1. Session refresh - Keeps auth cookies up to date
- * 2. Admin route protection - Blocks unauthorized access to /admin/*
+ * 2. Customer route protection - Redirects unauthenticated users to /login
+ * 3. Admin route protection - Blocks unauthorized access to /admin/*
  *
  * Performance: the user's role is cached in a short‑lived cookie so that
  * admin page navigations only require the auth token check (getUser()),
@@ -67,9 +68,17 @@ export async function supabaseProxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const pathname = request.nextUrl.pathname;
+
   // Check if this is an admin route (but not the login page)
-  const isAdminRoute = request.nextUrl.pathname.startsWith("/admin");
-  const isAdminLoginPage = request.nextUrl.pathname === "/admin/login";
+  const isAdminRoute = pathname.startsWith("/admin");
+  const isAdminLoginPage = pathname === "/admin/login";
+
+  // Routes that require any authenticated user
+  const protectedCustomerRoutes = ["/profile", "/inner-circle", "/waitlist"];
+  const isProtectedCustomerRoute = protectedCustomerRoutes.some(
+    (route) => pathname === route || pathname.startsWith(route + "/")
+  );
 
   // Helper: resolve the user's role, preferring the cached cookie to avoid a DB call.
   async function resolveRole(): Promise<UserRole> {
@@ -103,6 +112,13 @@ export async function supabaseProxy(request: NextRequest) {
   // If user is not authenticated, clear any stale role cookie
   if (!user) {
     response.cookies.delete(ROLE_COOKIE);
+  }
+
+  // Customer routes need authentication
+  if (isProtectedCustomerRoute && !user) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("redirectTo", pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
   // Admin routes need special protection
