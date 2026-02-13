@@ -9,6 +9,7 @@ import { ADMIN_ROLES, UserRole } from '../common/rbac/permissions';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyOtpDto, ResendOtpDto } from './dto/verify-otp.dto';
 
 @Injectable()
 export class AuthService {
@@ -58,13 +59,22 @@ export class AuthService {
   async signup(dto: SignupDto) {
     const supabase = this.supabaseService.getAdminClient();
 
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: dto.email,
-      password: dto.password,
-    });
+    // Use auth.signUp so Supabase sends an OTP email for verification
+    const { data: authData, error: authError } =
+      await supabase.auth.signUp({
+        email: dto.email,
+        password: dto.password,
+        options: {
+          data: {
+            first_name: dto.first_name || null,
+            last_name: dto.last_name || null,
+            phone_number: dto.phone_number || null,
+          },
+        },
+      });
 
     if (authError) {
-      if (authError.message.includes('already registered')) {
+      if (authError.message.includes('already been registered')) {
         throw new UnauthorizedException('User already registered');
       }
       throw new UnauthorizedException(authError.message);
@@ -74,13 +84,39 @@ export class AuthService {
       throw new UnauthorizedException('Failed to create user');
     }
 
-    // Create profile record
+    return {
+      success: true,
+      user: {
+        id: authData.user.id,
+        email: authData.user.email,
+      },
+    };
+  }
+
+  async verifyOtp(dto: VerifyOtpDto) {
+    const supabase = this.supabaseService.getAdminClient();
+
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: dto.email,
+      token: dto.token,
+      type: 'signup',
+    });
+
+    if (error) {
+      throw new UnauthorizedException(error.message);
+    }
+
+    if (!data.user) {
+      throw new UnauthorizedException('Verification failed');
+    }
+
+    // Create profile record now that the user is verified
     const { error: profileError } = await supabase.from('profiles').insert({
-      id: authData.user.id,
-      email: authData.user.email,
-      first_name: dto.first_name || null,
-      last_name: dto.last_name || null,
-      phone_number: dto.phone_number || null,
+      id: data.user.id,
+      email: data.user.email,
+      first_name: data.user.user_metadata?.first_name || null,
+      last_name: data.user.user_metadata?.last_name || null,
+      phone_number: data.user.user_metadata?.phone_number || null,
       role: 'public',
     });
 
@@ -88,12 +124,39 @@ export class AuthService {
       console.error('Failed to create profile:', profileError.message);
     }
 
+    const role: UserRole = 'public';
+    const token = await this.signToken(
+      data.user.id,
+      data.user.email!,
+      role,
+    );
+
+    return {
+      access_token: token,
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        role,
+      },
+    };
+  }
+
+  async resendOtp(dto: ResendOtpDto) {
+    const supabase = this.supabaseService.getAdminClient();
+
+    const { error } = await supabase.auth.resend({
+      email: dto.email,
+      type: 'signup',
+    });
+
+    if (error) {
+      console.error('Resend OTP error:', error.message);
+    }
+
+    // Always return success to prevent email enumeration
     return {
       success: true,
-      user: {
-        id: authData.user.id,
-        email: authData.user.email,
-      },
+      message: 'If an account exists, a verification code has been sent',
     };
   }
 

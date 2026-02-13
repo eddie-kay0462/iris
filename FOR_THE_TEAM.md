@@ -601,4 +601,89 @@ NEXT_PUBLIC_API_URL=http://localhost:4000/api
 
 ---
 
+## Week 2, Day 4 — OTP Email Verification After Signup (Feb 2025)
+
+### What Got Done
+
+**Added email verification to the signup flow.** Previously, signup used `auth.admin.createUser()` with `email_confirm: true` to skip verification — which meant anyone could sign up with a fake email. Now Supabase sends a real OTP code to the user's email, and they must enter it before their account is activated.
+
+### How It Works Now
+
+1. User fills out signup form → frontend calls `POST /api/auth/signup`
+2. Backend calls `supabase.auth.signUp()` (instead of the old admin API) → Supabase sends an 8-digit OTP to the user's email
+3. Frontend redirects to `/verify?email=user@example.com`
+4. User enters the 8-digit code from their email
+5. Frontend calls `POST /api/auth/verify-otp` with the email + code
+6. Backend verifies the OTP with Supabase, creates the user's profile, signs a JWT, and returns it
+7. Frontend stores the JWT and redirects to `/products` — user is logged in immediately
+
+**Profile creation moved to verification.** The profile record (name, phone, role) is now created *after* OTP verification, not during signup. User metadata (first name, last name, phone) is stored in Supabase's `user_metadata` during signup and read back when creating the profile.
+
+### The Verify Page
+
+The `/verify` page has:
+- **8 individual digit inputs** that auto-advance when you type and auto-submit when you enter the last digit
+- **Paste support** — paste the full code and it fills all boxes + auto-submits
+- **Backspace navigation** — pressing backspace on an empty box moves to the previous one
+- **Resend code** button with a 60-second cooldown timer
+- **"Use a different email"** link back to signup
+- Matches the existing black/white minimalist auth styling
+
+### API Endpoints Added
+
+| Endpoint | Method | Auth | What it does |
+|----------|--------|------|--------------|
+| `/api/auth/verify-otp` | POST | Public | Verify the OTP code, create profile, return JWT |
+| `/api/auth/resend-otp` | POST | Public | Resend the OTP email |
+
+### Files Created
+
+| File | What |
+|------|------|
+| `apps/backend/src/auth/dto/verify-otp.dto.ts` | VerifyOtpDto (email + 6-8 char token) and ResendOtpDto |
+| `apps/frontend/app/(auth)/verify/page.tsx` | OTP verification page with 8-digit input |
+
+### Files Modified
+
+| File | What Changed |
+|------|-------------|
+| `apps/backend/src/auth/auth.service.ts` | Reverted signup from `admin.createUser()` to `auth.signUp()`, added `verifyOtp()` and `resendOtp()` methods |
+| `apps/backend/src/auth/auth.controller.ts` | Added `POST /auth/verify-otp` and `POST /auth/resend-otp` endpoints |
+| `apps/frontend/app/(auth)/signup/page.tsx` | Redirect changed from `/login?registered=true` to `/verify?email=<email>` |
+| `apps/frontend/app/(auth)/login/page.tsx` | Removed "Account created successfully" banner (no longer needed), removed Suspense wrapper |
+
+### Want to Test It?
+
+```bash
+# Terminal 1 — backend
+cd apps/backend
+npm run start:dev
+
+# Terminal 2 — frontend
+cd apps/frontend
+npm run dev
+```
+
+1. **Delete any existing test user** from Supabase Dashboard → Authentication → Users (so you can sign up fresh)
+2. Go to `/signup`, fill in the form with a **real email address**, submit
+3. You should land on `/verify?email=your@email.com`
+4. Check your email for an 8-digit code from Supabase
+5. Enter the code (or paste it) → you should be logged in and redirected to `/products`
+6. Try clicking "Resend code" — it should grey out for 60 seconds, and you'll get another email
+
+### Something Not Working?
+
+**No email received** — Check your spam folder. Also verify your Supabase project has email sending enabled (Authentication → Configuration → SMTP).
+
+**"Token has expired or is invalid"** — OTP codes expire after 1 hour. Request a new one with the resend button.
+
+**Still getting a 6-digit code** — Check your Supabase email template. The code length is configured in Supabase Dashboard → Authentication → Configuration. The backend accepts 6-8 digit codes.
+
+### Next Up
+
+- Week 2: Products & Inventory API
+- Build out the `/products` page (customer-facing product browsing)
+
+---
+
 *Last updated: February 2025*

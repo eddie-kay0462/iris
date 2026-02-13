@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiClient, setToken } from "@/lib/api/client";
 
@@ -11,9 +11,6 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const registered = searchParams.get("registered") === "true";
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -28,8 +25,11 @@ function LoginForm() {
       setToken(data.access_token);
       router.push("/products");
     } catch (err: any) {
+      const msg = err?.data?.message ?? err?.message;
       setError(
-        err?.data?.message || err?.data?.error || "Invalid email or password"
+        typeof msg === "string"
+          ? msg
+          : "Invalid email or password"
       );
     } finally {
       setLoading(false);
@@ -38,12 +38,6 @@ function LoginForm() {
 
   return (
     <div className="w-full space-y-6">
-      {registered && (
-        <div className="rounded border border-green-300 bg-green-50 p-3 text-sm text-green-800 text-center">
-          Account created successfully. Please log in.
-        </div>
-      )}
-
       <div className="space-y-2 text-center">
         <h2 className="text-2xl font-semibold">Log in</h2>
         <p className="text-sm text-gray-500">
@@ -99,9 +93,5 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
-  return (
-    <Suspense>
-      <LoginForm />
-    </Suspense>
-  );
+  return <LoginForm />;
 }

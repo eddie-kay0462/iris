@@ -53,7 +53,7 @@ export default function SignupPage() {
         },
       });
 
-      router.push("/login?registered=true");
+      router.push(`/verify?email=${encodeURIComponent(data.email)}`);
     } catch (err: any) {
       setServerError(
         err?.data?.message || err?.data?.error || "Something went wrong"
