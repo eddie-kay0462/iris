@@ -421,9 +421,19 @@ export default function LookbookPage() {
             <p className="font-serif text-lg italic text-neutral-500 dark:text-neutral-400 sm:text-2xl">
               Fall / Winter 2024
             </p>
-            <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.3em] sm:text-xs">
-              IRIS &mdash; Apoluo Collection
-            </p>
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <Image
+                src="/homepage_img/no-bg-1NRI.png"
+                alt="1NRI"
+                width={72}
+                height={29}
+                className="h-5 w-auto min-w-[36px] dark:invert"
+                unoptimized
+              />
+              <span className="text-[10px] font-bold uppercase tracking-[0.3em] sm:text-xs">
+                &mdash; Apoluo Collection
+              </span>
+            </div>
           </div>
         </div>
       </section>

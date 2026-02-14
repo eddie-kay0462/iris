@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Menu, X, ShoppingBag } from "lucide-react";
 import { ThemeProvider, useTheme } from "@/lib/theme/theme-provider";
@@ -103,9 +104,17 @@ function ShopHeader() {
         {/* Centered logo */}
         <Link
           href="/"
-          className="absolute left-1/2 -translate-x-1/2 text-xl font-bold tracking-[0.2em] text-black dark:text-white"
+          className="absolute left-1/2 -translate-x-1/2 flex items-center"
         >
-          IRIS
+          <Image
+            src="/homepage_img/no-bg-1NRI.png"
+            alt="1NRI"
+            width={120}
+            height={48}
+            className="h-8 w-auto min-w-[60px] dark:invert"
+            priority
+            unoptimized
+          />
         </Link>
 
         {/* Right icons */}
@@ -147,9 +156,14 @@ function ShopFooter() {
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {/* Brand */}
           <div>
-            <h3 className="text-sm font-bold tracking-[0.2em] text-black dark:text-white">
-              IRIS
-            </h3>
+            <Image
+              src="/homepage_img/no-bg-1NRI.png"
+              alt="1NRI"
+              width={96}
+              height={38}
+              className="h-6 w-auto min-w-[48px] dark:invert"
+              unoptimized
+            />
             <p className="mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
               Faith-inspired streetwear for the bold and the believing.
             </p>
@@ -220,7 +234,7 @@ function ShopFooter() {
 
         <div className="mt-10 border-t border-gray-200 pt-6 dark:border-gray-800">
           <p className="text-center text-[11px] text-gray-400 dark:text-gray-500">
-            &copy; {new Date().getFullYear()} IRIS. All rights reserved.
+            &copy; {new Date().getFullYear()} 1NRI. All rights reserved.
           </p>
         </div>
       </div>
