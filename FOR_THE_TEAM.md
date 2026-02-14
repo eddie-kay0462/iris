@@ -899,4 +899,86 @@ curl -X POST http://localhost:4000/api/inventory/adjust \
 
 ---
 
+## Week 2, Day 6 — Bugfixes & Storefront Theme (Feb 2025)
+
+### What Got Done
+
+**Fixed three production-blocking bugs and added a light/dark theme toggle to the storefront.**
+
+### Bug Fixes
+
+1. **Products not loading (RLS permission denied)** — The Supabase service_role client wasn't properly bypassing Row Level Security because it was missing auth options. Fixed by adding `{ auth: { autoRefreshToken: false, persistSession: false } }` to the admin client in `supabase.service.ts`.
+
+2. **Product images returning 404** — The `src` URLs stored in the `product_images` table didn't match the actual filenames in Supabase Storage (old filenames from a previous upload). Wrote a migration script that scanned all storage buckets, matched files to DB records by product handle, and updated all 237 image URLs. Also added a `resolveImageUrl()` helper in the products service that converts storage paths to full public URLs (handles both full URLs and relative storage paths).
+
+3. **SQL grants needed** — If you get `42501 permission denied` errors, run this in Supabase SQL Editor:
+   ```sql
+   GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+   GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+   GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
+   GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+   ```
+
+### Storefront Theme
+
+**Light theme is now the default.** Previously the store followed the OS dark mode preference, which made text invisible on dark backgrounds. Now:
+
+- **Default is light** — white background, dark text, clean and readable
+- **Dark mode toggle** — moon/sun icon button in the header. Click to switch. Preference is saved in `localStorage` so it persists across visits
+- **All shop components support both themes** — every component has `dark:` Tailwind variants for backgrounds, text, borders, buttons, inputs, badges, etc.
+
+**Shop header added** — The storefront now has a proper header with:
+- IRIS logo (links to home)
+- Shop and Cart navigation links
+- Dark mode toggle button
+- Responsive design
+
+**Homepage redirects to /products** — The old Next.js boilerplate landing page has been replaced with a redirect to the product catalog.
+
+### How Dark Mode Works
+
+- Uses Tailwind CSS v4 class-based dark mode (`@custom-variant dark`)
+- `.dark` class on `<html>` element toggles all `dark:` utilities
+- `color-scheme: light` set on `<html>` to prevent browser auto-dark
+- Theme state managed by `ThemeProvider` context at `lib/theme/theme-provider.tsx`
+- Persisted in `localStorage` as `iris-theme` (values: `"light"` or `"dark"`)
+
+### Files Created
+
+| File | What |
+|------|------|
+| `apps/frontend/app/(shop)/layout.tsx` | Shop layout with header, nav, and dark mode toggle |
+| `apps/frontend/lib/theme/theme-provider.tsx` | Theme context provider with localStorage persistence |
+
+### Files Modified
+
+| File | What Changed |
+|------|-------------|
+| `apps/backend/src/common/supabase/supabase.service.ts` | Added auth options to admin client for proper RLS bypass |
+| `apps/backend/src/products/products.service.ts` | Added `resolveImageUrl()` and `resolveProductImages()` helpers, injected ConfigService |
+| `apps/frontend/app/globals.css` | Switched from `prefers-color-scheme` to class-based dark mode, explicit light defaults |
+| `apps/frontend/app/layout.tsx` | Added `colorScheme: "light"` on `<html>` |
+| `apps/frontend/app/page.tsx` | Replaced Next.js boilerplate with redirect to `/products` |
+| `apps/frontend/app/(shop)/components/ProductCard.tsx` | Added `dark:` variants |
+| `apps/frontend/app/(shop)/components/ProductGrid.tsx` | Added `dark:` variants |
+| `apps/frontend/app/(shop)/components/ProductFilters.tsx` | Added `dark:` variants for tabs, inputs, select |
+| `apps/frontend/app/(shop)/components/ImageGallery.tsx` | Added `dark:` variants |
+| `apps/frontend/app/(shop)/components/VariantSelector.tsx` | Added `dark:` variants |
+| `apps/frontend/app/(shop)/products/page.tsx` | Added `dark:` variants for skeletons, pagination, heading |
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | Added `dark:` variants for all text, buttons, tags, breadcrumbs |
+
+### Something Not Working?
+
+**Store still looks dark** — Clear localStorage: open browser console and run `localStorage.removeItem("iris-theme")`, then refresh. If your OS is in dark mode, the `color-scheme: light` fix should override it.
+
+**Images still not showing** — The image URL fix was a one-time DB migration. If you add new images, make sure the `src` is either a full URL (`https://...`) or a valid Supabase storage path (`product-images/originals/...`).
+
+### Next Up
+
+- Cart & checkout functionality
+- Order management
+- Payment processing with Paystack
+
+---
+
 *Last updated: February 2025*
