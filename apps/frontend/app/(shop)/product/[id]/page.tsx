@@ -2,6 +2,7 @@
 
 import { use, useState } from "react";
 import { useProduct, type ProductVariant } from "@/lib/api/products";
+import { useCart } from "@/lib/cart";
 import { ImageGallery } from "../../components/ImageGallery";
 import { VariantSelector } from "../../components/VariantSelector";
 
@@ -12,9 +13,11 @@ type PageProps = {
 export default function ProductDetailPage({ params }: PageProps) {
   const { id } = use(params);
   const { data: product, isLoading, error } = useProduct(id);
+  const { addItem } = useCart();
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(
     null,
   );
+  const [added, setAdded] = useState(false);
 
   if (isLoading) {
     return (
@@ -44,6 +47,28 @@ export default function ProductDetailPage({ params }: PageProps) {
   const displayPrice = active?.price ?? product.base_price;
   const comparePrice = active?.compare_at_price ?? null;
   const inStock = active ? active.inventory_quantity > 0 : true;
+
+  function handleAddToCart() {
+    if (!active || !inStock || !product) return;
+    const image = product.product_images?.[0]?.src ?? null;
+    const variantParts = [
+      active.option1_value,
+      active.option2_value,
+      active.option3_value,
+    ].filter(Boolean);
+
+    addItem({
+      variantId: active.id,
+      productId: product.id,
+      productTitle: product.title,
+      variantTitle: variantParts.length > 0 ? variantParts.join(" / ") : null,
+      price: active.price ?? product.base_price ?? 0,
+      image,
+    });
+
+    setAdded(true);
+    setTimeout(() => setAdded(false), 2000);
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
@@ -98,12 +123,13 @@ export default function ProductDetailPage({ params }: PageProps) {
             {inStock ? "In stock" : "Out of stock"}
           </p>
 
-          {/* Add to cart (placeholder) */}
+          {/* Add to cart */}
           <button
+            onClick={handleAddToCart}
             disabled={!inStock}
             className="w-full rounded-lg bg-black py-3 text-sm font-semibold text-white disabled:bg-gray-300 disabled:cursor-not-allowed dark:bg-white dark:text-black dark:disabled:bg-gray-700 dark:disabled:text-gray-500"
           >
-            {inStock ? "Add to cart" : "Sold out"}
+            {!inStock ? "Sold out" : added ? "Added!" : "Add to cart"}
           </button>
 
           {/* Description */}

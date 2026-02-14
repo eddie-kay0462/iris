@@ -981,4 +981,179 @@ curl -X POST http://localhost:4000/api/inventory/adjust \
 
 ---
 
+## Week 3, Day 1 — Cart, Checkout, Orders & Payments (Feb 2025)
+
+### What Got Done
+
+**Built the complete purchasing flow** — from adding items to cart, through Paystack payment, to order management for both customers and admins. This is the feature that turns browsing into revenue.
+
+### Phase 1: Cart System
+
+**Cart lives in localStorage** — no backend needed. Fast, works offline, persists across page refreshes.
+
+- **Cart context** (`lib/cart/`) — `CartProvider` wraps the shop layout. Uses `useReducer` internally with actions: ADD, REMOVE, UPDATE_QTY, CLEAR, HYDRATE. Hydrates from `localStorage("iris_cart")` in `useEffect` (SSR-safe). Persists on every change.
+- **`useCart()` hook** — returns `items`, `itemCount`, `subtotal`, `addItem()`, `removeItem()`, `updateQuantity()`, `clearCart()`
+- **Cart badge** — Shows item count next to "Cart" in the shop header. Black circle with white number (inverted in dark mode).
+- **Product page wired** — "Add to cart" button now works. Adds the selected variant with product title, price, and image. Button text changes to "Added!" for 2 seconds.
+- **Cart page** (`/cart`) — Full cart with item image, title, variant info, quantity controls (±), remove button, subtotal, "Proceed to checkout" link, and empty state. Dark mode support.
+
+### Phase 2: Orders Backend (NestJS)
+
+**New `OrdersModule`** with 7 endpoints:
+
+| Endpoint | Method | Auth | What it does |
+|----------|--------|------|--------------|
+| `/api/orders` | POST | JWT | Create order after payment |
+| `/api/orders/my` | GET | JWT | Customer's own orders (paginated) |
+| `/api/orders/my/:id` | GET | JWT | Customer's own order detail |
+| `/api/orders/admin/list` | GET | `orders:read` | Admin list with search/status/date filters |
+| `/api/orders/admin/:id` | GET | `orders:read` | Admin order detail |
+| `/api/orders/admin/:id/status` | PATCH | `orders:update` | Update order status |
+| `/api/orders/:id/cancel` | POST | JWT | Cancel own order (pending/paid only) |
+
+**Key logic:**
+- `generateOrderNumber()` — Auto-increments from `IRD-000001`
+- `create()` — Validates stock → inserts order (status='paid') → inserts order_items → deducts inventory with `movement_type='sale'` → returns full order
+- `cancelOrder()` — Only if pending/paid. Sets status='cancelled', restores inventory with `movement_type='cancellation_reversal'`
+- `confirmPayment()` — Called by Paystack webhook to confirm payment status
+
+**Paystack webhook completed** — `handleWebhook()` in `PaymentsService` now handles `charge.success` events by looking up the order by `payment_reference` and confirming payment.
+
+### Phase 3: Checkout + Paystack Integration
+
+**Checkout page** (`/checkout`) — Two-column layout:
+- **Left:** Shipping form (full name, address, city, region, postal code, phone) with inline validation
+- **Right:** Order summary showing cart items and total, with Paystack payment button
+- **Auth required** — redirects to `/login?redirect=/checkout` if not logged in
+- **Email auto-detected** from JWT token
+
+**Payment flow:**
+1. User fills shipping form, clicks "Pay GH₵{total}"
+2. Form validates (required fields check)
+3. Reference generated: `IRD-{timestamp}-{random4}`
+4. Paystack popup opens (amount in pesewas, currency GHS)
+5. On success → `POST /api/orders` with cart items + address + reference
+6. Cart cleared → redirect to `/checkout/confirmation?order={orderNumber}`
+
+**Confirmation page** (`/checkout/confirmation`) — Shows green checkmark, order number, links to "View my orders" and "Continue shopping". Wrapped in Suspense for `useSearchParams()`.
+
+### Phase 4: Orders UI
+
+**Admin orders** (`/admin/orders`):
+- Real data via `useAdminOrders()` hook replacing mock data
+- Search by order number or email
+- Status filter dropdown (pending/paid/processing/shipped/delivered/cancelled/refunded)
+- DataTable with order number, customer email, status badge, total, date
+- Pagination
+- Click row → order detail
+
+**Admin order detail** (`/admin/orders/{id}`):
+- Items table with product name, variant, qty, unit price, total
+- Summary card with subtotal/discount/shipping/total
+- Customer info and shipping address
+- Status update: dropdown + notes + tracking number/carrier fields (shown for shipped/delivered)
+- Status timeline from `order_status_history`
+
+**Customer orders** (`/orders`):
+- Order history list with order number, date, item count, status badge, total
+- Click → order detail (read-only)
+- Cancel button for pending/paid orders (with confirmation dialog)
+- Order timeline showing status changes
+- Shipping address and tracking info when available
+
+**Status badges updated** — `StatusBadge` component now supports order statuses: pending (yellow), paid (blue), processing (indigo), shipped (purple), delivered (green), cancelled (red), refunded (gray).
+
+**Dashboard nav** — Added "Orders" link to customer dashboard navigation.
+
+### Files Created
+
+| Category | File | What |
+|----------|------|------|
+| Cart | `lib/cart/cart-context.tsx` | CartProvider + useCart hook |
+| Cart | `lib/cart/index.ts` | Re-exports |
+| Backend | `orders/orders.module.ts` | NestJS module |
+| Backend | `orders/orders.controller.ts` | 7 endpoints |
+| Backend | `orders/orders.service.ts` | Business logic |
+| Backend | `orders/dto/create-order.dto.ts` | Create order DTO |
+| Backend | `orders/dto/query-orders.dto.ts` | Query filters DTO |
+| Backend | `orders/dto/update-order-status.dto.ts` | Status update DTO |
+| Frontend | `lib/api/orders.ts` | Types + React Query hooks |
+| Frontend | `app/(shop)/checkout/confirmation/page.tsx` | Order confirmation |
+| Frontend | `app/(dashboard)/orders/page.tsx` | Customer order history |
+| Frontend | `app/(dashboard)/orders/[id]/page.tsx` | Customer order detail |
+
+### Files Modified
+
+| File | What Changed |
+|------|-------------|
+| `apps/backend/src/app.module.ts` | Added OrdersModule |
+| `apps/backend/src/payments/payments.module.ts` | Imports OrdersModule |
+| `apps/backend/src/payments/payments.service.ts` | Webhook handles `charge.success` |
+| `apps/frontend/app/(shop)/layout.tsx` | CartProvider + cart badge |
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | Add to cart wired |
+| `apps/frontend/app/(shop)/cart/page.tsx` | Full cart page |
+| `apps/frontend/app/(shop)/checkout/page.tsx` | Full checkout with Paystack |
+| `apps/frontend/app/admin/(dashboard)/orders/page.tsx` | Real data + filters |
+| `apps/frontend/app/admin/(dashboard)/orders/[id]/page.tsx` | Full detail + status management |
+| `apps/frontend/app/admin/components/StatusBadge.tsx` | Order status colors |
+| `apps/frontend/app/(dashboard)/layout.tsx` | Orders nav link |
+| `apps/frontend/lib/paystack/client.ts` | Added `currency: "GHS"` |
+
+### Want to Test It?
+
+```bash
+# Terminal 1 — backend
+cd apps/backend
+npm run start:dev
+
+# Terminal 2 — frontend
+cd apps/frontend
+npm run dev
+```
+
+**Test the cart:**
+1. Go to `/products`, click a product
+2. Select a variant, click "Add to cart" — button says "Added!" for 2s
+3. Check the cart badge in header — should show count
+4. Go to `/cart` — see items, adjust quantities, remove items
+5. Refresh the page — cart persists
+
+**Test checkout:**
+1. Add items to cart, click "Proceed to checkout"
+2. If not logged in, you'll be redirected to `/login`
+3. Fill shipping form, click "Pay GH₵{total}"
+4. Paystack popup opens (use test card: 4084 0840 8408 4081, any future expiry, any CVV)
+5. On success → order created → cart cleared → confirmation page
+
+**Test admin orders:**
+1. Log in as admin at `/admin/login`
+2. Go to `/admin/orders` — see the order you just placed
+3. Click the order → see full detail with items, shipping, timeline
+4. Update status to "processing" → see timeline entry added
+
+**Test customer orders:**
+1. Log in as customer
+2. Go to `/orders` — see your order history
+3. Click an order → see detail with items and timeline
+4. Try cancelling a pending/paid order
+
+### Something Not Working?
+
+**Paystack popup not opening** — Make sure `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` is set in `apps/frontend/.env.local`. Get it from Paystack Dashboard → Settings → API Keys & Webhooks.
+
+**"Insufficient stock" error** — The product variant doesn't have enough `inventory_quantity`. Adjust stock in `/admin/inventory`.
+
+**Order not created after payment** — Check the backend console for errors. The order creation requires valid variant IDs and sufficient stock.
+
+**Webhook not confirming payment** — Webhooks only work with a public URL. For local testing, use `ngrok` to tunnel to port 4000 and set the URL in Paystack Dashboard → Settings → Webhooks.
+
+### Next Up
+
+- Email notifications (order confirmation, shipping updates)
+- Discount codes / coupons
+- Customer reviews
+- Analytics dashboard with real order data
+
+---
+
 *Last updated: February 2025*

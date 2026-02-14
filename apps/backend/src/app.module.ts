@@ -11,6 +11,7 @@ import { TestRbacModule } from './test-rbac/test-rbac.module';
 import { ProductsModule } from './products/products.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { CollectionsModule } from './collections/collections.module';
+import { OrdersModule } from './orders/orders.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { CollectionsModule } from './collections/collections.module';
     ProductsModule,
     InventoryModule,
     CollectionsModule,
+    OrdersModule,
   ],
   providers: [
     // Apply JwtAuthGuard globally — use @Public() to skip

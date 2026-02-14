@@ -1,12 +1,16 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
+import { OrdersService } from '../orders/orders.service';
 
 @Injectable()
 export class PaymentsService {
   private secretKey: string;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private ordersService: OrdersService,
+  ) {
     this.secretKey = this.configService.get<string>(
       'PAYSTACK_SECRET_KEY',
       '',
@@ -24,8 +28,16 @@ export class PaymentsService {
   }
 
   async handleWebhook(event: any): Promise<{ ok: boolean }> {
-    // Stub — will be expanded when order flow is built
-    console.log('Paystack webhook event:', event?.event);
+    const eventType = event?.event;
+    console.log('Paystack webhook event:', eventType);
+
+    if (eventType === 'charge.success') {
+      const reference = event?.data?.reference;
+      if (reference) {
+        await this.ordersService.confirmPayment(reference);
+      }
+    }
+
     return { ok: true };
   }
 }

@@ -14,6 +14,7 @@ export const createPaystackConfig = ({
 }: PaystackConfig) => ({
   email,
   amount,
+  currency: "GHS",
   reference: reference ?? `${Date.now()}`,
   publicKey: PAYSTACK_PUBLIC_KEY,
 });

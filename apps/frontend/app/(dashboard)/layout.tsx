@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { apiClient, clearToken } from "@/lib/api/client";
 
 const navItems = [
+  { href: "/orders", label: "Orders" },
   { href: "/waitlist", label: "Waitlist" },
   { href: "/inner-circle", label: "Inner Circle" },
   { href: "/profile", label: "Profile" },

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ThemeProvider, useTheme } from "@/lib/theme/theme-provider";
+import { CartProvider, useCart } from "@/lib/cart";
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -34,6 +35,23 @@ function ThemeToggle() {
   );
 }
 
+function CartLink() {
+  const { itemCount } = useCart();
+  return (
+    <Link
+      href="/cart"
+      className="relative text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+    >
+      Cart
+      {itemCount > 0 && (
+        <span className="absolute -right-4 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-black text-[10px] font-bold text-white dark:bg-white dark:text-black">
+          {itemCount > 99 ? "99+" : itemCount}
+        </span>
+      )}
+    </Link>
+  );
+}
+
 function ShopHeader() {
   return (
     <header className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
@@ -48,12 +66,7 @@ function ShopHeader() {
           >
             Shop
           </Link>
-          <Link
-            href="/cart"
-            className="text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
-          >
-            Cart
-          </Link>
+          <CartLink />
           <ThemeToggle />
         </nav>
       </div>
@@ -64,10 +77,12 @@ function ShopHeader() {
 export default function ShopLayout({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
-      <div className="min-h-screen bg-white dark:bg-gray-950">
-        <ShopHeader />
-        <main>{children}</main>
-      </div>
+      <CartProvider>
+        <div className="min-h-screen bg-white dark:bg-gray-950">
+          <ShopHeader />
+          <main>{children}</main>
+        </div>
+      </CartProvider>
     </ThemeProvider>
   );
 }
