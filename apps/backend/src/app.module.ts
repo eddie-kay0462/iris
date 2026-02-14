@@ -8,6 +8,9 @@ import { ProfileModule } from './profile/profile.module';
 import { SmsModule } from './sms/sms.module';
 import { PaymentsModule } from './payments/payments.module';
 import { TestRbacModule } from './test-rbac/test-rbac.module';
+import { ProductsModule } from './products/products.module';
+import { InventoryModule } from './inventory/inventory.module';
+import { CollectionsModule } from './collections/collections.module';
 
 @Module({
   imports: [
@@ -18,6 +21,9 @@ import { TestRbacModule } from './test-rbac/test-rbac.module';
     SmsModule,
     PaymentsModule,
     TestRbacModule,
+    ProductsModule,
+    InventoryModule,
+    CollectionsModule,
   ],
   providers: [
     // Apply JwtAuthGuard globally — use @Public() to skip

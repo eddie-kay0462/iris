@@ -68,18 +68,28 @@ export async function apiClient<T = any>(
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  // Handle 401 — redirect to login
-  if (res.status === 401 && typeof window !== 'undefined') {
+  // Handle 401 — redirect to login (but not for auth endpoints like login/signup)
+  const isAuthEndpoint = path.startsWith('/auth/');
+  if (res.status === 401 && !isAuthEndpoint && typeof window !== 'undefined') {
     clearToken();
     const isAdmin = window.location.pathname.startsWith('/admin');
     window.location.href = isAdmin ? '/admin/login' : '/login';
     throw new Error('Unauthorized');
   }
 
-  const data = await res.json();
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    data = { message: 'Request failed' };
+  }
 
   if (!res.ok) {
-    const error = new Error(data.message || data.error || 'Request failed');
+    // NestJS message can be a string or array of strings
+    const msg = Array.isArray(data.message)
+      ? data.message[0]
+      : data.message || data.error || 'Request failed';
+    const error = new Error(msg);
     (error as any).status = res.status;
     (error as any).data = data;
     throw error;

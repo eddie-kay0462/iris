@@ -1,19 +1,43 @@
-type Column = {
+"use client";
+
+export interface Column<T> {
   key: string;
   header: string;
-};
+  render?: (row: T) => React.ReactNode;
+}
 
-type DataTableProps = {
-  columns: Column[];
-  rows: Array<Record<string, string | number>>;
+interface DataTableProps<T> {
+  columns: Column<T>[];
+  rows: T[];
   emptyMessage?: string;
-};
+  loading?: boolean;
+  onRowClick?: (row: T) => void;
+}
 
-export function DataTable({
+function SkeletonRows({ cols, count = 5 }: { cols: number; count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <tr key={i} className="border-t border-slate-200 animate-pulse">
+          {Array.from({ length: cols }).map((_, j) => (
+            <td key={j} className="px-4 py-3">
+              <div className="h-4 w-3/4 rounded bg-slate-200" />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function DataTable<T extends Record<string, any>>({
   columns,
   rows,
   emptyMessage = "No data to display.",
-}: DataTableProps) {
+  loading = false,
+  onRowClick,
+}: DataTableProps<T>) {
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
       <table className="w-full border-collapse text-sm">
@@ -27,7 +51,9 @@ export function DataTable({
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? (
+          {loading ? (
+            <SkeletonRows cols={columns.length} />
+          ) : rows.length === 0 ? (
             <tr>
               <td
                 colSpan={columns.length}
@@ -38,10 +64,16 @@ export function DataTable({
             </tr>
           ) : (
             rows.map((row, index) => (
-              <tr key={index} className="border-t border-slate-200">
+              <tr
+                key={index}
+                className={`border-t border-slate-200 ${onRowClick ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                onClick={() => onRowClick?.(row)}
+              >
                 {columns.map((column) => (
                   <td key={column.key} className="px-4 py-3">
-                    {row[column.key]}
+                    {column.render
+                      ? column.render(row)
+                      : (row[column.key] as React.ReactNode)}
                   </td>
                 ))}
               </tr>

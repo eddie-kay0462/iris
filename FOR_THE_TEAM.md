@@ -686,4 +686,217 @@ npm run dev
 
 ---
 
+## Week 2, Day 5 — Products & Inventory System (Feb 2025)
+
+### What Got Done
+
+**Built the complete Products & Inventory system** — backend API, admin management pages, and customer-facing storefront. This is the core of the e-commerce platform that everything else (cart, orders, payments) depends on.
+
+### Backend: Three New NestJS Modules
+
+**ProductsModule** — Full product CRUD with 14 endpoints:
+
+| Endpoint | Method | Auth | What it does |
+|----------|--------|------|--------------|
+| `/api/products` | GET | Public | Storefront: published products with images + variants |
+| `/api/products/:idOrHandle` | GET | Public | Single product (by UUID or URL handle) |
+| `/api/products/admin/list` | GET | `products:read` | Admin: all products including drafts/archived |
+| `/api/products` | POST | `products:create` | Create product (optionally with inline variants) |
+| `/api/products/:id` | PUT | `products:update` | Update product |
+| `/api/products/:id` | DELETE | `products:delete` | Soft-delete (sets deleted_at) |
+| `/api/products/:id/publish` | PATCH | `products:publish` | Toggle published flag |
+| `/api/products/:id/variants` | POST | `products:create` | Add variant |
+| `/api/products/:id/variants/:vid` | PUT | `products:update` | Update variant |
+| `/api/products/:id/variants/:vid` | DELETE | `products:update` | Delete variant |
+| `/api/products/:id/images` | POST | `products:update` | Add image (URL-based) |
+| `/api/products/:id/images/:imgId` | DELETE | `products:update` | Remove image |
+| `/api/products/:id/images/reorder` | PUT | `products:update` | Reorder images |
+
+Key details:
+- URL handles are auto-generated from the title (slugified), with `-2`, `-3` suffixes for uniqueness
+- Public queries filter `deleted_at IS NULL` and `published = true`
+- All list endpoints return paginated responses: `{ data, total, page, limit, totalPages }`
+
+**InventoryModule** — Stock management with 6 endpoints:
+
+| Endpoint | Method | Permission | What it does |
+|----------|--------|------------|--------------|
+| `/api/inventory` | GET | `inventory:read` | Variants with stock levels + product title |
+| `/api/inventory/stats` | GET | `inventory:read` | Total SKUs, low stock count, out of stock count, total value |
+| `/api/inventory/low-stock` | GET | `inventory:read` | Variants with quantity < 10 |
+| `/api/inventory/adjust` | POST | `inventory:update` | Adjust stock for one variant |
+| `/api/inventory/bulk-adjust` | POST | `inventory:update` | Adjust stock for multiple variants |
+| `/api/inventory/movements` | GET | `inventory:read` | Movement history with filters |
+
+Stock adjustments update the variant's `inventory_quantity` and log to the `inventory_movements` table with before/after quantities, movement type, and who made the change.
+
+**CollectionsModule** — Product groupings with 8 endpoints:
+
+| Endpoint | Method | Auth | What it does |
+|----------|--------|------|--------------|
+| `/api/collections` | GET | Public | Published collections |
+| `/api/collections/:idOrHandle` | GET | Public | Single collection with its products |
+| `/api/collections/admin/list` | GET | `products:read` | All collections |
+| `/api/collections` | POST | `products:create` | Create collection |
+| `/api/collections/:id` | PUT | `products:update` | Update collection |
+| `/api/collections/:id` | DELETE | `products:delete` | Soft-delete |
+| `/api/collections/:id/products` | POST | `products:update` | Add products to collection |
+| `/api/collections/:id/products/:pid` | DELETE | `products:update` | Remove product from collection |
+
+### Frontend: Admin Product Management
+
+**Products list** (`/admin/products`) — Real data table replacing the old mock data:
+- Search by product name, filter by status (active/draft/archived) and gender
+- Table shows image thumbnail, title, SKU, status badge (colored pill), price, total stock
+- Clickable rows navigate to product detail
+- Pagination controls
+
+**Product create** (`/admin/products/new`) — Full form with:
+- Two-column layout: main content left, sidebar right
+- Basic info: title, description, base price, compare-at price
+- Sidebar: status dropdown, published checkbox, gender, product type, vendor, tags, URL handle
+- Collections picker (multi-select from existing collections)
+
+**Product edit** (`/admin/products/{id}`) — Same form plus:
+- Variants editor: inline table with add/edit/delete, shows option value, SKU, price, stock
+- Images editor: grid of image thumbnails with URL-based add, delete on hover
+- Publish/Unpublish and Delete buttons in the header
+
+**Inventory dashboard** (`/admin/inventory`) — Full inventory management:
+- 4 stats cards at the top: Total SKUs, Low Stock (yellow), Out of Stock (red), Total Value
+- Stock table with search, low-stock/out-of-stock filter, pagination
+- "Adjust" button on each row opens a modal with: current stock, quantity change input, movement type dropdown, notes field, live preview of new quantity
+- Toggleable movement history section showing all stock changes with type badges, date, quantity change, before/after values
+
+### Frontend: Customer Storefront
+
+**Product catalog** (`/products`) — Browse published products:
+- Gender tabs (All / Men / Women / Unisex) at the top
+- Search input and sort dropdown (Newest, Price Low→High, etc.)
+- Responsive product grid (3 columns desktop, 2 tablet, 1 mobile)
+- Product cards with image, title, price, "New" badge for items < 7 days old, hover zoom effect
+- Pagination
+
+**Product detail** (`/product/{handle}`) — Individual product page:
+- Two-column layout: image gallery left, product info right
+- Image gallery with main image + thumbnail strip (click to switch)
+- Variant selector: option buttons (e.g. size/color) that update displayed price and availability
+- Stock status indicator (green "In stock" / red "Out of stock")
+- "Add to cart" button (placeholder — ready for cart implementation)
+- Description section and tags
+- Breadcrumb navigation
+
+### Shared Infrastructure
+
+**React Query** — Added `@tanstack/react-query` provider wrapping the entire app in `layout.tsx`. All data fetching uses React Query hooks with 30-second stale time and automatic cache invalidation on mutations.
+
+**Reusable admin components:**
+- `DataTable` — Enhanced with generic typing, custom render functions per column, loading skeleton state, clickable rows
+- `StatusBadge` — Colored pills (green = active, yellow = draft, gray = archived)
+- `Pagination` — Previous/Next with page indicator
+- `SearchInput` — Debounced (300ms) text input with search icon
+
+### Files Created
+
+| Category | Files |
+|----------|-------|
+| Backend: Products | `products.module.ts`, `products.controller.ts`, `products.service.ts`, 5 DTOs |
+| Backend: Inventory | `inventory.module.ts`, `inventory.controller.ts`, `inventory.service.ts`, 3 DTOs |
+| Backend: Collections | `collections.module.ts`, `collections.controller.ts`, `collections.service.ts`, 3 DTOs |
+| Frontend: Shared | `lib/query/providers.tsx`, `lib/api/products.ts`, `lib/api/inventory.ts`, `lib/api/collections.ts`, `lib/validation/product.ts` |
+| Frontend: Admin | `StatusBadge.tsx`, `Pagination.tsx`, `SearchInput.tsx`, `ProductForm.tsx`, `VariantsEditor.tsx`, `ImagesEditor.tsx`, `CollectionsPicker.tsx`, `AdjustStockModal.tsx`, `MovementHistory.tsx` |
+| Frontend: Storefront | `ProductCard.tsx`, `ProductGrid.tsx`, `ProductFilters.tsx`, `ImageGallery.tsx`, `VariantSelector.tsx` |
+
+### Files Modified
+
+| File | What Changed |
+|------|-------------|
+| `apps/backend/src/app.module.ts` | Registered ProductsModule, InventoryModule, CollectionsModule |
+| `apps/frontend/app/layout.tsx` | Wrapped children with QueryProvider |
+| `apps/frontend/app/admin/components/DataTable.tsx` | Added generics, render functions, loading skeletons, row click |
+| `apps/frontend/app/admin/(dashboard)/products/page.tsx` | Replaced mock data with real API data |
+| `apps/frontend/app/admin/(dashboard)/products/new/page.tsx` | Now renders ProductForm |
+| `apps/frontend/app/admin/(dashboard)/products/[id]/page.tsx` | Full product edit page with publish/delete |
+| `apps/frontend/app/admin/(dashboard)/inventory/page.tsx` | Full inventory dashboard |
+| `apps/frontend/app/(shop)/products/page.tsx` | Full product catalog |
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | Full product detail page |
+
+### Want to Test It?
+
+```bash
+# Terminal 1 — backend
+cd apps/backend
+npm install
+npm run start:dev
+
+# Terminal 2 — frontend
+cd apps/frontend
+npm install --legacy-peer-deps
+npm run dev
+```
+
+**Test the backend with curl:**
+```bash
+# Get a JWT first (log in as admin)
+TOKEN=$(curl -s -X POST http://localhost:4000/api/auth/admin/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@iris.test","password":"TestUser123!"}' | jq -r '.access_token')
+
+# Create a product with variants
+curl -X POST http://localhost:4000/api/products \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "title": "Calm Candle",
+    "base_price": 5500,
+    "status": "active",
+    "published": true,
+    "gender": "unisex",
+    "variants": [
+      {"option1_name": "Size", "option1_value": "Small", "price": 5500, "sku": "CND-S", "inventory_quantity": 25},
+      {"option1_name": "Size", "option1_value": "Large", "price": 8500, "sku": "CND-L", "inventory_quantity": 10}
+    ]
+  }'
+
+# Browse public products (no auth needed)
+curl http://localhost:4000/api/products
+
+# Check inventory stats
+curl -H "Authorization: Bearer $TOKEN" http://localhost:4000/api/inventory/stats
+
+# Adjust stock
+curl -X POST http://localhost:4000/api/inventory/adjust \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"variant_id": "<variant-id>", "quantity_change": -5, "movement_type": "sale", "notes": "Sold 5 units"}'
+```
+
+**Test the admin frontend:**
+1. Go to `/admin/login`, log in as admin
+2. `/admin/products` — should show real data table (create a product first if empty)
+3. `/admin/products/new` — fill form, create product, verify it appears in list
+4. `/admin/products/{id}` — edit product, manage variants and images
+5. `/admin/inventory` — should show stats cards and stock table, try adjusting stock
+
+**Test the storefront:**
+1. Go to `/products` — should show published products in a grid
+2. Filter by gender, search by name, change sort order
+3. Click a product → detail page with images and variant selector
+
+### Something Not Working?
+
+**No products showing up on storefront** — Make sure the product has `published: true`. Draft/archived products only show in admin.
+
+**"Variant not found" when adjusting stock** — Copy the variant ID from the product detail response, not the product ID.
+
+**Admin product list empty but products exist** — Check that your JWT has a role with `products:read` permission (staff, manager, or admin).
+
+### Next Up
+
+- Cart & checkout functionality
+- Order management
+- Payment processing with Paystack
+
+---
+
 *Last updated: February 2025*
