@@ -163,12 +163,14 @@ export class ProductsService {
     const handle = dto.handle || (await this.generateUniqueHandle(dto.title));
     const { variants, ...productData } = dto;
 
+    // Remove fields that don't exist on the products table
+    const { compare_at_price, ...safeProductData } = productData as any;
+
     const { data: product, error } = await db
       .from('products')
       .insert({
-        ...productData,
+        ...safeProductData,
         handle,
-        created_by: userId,
       })
       .select()
       .single();
@@ -191,7 +193,7 @@ export class ProductsService {
 
   async update(id: string, dto: UpdateProductDto) {
     const db = this.supabase.getAdminClient();
-    const { variants, ...productData } = dto;
+    const { variants, compare_at_price, ...productData } = dto as any;
 
     // Verify product exists
     await this.findOneAdmin(id);
@@ -299,7 +301,7 @@ export class ProductsService {
 
   // --- Images ---
 
-  async addImage(productId: string, body: { url: string; alt_text?: string }) {
+  async addImage(productId: string, body: { src: string; alt_text?: string }) {
     const db = this.supabase.getAdminClient();
     await this.findOneAdmin(productId);
 
@@ -317,7 +319,7 @@ export class ProductsService {
       .from('product_images')
       .insert({
         product_id: productId,
-        url: body.url,
+        src: body.src,
         alt_text: body.alt_text,
         position,
       })

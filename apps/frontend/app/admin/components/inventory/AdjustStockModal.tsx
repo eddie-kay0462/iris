@@ -95,8 +95,8 @@ export function AdjustStockModal({ item, onClose }: AdjustStockModalProps) {
               <option value="adjustment">Adjustment</option>
               <option value="restock">Restock</option>
               <option value="return">Return</option>
-              <option value="damage">Damage</option>
-              <option value="correction">Correction</option>
+              <option value="damaged">Damaged</option>
+              <option value="transfer">Transfer</option>
             </select>
           </div>
 

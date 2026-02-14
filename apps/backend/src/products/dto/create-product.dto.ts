@@ -86,11 +86,6 @@ export class CreateProductDto {
   base_price?: number;
 
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  compare_at_price?: number;
-
-  @IsOptional()
   @IsEnum(['draft', 'active', 'archived'])
   status?: string;
 

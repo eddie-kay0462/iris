@@ -19,7 +19,7 @@ export function ImageGallery({ images }: { images: ProductImage[] }) {
     <div className="space-y-3">
       <div className="aspect-square overflow-hidden rounded-lg bg-gray-100">
         <img
-          src={sorted[selected].url}
+          src={sorted[selected].src}
           alt={sorted[selected].alt_text || "Product image"}
           className="h-full w-full object-cover"
         />
@@ -35,7 +35,7 @@ export function ImageGallery({ images }: { images: ProductImage[] }) {
               }`}
             >
               <img
-                src={img.url}
+                src={img.src}
                 alt={img.alt_text || "Thumbnail"}
                 className="h-full w-full object-cover"
               />

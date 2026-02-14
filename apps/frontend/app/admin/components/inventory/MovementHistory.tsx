@@ -84,7 +84,7 @@ export function MovementHistory() {
                 </span>
               </td>
               <td className="py-2 text-slate-500">
-                {m.previous_quantity} → {m.new_quantity}
+                {m.quantity_before} → {m.quantity_after}
               </td>
               <td className="py-2 text-slate-400">{m.notes || "—"}</td>
             </tr>

@@ -31,8 +31,8 @@ export interface InventoryMovement {
   id: string;
   variant_id: string;
   quantity_change: number;
-  previous_quantity: number;
-  new_quantity: number;
+  quantity_before: number;
+  quantity_after: number;
   movement_type: string;
   notes: string | null;
   created_by: string | null;

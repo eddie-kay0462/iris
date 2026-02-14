@@ -32,7 +32,7 @@ export default function AdminProductsPage() {
         <div className="flex items-center gap-3">
           {row.product_images?.[0] ? (
             <img
-              src={row.product_images[0].url}
+              src={row.product_images[0].src}
               alt={row.title}
               className="h-10 w-10 rounded object-cover"
             />

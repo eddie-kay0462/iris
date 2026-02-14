@@ -105,7 +105,7 @@ export class ProductsController {
   @RequirePermission('products:update')
   addImage(
     @Param('id') id: string,
-    @Body() body: { url: string; alt_text?: string },
+    @Body() body: { src: string; alt_text?: string },
   ) {
     return this.productsService.addImage(id, body);
   }

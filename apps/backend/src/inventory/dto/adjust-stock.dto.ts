@@ -12,8 +12,9 @@ export class AdjustStockDto {
     'sale',
     'return',
     'restock',
-    'damage',
-    'correction',
+    'damaged',
+    'transfer',
+    'preorder',
   ])
   movement_type: string;
 

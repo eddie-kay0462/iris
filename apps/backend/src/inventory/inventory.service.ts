@@ -119,8 +119,8 @@ export class InventoryService {
       .insert({
         variant_id: dto.variant_id,
         quantity_change: dto.quantity_change,
-        previous_quantity: previousQuantity,
-        new_quantity: Math.max(0, newQuantity),
+        quantity_before: previousQuantity,
+        quantity_after: Math.max(0, newQuantity),
         movement_type: dto.movement_type,
         notes: dto.notes,
         created_by: userId,
@@ -130,8 +130,8 @@ export class InventoryService {
 
     return {
       variant_id: dto.variant_id,
-      previous_quantity: previousQuantity,
-      new_quantity: Math.max(0, newQuantity),
+      quantity_before: previousQuantity,
+      quantity_after: Math.max(0, newQuantity),
       change: dto.quantity_change,
     };
   }

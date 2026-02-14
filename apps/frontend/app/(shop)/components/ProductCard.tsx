@@ -4,7 +4,7 @@ import type { Product } from "@/lib/api/products";
 export function ProductCard({ product }: { product: Product }) {
   const image = product.product_images?.[0];
   const price = product.base_price;
-  const comparePrice = product.compare_at_price;
+  const comparePrice = product.product_variants?.[0]?.compare_at_price ?? null;
   const isNew =
     new Date(product.created_at) >
     new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -17,7 +17,7 @@ export function ProductCard({ product }: { product: Product }) {
       <div className="relative aspect-[3/4] overflow-hidden rounded-lg bg-gray-100">
         {image ? (
           <img
-            src={image.url}
+            src={image.src}
             alt={image.alt_text || product.title}
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />

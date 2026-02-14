@@ -52,7 +52,6 @@ export function ProductForm({ mode, product }: ProductFormProps) {
       description: product?.description || "",
       handle: product?.handle || "",
       base_price: product?.base_price ?? undefined,
-      compare_at_price: product?.compare_at_price ?? undefined,
       status: product?.status || "draft",
       gender: product?.gender ?? undefined,
       product_type: product?.product_type || "",
@@ -129,34 +128,21 @@ export function ProductForm({ mode, product }: ProductFormProps) {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Base price
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  {...register("base_price")}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-                />
-                {errors.base_price && (
-                  <p className="mt-1 text-xs text-red-500">
-                    {errors.base_price.message}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Compare at price
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  {...register("compare_at_price")}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-                />
-              </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Base price
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                {...register("base_price")}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+              />
+              {errors.base_price && (
+                <p className="mt-1 text-xs text-red-500">
+                  {errors.base_price.message}
+                </p>
+              )}
             </div>
           </div>
 
@@ -179,7 +165,7 @@ export function ProductForm({ mode, product }: ProductFormProps) {
             <div className="rounded-lg border border-slate-200 p-4">
               <ImagesEditor
                 images={product.product_images || []}
-                onAdd={(url, altText) => addImage.mutate({ url, alt_text: altText })}
+                onAdd={(url, altText) => addImage.mutate({ src: url, alt_text: altText })}
                 onDelete={(imageId) => deleteImage.mutate(imageId)}
                 onReorder={(imageIds) => reorderImages.mutate(imageIds)}
               />

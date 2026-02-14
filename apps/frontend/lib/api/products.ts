@@ -6,7 +6,7 @@ import { apiClient } from "./client";
 export interface ProductImage {
   id: string;
   product_id: string;
-  url: string;
+  src: string;
   alt_text: string | null;
   position: number;
 }
@@ -35,7 +35,6 @@ export interface Product {
   handle: string;
   description: string | null;
   base_price: number | null;
-  compare_at_price: number | null;
   status: "draft" | "active" | "archived";
   gender: "men" | "women" | "unisex" | null;
   product_type: string | null;
@@ -214,7 +213,7 @@ export function useDeleteVariant(productId: string) {
 export function useAddImage(productId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { url: string; alt_text?: string }) =>
+    mutationFn: (data: { src: string; alt_text?: string }) =>
       apiClient(`/products/${productId}/images`, {
         method: "POST",
         body: data,

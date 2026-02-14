@@ -42,7 +42,7 @@ export default function ProductDetailPage({ params }: PageProps) {
   const variants = product.product_variants || [];
   const active = selectedVariant || variants[0] || null;
   const displayPrice = active?.price ?? product.base_price;
-  const comparePrice = active?.compare_at_price ?? product.compare_at_price;
+  const comparePrice = active?.compare_at_price ?? null;
   const inStock = active ? active.inventory_quantity > 0 : true;
 
   return (

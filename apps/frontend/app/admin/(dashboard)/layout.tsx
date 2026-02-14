@@ -29,7 +29,7 @@ export default async function AdminLayout({
       payload.role
     )
       ? (payload.role as UserRole)
-      : "admin";
+      : "public";
 
   return <AdminShell role={role}>{children}</AdminShell>;
 }

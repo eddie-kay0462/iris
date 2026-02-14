@@ -50,7 +50,7 @@ export function ImagesEditor({
               className="group relative overflow-hidden rounded-lg border border-slate-200"
             >
               <img
-                src={img.url}
+                src={img.src}
                 alt={img.alt_text || "Product image"}
                 className="aspect-square w-full object-cover"
               />
