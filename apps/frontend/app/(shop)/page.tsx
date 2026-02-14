@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -72,15 +72,6 @@ function useScrollEngine() {
 
 const collections = [
   {
-    image: "/homepage/1.jpeg",
-    alt: "Intercessory Department — Two models in camo print",
-    title: "Intercessory Department",
-    subtitle: "Realtree Camo Collection",
-    cta: "Shop Now",
-    href: "/products",
-    objectPos: "object-top",
-  },
-  {
     image: "/homepage/2.jpeg",
     alt: "Psalm 52 — Black INRI set",
     title: "Psalm 52",
@@ -108,6 +99,66 @@ const collections = [
     objectPos: "object-top",
   },
 ];
+
+/* ------------------------------------------------------------------ */
+/*  Newsletter Form                                                    */
+/* ------------------------------------------------------------------ */
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+
+function NewsletterForm() {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+    setStatus("loading");
+    try {
+      const res = await fetch(`${API_BASE}/newsletter/subscribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) throw new Error();
+      setStatus("success");
+      setEmail("");
+    } catch {
+      setStatus("error");
+    }
+  };
+
+  if (status === "success") {
+    return (
+      <p className="mt-8 text-sm font-medium text-green-600 dark:text-green-400">
+        You&rsquo;re in! We&rsquo;ll keep you posted on new drops.
+      </p>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-8 flex items-center gap-0">
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Enter your email"
+        required
+        className="h-12 flex-1 border border-neutral-300 bg-white px-4 text-sm text-neutral-900 placeholder-neutral-400 outline-none transition focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:placeholder-neutral-500 dark:focus:border-neutral-300"
+      />
+      <button
+        type="submit"
+        disabled={status === "loading"}
+        className="h-12 whitespace-nowrap border border-neutral-900 bg-neutral-900 px-6 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-transparent hover:text-neutral-900 disabled:opacity-50 dark:border-white dark:bg-white dark:text-neutral-900 dark:hover:bg-transparent dark:hover:text-white"
+      >
+        {status === "loading" ? "..." : "Subscribe"}
+      </button>
+      {status === "error" && (
+        <p className="ml-3 text-xs text-red-500">Something went wrong. Try again.</p>
+      )}
+    </form>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
@@ -239,15 +290,15 @@ export default function HomePage() {
       <section
         data-scene="hscroll"
         className="relative"
-        style={{ height: "500vh" }}
+        style={{ height: "400vh" }}
       >
         <div className="sticky top-0 h-screen overflow-hidden">
-          {/* Horizontal track: 4 × 100vw = 400vw → translates 0 … −300vw */}
+          {/* Horizontal track: 3 × 100vw = 300vw → translates 0 … −200vw */}
           <div
             className="flex h-full will-change-transform"
             style={{
-              width: "400vw",
-              transform: "translate3d(calc(var(--p,0) * -300vw), 0px, 0px)",
+              width: "300vw",
+              transform: "translate3d(calc(var(--p,0) * -200vw), 0px, 0px)",
             }}
           >
             {collections.map((col, i) => (
@@ -305,16 +356,11 @@ export default function HomePage() {
 
           {/* Progress bar */}
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
-            <div className="flex items-center gap-4">
-              <span className="text-[9px] font-medium uppercase tracking-[0.2em] text-white/30">
-                Scroll
-              </span>
-              <div className="h-px w-24 overflow-hidden bg-white/20 sm:w-40">
-                <div
-                  className="h-full bg-white/70 transition-none"
-                  style={{ width: "calc(var(--p,0) * 100%)" }}
-                />
-              </div>
+            <div className="h-px w-24 overflow-hidden bg-white/20 sm:w-40">
+              <div
+                className="h-full bg-white/70 transition-none"
+                style={{ width: "calc(var(--p,0) * 100%)" }}
+              />
             </div>
           </div>
 
@@ -628,6 +674,25 @@ export default function HomePage() {
               Shop All
             </Link>
           </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════
+          NEWSLETTER
+          ══════════════════════════════════════════════════════════════ */}
+      <section className="border-t border-neutral-200 bg-neutral-50 py-20 dark:border-neutral-800 dark:bg-neutral-950">
+        <div className="mx-auto max-w-xl px-6 text-center">
+          <h3 className="text-xs font-semibold uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">
+            Stay in the loop
+          </h3>
+          <p className="mt-3 text-2xl font-bold uppercase tracking-wide text-neutral-900 dark:text-neutral-100 sm:text-3xl">
+            Join Our Newsletter
+          </p>
+          <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
+            Be the first to know about new drops, exclusive offers, and
+            behind-the-scenes content.
+          </p>
+          <NewsletterForm />
         </div>
       </section>
     </div>

@@ -1,14 +1,18 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useProducts } from "@/lib/api/products";
 import { ProductGrid } from "../components/ProductGrid";
 import { ProductFilters } from "../components/ProductFilters";
 
 function ProductCatalogContent() {
+  const searchParams = useSearchParams();
+  const initialSearch = searchParams.get("search") || "";
+
   const [gender, setGender] = useState("");
   const [sort, setSort] = useState("created_at:desc");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [category, setCategory] = useState("");
   const [page, setPage] = useState(1);
 

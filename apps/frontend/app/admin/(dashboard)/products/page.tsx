@@ -8,6 +8,8 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { Pagination } from "../../components/Pagination";
 import { SearchInput } from "../../components/SearchInput";
 import { useAdminProducts, type Product } from "@/lib/api/products";
+import { Download } from "lucide-react";
+import { getToken } from "@/lib/api/client";
 
 export default function AdminProductsPage() {
   const router = useRouter();
@@ -90,12 +92,34 @@ export default function AdminProductsPage() {
             Manage product catalog, pricing, and inventory.
           </p>
         </div>
-        <Link
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-          href="/admin/products/new"
-        >
-          New product
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api"}/export/products`;
+              const a = document.createElement("a");
+              a.href = `${url}?token=${getToken()}`;
+              // Use fetch for auth header
+              fetch(url, { headers: { Authorization: `Bearer ${getToken()}` } })
+                .then((r) => r.blob())
+                .then((blob) => {
+                  const link = document.createElement("a");
+                  link.href = URL.createObjectURL(blob);
+                  link.download = `products-${new Date().toISOString().slice(0, 10)}.csv`;
+                  link.click();
+                });
+            }}
+            className="flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </button>
+          <Link
+            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+            href="/admin/products/new"
+          >
+            New product
+          </Link>
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center gap-3">

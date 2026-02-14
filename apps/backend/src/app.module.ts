@@ -12,6 +12,9 @@ import { ProductsModule } from './products/products.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { CollectionsModule } from './collections/collections.module';
 import { OrdersModule } from './orders/orders.module';
+import { SettingsModule } from './settings/settings.module';
+import { NewsletterModule } from './newsletter/newsletter.module';
+import { ExportModule } from './export/export.module';
 
 @Module({
   imports: [
@@ -26,6 +29,9 @@ import { OrdersModule } from './orders/orders.module';
     InventoryModule,
     CollectionsModule,
     OrdersModule,
+    SettingsModule,
+    NewsletterModule,
+    ExportModule,
   ],
   providers: [
     // Apply JwtAuthGuard globally — use @Public() to skip

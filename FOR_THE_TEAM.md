@@ -1286,4 +1286,92 @@ npm run dev
 
 ---
 
+## Week 3, Day 3 — Homepage Polish, Admin Payments/Settings/Export, Search (Feb 2025)
+
+### What Got Done
+
+**Polished the homepage scrollytelling, built out missing admin features, and added storefront search.**
+
+### 1. Homepage Updates
+
+- **Removed duplicate slide** — The first slide in the horizontal scroll section (Intercessory Department) was already the hero, so it was removed. Horizontal scroll now has 3 panels instead of 4.
+- **Removed "Scroll" text** from the progress bar in the horizontal scroll section.
+- **Added newsletter section** — "Join Our Newsletter" section with email input before the footer. Calls `POST /api/newsletter/subscribe` on submit with success/error feedback.
+- **Added social media icons** to footer Connect section — Instagram, X/Twitter, and TikTok with SVG icons.
+
+### 2. Admin Payments Page (NEW)
+
+Full payments management at `/admin/payments`:
+- **4 stats cards** — Total Collected (green), Pending (yellow), Refunded (red), Transaction Count
+- **Payments table** with search, status filter, pagination
+- **Backend endpoints** — `GET /api/payments/admin/list` and `GET /api/payments/admin/stats` (permission: `orders:read`)
+
+### 3. Admin Settings Wired to Real Data
+
+Previously the settings pages had mock/hardcoded data. Now they hit the backend:
+
+- **Users page** (`/admin/settings/users`) — Real data table from `GET /api/settings/users`. Inline role dropdown to change user roles via `PATCH /api/settings/users/:id/role`.
+- **Roles page** (`/admin/settings/roles`) — Fetches all 4 roles with their permissions from `GET /api/settings/roles`. Shows permission badges for each role.
+- **Backend module** — New `SettingsModule` with user management and role listing endpoints.
+
+### 4. CSV Export
+
+Added export buttons to admin pages:
+- **Orders page** — "Export CSV" button downloads orders as CSV via `GET /api/export/orders` (supports status filter)
+- **Products page** — "Export" button downloads products as CSV via `GET /api/export/products`
+- **Backend module** — New `ExportModule` that generates CSV from database queries with proper Content-Type and Content-Disposition headers.
+
+### 5. Newsletter Backend
+
+- **New `NewsletterModule`** — `POST /api/newsletter/subscribe` (public) and `GET /api/newsletter/admin/list` (admin)
+- **DB migration** — `newsletter_subscribers` table with email (unique) and subscribed_at
+- Upserts on subscribe so duplicate emails don't error
+
+### 6. Storefront Search
+
+Added a search icon to the customer-facing store header:
+- **Search icon** — magnifying glass icon next to the theme toggle and cart icons
+- **Search overlay** — clicking the icon opens a centered modal with a text input. Type a query and press Enter to navigate to `/products?search=<query>`.
+- **ESC to close** — press Escape or click the backdrop to dismiss
+- **Products page** now reads the `search` URL parameter so searches from the header pre-populate the filter
+
+### Files Created
+
+| File | What |
+|------|------|
+| `apps/backend/src/settings/` | SettingsModule, controller, service, DTO (4 files) |
+| `apps/backend/src/newsletter/` | NewsletterModule, controller, service, DTO (4 files) |
+| `apps/backend/src/export/` | ExportModule, controller, service (3 files) |
+| `apps/backend/src/payments/dto/query-payments.dto.ts` | Query DTO for payments |
+| `apps/frontend/lib/api/payments.ts` | Payments API hooks |
+| `apps/frontend/lib/api/settings.ts` | Settings API hooks |
+| `apps/frontend/app/admin/(dashboard)/payments/page.tsx` | Admin payments page |
+| `supabase/migrations/20260214200000_create_newsletter_subscribers.sql` | Newsletter table |
+
+### Files Modified
+
+| File | What Changed |
+|------|-------------|
+| `apps/backend/src/app.module.ts` | Added SettingsModule, NewsletterModule, ExportModule |
+| `apps/backend/src/payments/payments.controller.ts` | Added admin list/stats endpoints |
+| `apps/backend/src/payments/payments.service.ts` | Added findAdminPayments(), getPaymentStats() |
+| `apps/frontend/app/(shop)/layout.tsx` | Added search icon + search overlay to header |
+| `apps/frontend/app/(shop)/page.tsx` | Removed duplicate slide, removed "Scroll" text, added newsletter section |
+| `apps/frontend/app/(shop)/products/page.tsx` | Reads `search` URL param |
+| `apps/frontend/app/admin/(dashboard)/orders/page.tsx` | Added CSV export button |
+| `apps/frontend/app/admin/(dashboard)/products/page.tsx` | Added CSV export button |
+| `apps/frontend/app/admin/(dashboard)/settings/users/page.tsx` | Wired to real API data |
+| `apps/frontend/app/admin/(dashboard)/settings/roles/page.tsx` | Wired to real API data |
+| `apps/frontend/app/admin/components/Sidebar.tsx` | Added Payments nav item |
+
+### Want to Test It?
+
+- **Search:** Click the magnifying glass in the store header → type a product name → press Enter
+- **Payments:** Log in as admin → `/admin/payments` → see stats and transaction list
+- **Export:** Go to `/admin/orders` or `/admin/products` → click "Export CSV"
+- **Newsletter:** Scroll to the bottom of the homepage → enter email → submit
+- **Settings:** Go to `/admin/settings/users` → change a user's role from the dropdown
+
+---
+
 *Last updated: February 2025*
