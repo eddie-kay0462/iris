@@ -151,6 +151,52 @@ export function useCancelOrder() {
   });
 }
 
+// --- Admin Types ---
+
+export interface AdminStats {
+  totalRevenue: number;
+  recentRevenue: number;
+  orderCount: number;
+  customerCount: number;
+  lowStockCount: number;
+  ordersByStatus: Record<string, number>;
+}
+
+export interface AdminCustomer {
+  id: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone_number: string | null;
+  role: string;
+  created_at: string;
+  last_login_at: string | null;
+  order_count: number;
+  total_spent: number;
+  last_order_date: string | null;
+}
+
+export interface AdminCustomerDetail extends AdminCustomer {
+  orders: Order[];
+}
+
+export interface PaginatedCustomers {
+  data: AdminCustomer[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface AnalyticsData {
+  revenueByDay: Record<string, number>;
+  ordersByDay: Record<string, number>;
+  topProducts: { name: string; revenue: number; unitsSold: number }[];
+  statusBreakdown: Record<string, number>;
+  totalOrders: number;
+  totalRevenue: number;
+}
+
 // --- Admin Hooks ---
 
 export function useAdminOrders(params: OrderQueryParams = {}) {
@@ -192,5 +238,40 @@ export function useUpdateOrderStatus() {
       qc.invalidateQueries({ queryKey: ["admin-orders"] });
       qc.invalidateQueries({ queryKey: ["admin-order"] });
     },
+  });
+}
+
+export function useAdminStats() {
+  return useQuery({
+    queryKey: ["admin-stats"],
+    queryFn: () => apiClient<AdminStats>("/orders/admin/stats"),
+  });
+}
+
+export function useAdminCustomers(params: { search?: string; page?: number; limit?: number } = {}) {
+  return useQuery({
+    queryKey: ["admin-customers", params],
+    queryFn: () =>
+      apiClient<PaginatedCustomers>(
+        `/orders/admin/customers${toSearchParams(params as OrderQueryParams)}`,
+      ),
+  });
+}
+
+export function useAdminCustomer(id: string) {
+  return useQuery({
+    queryKey: ["admin-customer", id],
+    queryFn: () => apiClient<AdminCustomerDetail>(`/orders/admin/customers/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useAnalytics(params: { from_date?: string; to_date?: string } = {}) {
+  return useQuery({
+    queryKey: ["admin-analytics", params],
+    queryFn: () =>
+      apiClient<AnalyticsData>(
+        `/orders/admin/analytics${toSearchParams(params as OrderQueryParams)}`,
+      ),
   });
 }

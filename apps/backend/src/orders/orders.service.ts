@@ -331,6 +331,258 @@ export class OrdersService {
     return this.findOne(orderId);
   }
 
+  async getAdminStats() {
+    const db = this.supabase.getAdminClient();
+
+    // Total revenue (non-cancelled/refunded orders)
+    const { data: revenueData } = await db
+      .from('orders')
+      .select('total')
+      .is('deleted_at', null)
+      .not('status', 'in', '("cancelled","refunded")');
+
+    const totalRevenue = (revenueData || []).reduce(
+      (sum, o) => sum + Number(o.total),
+      0,
+    );
+
+    // Order count
+    const { count: orderCount } = await db
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+      .is('deleted_at', null);
+
+    // Customer count (distinct user_ids who have orders)
+    const { data: customerData } = await db
+      .from('orders')
+      .select('user_id')
+      .is('deleted_at', null);
+
+    const uniqueCustomers = new Set(
+      (customerData || []).map((o) => o.user_id),
+    ).size;
+
+    // Low stock items
+    const { data: lowStockData } = await db
+      .from('product_variants')
+      .select('id')
+      .gt('inventory_quantity', 0)
+      .lt('inventory_quantity', 10);
+
+    const lowStockCount = lowStockData?.length || 0;
+
+    // Orders by status
+    const { data: statusData } = await db
+      .from('orders')
+      .select('status')
+      .is('deleted_at', null);
+
+    const ordersByStatus: Record<string, number> = {};
+    (statusData || []).forEach((o) => {
+      ordersByStatus[o.status] = (ordersByStatus[o.status] || 0) + 1;
+    });
+
+    // Recent revenue (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const { data: recentData } = await db
+      .from('orders')
+      .select('total, created_at')
+      .is('deleted_at', null)
+      .not('status', 'in', '("cancelled","refunded")')
+      .gte('created_at', thirtyDaysAgo.toISOString());
+
+    const recentRevenue = (recentData || []).reduce(
+      (sum, o) => sum + Number(o.total),
+      0,
+    );
+
+    return {
+      totalRevenue,
+      recentRevenue,
+      orderCount: orderCount || 0,
+      customerCount: uniqueCustomers,
+      lowStockCount,
+      ordersByStatus,
+    };
+  }
+
+  async findAdminCustomers(query: {
+    search?: string;
+    page?: string;
+    limit?: string;
+  }) {
+    const db = this.supabase.getAdminClient();
+    const page = parseInt(query.page || '1', 10);
+    const limit = parseInt(query.limit || '20', 10);
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    // Get profiles (customers only = role 'public')
+    let q = db
+      .from('profiles')
+      .select('*', { count: 'exact' })
+      .eq('role', 'public');
+
+    if (query.search) {
+      q = q.or(
+        `email.ilike.%${query.search}%,first_name.ilike.%${query.search}%,last_name.ilike.%${query.search}%`,
+      );
+    }
+
+    q = q.order('created_at', { ascending: false }).range(from, to);
+
+    const { data: profiles, count, error } = await q;
+    if (error) throw error;
+
+    // For each profile, get order count and total spent
+    const enriched = await Promise.all(
+      (profiles || []).map(async (profile) => {
+        const { data: orders } = await db
+          .from('orders')
+          .select('total, created_at')
+          .eq('user_id', profile.id)
+          .is('deleted_at', null)
+          .not('status', 'in', '("cancelled","refunded")');
+
+        const orderCount = orders?.length || 0;
+        const totalSpent = (orders || []).reduce(
+          (sum, o) => sum + Number(o.total),
+          0,
+        );
+        const lastOrderDate =
+          orders && orders.length > 0
+            ? orders.sort(
+                (a, b) =>
+                  new Date(b.created_at).getTime() -
+                  new Date(a.created_at).getTime(),
+              )[0].created_at
+            : null;
+
+        return {
+          ...profile,
+          order_count: orderCount,
+          total_spent: totalSpent,
+          last_order_date: lastOrderDate,
+        };
+      }),
+    );
+
+    return {
+      data: enriched,
+      total: count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((count || 0) / limit),
+    };
+  }
+
+  async findAdminCustomer(customerId: string) {
+    const db = this.supabase.getAdminClient();
+
+    const { data: profile, error } = await db
+      .from('profiles')
+      .select('*')
+      .eq('id', customerId)
+      .single();
+
+    if (error || !profile) {
+      throw new NotFoundException('Customer not found');
+    }
+
+    // Get their orders
+    const { data: orders } = await db
+      .from('orders')
+      .select('*, order_items(*)')
+      .eq('user_id', customerId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    const totalSpent = (orders || [])
+      .filter((o) => !['cancelled', 'refunded'].includes(o.status))
+      .reduce((sum, o) => sum + Number(o.total), 0);
+
+    return {
+      ...profile,
+      orders: orders || [],
+      order_count: orders?.length || 0,
+      total_spent: totalSpent,
+    };
+  }
+
+  async getAnalytics(query: { from_date?: string; to_date?: string }) {
+    const db = this.supabase.getAdminClient();
+
+    const fromDate =
+      query.from_date ||
+      new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const toDate = query.to_date || new Date().toISOString();
+
+    // Revenue by day
+    const { data: orders } = await db
+      .from('orders')
+      .select('total, status, created_at')
+      .is('deleted_at', null)
+      .gte('created_at', fromDate)
+      .lte('created_at', toDate)
+      .order('created_at', { ascending: true });
+
+    const revenueByDay: Record<string, number> = {};
+    const ordersByDay: Record<string, number> = {};
+
+    (orders || []).forEach((o) => {
+      const day = o.created_at.slice(0, 10);
+      ordersByDay[day] = (ordersByDay[day] || 0) + 1;
+      if (!['cancelled', 'refunded'].includes(o.status)) {
+        revenueByDay[day] = (revenueByDay[day] || 0) + Number(o.total);
+      }
+    });
+
+    // Top products by revenue
+    const { data: topItems } = await db
+      .from('order_items')
+      .select('product_name, quantity, total_price, order:orders!inner(status, created_at, deleted_at)')
+      .gte('orders.created_at', fromDate)
+      .lte('orders.created_at', toDate)
+      .is('orders.deleted_at', null);
+
+    const productMap: Record<
+      string,
+      { name: string; revenue: number; unitsSold: number }
+    > = {};
+    (topItems || []).forEach((item: any) => {
+      if (['cancelled', 'refunded'].includes(item.order?.status)) return;
+      const name = item.product_name;
+      if (!productMap[name]) {
+        productMap[name] = { name, revenue: 0, unitsSold: 0 };
+      }
+      productMap[name].revenue += Number(item.total_price);
+      productMap[name].unitsSold += item.quantity;
+    });
+
+    const topProducts = Object.values(productMap)
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10);
+
+    // Status breakdown
+    const statusBreakdown: Record<string, number> = {};
+    (orders || []).forEach((o) => {
+      statusBreakdown[o.status] = (statusBreakdown[o.status] || 0) + 1;
+    });
+
+    return {
+      revenueByDay,
+      ordersByDay,
+      topProducts,
+      statusBreakdown,
+      totalOrders: orders?.length || 0,
+      totalRevenue: (orders || [])
+        .filter((o) => !['cancelled', 'refunded'].includes(o.status))
+        .reduce((sum, o) => sum + Number(o.total), 0),
+    };
+  }
+
   async confirmPayment(paymentReference: string) {
     const db = this.supabase.getAdminClient();
     const { data, error } = await db

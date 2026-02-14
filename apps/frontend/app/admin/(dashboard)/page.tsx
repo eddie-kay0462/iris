@@ -1,14 +1,45 @@
+"use client";
+
 import { DollarSign, ShoppingCart, Users, AlertTriangle } from "lucide-react";
 import { StatsCard } from "../components/StatsCard";
-
-const stats = [
-  { label: "Total sales", value: "$24,120", icon: DollarSign, helperText: "Lifetime revenue" },
-  { label: "Orders", value: "312", icon: ShoppingCart, helperText: "All-time orders" },
-  { label: "Customers", value: "189", icon: Users, helperText: "Registered accounts" },
-  { label: "Low stock", value: "7 items", icon: AlertTriangle, helperText: "Below reorder threshold" },
-];
+import { useAdminStats } from "@/lib/api/orders";
 
 export default function AdminDashboardPage() {
+  const { data: stats, isLoading } = useAdminStats();
+
+  const cards = [
+    {
+      label: "Total sales",
+      value: isLoading
+        ? "..."
+        : `GH₵${(stats?.totalRevenue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      icon: DollarSign,
+      helperText: isLoading
+        ? "Loading..."
+        : `GH₵${(stats?.recentRevenue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} last 30 days`,
+    },
+    {
+      label: "Orders",
+      value: isLoading ? "..." : String(stats?.orderCount ?? 0),
+      icon: ShoppingCart,
+      helperText: "All-time orders",
+    },
+    {
+      label: "Customers",
+      value: isLoading ? "..." : String(stats?.customerCount ?? 0),
+      icon: Users,
+      helperText: "Unique customers",
+    },
+    {
+      label: "Low stock",
+      value: isLoading
+        ? "..."
+        : `${stats?.lowStockCount ?? 0} item${(stats?.lowStockCount ?? 0) !== 1 ? "s" : ""}`,
+      icon: AlertTriangle,
+      helperText: "Below 10 units",
+    },
+  ];
+
   return (
     <section className="space-y-6">
       <header className="space-y-1">
@@ -18,7 +49,7 @@ export default function AdminDashboardPage() {
         </p>
       </header>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map((stat) => (
+        {cards.map((stat) => (
           <StatsCard
             key={stat.label}
             label={stat.label}
@@ -28,6 +59,22 @@ export default function AdminDashboardPage() {
           />
         ))}
       </div>
+
+      {stats?.ordersByStatus && (
+        <div className="rounded-lg border border-slate-200 bg-white p-6">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600">
+            Orders by Status
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+            {Object.entries(stats.ordersByStatus).map(([status, count]) => (
+              <div key={status} className="text-center">
+                <p className="text-lg font-semibold text-slate-900">{count}</p>
+                <p className="text-xs capitalize text-slate-500">{status}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

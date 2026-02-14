@@ -4,197 +4,135 @@ import { useEffect, useRef } from "react";
 import Image from "next/image";
 
 /* ------------------------------------------------------------------ */
-/*  Image data — reusing homepage images in editorial arrangements     */
+/*  Utility                                                            */
 /* ------------------------------------------------------------------ */
 
-const rows: {
-  layout: "triple" | "double" | "single" | "offset";
-  images: { src: string; alt: string; aspect?: string }[];
-}[] = [
-  {
-    layout: "triple",
-    images: [
-      { src: "/homepage/1.jpeg", alt: "Camo look — left", aspect: "aspect-[3/4]" },
-      { src: "/homepage/2.jpeg", alt: "Black set — center", aspect: "aspect-[3/4]" },
-      { src: "/homepage/4.jpeg", alt: "Jacket — right", aspect: "aspect-[3/4]" },
-    ],
-  },
-  {
-    layout: "double",
-    images: [
-      { src: "/homepage/3.png", alt: "Pants detail", aspect: "aspect-[16/9]" },
-      { src: "/homepage/1.jpeg", alt: "Camo look — wide", aspect: "aspect-[16/9]" },
-    ],
-  },
-  {
-    layout: "offset",
-    images: [
-      { src: "/homepage/4.jpeg", alt: "Betrayer's Kiss close", aspect: "aspect-[4/5]" },
-      { src: "/homepage/2.jpeg", alt: "Black set", aspect: "aspect-[4/5]" },
-      { src: "/homepage/3.png", alt: "Essentials lineup", aspect: "aspect-[4/5]" },
-    ],
-  },
-  {
-    layout: "single",
-    images: [
-      { src: "/homepage/1.jpeg", alt: "Camo hero — full width", aspect: "aspect-[21/9]" },
-    ],
-  },
-  {
-    layout: "triple",
-    images: [
-      { src: "/homepage/2.jpeg", alt: "Model portrait", aspect: "aspect-[3/4]" },
-      { src: "/homepage/4.jpeg", alt: "Back detail", aspect: "aspect-[3/4]" },
-      { src: "/homepage/3.png", alt: "Colour range", aspect: "aspect-[3/4]" },
-    ],
-  },
-];
+const clamp = (v: number, min = 0, max = 1) => Math.min(max, Math.max(min, v));
 
 /* ------------------------------------------------------------------ */
-/*  Scroll-reveal hook                                                 */
+/*  Scroll engine — updates CSS vars on [data-scene] elements and      */
+/*  applies transform on [data-speed] parallax elements every frame.   */
+/*  Uses only transform / opacity for GPU-composited 60 fps.           */
 /* ------------------------------------------------------------------ */
 
-function useScrollReveal() {
+function useScrollEngine() {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    const root = ref.current;
+    if (!root) return;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("revealed");
-          }
-        });
-      },
-      { threshold: 0.15, rootMargin: "0px 0px -60px 0px" },
-    );
+    let ticking = false;
 
-    const items = el.querySelectorAll(".reveal-item");
-    items.forEach((item) => observer.observe(item));
+    const update = () => {
+      const vh = window.innerHeight;
 
-    return () => observer.disconnect();
+      /* --p: 0 → 1 progress through each scene's scrollable area ---- */
+      root.querySelectorAll<HTMLElement>("[data-scene]").forEach((s) => {
+        const r = s.getBoundingClientRect();
+        const scrollable = s.offsetHeight - vh;
+        const p = scrollable > 0 ? clamp(-r.top / scrollable) : 0;
+        s.style.setProperty("--p", p.toFixed(4));
+      });
+
+      /* parallax: offset based on distance from viewport centre ------ */
+      root.querySelectorAll<HTMLElement>("[data-speed]").forEach((el) => {
+        const speed = parseFloat(el.dataset.speed || "0");
+        const r = el.getBoundingClientRect();
+        const offset = (r.top + r.height / 2 - vh / 2) * speed;
+        el.style.transform = `translate3d(0,${offset}px,0)`;
+      });
+
+      ticking = false;
+    };
+
+    const onScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(update);
+        ticking = true;
+      }
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", update, { passive: true });
+    update();
+
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", update);
+    };
   }, []);
 
   return ref;
 }
 
 /* ------------------------------------------------------------------ */
-/*  Row renderers                                                      */
+/*  Stacking card — each card sticks at top:0, next card slides over   */
+/*  Image subtly zooms out and darkens as the card "recedes" behind    */
 /* ------------------------------------------------------------------ */
 
-function TripleRow({ images }: { images: typeof rows[0]["images"] }) {
+function StackCard({
+  src,
+  alt,
+  label,
+  sublabel,
+  index,
+}: {
+  src: string;
+  alt: string;
+  label: string;
+  sublabel: string;
+  index: number;
+}) {
   return (
-    <div className="grid grid-cols-3 gap-2 sm:gap-3">
-      {images.map((img, i) => (
+    <div data-scene={`card-${index}`} style={{ height: "140vh" }}>
+      <div
+        className="sticky top-0 h-screen w-full overflow-hidden"
+        style={{ zIndex: index + 1 }}
+      >
+        {/* Image with slow zoom-out as card recedes */}
         <div
-          key={i}
-          className="reveal-item translate-y-8 opacity-0 transition-all duration-700 ease-out"
-          style={{ transitionDelay: `${i * 150}ms` }}
+          className="absolute inset-0 will-change-transform"
+          style={{ transform: "scale(calc(1.08 - var(--p,0) * 0.08))" }}
         >
-          <div className={`relative overflow-hidden ${img.aspect || "aspect-[3/4]"}`}>
-            <Image
-              src={img.src}
-              alt={img.alt}
-              fill
-              className="object-cover object-top"
-              sizes="33vw"
-            />
-          </div>
+          <Image
+            src={src}
+            alt={alt}
+            fill
+            className="object-cover object-top"
+            sizes="100vw"
+            priority={index === 0}
+          />
         </div>
-      ))}
-    </div>
-  );
-}
 
-function DoubleRow({ images }: { images: typeof rows[0]["images"] }) {
-  return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
-      {images.map((img, i) => (
+        {/* Bottom gradient for text legibility */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent" />
+
+        {/* Darkening veil as next card covers this one */}
         <div
-          key={i}
-          className="reveal-item translate-y-8 opacity-0 transition-all duration-700 ease-out"
-          style={{ transitionDelay: `${i * 200}ms` }}
-        >
-          <div className={`relative overflow-hidden ${img.aspect || "aspect-[16/9]"}`}>
-            <Image
-              src={img.src}
-              alt={img.alt}
-              fill
-              className="object-cover object-center"
-              sizes="(min-width: 640px) 50vw, 100vw"
-            />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SingleRow({ images }: { images: typeof rows[0]["images"] }) {
-  const img = images[0];
-  return (
-    <div className="reveal-item translate-y-8 opacity-0 transition-all duration-1000 ease-out">
-      <div className={`relative overflow-hidden ${img.aspect || "aspect-[21/9]"}`}>
-        <Image
-          src={img.src}
-          alt={img.alt}
-          fill
-          className="object-cover object-top"
-          sizes="100vw"
+          className="pointer-events-none absolute inset-0 bg-black transition-none"
+          style={{ opacity: "calc(var(--p,0) * 0.35)" }}
         />
-      </div>
-    </div>
-  );
-}
 
-function OffsetRow({ images }: { images: typeof rows[0]["images"] }) {
-  return (
-    <div className="grid grid-cols-12 gap-2 sm:gap-3">
-      {/* Left — spans 5 cols, pushed down */}
-      <div
-        className="reveal-item col-span-5 translate-y-8 opacity-0 transition-all duration-700 ease-out pt-12 sm:pt-20"
-      >
-        <div className={`relative overflow-hidden ${images[0]?.aspect || "aspect-[4/5]"}`}>
-          <Image
-            src={images[0].src}
-            alt={images[0].alt}
-            fill
-            className="object-cover object-top"
-            sizes="40vw"
-          />
-        </div>
-      </div>
-      {/* Center — spans 4 cols */}
-      <div
-        className="reveal-item col-span-4 translate-y-8 opacity-0 transition-all duration-700 ease-out"
-        style={{ transitionDelay: "150ms" }}
-      >
-        <div className={`relative overflow-hidden ${images[1]?.aspect || "aspect-[4/5]"}`}>
-          <Image
-            src={images[1].src}
-            alt={images[1].alt}
-            fill
-            className="object-cover object-top"
-            sizes="33vw"
-          />
-        </div>
-      </div>
-      {/* Right — spans 3 cols, pushed down more */}
-      <div
-        className="reveal-item col-span-3 translate-y-8 opacity-0 transition-all duration-700 ease-out pt-24 sm:pt-36"
-        style={{ transitionDelay: "300ms" }}
-      >
-        <div className={`relative overflow-hidden ${images[2]?.aspect || "aspect-[4/5]"}`}>
-          <Image
-            src={images[2].src}
-            alt={images[2].alt}
-            fill
-            className="object-cover object-center"
-            sizes="25vw"
-          />
+        {/* Top-edge hairline for depth between cards */}
+        {index > 0 && (
+          <div className="absolute inset-x-0 top-0 h-px bg-white/10" />
+        )}
+
+        {/* Caption */}
+        <div
+          className="absolute bottom-0 left-0 right-0 p-8 sm:p-16 will-change-transform"
+          style={{
+            opacity: "calc(1 - var(--p,0) * 2)",
+            transform: "translateY(calc(var(--p,0) * -30px))",
+          }}
+        >
+          <p className="text-[10px] font-medium uppercase tracking-[0.4em] text-white/50">
+            {sublabel}
+          </p>
+          <h2 className="mt-2 font-serif text-3xl font-light text-white sm:text-5xl">
+            {label}
+          </h2>
         </div>
       </div>
     </div>
@@ -206,75 +144,289 @@ function OffsetRow({ images }: { images: typeof rows[0]["images"] }) {
 /* ------------------------------------------------------------------ */
 
 export default function LookbookPage() {
-  const containerRef = useScrollReveal();
+  const containerRef = useScrollEngine();
 
   return (
-    <div ref={containerRef}>
-      {/* ---- Lookbook header ---- */}
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-          <span className="text-[10px] font-medium uppercase tracking-[0.25em] text-gray-500 dark:text-gray-400">
-            FW&apos;24
-          </span>
-          <span className="text-sm font-bold uppercase tracking-[0.3em] text-gray-900 dark:text-white">
-            Apoluo
-          </span>
-          <span className="text-[10px] font-medium uppercase tracking-[0.25em] text-gray-500 dark:text-gray-400">
-            Lookbook
-          </span>
-        </div>
-      </div>
-
-      {/* ---- Intro text ---- */}
-      <div className="mx-auto max-w-2xl px-4 py-20 text-center sm:py-28">
-        <p className="reveal-item translate-y-6 font-serif text-xl italic leading-relaxed text-gray-700 opacity-0 transition-all duration-1000 ease-out dark:text-gray-300 sm:text-2xl">
-          The year it all makes sense.
-        </p>
-        <p className="reveal-item mt-6 translate-y-6 font-serif text-lg italic text-gray-500 opacity-0 transition-all duration-1000 ease-out dark:text-gray-400 sm:text-xl"
-          style={{ transitionDelay: "300ms" }}
-        >
-          Apoluo means to fall away&hellip;
-        </p>
-      </div>
-
-      {/* ---- Image rows ---- */}
-      <div className="mx-auto max-w-7xl space-y-16 px-4 pb-24 sm:space-y-24">
-        {rows.map((row, i) => {
-          const key = `row-${i}`;
-          switch (row.layout) {
-            case "triple":
-              return <TripleRow key={key} images={row.images} />;
-            case "double":
-              return <DoubleRow key={key} images={row.images} />;
-            case "single":
-              return <SingleRow key={key} images={row.images} />;
-            case "offset":
-              return <OffsetRow key={key} images={row.images} />;
-          }
-        })}
-      </div>
-
-      {/* ---- Closing ---- */}
-      <div className="border-t border-gray-200 dark:border-gray-800">
-        <div className="mx-auto max-w-2xl px-4 py-16 text-center sm:py-24">
-          <p className="reveal-item translate-y-6 font-serif text-lg italic text-gray-500 opacity-0 transition-all duration-1000 ease-out dark:text-gray-400">
-            Fall / Winter 2024
-          </p>
-          <p className="reveal-item mt-4 translate-y-6 text-[10px] font-semibold uppercase tracking-[0.3em] text-gray-900 opacity-0 transition-all duration-1000 ease-out dark:text-white"
-            style={{ transitionDelay: "200ms" }}
+    <div
+      ref={containerRef}
+      className="bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100"
+    >
+      {/* ═══════════════════════════════════════════════════════════════
+          SCENE 1 — Hero
+          Full-viewport, zoom-on-scroll background, centred title
+          ═══════════════════════════════════════════════════════════════ */}
+      <section data-scene="hero" className="relative" style={{ height: "200vh" }}>
+        <div className="sticky top-0 flex h-screen items-center justify-center overflow-hidden">
+          {/* Background — scales up gently as you scroll */}
+          <div
+            className="absolute inset-0 will-change-transform"
+            style={{ transform: "scale(calc(1 + var(--p,0) * 0.2))" }}
           >
-            IRIS &mdash; Apoluo Collection
+            <Image
+              src="/homepage/1.jpeg"
+              alt="FW24 Hero"
+              fill
+              className="object-cover"
+              sizes="100vw"
+              priority
+            />
+          </div>
+
+          <div className="absolute inset-0 bg-black/40" />
+
+          {/* Title block — fades & floats upward */}
+          <div
+            className="relative text-center will-change-transform"
+            style={{
+              opacity: "calc(1 - var(--p,0) * 2.5)",
+              transform: "translateY(calc(var(--p,0) * -100px))",
+            }}
+          >
+            <p className="text-[10px] font-medium uppercase tracking-[0.5em] text-white/60 sm:text-xs">
+              Fall / Winter 2024
+            </p>
+            <h1 className="mt-4 text-5xl font-extralight uppercase tracking-[0.25em] text-white sm:mt-6 sm:text-[7rem] sm:leading-none">
+              Apoluo
+            </h1>
+            <p className="mt-3 text-[10px] font-medium uppercase tracking-[0.5em] text-white/60 sm:mt-5 sm:text-xs">
+              Lookbook
+            </p>
+          </div>
+
+          {/* Scroll hint */}
+          <div
+            className="absolute bottom-10 left-1/2 -translate-x-1/2"
+            style={{ opacity: "calc(1 - var(--p,0) * 6)" }}
+          >
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-[9px] uppercase tracking-[0.3em] text-white/40">
+                Scroll
+              </span>
+              <div className="relative h-8 w-px overflow-hidden bg-white/20">
+                <div className="absolute inset-x-0 top-0 h-full w-full animate-pulse bg-white/60" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          SCENE 2 — Editorial statement
+          Large serif text fades in, holds, then fades out
+          ═══════════════════════════════════════════════════════════════ */}
+      <section data-scene="statement" className="relative" style={{ height: "160vh" }}>
+        <div className="sticky top-0 flex h-screen items-center justify-center px-6">
+          <div className="max-w-3xl text-center">
+            <p
+              className="font-serif text-2xl leading-relaxed sm:text-4xl sm:leading-relaxed"
+              style={{
+                opacity:
+                  "calc(min(var(--p,0) * 4, 1) * (1 - max(0, (var(--p,0) - 0.7) * 3.33)))",
+                transform: "translateY(calc((1 - min(var(--p,0) * 4, 1)) * 50px))",
+              }}
+            >
+              The year it all makes sense.
+            </p>
+
+            <p
+              className="mt-8 font-serif text-lg italic text-neutral-500 dark:text-neutral-400 sm:mt-12 sm:text-2xl"
+              style={{
+                opacity:
+                  "calc(min(max(0, (var(--p,0) - 0.12) * 4), 1) * (1 - max(0, (var(--p,0) - 0.7) * 3.33)))",
+                transform:
+                  "translateY(calc((1 - min(max(0, (var(--p,0) - 0.12) * 4), 1)) * 50px))",
+              }}
+            >
+              Apoluo means to fall away&hellip;
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          SCENE 3 — Stacking cards
+          Three full-viewport images stack via sticky positioning.
+          Each card darkens & zooms out as the next slides over it.
+          ═══════════════════════════════════════════════════════════════ */}
+      <section>
+        <StackCard
+          src="/homepage/1.jpeg"
+          alt="Chapter I"
+          label="Origins"
+          sublabel="Chapter I"
+          index={0}
+        />
+        <StackCard
+          src="/homepage/2.jpeg"
+          alt="Chapter II"
+          label="Evolution"
+          sublabel="Chapter II"
+          index={1}
+        />
+        <StackCard
+          src="/homepage/4.jpeg"
+          alt="Chapter III"
+          label="Identity"
+          sublabel="Chapter III"
+          index={2}
+        />
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          SCENE 4 — Parallax split
+          Two images scroll at opposing speeds; centre overlay text
+          ═══════════════════════════════════════════════════════════════ */}
+      <section className="relative overflow-hidden py-32 sm:py-48">
+        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-4 px-4 sm:gap-8">
+          <div data-speed="-0.15" className="will-change-transform">
+            <div className="relative aspect-[3/4] overflow-hidden">
+              <Image
+                src="/homepage/3.png"
+                alt="Detail left"
+                fill
+                className="object-cover"
+                sizes="50vw"
+              />
+            </div>
+          </div>
+          <div data-speed="0.15" className="mt-16 will-change-transform sm:mt-32">
+            <div className="relative aspect-[3/4] overflow-hidden">
+              <Image
+                src="/homepage/4.jpeg"
+                alt="Detail right"
+                fill
+                className="object-cover"
+                sizes="50vw"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Floating centre caption */}
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <p className="bg-neutral-50/80 px-8 py-4 font-serif text-lg italic text-neutral-600 backdrop-blur-sm dark:bg-neutral-950/80 dark:text-neutral-400 sm:text-2xl">
+            Between stillness &amp; motion
           </p>
         </div>
-      </div>
+      </section>
 
-      {/* Global styles for reveal animation */}
-      <style jsx global>{`
-        .revealed {
-          opacity: 1 !important;
-          transform: translateY(0) !important;
-        }
-      `}</style>
+      {/* ═══════════════════════════════════════════════════════════════
+          SCENE 5 — Full-bleed zoom
+          Sticky full-viewport image that scales on scroll; overlay
+          text fades in at the midpoint and out near the end
+          ═══════════════════════════════════════════════════════════════ */}
+      <section data-scene="bleed" className="relative" style={{ height: "180vh" }}>
+        <div className="sticky top-0 h-screen overflow-hidden">
+          <div
+            className="absolute inset-0 will-change-transform"
+            style={{ transform: "scale(calc(1 + var(--p,0) * 0.15))" }}
+          >
+            <Image
+              src="/homepage/2.jpeg"
+              alt="Full bleed editorial"
+              fill
+              className="object-cover object-top"
+              sizes="100vw"
+            />
+          </div>
+
+          <div className="absolute inset-0 bg-black/25" />
+
+          {/* Text overlay — appears at ~30 % progress, fades at ~80 % */}
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{
+              opacity:
+                "calc(min(max(0, (var(--p,0) - 0.3) * 3.33), 1) * (1 - max(0, (var(--p,0) - 0.8) * 5)))",
+            }}
+          >
+            <div className="text-center">
+              <p className="text-[10px] font-medium uppercase tracking-[0.4em] text-white/60">
+                The Collection
+              </p>
+              <p className="mt-4 font-serif text-3xl font-light text-white sm:text-6xl">
+                Fall / Winter 2024
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          SCENE 6 — Detail gallery
+          Offset three-column grid; each column parallaxes at its own
+          speed for a subtle layered depth effect
+          ═══════════════════════════════════════════════════════════════ */}
+      <section className="relative overflow-hidden py-24 sm:py-40">
+        <div className="mx-auto grid max-w-7xl grid-cols-12 gap-4 px-4">
+          {/* Left — tall, slow */}
+          <div data-speed="-0.1" className="col-span-5 will-change-transform">
+            <div className="relative aspect-[3/5] overflow-hidden">
+              <Image
+                src="/homepage/4.jpeg"
+                alt="Detail 1"
+                fill
+                className="object-cover object-top"
+                sizes="40vw"
+              />
+            </div>
+          </div>
+
+          {/* Centre — offset down, faster */}
+          <div
+            data-speed="0.12"
+            className="col-span-4 mt-20 will-change-transform sm:mt-32"
+          >
+            <div className="relative aspect-[3/4] overflow-hidden">
+              <Image
+                src="/homepage/1.jpeg"
+                alt="Detail 2"
+                fill
+                className="object-cover"
+                sizes="33vw"
+              />
+            </div>
+          </div>
+
+          {/* Right — small, pushed down further */}
+          <div
+            data-speed="-0.08"
+            className="col-span-3 mt-40 will-change-transform sm:mt-56"
+          >
+            <div className="relative aspect-[4/5] overflow-hidden">
+              <Image
+                src="/homepage/3.png"
+                alt="Detail 3"
+                fill
+                className="object-cover"
+                sizes="25vw"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          SCENE 7 — Closing
+          ═══════════════════════════════════════════════════════════════ */}
+      <section data-scene="closing" className="relative" style={{ height: "130vh" }}>
+        <div className="sticky top-0 flex h-screen flex-col items-center justify-center border-t border-neutral-200 dark:border-neutral-800">
+          <div
+            className="text-center"
+            style={{
+              opacity: "calc(min(var(--p,0) * 3.5, 1))",
+              transform: "translateY(calc((1 - min(var(--p,0) * 3.5, 1)) * 50px))",
+            }}
+          >
+            <p className="font-serif text-lg italic text-neutral-500 dark:text-neutral-400 sm:text-2xl">
+              Fall / Winter 2024
+            </p>
+            <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.3em] sm:text-xs">
+              IRIS &mdash; Apoluo Collection
+            </p>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

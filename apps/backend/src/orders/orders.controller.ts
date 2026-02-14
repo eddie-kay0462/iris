@@ -23,6 +23,34 @@ export class OrdersController {
 
   // --- Admin routes (must come before parameterized routes) ---
 
+  @Get('admin/stats')
+  @RequirePermission('orders:read')
+  getAdminStats() {
+    return this.ordersService.getAdminStats();
+  }
+
+  @Get('admin/analytics')
+  @RequirePermission('orders:read')
+  getAnalytics(
+    @Query() query: { from_date?: string; to_date?: string },
+  ) {
+    return this.ordersService.getAnalytics(query);
+  }
+
+  @Get('admin/customers')
+  @RequirePermission('orders:read')
+  findAdminCustomers(
+    @Query() query: { search?: string; page?: string; limit?: string },
+  ) {
+    return this.ordersService.findAdminCustomers(query);
+  }
+
+  @Get('admin/customers/:id')
+  @RequirePermission('orders:read')
+  findAdminCustomer(@Param('id') id: string) {
+    return this.ordersService.findAdminCustomer(id);
+  }
+
   @Get('admin/list')
   @RequirePermission('orders:read')
   findAdmin(@Query() query: QueryOrdersDto) {
