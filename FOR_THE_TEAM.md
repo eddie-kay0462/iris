@@ -1156,4 +1156,134 @@ npm run dev
 
 ---
 
+## Week 3, Day 2 — Storefront Redesign: Homepage, Products, Checkout & Lookbook (Feb 2025)
+
+### What Got Done
+
+**Major storefront overhaul** — redesigned the checkout page, built a full editorial homepage, redesigned the products catalog, and created a lookbook page with scroll-triggered animations.
+
+### 1. Checkout Page Redesign
+
+Completely rewrote the checkout page to match a professional e-commerce design:
+
+- **Three numbered step sections** — (1) Customer (auto-filled email with green check), (2) Delivery (shipping form), (3) Payment
+- **Two-column layout** — form fields on the left, order summary on the right with gray background
+- **Order summary** shows product images, names, variant info, quantities, subtotal, and shipping cost
+- **Delivery options** — Standard (GH₵40) and Express (GH₵68) radio buttons
+- **Promo code** input field (UI ready, logic TBD)
+- **Paystack integration** — uppercase "PAY NOW" button triggers Paystack popup
+- Still uses Paystack only (no PayPal despite the reference design having it)
+
+### 2. Homepage
+
+Built an editorial fashion homepage at `/` with full-screen image sections:
+
+- **New shop header** — centered "IRIS" logo with left-side nav links (Shop, New Arrivals, Lookbook) in uppercase tracking-widest style. Shopping bag icon with cart badge. Mobile hamburger menu.
+- **New shop footer** — 4-column grid (Brand tagline, Shop links, Help links, Connect/social). Copyright bar at bottom.
+- **4 full-width hero sections** stacked vertically, each with:
+  - Full-bleed background image (from `/public/homepage/`)
+  - Dark overlay for text readability
+  - Centered title, subtitle, and CTA button with hover effect
+  - `object-top` positioning for portrait images so faces are visible
+- **Images:** Intercessor Department camo collection, Psalm 52 black set, Essentials sweats, Betrayer's Kiss jacket
+- Header + footer wrap ALL shop pages as the shared template
+
+### 3. Products Page Redesign
+
+Redesigned to match an editorial fashion catalog:
+
+- **"DISCOVER ALL PRODUCTS"** heading in uppercase tracking-widest
+- **Gender tabs** — "Shop All | Men's | Women's" with underline active state
+- **Category tabs** — All, Sale, Shirts, Pants, Shorts, Hoodies and Sweatshirts, Ties/Hats, Accessories (scrollable)
+- **"Match..." search** — minimal underline-style input
+- **4-column product grid** (was 3) — `grid-cols-2 sm:3 lg:4`
+- **Cleaner product cards** — uppercase title, subtle price text, `object-top` so model faces show, no rounded corners
+- **Minimal pagination** — uppercase Previous/Next text links
+
+### 4. Lookbook Page (NEW)
+
+Created `/lookbook` with advanced scroll-triggered animations:
+
+- **Sub-header** — "FW'24 | APOLUO | LOOKBOOK" in the editorial style from the reference design
+- **Serif italic intro text** — "The year it all makes sense." / "Apoluo means to fall away..."
+- **5 image rows** with varying layouts:
+  - Triple row (3 equal portrait columns)
+  - Double row (2 wide landscape images)
+  - Offset row (staggered 5/4/3 column grid with different vertical offsets — editorial magazine feel)
+  - Single row (full-width cinematic 21:9 aspect)
+  - Triple row (closing)
+- **Scroll-triggered reveal animations** — images and text fade up with staggered delays as you scroll. Uses IntersectionObserver with `threshold: 0.15`.
+- **Closing section** — "Fall / Winter 2024" / "IRIS — Apoluo Collection"
+- Reuses the homepage images in creative arrangements
+
+### 5. Gender Value Migration
+
+Changed gender value from `unisex` to `all` across the stack:
+- Backend DTOs updated (`create-product.dto.ts`, `query-products.dto.ts`)
+- Frontend types and validation updated
+- SQL migration: `supabase/migrations/20260214100000_replace_unisex_with_all_in_products.sql`
+
+### Files Created
+
+| File | What |
+|------|------|
+| `apps/frontend/app/(shop)/page.tsx` | Homepage with 4 editorial image sections |
+| `apps/frontend/app/(shop)/lookbook/page.tsx` | Lookbook with scrollytelling animations |
+| `apps/frontend/public/homepage/1.jpeg` | Camo collection image |
+| `apps/frontend/public/homepage/2.jpeg` | Black set image |
+| `apps/frontend/public/homepage/3.png` | Essentials pants image |
+| `apps/frontend/public/homepage/4.jpeg` | Betrayer's Kiss jacket image |
+| `supabase/migrations/20260214100000_...` | Gender unisex→all migration |
+
+### Files Modified
+
+| File | What Changed |
+|------|-------------|
+| `apps/frontend/app/(shop)/layout.tsx` | Full rewrite — centered logo header, nav with Lookbook link, footer, mobile menu |
+| `apps/frontend/app/(shop)/checkout/page.tsx` | Full rewrite — 3-step checkout with delivery options, order summary |
+| `apps/frontend/app/(shop)/components/ProductFilters.tsx` | Gender tabs, category tabs, Match search input |
+| `apps/frontend/app/(shop)/components/ProductGrid.tsx` | 4-column grid |
+| `apps/frontend/app/(shop)/components/ProductCard.tsx` | Cleaner card, uppercase title, object-top |
+| `apps/frontend/app/(shop)/products/page.tsx` | New heading, category filter, 16 items per page |
+| `apps/frontend/app/page.tsx` | Removed (homepage now at `(shop)/page.tsx`) |
+| `apps/backend/src/products/dto/create-product.dto.ts` | `unisex` → `all` |
+| `apps/backend/src/products/dto/query-products.dto.ts` | `unisex` → `all` |
+| `apps/frontend/lib/api/products.ts` | `unisex` → `all` |
+| `apps/frontend/lib/validation/product.ts` | `unisex` → `all` |
+| `apps/frontend/app/admin/(dashboard)/products/page.tsx` | `Unisex` → `All` in filter |
+| `apps/frontend/app/admin/components/products/ProductForm.tsx` | `unisex` → `all` in gender options |
+
+### Want to Test It?
+
+```bash
+# Terminal 1 — backend
+cd apps/backend
+npm run start:dev
+
+# Terminal 2 — frontend
+cd apps/frontend
+npm run dev
+```
+
+- **Homepage:** Go to `/` — see 4 full-screen image sections with centered text
+- **Products:** Go to `/products` — see the redesigned catalog with 4-column grid and category tabs
+- **Lookbook:** Go to `/lookbook` — scroll down to see images fade in with staggered animations
+- **Checkout:** Add items to cart → `/checkout` — see the 3-step layout with delivery options
+- **Header/Footer:** Navigate between pages — shared header with centered IRIS logo and footer on all shop pages
+
+### Something Not Working?
+
+**Homepage images not loading** — Make sure `public/homepage/` has the 4 image files (1.jpeg, 2.jpeg, 3.png, 4.jpeg).
+
+**Gender "unisex" causing errors** — Run the SQL migration in Supabase SQL Editor to update existing products from `unisex` to `all`.
+
+### Next Up
+
+- Email notifications (order confirmation, shipping updates)
+- Discount codes / coupons
+- Customer reviews
+- Analytics dashboard with real order data
+
+---
+
 *Last updated: February 2025*

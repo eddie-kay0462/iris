@@ -209,7 +209,7 @@ export function ProductForm({ mode, product }: ProductFormProps) {
                 <option value="">None</option>
                 <option value="men">Men</option>
                 <option value="women">Women</option>
-                <option value="unisex">Unisex</option>
+                <option value="all">All</option>
               </select>
             </div>
             <div>

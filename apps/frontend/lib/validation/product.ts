@@ -26,7 +26,7 @@ export const productSchema = z.object({
   handle: z.string().optional(),
   base_price: z.coerce.number().min(0, "Price must be positive").optional(),
   status: z.enum(["draft", "active", "archived"]).optional(),
-  gender: z.enum(["men", "women", "unisex"]).optional(),
+  gender: z.enum(["men", "women", "all"]).optional(),
   product_type: z.string().optional(),
   vendor: z.string().optional(),
   tags: z.array(z.string()).optional(),

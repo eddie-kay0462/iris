@@ -90,7 +90,7 @@ export class CreateProductDto {
   status?: string;
 
   @IsOptional()
-  @IsEnum(['men', 'women', 'unisex'])
+  @IsEnum(['men', 'women', 'all'])
   gender?: string;
 
   @IsOptional()

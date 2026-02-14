@@ -36,7 +36,7 @@ export interface Product {
   description: string | null;
   base_price: number | null;
   status: "draft" | "active" | "archived";
-  gender: "men" | "women" | "unisex" | null;
+  gender: "men" | "women" | "all" | null;
   product_type: string | null;
   vendor: string | null;
   tags: string[] | null;
