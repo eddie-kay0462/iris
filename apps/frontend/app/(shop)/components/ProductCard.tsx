@@ -39,12 +39,12 @@ export function ProductCard({ product }: { product: Product }) {
         <div className="flex items-center gap-2">
           {price != null && (
             <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              ₦{price.toLocaleString()}
+              GH₵{price.toLocaleString()}
             </span>
           )}
           {comparePrice != null && comparePrice > (price || 0) && (
             <span className="text-xs text-gray-400 line-through dark:text-gray-500">
-              ₦{comparePrice.toLocaleString()}
+              GH₵{comparePrice.toLocaleString()}
             </span>
           )}
         </div>

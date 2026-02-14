@@ -60,7 +60,7 @@ export default function AdminProductsPage() {
       header: "Price",
       render: (row) =>
         row.base_price != null
-          ? `₦${row.base_price.toLocaleString()}`
+          ? `GH₵${row.base_price.toLocaleString()}`
           : "—",
     },
     {

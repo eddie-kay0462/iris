@@ -74,12 +74,12 @@ export default function ProductDetailPage({ params }: PageProps) {
           <div className="flex items-baseline gap-3">
             {displayPrice != null && (
               <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                ₦{displayPrice.toLocaleString()}
+                GH₵{displayPrice.toLocaleString()}
               </span>
             )}
             {comparePrice != null && comparePrice > (displayPrice || 0) && (
               <span className="text-lg text-gray-400 line-through dark:text-gray-500">
-                ₦{comparePrice.toLocaleString()}
+                GH₵{comparePrice.toLocaleString()}
               </span>
             )}
           </div>

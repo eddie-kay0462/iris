@@ -170,7 +170,7 @@ export function VariantsEditor({
                   </td>
                   <td className="py-2 text-slate-500">{v.sku || "—"}</td>
                   <td className="py-2">
-                    {v.price != null ? `₦${v.price.toLocaleString()}` : "—"}
+                    {v.price != null ? `GH₵${v.price.toLocaleString()}` : "—"}
                   </td>
                   <td className="py-2">
                     <span

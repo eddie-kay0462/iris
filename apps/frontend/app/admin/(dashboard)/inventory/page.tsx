@@ -85,7 +85,7 @@ export default function AdminInventoryPage() {
       header: "Value",
       render: (row) => {
         const val = (row.price || 0) * (row.inventory_quantity || 0);
-        return val > 0 ? `₦${val.toLocaleString()}` : "—";
+        return val > 0 ? `GH₵${val.toLocaleString()}` : "—";
       },
     },
     {
@@ -138,7 +138,7 @@ export default function AdminInventoryPage() {
             />
             <StatsCard
               label="Total Value"
-              value={`₦${(stats?.totalValue ?? 0).toLocaleString()}`}
+              value={`GH₵${(stats?.totalValue ?? 0).toLocaleString()}`}
             />
           </>
         )}
