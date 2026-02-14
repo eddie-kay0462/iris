@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../common/supabase/supabase.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -8,7 +9,35 @@ import { UpdateVariantDto } from './dto/update-variant.dto';
 
 @Injectable()
 export class ProductsService {
-  constructor(private supabase: SupabaseService) {}
+  private supabaseUrl: string;
+
+  constructor(
+    private supabase: SupabaseService,
+    private configService: ConfigService,
+  ) {
+    this.supabaseUrl = this.configService.getOrThrow<string>('SUPABASE_URL');
+  }
+
+  /** Resolve image src to full public URL if it's a storage path */
+  private resolveImageUrl(src: string): string {
+    if (!src) return src;
+    // Already a full URL
+    if (src.startsWith('http://') || src.startsWith('https://')) return src;
+    // Supabase storage path — resolve to public URL
+    return `${this.supabaseUrl}/storage/v1/object/public/${src}`;
+  }
+
+  /** Resolve all image URLs in a product */
+  private resolveProductImages(product: any): any {
+    if (!product) return product;
+    if (product.product_images && Array.isArray(product.product_images)) {
+      product.product_images = product.product_images.map((img: any) => ({
+        ...img,
+        src: this.resolveImageUrl(img.src),
+      }));
+    }
+    return product;
+  }
 
   private slugify(title: string): string {
     return title
@@ -67,7 +96,7 @@ export class ProductsService {
     if (error) throw error;
 
     return {
-      data: data || [],
+      data: (data || []).map((p) => this.resolveProductImages(p)),
       total: count || 0,
       page,
       limit,
@@ -96,7 +125,7 @@ export class ProductsService {
 
     const { data, error } = await q.single();
     if (error || !data) throw new NotFoundException('Product not found');
-    return data;
+    return this.resolveProductImages(data);
   }
 
   async findAdmin(query: QueryProductsDto) {
@@ -137,7 +166,7 @@ export class ProductsService {
     if (error) throw error;
 
     return {
-      data: data || [],
+      data: (data || []).map((p) => this.resolveProductImages(p)),
       total: count || 0,
       page,
       limit,
@@ -155,7 +184,7 @@ export class ProductsService {
       .single();
 
     if (error || !data) throw new NotFoundException('Product not found');
-    return data;
+    return this.resolveProductImages(data);
   }
 
   async create(dto: CreateProductDto, userId: string) {

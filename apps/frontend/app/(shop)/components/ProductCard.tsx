@@ -14,7 +14,7 @@ export function ProductCard({ product }: { product: Product }) {
       href={`/product/${product.handle || product.id}`}
       className="group block"
     >
-      <div className="relative aspect-[3/4] overflow-hidden rounded-lg bg-gray-100">
+      <div className="relative aspect-[3/4] overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
         {image ? (
           <img
             src={image.src}
@@ -22,28 +22,28 @@ export function ProductCard({ product }: { product: Product }) {
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-gray-400">
+          <div className="flex h-full items-center justify-center text-sm text-gray-400 dark:text-gray-500">
             No image
           </div>
         )}
         {isNew && (
-          <span className="absolute left-2 top-2 rounded bg-black px-2 py-0.5 text-xs font-medium text-white">
+          <span className="absolute left-2 top-2 rounded bg-black px-2 py-0.5 text-xs font-medium text-white dark:bg-white dark:text-black">
             New
           </span>
         )}
       </div>
       <div className="mt-3 space-y-1">
-        <h3 className="text-sm font-medium text-gray-900 group-hover:underline">
+        <h3 className="text-sm font-medium text-gray-900 group-hover:underline dark:text-gray-100">
           {product.title}
         </h3>
         <div className="flex items-center gap-2">
           {price != null && (
-            <span className="text-sm font-semibold text-gray-900">
+            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               ₦{price.toLocaleString()}
             </span>
           )}
           {comparePrice != null && comparePrice > (price || 0) && (
-            <span className="text-xs text-gray-400 line-through">
+            <span className="text-xs text-gray-400 line-through dark:text-gray-500">
               ₦{comparePrice.toLocaleString()}
             </span>
           )}

@@ -20,11 +20,11 @@ export default function ProductDetailPage({ params }: PageProps) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-          <div className="aspect-square animate-pulse rounded-lg bg-gray-100" />
+          <div className="aspect-square animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
           <div className="space-y-4">
-            <div className="h-8 w-3/4 animate-pulse rounded bg-gray-100" />
-            <div className="h-6 w-1/4 animate-pulse rounded bg-gray-100" />
-            <div className="h-24 animate-pulse rounded bg-gray-100" />
+            <div className="h-8 w-3/4 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+            <div className="h-6 w-1/4 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+            <div className="h-24 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
           </div>
         </div>
       </div>
@@ -34,7 +34,7 @@ export default function ProductDetailPage({ params }: PageProps) {
   if (error || !product) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8">
-        <p className="text-center text-gray-500">Product not found.</p>
+        <p className="text-center text-gray-500 dark:text-gray-400">Product not found.</p>
       </div>
     );
   }
@@ -48,12 +48,12 @@ export default function ProductDetailPage({ params }: PageProps) {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       {/* Breadcrumbs */}
-      <nav className="mb-6 text-sm text-gray-500">
-        <a href="/products" className="hover:text-gray-700">
+      <nav className="mb-6 text-sm text-gray-500 dark:text-gray-400">
+        <a href="/products" className="hover:text-gray-700 dark:hover:text-gray-200">
           Products
         </a>
         <span className="mx-2">/</span>
-        <span className="text-gray-900">{product.title}</span>
+        <span className="text-gray-900 dark:text-white">{product.title}</span>
       </nav>
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
@@ -63,22 +63,22 @@ export default function ProductDetailPage({ params }: PageProps) {
         {/* Product info */}
         <div className="space-y-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
               {product.title}
             </h1>
             {product.vendor && (
-              <p className="mt-1 text-sm text-gray-500">{product.vendor}</p>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{product.vendor}</p>
             )}
           </div>
 
           <div className="flex items-baseline gap-3">
             {displayPrice != null && (
-              <span className="text-2xl font-bold text-gray-900">
+              <span className="text-2xl font-bold text-gray-900 dark:text-white">
                 ₦{displayPrice.toLocaleString()}
               </span>
             )}
             {comparePrice != null && comparePrice > (displayPrice || 0) && (
-              <span className="text-lg text-gray-400 line-through">
+              <span className="text-lg text-gray-400 line-through dark:text-gray-500">
                 ₦{comparePrice.toLocaleString()}
               </span>
             )}
@@ -93,7 +93,7 @@ export default function ProductDetailPage({ params }: PageProps) {
 
           {/* Stock status */}
           <p
-            className={`text-sm font-medium ${inStock ? "text-green-600" : "text-red-600"}`}
+            className={`text-sm font-medium ${inStock ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
           >
             {inStock ? "In stock" : "Out of stock"}
           </p>
@@ -101,18 +101,18 @@ export default function ProductDetailPage({ params }: PageProps) {
           {/* Add to cart (placeholder) */}
           <button
             disabled={!inStock}
-            className="w-full rounded-lg bg-black py-3 text-sm font-semibold text-white disabled:bg-gray-300 disabled:cursor-not-allowed"
+            className="w-full rounded-lg bg-black py-3 text-sm font-semibold text-white disabled:bg-gray-300 disabled:cursor-not-allowed dark:bg-white dark:text-black dark:disabled:bg-gray-700 dark:disabled:text-gray-500"
           >
             {inStock ? "Add to cart" : "Sold out"}
           </button>
 
           {/* Description */}
           {product.description && (
-            <div className="border-t border-gray-200 pt-6">
-              <h2 className="mb-2 text-sm font-medium text-gray-900">
+            <div className="border-t border-gray-200 pt-6 dark:border-gray-700">
+              <h2 className="mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">
                 Description
               </h2>
-              <p className="text-sm leading-relaxed text-gray-600">
+              <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
                 {product.description}
               </p>
             </div>
@@ -124,7 +124,7 @@ export default function ProductDetailPage({ params }: PageProps) {
               {product.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600"
+                  className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-400"
                 >
                   {tag}
                 </span>

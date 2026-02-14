@@ -15,7 +15,12 @@ export class SupabaseService {
     );
 
     this.client = createClient(url, anonKey);
-    this.adminClient = createClient(url, serviceRoleKey);
+    this.adminClient = createClient(url, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
   }
 
   /** Anon-key client (respects RLS) */
