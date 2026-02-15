@@ -41,10 +41,10 @@ export function BarChart({
       preserveAspectRatio="xMidYMid meet"
     >
       {/* Grid lines */}
-      {ticks.map((tick) => {
+      {ticks.map((tick, i) => {
         const y = padding.top + chartH - (tick / maxVal) * chartH;
         return (
-          <g key={tick}>
+          <g key={i}>
             <line
               x1={padding.left}
               y1={y}
