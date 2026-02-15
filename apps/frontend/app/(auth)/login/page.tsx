@@ -23,7 +23,7 @@ function LoginForm() {
       });
 
       setToken(data.access_token);
-      router.push("/products");
+      router.push("/");
     } catch (err: any) {
       const msg = err?.data?.message ?? err?.message;
       setError(

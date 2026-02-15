@@ -1480,4 +1480,105 @@ npm run dev
 
 ---
 
+## Week 3, Day 5 — Admin App Separation (Feb 2025)
+
+### What Got Done
+
+**Separated the admin panel into its own standalone Next.js app.** The admin dashboard used to live inside the storefront at `/admin/*`. Now it's a fully independent app at `apps/admin/` running on port 3001, while the storefront stays at `apps/frontend/` on port 3000.
+
+### Why This Matters
+
+- **Independent deployments** — Ship admin changes without touching the storefront, and vice versa
+- **Smaller bundles** — The storefront no longer ships admin code (DataTable, Sidebar, analytics charts, etc.) to customers
+- **Cleaner separation** — Each app has exactly the dependencies it needs. Admin doesn't have `react-paystack`, `sharp`, or `zustand`. Storefront doesn't have admin components.
+- **Simpler routing** — Admin routes no longer need the `/admin` prefix. Dashboard is at `/`, products at `/products`, orders at `/orders`, etc.
+
+### New Structure
+
+```
+iris/
+├── apps/
+│   ├── frontend/   (storefront — port 3000)
+│   ├── admin/      (admin panel — port 3001)  ← NEW
+│   └── backend/    (NestJS API — port 4000)
+```
+
+### What Changed
+
+**New `apps/admin/` app:**
+- Own `package.json` (name: `iris-admin`, dev runs on port 3001)
+- Own `tsconfig.json`, `next.config.ts`, `postcss.config.mjs`
+- Own `lib/` with copies of: API client, RBAC, validation, React Query provider, Supabase clients, auth utils
+- Own `types/database.types.ts`
+- All admin pages moved from `app/admin/(auth|dashboard)/...` to `app/(auth|dashboard)/...`
+- All admin components moved from `app/admin/components/` to `app/components/`
+- All `/admin` prefixes stripped from links, redirects, and router.push calls
+- Simplified proxy — every route except `/login` requires admin auth (no customer route logic)
+- `.env.local` with Supabase + API URL config
+
+**Storefront (`apps/frontend/`) cleaned up:**
+- `app/admin/` directory deleted entirely (36 files removed)
+- `lib/supabase/proxy.ts` simplified — removed all admin route protection, keeps only customer route protection
+- No more admin-related code in the storefront bundle
+
+**Backend (`apps/backend/src/main.ts`):**
+- CORS updated to accept both `http://localhost:3000` (storefront) and `http://localhost:3001` (admin)
+
+**Bug fix:** Removed `compare_at_price` from the products CSV export query — the column didn't exist in the live database, causing an internal server error when exporting products.
+
+### Running Both Apps
+
+```bash
+# Terminal 1 — backend
+cd apps/backend
+npm run start:dev
+# Runs on http://localhost:4000
+
+# Terminal 2 — admin
+cd apps/admin
+npm run dev
+# Runs on http://localhost:3001
+
+# Terminal 3 — storefront
+cd apps/frontend
+npm run dev
+# Runs on http://localhost:3000
+```
+
+**All three must be running for full functionality.**
+
+### Admin Environment Variables
+
+Create `apps/admin/.env.local` with:
+```
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_API_URL=http://localhost:4000/api
+```
+
+### Want to Test It?
+
+- **Admin login:** Go to `http://localhost:3001/login` → log in with admin credentials
+- **Admin dashboard:** `http://localhost:3001/` → stats cards, orders by status
+- **Admin pages:** Products, Orders, Customers, Inventory, Analytics, Payments, Settings, Waitlist — all work as before, just without the `/admin` prefix
+- **Storefront:** `http://localhost:3000` → works exactly as before
+- **Storefront /admin:** `http://localhost:3000/admin` → 404 (admin routes no longer exist here)
+
+### Something Not Working?
+
+**Admin pages show empty data** — Restart the NestJS backend. The backend needs to be running with the updated CORS config that allows port 3001.
+
+**CORS errors in browser console** — Make sure the backend was restarted after the CORS change. The `ADMIN_URL` env var in the backend defaults to `http://localhost:3001`.
+
+**Products CSV export shows "Internal Server Error"** — This was fixed by removing the `compare_at_price` column from the export query. Make sure you have the latest backend code.
+
+### Next Up
+
+- Waitlist & Inner Circle pages
+- Admin waitlist management
+- Email notifications (order confirmation, shipping updates)
+- Discount codes / coupons
+
+---
+
 *Last updated: February 2025*

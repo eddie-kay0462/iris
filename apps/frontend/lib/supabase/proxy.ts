@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ADMIN_ROLES, type UserRole } from "@/lib/rbac/permissions";
 
 /**
  * JWT Cookie name set by the frontend API client.
@@ -27,11 +26,9 @@ function decodeJwtPayload(token: string): any | null {
  * Supabase Proxy (JWT-aware)
  *
  * This proxy runs on every request and handles:
- * 1. Customer route protection - Redirects unauthenticated users to /login
- * 2. Admin route protection - Blocks unauthorized access to /admin/*
+ * - Customer route protection - Redirects unauthenticated users to /login
  *
- * Auth is now JWT-based. The JWT is stored in a cookie (iris_jwt) by the
- * frontend API client so this server-side proxy can read it.
+ * Admin routes are now served by the separate admin app (apps/admin).
  */
 export async function supabaseProxy(request: NextRequest) {
   const response = NextResponse.next({
@@ -46,9 +43,6 @@ export async function supabaseProxy(request: NextRequest) {
   const isAuthenticated =
     user && user.exp && user.exp * 1000 > Date.now();
 
-  const isAdminRoute = pathname.startsWith("/admin");
-  const isAdminLoginPage = pathname === "/admin/login";
-
   const protectedCustomerRoutes = ["/profile", "/inner-circle", "/waitlist"];
   const isProtectedCustomerRoute = protectedCustomerRoutes.some(
     (route) => pathname === route || pathname.startsWith(route + "/")
@@ -59,31 +53,6 @@ export async function supabaseProxy(request: NextRequest) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(loginUrl);
-  }
-
-  // Admin routes need authentication + admin role
-  if (isAdminRoute && !isAdminLoginPage) {
-    if (!isAuthenticated) {
-      const loginUrl = new URL("/admin/login", request.url);
-      loginUrl.searchParams.set("redirectTo", pathname);
-      return NextResponse.redirect(loginUrl);
-    }
-
-    const role = (user?.role as UserRole) ?? "public";
-    if (!ADMIN_ROLES.includes(role)) {
-      const loginUrl = new URL("/admin/login", request.url);
-      loginUrl.searchParams.set("error", "unauthorized");
-      return NextResponse.redirect(loginUrl);
-    }
-  }
-
-  // If user is on admin login page but already authenticated as admin,
-  // redirect to admin dashboard
-  if (isAdminLoginPage && isAuthenticated) {
-    const role = (user?.role as UserRole) ?? "public";
-    if (ADMIN_ROLES.includes(role)) {
-      return NextResponse.redirect(new URL("/admin", request.url));
-    }
   }
 
   return response;
