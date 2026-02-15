@@ -2,7 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { useAnalytics } from "@/lib/api/orders";
+import { StatsCard } from "../../components/StatsCard";
 import { StatusBadge } from "../../components/StatusBadge";
+import { BarChart } from "./components/BarChart";
+import { OrderFunnel } from "./components/OrderFunnel";
+import { DollarSign, ShoppingCart, TrendingUp } from "lucide-react";
 
 function DateRangeSelector({
   value,
@@ -25,62 +29,31 @@ function DateRangeSelector({
   );
 }
 
-function RevenueChart({ data }: { data: Record<string, number> }) {
-  const entries = Object.entries(data).sort(([a], [b]) => a.localeCompare(b));
-  if (entries.length === 0) return <p className="text-sm text-slate-500">No data in this period.</p>;
-
-  const maxVal = Math.max(...entries.map(([, v]) => v), 1);
-
+function PeriodComparison({
+  current,
+  previous,
+}: {
+  current: number;
+  previous: number;
+}) {
+  if (previous === 0 && current === 0) return null;
+  if (previous === 0) {
+    return <span className="text-green-600 font-medium">New</span>;
+  }
+  const pctChange = ((current - previous) / previous) * 100;
+  const isUp = pctChange >= 0;
   return (
-    <div className="space-y-1.5">
-      {entries.map(([day, amount]) => (
-        <div key={day} className="flex items-center gap-3 text-xs">
-          <span className="w-20 shrink-0 text-slate-500">{day.slice(5)}</span>
-          <div className="flex-1">
-            <div
-              className="h-5 rounded bg-blue-500 transition-all"
-              style={{ width: `${(amount / maxVal) * 100}%`, minWidth: amount > 0 ? "4px" : "0px" }}
-            />
-          </div>
-          <span className="w-24 shrink-0 text-right font-medium text-slate-700">
-            GH₵{amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function OrdersChart({ data }: { data: Record<string, number> }) {
-  const entries = Object.entries(data).sort(([a], [b]) => a.localeCompare(b));
-  if (entries.length === 0) return <p className="text-sm text-slate-500">No data in this period.</p>;
-
-  const maxVal = Math.max(...entries.map(([, v]) => v), 1);
-
-  return (
-    <div className="space-y-1.5">
-      {entries.map(([day, count]) => (
-        <div key={day} className="flex items-center gap-3 text-xs">
-          <span className="w-20 shrink-0 text-slate-500">{day.slice(5)}</span>
-          <div className="flex-1">
-            <div
-              className="h-5 rounded bg-indigo-500 transition-all"
-              style={{ width: `${(count / maxVal) * 100}%`, minWidth: count > 0 ? "4px" : "0px" }}
-            />
-          </div>
-          <span className="w-10 shrink-0 text-right font-medium text-slate-700">
-            {count}
-          </span>
-        </div>
-      ))}
-    </div>
+    <span className={`font-medium ${isUp ? "text-green-600" : "text-red-500"}`}>
+      {isUp ? "↑" : "↓"}
+      {Math.abs(pctChange).toFixed(1)}% vs prev period
+    </span>
   );
 }
 
 function TopProducts({
   products,
 }: {
-  products: { name: string; revenue: number; unitsSold: number }[];
+  products: { name: string; revenue: number; unitsSold: number; productId: string | null; imageUrl: string | null }[];
 }) {
   if (products.length === 0) return <p className="text-sm text-slate-500">No product data.</p>;
 
@@ -91,8 +64,19 @@ function TopProducts({
       {products.map((p, i) => (
         <div key={p.name} className="space-y-1">
           <div className="flex items-center justify-between text-sm">
-            <span className="font-medium text-slate-900">
-              <span className="mr-2 text-slate-400">{i + 1}.</span>
+            <span className="flex items-center gap-2 font-medium text-slate-900">
+              <span className="text-slate-400">{i + 1}.</span>
+              {p.imageUrl ? (
+                <img
+                  src={p.imageUrl}
+                  alt=""
+                  className="h-8 w-8 rounded object-cover"
+                />
+              ) : (
+                <span className="flex h-8 w-8 items-center justify-center rounded bg-slate-100 text-xs text-slate-400">
+                  —
+                </span>
+              )}
               {p.name}
             </span>
             <span className="text-slate-600">
@@ -125,6 +109,16 @@ export default function AdminAnalyticsPage() {
     from_date: fromDate,
   });
 
+  const avgOrderValue =
+    data && data.totalOrders > 0
+      ? data.totalRevenue / data.totalOrders
+      : 0;
+
+  const prevAvg =
+    data && data.previousPeriodOrders > 0
+      ? data.previousPeriodRevenue / data.previousPeriodOrders
+      : 0;
+
   return (
     <section className="space-y-6">
       <header className="flex items-start justify-between">
@@ -150,30 +144,98 @@ export default function AdminAnalyticsPage() {
         </div>
       ) : (
         <>
-          {/* Summary cards */}
+          {/* Summary cards with period comparison */}
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-lg border border-slate-200 bg-white p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Revenue</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">
-                GH₵{(data?.totalRevenue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-white p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Orders</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">{data?.totalOrders ?? 0}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-white p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Avg. Order Value</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">
-                GH₵{data && data.totalOrders > 0 ? (data.totalRevenue / data.totalOrders).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
-              </p>
-            </div>
+            <StatsCard
+              label="Revenue"
+              value={`GH₵${(data?.totalRevenue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              icon={DollarSign}
+              helperText={
+                data ? (
+                  <PeriodComparison
+                    current={data.totalRevenue}
+                    previous={data.previousPeriodRevenue}
+                  />
+                ) : undefined
+              }
+            />
+            <StatsCard
+              label="Orders"
+              value={String(data?.totalOrders ?? 0)}
+              icon={ShoppingCart}
+              helperText={
+                data ? (
+                  <PeriodComparison
+                    current={data.totalOrders}
+                    previous={data.previousPeriodOrders}
+                  />
+                ) : undefined
+              }
+            />
+            <StatsCard
+              label="Avg. Order Value"
+              value={`GH₵${avgOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              icon={TrendingUp}
+              helperText={
+                data ? (
+                  <PeriodComparison current={avgOrderValue} previous={prevAvg} />
+                ) : undefined
+              }
+            />
           </div>
 
           {data && data.totalOrders === 0 && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-8 text-center">
               <p className="text-sm font-medium text-slate-600">No orders in this period</p>
               <p className="mt-1 text-xs text-slate-400">Try selecting a longer date range, or data will appear here once orders come in.</p>
+            </div>
+          )}
+
+          {/* Revenue + Orders charts side by side */}
+          {data && (Object.keys(data.revenueByDay).length > 0 || Object.keys(data.ordersByDay).length > 0) && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 bg-white p-6">
+                <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600">
+                  Revenue by Day
+                </h2>
+                <BarChart
+                  data={data.revenueByDay}
+                  color="#3b82f6"
+                  formatValue={(v) =>
+                    `GH₵${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                  }
+                />
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white p-6">
+                <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600">
+                  Orders by Day
+                </h2>
+                <BarChart
+                  data={data.ordersByDay}
+                  color="#6366f1"
+                  formatValue={(v) => String(v)}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Order Funnel */}
+          {data && data.funnelCounts && Object.keys(data.funnelCounts).length > 0 && (
+            <div className="rounded-lg border border-slate-200 bg-white p-6">
+              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600">
+                Order Funnel
+              </h2>
+              <OrderFunnel funnelCounts={data.funnelCounts} />
+            </div>
+          )}
+
+          {/* Top products */}
+          {data && data.topProducts.length > 0 && (
+            <div className="rounded-lg border border-slate-200 bg-white p-6">
+              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600">
+                Top Products
+              </h2>
+              <TopProducts products={data.topProducts} />
             </div>
           )}
 
@@ -191,36 +253,6 @@ export default function AdminAnalyticsPage() {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* Revenue by day */}
-          {data && Object.keys(data.revenueByDay).length > 0 && (
-            <div className="rounded-lg border border-slate-200 bg-white p-6">
-              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600">
-                Revenue by Day
-              </h2>
-              <RevenueChart data={data.revenueByDay} />
-            </div>
-          )}
-
-          {/* Orders by day */}
-          {data && Object.keys(data.ordersByDay).length > 0 && (
-            <div className="rounded-lg border border-slate-200 bg-white p-6">
-              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600">
-                Orders by Day
-              </h2>
-              <OrdersChart data={data.ordersByDay} />
-            </div>
-          )}
-
-          {/* Top products */}
-          {data && data.topProducts.length > 0 && (
-            <div className="rounded-lg border border-slate-200 bg-white p-6">
-              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600">
-                Top Products
-              </h2>
-              <TopProducts products={data.topProducts} />
             </div>
           )}
         </>

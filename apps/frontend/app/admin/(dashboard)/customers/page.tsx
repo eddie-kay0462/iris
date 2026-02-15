@@ -2,10 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAdminCustomers, type AdminCustomer } from "@/lib/api/orders";
+import { useAdminCustomers, useCustomerStats, type AdminCustomer } from "@/lib/api/orders";
 import { DataTable, type Column } from "../../components/DataTable";
 import { SearchInput } from "../../components/SearchInput";
 import { Pagination } from "../../components/Pagination";
+import { StatsCard } from "../../components/StatsCard";
+import { Users, UserPlus, ShoppingCart, Crown } from "lucide-react";
+
+type Segment = "all" | "new" | "returning";
 
 const columns: Column<AdminCustomer>[] = [
   {
@@ -51,8 +55,23 @@ export default function AdminCustomersPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [segment, setSegment] = useState<Segment>("all");
 
-  const { data, isLoading } = useAdminCustomers({ search, page });
+  const segmentFilters =
+    segment === "new"
+      ? { max_orders: 1 }
+      : segment === "returning"
+        ? { min_orders: 2 }
+        : {};
+
+  const { data, isLoading } = useAdminCustomers({ search, page, ...segmentFilters });
+  const { data: stats } = useCustomerStats();
+
+  const segments: { key: Segment; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "new", label: "New (≤1 order)" },
+    { key: "returning", label: "Returning (2+)" },
+  ];
 
   return (
     <section className="space-y-6">
@@ -63,14 +82,70 @@ export default function AdminCustomersPage() {
         </p>
       </header>
 
-      <SearchInput
-        value={search}
-        onChange={(v) => {
-          setSearch(v);
-          setPage(1);
-        }}
-        placeholder="Search by name or email..."
-      />
+      {/* Stats cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatsCard
+          label="Total Customers"
+          value={String(stats?.totalCustomers ?? "—")}
+          icon={Users}
+        />
+        <StatsCard
+          label="New This Month"
+          value={String(stats?.newThisMonth ?? "—")}
+          icon={UserPlus}
+        />
+        <StatsCard
+          label="Avg Order Value"
+          value={
+            stats
+              ? `GH₵${stats.avgOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              : "—"
+          }
+          icon={ShoppingCart}
+        />
+        <StatsCard
+          label="Top Spender"
+          value={stats?.topSpender?.name ?? "—"}
+          icon={Crown}
+          helperText={
+            stats?.topSpender
+              ? `GH₵${stats.topSpender.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              : undefined
+          }
+        />
+      </div>
+
+      {/* Segment filter + search */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+          {segments.map((s) => (
+            <button
+              key={s.key}
+              onClick={() => {
+                setSegment(s.key);
+                setPage(1);
+              }}
+              className={`px-3 py-1.5 text-sm transition-colors ${
+                segment === s.key
+                  ? "bg-slate-900 text-white"
+                  : "bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 min-w-[200px]">
+          <SearchInput
+            value={search}
+            onChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
+            placeholder="Search by name or email..."
+          />
+        </div>
+      </div>
 
       <DataTable
         columns={columns}

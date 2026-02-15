@@ -412,6 +412,8 @@ export class OrdersService {
     search?: string;
     page?: string;
     limit?: string;
+    min_orders?: string;
+    max_orders?: string;
   }) {
     const db = this.supabase.getAdminClient();
     const page = parseInt(query.page || '1', 10);
@@ -469,12 +471,26 @@ export class OrdersService {
       }),
     );
 
+    // Apply min/max order count filters
+    let filtered = enriched;
+    if (query.min_orders) {
+      const min = parseInt(query.min_orders, 10);
+      filtered = filtered.filter((c) => c.order_count >= min);
+    }
+    if (query.max_orders) {
+      const max = parseInt(query.max_orders, 10);
+      filtered = filtered.filter((c) => c.order_count <= max);
+    }
+
     return {
-      data: enriched,
-      total: count || 0,
+      data: filtered,
+      total: query.min_orders || query.max_orders ? filtered.length : count || 0,
       page,
       limit,
-      totalPages: Math.ceil((count || 0) / limit),
+      totalPages: Math.ceil(
+        (query.min_orders || query.max_orders ? filtered.length : count || 0) /
+          limit,
+      ),
     };
   }
 
@@ -511,6 +527,84 @@ export class OrdersService {
     };
   }
 
+  async getCustomerStats() {
+    const db = this.supabase.getAdminClient();
+
+    // Total customers (role = 'public')
+    const { count: totalCustomers } = await db
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('role', 'public');
+
+    // New this month
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const { count: newThisMonth } = await db
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('role', 'public')
+      .gte('created_at', startOfMonth.toISOString());
+
+    // Avg order value
+    const { data: orderTotals } = await db
+      .from('orders')
+      .select('total')
+      .is('deleted_at', null)
+      .not('status', 'in', '("cancelled","refunded")');
+
+    const totals = orderTotals || [];
+    const avgOrderValue =
+      totals.length > 0
+        ? totals.reduce((sum, o) => sum + Number(o.total), 0) / totals.length
+        : 0;
+
+    // Top spender
+    const { data: allOrders } = await db
+      .from('orders')
+      .select('user_id, total, email')
+      .is('deleted_at', null)
+      .not('status', 'in', '("cancelled","refunded")');
+
+    const spendByUser: Record<string, { email: string; amount: number }> = {};
+    (allOrders || []).forEach((o) => {
+      if (!spendByUser[o.user_id]) {
+        spendByUser[o.user_id] = { email: o.email, amount: 0 };
+      }
+      spendByUser[o.user_id].amount += Number(o.total);
+    });
+
+    let topSpender: { name: string; amount: number } | null = null;
+    const entries = Object.entries(spendByUser);
+    if (entries.length > 0) {
+      const [userId, best] = entries.sort(
+        (a, b) => b[1].amount - a[1].amount,
+      )[0];
+
+      // Try to get their name from profiles
+      const { data: profile } = await db
+        .from('profiles')
+        .select('first_name, last_name')
+        .eq('id', userId)
+        .single();
+
+      const name = profile
+        ? [profile.first_name, profile.last_name].filter(Boolean).join(' ') ||
+          best.email
+        : best.email;
+
+      topSpender = { name, amount: best.amount };
+    }
+
+    return {
+      totalCustomers: totalCustomers || 0,
+      newThisMonth: newThisMonth || 0,
+      avgOrderValue,
+      topSpender,
+    };
+  }
+
   async getAnalytics(query: { from_date?: string; to_date?: string }) {
     const db = this.supabase.getAdminClient();
 
@@ -539,23 +633,64 @@ export class OrdersService {
       }
     });
 
+    // Previous period comparison
+    const fromMs = new Date(fromDate).getTime();
+    const toMs = new Date(toDate).getTime();
+    const periodLength = toMs - fromMs;
+    const prevFrom = new Date(fromMs - periodLength).toISOString();
+    const prevTo = fromDate;
+
+    const { data: prevOrders } = await db
+      .from('orders')
+      .select('total, status')
+      .is('deleted_at', null)
+      .gte('created_at', prevFrom)
+      .lte('created_at', prevTo);
+
+    const validPrev = (prevOrders || []).filter(
+      (o) => !['cancelled', 'refunded'].includes(o.status),
+    );
+    const previousPeriodRevenue = validPrev.reduce(
+      (sum, o) => sum + Number(o.total),
+      0,
+    );
+    const previousPeriodOrders = prevOrders?.length || 0;
+
+    // Funnel counts from current orders
+    const validOrders = (orders || []).filter(
+      (o) => !['cancelled', 'refunded'].includes(o.status),
+    );
+    const funnelStages = ['paid', 'processing', 'shipped', 'delivered'];
+    const stagePriority: Record<string, number> = {
+      paid: 0,
+      processing: 1,
+      shipped: 2,
+      delivered: 3,
+    };
+    const funnelCounts: Record<string, number> = {};
+    funnelStages.forEach((stage) => {
+      funnelCounts[stage] = validOrders.filter(
+        (o) => (stagePriority[o.status] ?? -1) >= stagePriority[stage],
+      ).length;
+    });
+
     // Top products by revenue
     const { data: topItems } = await db
       .from('order_items')
-      .select('product_name, quantity, total_price, order:orders!inner(status, created_at, deleted_at)')
+      .select('product_id, product_name, quantity, total_price, order:orders!inner(status, created_at, deleted_at)')
       .gte('orders.created_at', fromDate)
       .lte('orders.created_at', toDate)
       .is('orders.deleted_at', null);
 
     const productMap: Record<
       string,
-      { name: string; revenue: number; unitsSold: number }
+      { name: string; revenue: number; unitsSold: number; productId: string | null }
     > = {};
     (topItems || []).forEach((item: any) => {
       if (['cancelled', 'refunded'].includes(item.order?.status)) return;
       const name = item.product_name;
       if (!productMap[name]) {
-        productMap[name] = { name, revenue: 0, unitsSold: 0 };
+        productMap[name] = { name, revenue: 0, unitsSold: 0, productId: item.product_id || null };
       }
       productMap[name].revenue += Number(item.total_price);
       productMap[name].unitsSold += item.quantity;
@@ -564,6 +699,31 @@ export class OrdersService {
     const topProducts = Object.values(productMap)
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 10);
+
+    // Batch-fetch product images for top products
+    const productIds = topProducts
+      .map((p) => p.productId)
+      .filter((id): id is string => id !== null);
+
+    let imageMap: Record<string, string> = {};
+    if (productIds.length > 0) {
+      const { data: images } = await db
+        .from('product_images')
+        .select('product_id, url')
+        .in('product_id', productIds)
+        .eq('is_primary', true);
+
+      (images || []).forEach((img: any) => {
+        if (!imageMap[img.product_id]) {
+          imageMap[img.product_id] = img.url;
+        }
+      });
+    }
+
+    const topProductsWithImages = topProducts.map((p) => ({
+      ...p,
+      imageUrl: p.productId ? imageMap[p.productId] || null : null,
+    }));
 
     // Status breakdown
     const statusBreakdown: Record<string, number> = {};
@@ -574,12 +734,16 @@ export class OrdersService {
     return {
       revenueByDay,
       ordersByDay,
-      topProducts,
+      topProducts: topProductsWithImages,
       statusBreakdown,
       totalOrders: orders?.length || 0,
-      totalRevenue: (orders || [])
-        .filter((o) => !['cancelled', 'refunded'].includes(o.status))
-        .reduce((sum, o) => sum + Number(o.total), 0),
+      totalRevenue: validOrders.reduce(
+        (sum, o) => sum + Number(o.total),
+        0,
+      ),
+      previousPeriodRevenue,
+      previousPeriodOrders,
+      funnelCounts,
     };
   }
 

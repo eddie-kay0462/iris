@@ -1387,4 +1387,97 @@ The analytics page was making endless API requests because `new Date().toISOStri
 
 ---
 
+## Week 3, Day 4 — Admin Analytics Enhancements & Customer Page Improvements (Feb 2025)
+
+### What Got Done
+
+**Major upgrade to the analytics dashboard and customer management pages.** The analytics page now has real charts, period-over-period comparison, and a conversion funnel. The customers page has stats cards and segmentation. The customer detail page has a timeline view and spending sparkline.
+
+### 1. Analytics Page Overhaul
+
+The analytics page (`/admin/analytics`) was completely rewritten:
+
+- **Period comparison on stat cards** — Revenue, Orders, and Avg Order Value cards now show `↑12.5% vs prev period` or `↓8.3% vs prev period` in green/red. The backend calculates the equivalent prior period (e.g. if viewing last 30 days, it compares against the 30 days before that).
+- **SVG vertical bar charts** — Replaced the old horizontal bar lists with proper vertical bar charts (inline SVG, no chart library). Revenue and Orders charts sit side-by-side with y-axis labels, grid lines, date labels on x-axis, and hover tooltips. Charts are responsive via SVG viewBox.
+- **Order funnel** — New visualization showing how orders progress through stages: Paid → Processing → Shipped → Delivered. Each stage shows count, bar width proportional to volume, and drop-off percentage between stages.
+- **Product images in Top Products** — Each product in the top 10 list now shows a 32×32 thumbnail image (batch-fetched from `product_images` table). Falls back to a placeholder if no image exists.
+- **Status breakdown** kept as-is (colored pills).
+
+### 2. Customer Page Stats & Segmentation
+
+The customers list page (`/admin/customers`) now has:
+
+- **4 stats cards** at the top — Total Customers (Users icon), New This Month (UserPlus), Avg Order Value (ShoppingCart), Top Spender (Crown with spend amount)
+- **Segment filter bar** — "All | New (≤1 order) | Returning (2+)" button group that filters the customer list by order count
+- **Backend support** — New `GET /api/orders/admin/customer-stats` endpoint returns `totalCustomers`, `newThisMonth`, `avgOrderValue`, and `topSpender`. The existing customers endpoint now accepts `min_orders` and `max_orders` query params.
+
+### 3. Customer Detail Page Enhancements
+
+The customer detail page (`/admin/customers/{id}`) now has:
+
+- **Avatar with initials** — 48×48 rounded circle with the customer's initials (e.g. "JD" for John Doe) in the header next to their name
+- **Mini sparkline** — 6 tiny bars in the Lifetime Value card showing the last 6 months of spending, computed client-side from the orders array
+- **Timeline view** — Replaced the orders table with a vertical timeline. Each order appears as a card on a vertical line with dots, showing order number (clickable link to order detail), status badge, total, item count, and date.
+
+### Backend Changes
+
+| Endpoint | Method | Permission | What's new |
+|----------|--------|------------|------------|
+| `/api/orders/admin/customer-stats` | GET | `orders:read` | **New** — customer stats for dashboard cards |
+| `/api/orders/admin/analytics` | GET | `orders:read` | **Enhanced** — now returns `previousPeriodRevenue`, `previousPeriodOrders`, `funnelCounts`, product images |
+| `/api/orders/admin/customers` | GET | `orders:read` | **Enhanced** — accepts `min_orders`, `max_orders` query params |
+
+### Files Created
+
+| File | What |
+|------|------|
+| `apps/frontend/app/admin/(dashboard)/analytics/components/BarChart.tsx` | Reusable SVG vertical bar chart component |
+| `apps/frontend/app/admin/(dashboard)/analytics/components/OrderFunnel.tsx` | Order funnel visualization component |
+
+### Files Modified
+
+| File | What Changed |
+|------|-------------|
+| `apps/backend/src/orders/orders.service.ts` | Added `getCustomerStats()`, enhanced `getAnalytics()` with previous period + funnel + images, added order count filters to `findAdminCustomers()` |
+| `apps/backend/src/orders/orders.controller.ts` | Added `customer-stats` route, updated customers query params |
+| `apps/frontend/lib/api/orders.ts` | Extended `AnalyticsData` type, added `CustomerStats` interface + `useCustomerStats()` hook, added filter params |
+| `apps/frontend/app/admin/components/StatsCard.tsx` | `helperText` now accepts `ReactNode` (non-breaking change) |
+| `apps/frontend/app/admin/(dashboard)/analytics/page.tsx` | Full rewrite with comparison cards, SVG charts, funnel, product images |
+| `apps/frontend/app/admin/(dashboard)/customers/page.tsx` | Added stats cards, segment filter bar |
+| `apps/frontend/app/admin/(dashboard)/customers/[id]/page.tsx` | Added avatar, sparkline, timeline view |
+
+### Want to Test It?
+
+```bash
+# Terminal 1 — backend
+cd apps/backend
+npm run start:dev
+
+# Terminal 2 — frontend
+cd apps/frontend
+npm run dev
+```
+
+- **Analytics:** Log in as admin → `/admin/analytics` → see comparison cards, bar charts, funnel, product images
+- **Customers:** Go to `/admin/customers` → see stats cards, try the segment filter buttons
+- **Customer detail:** Click a customer → see avatar, sparkline in Lifetime Value card, timeline view for orders
+- **Empty states:** All new features handle zero data gracefully (no crashes, helpful messages)
+
+### Something Not Working?
+
+**Charts empty but orders exist** — Check the date range selector. The default is "Last 30 days" — if orders are older, switch to "Last year".
+
+**Product images not showing in Top Products** — Images are fetched from the `product_images` table where `is_primary = true`. If products don't have a primary image set, they'll show a placeholder.
+
+**Customer stats all zeros** — The stats endpoint counts profiles with `role = 'public'`. Admin/staff/manager accounts are excluded.
+
+### Next Up
+
+- Waitlist & Inner Circle pages
+- Admin waitlist management
+- Email notifications (order confirmation, shipping updates)
+- Discount codes / coupons
+
+---
+
 *Last updated: February 2025*

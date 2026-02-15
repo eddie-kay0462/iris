@@ -188,13 +188,31 @@ export interface PaginatedCustomers {
   totalPages: number;
 }
 
+export interface AnalyticsTopProduct {
+  name: string;
+  revenue: number;
+  unitsSold: number;
+  productId: string | null;
+  imageUrl: string | null;
+}
+
 export interface AnalyticsData {
   revenueByDay: Record<string, number>;
   ordersByDay: Record<string, number>;
-  topProducts: { name: string; revenue: number; unitsSold: number }[];
+  topProducts: AnalyticsTopProduct[];
   statusBreakdown: Record<string, number>;
   totalOrders: number;
   totalRevenue: number;
+  previousPeriodRevenue: number;
+  previousPeriodOrders: number;
+  funnelCounts: Record<string, number>;
+}
+
+export interface CustomerStats {
+  totalCustomers: number;
+  newThisMonth: number;
+  avgOrderValue: number;
+  topSpender: { name: string; amount: number } | null;
 }
 
 // --- Admin Hooks ---
@@ -248,7 +266,14 @@ export function useAdminStats() {
   });
 }
 
-export function useAdminCustomers(params: { search?: string; page?: number; limit?: number } = {}) {
+export function useCustomerStats() {
+  return useQuery({
+    queryKey: ["admin-customer-stats"],
+    queryFn: () => apiClient<CustomerStats>("/orders/admin/customer-stats"),
+  });
+}
+
+export function useAdminCustomers(params: { search?: string; page?: number; limit?: number; min_orders?: number; max_orders?: number } = {}) {
   return useQuery({
     queryKey: ["admin-customers", params],
     queryFn: () =>

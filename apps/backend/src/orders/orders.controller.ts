@@ -29,6 +29,12 @@ export class OrdersController {
     return this.ordersService.getAdminStats();
   }
 
+  @Get('admin/customer-stats')
+  @RequirePermission('orders:read')
+  getCustomerStats() {
+    return this.ordersService.getCustomerStats();
+  }
+
   @Get('admin/analytics')
   @RequirePermission('orders:read')
   getAnalytics(
@@ -40,7 +46,7 @@ export class OrdersController {
   @Get('admin/customers')
   @RequirePermission('orders:read')
   findAdminCustomers(
-    @Query() query: { search?: string; page?: string; limit?: string },
+    @Query() query: { search?: string; page?: string; limit?: string; min_orders?: string; max_orders?: string },
   ) {
     return this.ordersService.findAdminCustomers(query);
   }
