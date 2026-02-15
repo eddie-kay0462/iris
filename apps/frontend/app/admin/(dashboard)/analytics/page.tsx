@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAnalytics } from "@/lib/api/orders";
 import { StatusBadge } from "../../components/StatusBadge";
 
@@ -114,11 +114,15 @@ function TopProducts({
 export default function AdminAnalyticsPage() {
   const [days, setDays] = useState("30");
 
-  const fromDate = new Date();
-  fromDate.setDate(fromDate.getDate() - parseInt(days));
+  const fromDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - parseInt(days));
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString().slice(0, 10);
+  }, [days]);
 
-  const { data, isLoading } = useAnalytics({
-    from_date: fromDate.toISOString(),
+  const { data, isLoading, error } = useAnalytics({
+    from_date: fromDate,
   });
 
   return (
@@ -139,30 +143,42 @@ export default function AdminAnalyticsPage() {
             <div key={i} className="h-48 animate-pulse rounded-lg bg-slate-100" />
           ))}
         </div>
-      ) : data ? (
+      ) : error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-6">
+          <p className="text-sm font-medium text-red-800">Failed to load analytics data.</p>
+          <p className="mt-1 text-xs text-red-600">{(error as Error).message}</p>
+        </div>
+      ) : (
         <>
           {/* Summary cards */}
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="rounded-lg border border-slate-200 bg-white p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Revenue</p>
               <p className="mt-1 text-2xl font-semibold text-slate-900">
-                GH₵{data.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                GH₵{(data?.totalRevenue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-white p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Orders</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">{data.totalOrders}</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">{data?.totalOrders ?? 0}</p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-white p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Avg. Order Value</p>
               <p className="mt-1 text-2xl font-semibold text-slate-900">
-                GH₵{data.totalOrders > 0 ? (data.totalRevenue / data.totalOrders).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
+                GH₵{data && data.totalOrders > 0 ? (data.totalRevenue / data.totalOrders).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
               </p>
             </div>
           </div>
 
+          {data && data.totalOrders === 0 && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-8 text-center">
+              <p className="text-sm font-medium text-slate-600">No orders in this period</p>
+              <p className="mt-1 text-xs text-slate-400">Try selecting a longer date range, or data will appear here once orders come in.</p>
+            </div>
+          )}
+
           {/* Status breakdown */}
-          {Object.keys(data.statusBreakdown).length > 0 && (
+          {data && Object.keys(data.statusBreakdown).length > 0 && (
             <div className="rounded-lg border border-slate-200 bg-white p-6">
               <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600">
                 Status Breakdown
@@ -179,31 +195,35 @@ export default function AdminAnalyticsPage() {
           )}
 
           {/* Revenue by day */}
-          <div className="rounded-lg border border-slate-200 bg-white p-6">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600">
-              Revenue by Day
-            </h2>
-            <RevenueChart data={data.revenueByDay} />
-          </div>
+          {data && Object.keys(data.revenueByDay).length > 0 && (
+            <div className="rounded-lg border border-slate-200 bg-white p-6">
+              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600">
+                Revenue by Day
+              </h2>
+              <RevenueChart data={data.revenueByDay} />
+            </div>
+          )}
 
           {/* Orders by day */}
-          <div className="rounded-lg border border-slate-200 bg-white p-6">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600">
-              Orders by Day
-            </h2>
-            <OrdersChart data={data.ordersByDay} />
-          </div>
+          {data && Object.keys(data.ordersByDay).length > 0 && (
+            <div className="rounded-lg border border-slate-200 bg-white p-6">
+              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600">
+                Orders by Day
+              </h2>
+              <OrdersChart data={data.ordersByDay} />
+            </div>
+          )}
 
           {/* Top products */}
-          <div className="rounded-lg border border-slate-200 bg-white p-6">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600">
-              Top Products
-            </h2>
-            <TopProducts products={data.topProducts} />
-          </div>
+          {data && data.topProducts.length > 0 && (
+            <div className="rounded-lg border border-slate-200 bg-white p-6">
+              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600">
+                Top Products
+              </h2>
+              <TopProducts products={data.topProducts} />
+            </div>
+          )}
         </>
-      ) : (
-        <p className="text-sm text-slate-500">Failed to load analytics data.</p>
       )}
     </section>
   );

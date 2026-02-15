@@ -1372,6 +1372,10 @@ Added a search icon to the customer-facing store header:
 - **Newsletter:** Scroll to the bottom of the homepage → enter email → submit
 - **Settings:** Go to `/admin/settings/users` → change a user's role from the dropdown
 
+### Bug Fix: Analytics Infinite Requests
+
+The analytics page was making endless API requests because `new Date().toISOString()` produced a different value on every render (millisecond precision), which changed the React Query key each time → refetch → re-render → loop. Fixed by memoizing the date and truncating to day precision (`2026-02-15` instead of full ISO timestamp). Also improved the page to show proper empty states when there's no order data yet, and display actual error messages when the API fails.
+
 ### Next Up
 
 - **Waitlist & Inner Circle pages** — Build out the customer-facing waitlist signup and inner circle membership pages (currently stubs)
