@@ -72,6 +72,15 @@ function useScrollEngine() {
 
 const collections = [
   {
+    image: "/homepage/1.jpeg",
+    alt: "Realtree Camo Collection",
+    title: "Realtree Camo",
+    subtitle: "Intercessory Department — Latest Drop",
+    cta: "Shop Now",
+    href: "/products",
+    objectPos: "object-top",
+  },
+  {
     image: "/homepage/2.jpeg",
     alt: "Psalm 52 — Black INRI set",
     title: "Psalm 52",
@@ -91,7 +100,7 @@ const collections = [
   },
   {
     image: "/homepage/4.jpeg",
-    alt: "Betrayer's Kiss jacket — Apoluo Fall/Winter",
+    alt: "Betrayer\u2019s Kiss jacket — Apoluo Fall/Winter",
     title: "Betrayer\u2019s Kiss",
     subtitle: "Apoluo \u2014 Fall / Winter 2024",
     cta: "Explore",
@@ -179,18 +188,18 @@ export default function HomePage() {
           ══════════════════════════════════════════════════════════════ */}
       <section data-scene="hero" className="relative" style={{ height: "220vh" }}>
         <div className="sticky top-0 flex h-screen items-center justify-center overflow-hidden">
-          {/* Background — zooms 1× → 1.35× */}
+          {/* Background video — zooms 1× → 1.35× */}
           <div
             className="absolute inset-0 will-change-transform"
             style={{ transform: "scale(calc(1 + var(--p,0) * 0.35))" }}
           >
-            <Image
-              src="/homepage/1.jpeg"
-              alt="Hero"
-              fill
-              className="object-cover object-top"
-              sizes="100vw"
-              priority
+            <video
+              src="https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/homepage/main-video/1NRI-2.mp4"
+              autoPlay
+              muted
+              loop
+              playsInline
+              className="h-full w-full object-cover object-top"
             />
           </div>
 
@@ -290,15 +299,15 @@ export default function HomePage() {
       <section
         data-scene="hscroll"
         className="relative"
-        style={{ height: "400vh" }}
+        style={{ height: "500vh" }}
       >
         <div className="sticky top-0 h-screen overflow-hidden">
-          {/* Horizontal track: 3 × 100vw = 300vw → translates 0 … −200vw */}
+          {/* Horizontal track: 4 × 100vw = 400vw → translates 0 … −300vw */}
           <div
             className="flex h-full will-change-transform"
             style={{
-              width: "300vw",
-              transform: "translate3d(calc(var(--p,0) * -200vw), 0px, 0px)",
+              width: "400vw",
+              transform: "translate3d(calc(var(--p,0) * -300vw), 0px, 0px)",
             }}
           >
             {collections.map((col, i) => (
