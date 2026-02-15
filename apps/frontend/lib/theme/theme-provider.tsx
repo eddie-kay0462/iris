@@ -28,18 +28,23 @@ function applyTheme(theme: Theme) {
   }
 }
 
+function getInitialTheme(): Theme {
+  if (typeof window === "undefined") return "light";
+  try {
+    const stored = localStorage.getItem("iris-theme");
+    return stored === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("light");
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
 
   useEffect(() => {
-    const stored = localStorage.getItem("iris-theme") as Theme | null;
-    if (stored === "dark") {
-      setTheme("dark");
-      applyTheme("dark");
-    } else {
-      applyTheme("light");
-    }
-  }, []);
+    // Sync DOM in case React state and DOM are out of sync
+    applyTheme(theme);
+  }, [theme]);
 
   function toggleTheme() {
     const next = theme === "light" ? "dark" : "light";

@@ -65,7 +65,7 @@ export function Sidebar({ role = "admin", mobileOpen = false, onClose }: Sidebar
   const navContent = (
     <div className="flex h-full flex-col">
       {/* Brand / pin area */}
-      <div className="flex h-14 items-center justify-between border-b border-slate-700 px-3">
+      <div className="flex h-14 items-center justify-between border-b border-neutral-800 px-3">
         <span
           className={`whitespace-nowrap text-sm font-semibold text-white transition-opacity duration-300 ${
             expanded || mobileOpen ? "opacity-100" : "opacity-0"
@@ -77,14 +77,14 @@ export function Sidebar({ role = "admin", mobileOpen = false, onClose }: Sidebar
         {mobileOpen ? (
           <button
             onClick={onClose}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-white md:hidden"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-800 hover:text-white md:hidden"
           >
             <X className="h-4 w-4" />
           </button>
         ) : (
           <button
             onClick={() => setPinned((p) => !p)}
-            className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-white md:flex"
+            className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-800 hover:text-white md:flex"
             title={pinned ? "Collapse sidebar" : "Pin sidebar open"}
           >
             {pinned ? (
@@ -111,7 +111,7 @@ export function Sidebar({ role = "admin", mobileOpen = false, onClose }: Sidebar
               className={`flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors ${
                 active
                   ? "bg-white/10 text-white"
-                  : "text-slate-400 hover:bg-white/5 hover:text-white"
+                  : "text-neutral-400 hover:bg-white/5 hover:text-white"
               }`}
             >
               <Icon className="h-4 w-4 shrink-0" />
@@ -137,7 +137,7 @@ export function Sidebar({ role = "admin", mobileOpen = false, onClose }: Sidebar
         onMouseLeave={() => setHovered(false)}
         className={`${
           expanded ? "w-56" : "w-16"
-        } hidden shrink-0 border-r border-slate-200 bg-slate-900 transition-[width] duration-300 overflow-hidden md:block`}
+        } hidden shrink-0 border-r border-neutral-800 bg-black transition-[width] duration-300 overflow-hidden md:block`}
       >
         {navContent}
       </aside>
@@ -149,7 +149,7 @@ export function Sidebar({ role = "admin", mobileOpen = false, onClose }: Sidebar
             className="fixed inset-0 z-40 bg-black/50 md:hidden"
             onClick={onClose}
           />
-          <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 md:hidden">
+          <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-black md:hidden">
             {navContent}
           </aside>
         </>
