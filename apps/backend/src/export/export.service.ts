@@ -47,11 +47,14 @@ export class ExportService {
 
     const { data, error } = await db
       .from('products')
-      .select('title, handle, base_price, compare_at_price, status, published, gender, product_type, vendor, tags, created_at')
+      .select('title, handle, base_price, status, published, gender, product_type, vendor, tags, created_at')
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[exportProducts] Supabase error:', error);
+      throw error;
+    }
 
     const rows = data || [];
     if (rows.length === 0) return 'No data to export';
