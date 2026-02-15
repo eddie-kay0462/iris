@@ -1372,6 +1372,15 @@ Added a search icon to the customer-facing store header:
 - **Newsletter:** Scroll to the bottom of the homepage → enter email → submit
 - **Settings:** Go to `/admin/settings/users` → change a user's role from the dropdown
 
+### Next Up
+
+- **Waitlist & Inner Circle pages** — Build out the customer-facing waitlist signup and inner circle membership pages (currently stubs)
+- **Admin waitlist management** — Wire `/admin/waitlist` to real data with approve/reject functionality
+- **Admin customers page** — Add customer detail view and order history per customer
+- **Email notifications** — Order confirmation, shipping updates, newsletter welcome email
+- **Discount codes / coupons** — Promo code system for checkout
+- **Admin analytics enhancements** — Revenue charts, top products, conversion funnel
+
 ---
 
 *Last updated: February 2025*
