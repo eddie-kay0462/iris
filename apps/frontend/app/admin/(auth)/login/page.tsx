@@ -2,28 +2,23 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { apiClient, setToken } from "@/lib/api/client";
 
 /**
  * Admin Login Page
  *
- * A simple email/password login form for admin users.
- * On success, redirects to the admin dashboard (or the page they were trying to access).
- *
- * Error states:
- * - "unauthorized" query param: Shows message that account doesn't have admin access
- * - Form submission errors: Shows inline error message
+ * Email/password login for admin users.
+ * On success, stores JWT and redirects to admin dashboard.
  */
 function AdminLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Form state
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Check for unauthorized error from middleware redirect
   const unauthorizedError = searchParams.get("error") === "unauthorized";
   const redirectTo = searchParams.get("redirectTo") ?? "/admin";
 
@@ -33,27 +28,21 @@ function AdminLoginForm() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/auth/admin/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      const data = await apiClient<{ access_token: string }>(
+        "/auth/admin/login",
+        {
+          method: "POST",
+          body: { email, password },
+        }
+      );
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        // Show error message from API
-        setError(data.error ?? "Login failed");
-        return;
-      }
-
-      // Success - redirect to admin dashboard or the page they were trying to access
+      setToken(data.access_token);
       router.push(redirectTo);
-      router.refresh(); // Refresh to update auth state in server components
-    } catch {
-      setError("Network error. Please try again.");
+      router.refresh();
+    } catch (err: any) {
+      setError(
+        err?.data?.message || err?.data?.error || "Login failed"
+      );
     } finally {
       setIsLoading(false);
     }
@@ -67,7 +56,6 @@ function AdminLoginForm() {
           Sign in to manage products, orders, and operations.
         </p>
 
-        {/* Show unauthorized message if redirected from middleware */}
         {unauthorizedError && (
           <div className="mt-4 rounded-md bg-amber-50 p-3 text-sm text-amber-800">
             Your account does not have admin access. Please sign in with an
@@ -75,7 +63,6 @@ function AdminLoginForm() {
           </div>
         )}
 
-        {/* Show form submission error */}
         {error && (
           <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-800">
             {error}

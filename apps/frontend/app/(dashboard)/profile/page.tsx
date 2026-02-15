@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@/lib/validation";
+import { apiClient } from "@/lib/api/client";
 
 const profileSchema = z.object({
   first_name: z.string().optional(),
@@ -35,9 +36,7 @@ export default function ProfilePage() {
   useEffect(() => {
     async function fetchProfile() {
       try {
-        const res = await fetch("/api/profile");
-        if (!res.ok) throw new Error("Failed to load profile");
-        const data = await res.json();
+        const data = await apiClient("/profile");
         reset({
           first_name: data.first_name ?? "",
           last_name: data.last_name ?? "",
@@ -59,22 +58,17 @@ export default function ProfilePage() {
     setSaving(true);
 
     try {
-      const res = await fetch("/api/profile", {
+      await apiClient("/profile", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: data,
       });
 
-      const body = await res.json();
-
-      if (!res.ok) {
-        setMessage({ type: "error", text: body.error || "Save failed." });
-        return;
-      }
-
       setMessage({ type: "success", text: "Profile updated." });
-    } catch {
-      setMessage({ type: "error", text: "Network error. Please try again." });
+    } catch (err: any) {
+      setMessage({
+        type: "error",
+        text: err?.data?.message || err?.data?.error || "Save failed.",
+      });
     } finally {
       setSaving(false);
     }

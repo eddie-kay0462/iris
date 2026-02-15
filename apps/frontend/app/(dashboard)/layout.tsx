@@ -5,8 +5,10 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import type { ReactNode } from "react";
+import { apiClient, clearToken } from "@/lib/api/client";
 
 const navItems = [
+  { href: "/orders", label: "Orders" },
   { href: "/waitlist", label: "Waitlist" },
   { href: "/inner-circle", label: "Inner Circle" },
   { href: "/profile", label: "Profile" },
@@ -21,12 +23,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   async function handleLogout() {
     setLoggingOut(true);
     try {
-      const res = await fetch("/api/auth/logout", { method: "POST" });
-      if (res.ok) {
-        router.push("/login");
-      }
+      await apiClient("/auth/logout", { method: "POST" });
     } catch {
-      setLoggingOut(false);
+      // Ignore errors — clear token regardless
+    } finally {
+      clearToken();
+      router.push("/login");
     }
   }
 

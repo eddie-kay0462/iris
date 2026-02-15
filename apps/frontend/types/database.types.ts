@@ -152,69 +152,291 @@ export type Database = {
       }
       products: {
         Row: {
-          category: string | null
-          created_at: string | null
-          description: string | null
-          early_access_start: string | null
           id: string
-          images: Json | null
-          inner_circle_price: number
-          is_active: boolean | null
-          is_exclusive: boolean | null
-          name: string
-          public_price: number
-          public_release_date: string | null
-          slug: string
-          stock_quantity: number | null
+          title: string
+          handle: string
+          description: string | null
+          base_price: number | null
+          compare_at_price: number | null
+          status: string | null
+          gender: string | null
+          product_type: string | null
+          vendor: string | null
+          tags: string[] | null
+          published: boolean | null
+          created_at: string | null
           updated_at: string | null
+          deleted_at: string | null
+          created_by: string | null
         }
         Insert: {
-          category?: string | null
-          created_at?: string | null
-          description?: string | null
-          early_access_start?: string | null
           id?: string
-          images?: Json | null
-          inner_circle_price: number
-          is_active?: boolean | null
-          is_exclusive?: boolean | null
-          name: string
-          public_price: number
-          public_release_date?: string | null
-          slug: string
-          stock_quantity?: number | null
+          title: string
+          handle: string
+          description?: string | null
+          base_price?: number | null
+          compare_at_price?: number | null
+          status?: string | null
+          gender?: string | null
+          product_type?: string | null
+          vendor?: string | null
+          tags?: string[] | null
+          published?: boolean | null
+          created_at?: string | null
           updated_at?: string | null
+          deleted_at?: string | null
+          created_by?: string | null
         }
         Update: {
-          category?: string | null
-          created_at?: string | null
-          description?: string | null
-          early_access_start?: string | null
           id?: string
-          images?: Json | null
-          inner_circle_price?: number
-          is_active?: boolean | null
-          is_exclusive?: boolean | null
-          name?: string
-          public_price?: number
-          public_release_date?: string | null
-          slug?: string
-          stock_quantity?: number | null
+          title?: string
+          handle?: string
+          description?: string | null
+          base_price?: number | null
+          compare_at_price?: number | null
+          status?: string | null
+          gender?: string | null
+          product_type?: string | null
+          vendor?: string | null
+          tags?: string[] | null
+          published?: boolean | null
+          created_at?: string | null
           updated_at?: string | null
+          deleted_at?: string | null
+          created_by?: string | null
         }
         Relationships: []
       }
+      product_variants: {
+        Row: {
+          id: string
+          product_id: string
+          option1_name: string | null
+          option1_value: string | null
+          option2_name: string | null
+          option2_value: string | null
+          option3_name: string | null
+          option3_value: string | null
+          price: number | null
+          compare_at_price: number | null
+          sku: string | null
+          barcode: string | null
+          inventory_quantity: number | null
+          weight: number | null
+          weight_unit: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          option1_name?: string | null
+          option1_value?: string | null
+          option2_name?: string | null
+          option2_value?: string | null
+          option3_name?: string | null
+          option3_value?: string | null
+          price?: number | null
+          compare_at_price?: number | null
+          sku?: string | null
+          barcode?: string | null
+          inventory_quantity?: number | null
+          weight?: number | null
+          weight_unit?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          option1_name?: string | null
+          option1_value?: string | null
+          option2_name?: string | null
+          option2_value?: string | null
+          option3_name?: string | null
+          option3_value?: string | null
+          price?: number | null
+          compare_at_price?: number | null
+          sku?: string | null
+          barcode?: string | null
+          inventory_quantity?: number | null
+          weight?: number | null
+          weight_unit?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_images: {
+        Row: {
+          id: string
+          product_id: string
+          url: string
+          alt_text: string | null
+          position: number
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          url: string
+          alt_text?: string | null
+          position?: number
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          url?: string
+          alt_text?: string | null
+          position?: number
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_images_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collections: {
+        Row: {
+          id: string
+          title: string
+          handle: string
+          description: string | null
+          image_url: string | null
+          published: boolean | null
+          created_at: string | null
+          updated_at: string | null
+          deleted_at: string | null
+        }
+        Insert: {
+          id?: string
+          title: string
+          handle: string
+          description?: string | null
+          image_url?: string | null
+          published?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+          deleted_at?: string | null
+        }
+        Update: {
+          id?: string
+          title?: string
+          handle?: string
+          description?: string | null
+          image_url?: string | null
+          published?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+          deleted_at?: string | null
+        }
+        Relationships: []
+      }
+      collection_products: {
+        Row: {
+          collection_id: string
+          product_id: string
+          position: number
+        }
+        Insert: {
+          collection_id: string
+          product_id: string
+          position: number
+        }
+        Update: {
+          collection_id?: string
+          product_id?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collection_products_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_movements: {
+        Row: {
+          id: string
+          variant_id: string
+          quantity_change: number
+          previous_quantity: number
+          new_quantity: number
+          movement_type: string | null
+          notes: string | null
+          created_at: string | null
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          variant_id: string
+          quantity_change: number
+          previous_quantity: number
+          new_quantity: number
+          movement_type?: string | null
+          notes?: string | null
+          created_at?: string | null
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          variant_id?: string
+          quantity_change?: number
+          previous_quantity?: number
+          new_quantity?: number
+          movement_type?: string | null
+          notes?: string | null
+          created_at?: string | null
+          created_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_movements_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
+          id: string
+          email: string | null
           created_at: string | null
           first_name: string | null
           full_name: string | null
-          id: string
           last_name: string | null
           location: string | null
           paystack_customer_code: string | null
           paystack_subscription_code: string | null
-          phone_number: string
+          phone_number: string | null
+          email_notifications: boolean | null
+          sms_notifications: boolean | null
           role: Database["public"]["Enums"]["user_role"] | null
           subscription_end_date: string | null
           subscription_start_date: string | null
@@ -225,15 +447,18 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          id: string
+          email?: string | null
           created_at?: string | null
           first_name?: string | null
           full_name?: string | null
-          id: string
           last_name?: string | null
           location?: string | null
           paystack_customer_code?: string | null
           paystack_subscription_code?: string | null
-          phone_number: string
+          phone_number?: string | null
+          email_notifications?: boolean | null
+          sms_notifications?: boolean | null
           role?: Database["public"]["Enums"]["user_role"] | null
           subscription_end_date?: string | null
           subscription_start_date?: string | null
@@ -244,15 +469,18 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          id?: string
+          email?: string | null
           created_at?: string | null
           first_name?: string | null
           full_name?: string | null
-          id?: string
           last_name?: string | null
           location?: string | null
           paystack_customer_code?: string | null
           paystack_subscription_code?: string | null
-          phone_number?: string
+          phone_number?: string | null
+          email_notifications?: boolean | null
+          sms_notifications?: boolean | null
           role?: Database["public"]["Enums"]["user_role"] | null
           subscription_end_date?: string | null
           subscription_start_date?: string | null
@@ -367,7 +595,7 @@ export type Database = {
     }
     Enums: {
       subscription_tier: "monthly" | "quarterly" | "annual"
-      user_role: "public" | "waitlist" | "inner_circle"
+      user_role: "public" | "waitlist" | "inner_circle" | "staff" | "manager" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -496,7 +724,7 @@ export const Constants = {
   public: {
     Enums: {
       subscription_tier: ["monthly", "quarterly", "annual"],
-      user_role: ["public", "waitlist", "inner_circle"],
+      user_role: ["public", "waitlist", "inner_circle", "staff", "manager", "admin"],
     },
   },
 } as const

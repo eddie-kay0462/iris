@@ -1,156 +1,87 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-
-import type { Database } from "../../types/database.types";
 import { ADMIN_ROLES, type UserRole } from "@/lib/rbac/permissions";
 
 /**
- * Cookie name used to cache the user's role so we don't query the
- * profiles table on every single navigation.  The cookie is HttpOnly,
- * short‑lived (5 min), and re‑validated whenever it's missing or after
- * the user logs out / back in (the Supabase auth cookies change).
+ * JWT Cookie name set by the frontend API client.
+ * This is a non-httpOnly cookie readable by the proxy.
  */
-const ROLE_COOKIE = "x-iris-role";
-const ROLE_COOKIE_MAX_AGE = 300; // 5 minutes
+const JWT_COOKIE = "iris_jwt";
 
 /**
- * Supabase Proxy (formerly Middleware)
+ * Decode a JWT payload without verification.
+ * The proxy only needs to read the role claim for route protection.
+ * Actual verification happens on the NestJS backend.
+ */
+function decodeJwtPayload(token: string): any | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const payload = Buffer.from(parts[1], "base64url").toString("utf-8");
+    return JSON.parse(payload);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Supabase Proxy (JWT-aware)
  *
  * This proxy runs on every request and handles:
- * 1. Session refresh - Keeps auth cookies up to date
- * 2. Customer route protection - Redirects unauthenticated users to /login
- * 3. Admin route protection - Blocks unauthorized access to /admin/*
+ * 1. Customer route protection - Redirects unauthenticated users to /login
+ * 2. Admin route protection - Blocks unauthorized access to /admin/*
  *
- * Performance: the user's role is cached in a short‑lived cookie so that
- * admin page navigations only require the auth token check (getUser()),
- * not a DB round‑trip for the profile on every request.
+ * Auth is now JWT-based. The JWT is stored in a cookie (iris_jwt) by the
+ * frontend API client so this server-side proxy can read it.
  */
 export async function supabaseProxy(request: NextRequest) {
-  // Create a response that we can modify
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
+  const response = NextResponse.next({
+    request: { headers: request.headers },
   });
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-  // Create Supabase client with cookie handling for middleware
-  const supabase = createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet) {
-        // Update request cookies for downstream handlers
-        cookiesToSet.forEach(({ name, value }) => {
-          request.cookies.set(name, value);
-        });
-        // Create fresh response with updated cookies
-        response = NextResponse.next({
-          request: {
-            headers: request.headers,
-          },
-        });
-        // Set cookies on response for browser
-        cookiesToSet.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, options);
-        });
-      },
-    },
-  });
-
-  // Refresh the session - this is important!
-  // It checks if the token is expired and refreshes it if needed.
-  // Use getUser() for security as recommended by Supabase docs.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
+  const token = request.cookies.get(JWT_COOKIE)?.value;
+  const user = token ? decodeJwtPayload(token) : null;
 
-  // Check if this is an admin route (but not the login page)
+  // Check if token is expired
+  const isAuthenticated =
+    user && user.exp && user.exp * 1000 > Date.now();
+
   const isAdminRoute = pathname.startsWith("/admin");
   const isAdminLoginPage = pathname === "/admin/login";
 
-  // Routes that require any authenticated user
   const protectedCustomerRoutes = ["/profile", "/inner-circle", "/waitlist"];
   const isProtectedCustomerRoute = protectedCustomerRoutes.some(
     (route) => pathname === route || pathname.startsWith(route + "/")
   );
 
-  // Helper: resolve the user's role, preferring the cached cookie to avoid a DB call.
-  async function resolveRole(): Promise<UserRole> {
-    const cached = request.cookies.get(ROLE_COOKIE)?.value as
-      | UserRole
-      | undefined;
-    if (cached && (["public", "staff", "manager", "admin"] as string[]).includes(cached)) {
-      return cached;
-    }
-
-    // Cache miss – query the profile once and cache in a cookie
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user!.id)
-      .single();
-
-    const role: UserRole = (profile?.role as UserRole) ?? "public";
-
-    response.cookies.set(ROLE_COOKIE, role, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: ROLE_COOKIE_MAX_AGE,
-    });
-
-    return role;
-  }
-
-  // If user is not authenticated, clear any stale role cookie
-  if (!user) {
-    response.cookies.delete(ROLE_COOKIE);
-  }
-
   // Customer routes need authentication
-  if (isProtectedCustomerRoute && !user) {
+  if (isProtectedCustomerRoute && !isAuthenticated) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Admin routes need special protection
+  // Admin routes need authentication + admin role
   if (isAdminRoute && !isAdminLoginPage) {
-    // Not authenticated? Redirect to admin login
-    if (!user) {
+    if (!isAuthenticated) {
       const loginUrl = new URL("/admin/login", request.url);
-      // Save where they were trying to go so we can redirect after login
-      loginUrl.searchParams.set("redirectTo", request.nextUrl.pathname);
+      loginUrl.searchParams.set("redirectTo", pathname);
       return NextResponse.redirect(loginUrl);
     }
 
-    const userRole = await resolveRole();
-
-    // Check if user has an admin role
-    if (!ADMIN_ROLES.includes(userRole)) {
-      // Authenticated but wrong role - redirect to admin login with error
+    const role = (user?.role as UserRole) ?? "public";
+    if (!ADMIN_ROLES.includes(role)) {
       const loginUrl = new URL("/admin/login", request.url);
       loginUrl.searchParams.set("error", "unauthorized");
       return NextResponse.redirect(loginUrl);
     }
-
-    // User is authenticated and has admin access - allow through
   }
 
   // If user is on admin login page but already authenticated as admin,
-  // redirect them to admin dashboard
-  if (isAdminLoginPage && user) {
-    const userRole = await resolveRole();
-
-    if (ADMIN_ROLES.includes(userRole)) {
-      // Already logged in as admin - redirect to dashboard
+  // redirect to admin dashboard
+  if (isAdminLoginPage && isAuthenticated) {
+    const role = (user?.role as UserRole) ?? "public";
+    if (ADMIN_ROLES.includes(role)) {
       return NextResponse.redirect(new URL("/admin", request.url));
     }
   }
