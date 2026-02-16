@@ -1581,4 +1581,34 @@ NEXT_PUBLIC_API_URL=http://localhost:4000/api
 
 ---
 
+## Week 2, Day 6 — Infinite Scrolling (Feb 2025)
+
+### What Got Done
+
+**Replaced pagination with infinite scrolling in the product grid.** The `/products` page now loads more items automatically as you scroll down, creating a smoother browsing experience.
+
+1. **Seamless Loading** — No more "Next Page" buttons. As you reach the bottom of the list, the next batch of products loads instantly.
+2. **Skeleton Loading State** — A subtle pulse animation shows while new products are being fetched.
+3. **Filter Compatible** — Changing filters (Gender, Sort, etc.) resets the list to the top, and infinite scrolling continues from there.
+4. **End of List Indicator** — Friendly message when you've seen everything.
+5. **No More Page Reloads** — Everything happens client-side, preserving your scroll position and feeling much faster.
+
+### Technical Details
+
+- **React Intersection Observer** — Uses `useInView` hook to detect when the user hits the bottom of the viewport.
+- **TanStack Query** — Switched to `useInfiniteQuery` for efficient data fetching and caching of multiple pages.
+- **New Component** — `InfiniteProductGrid` replaced the old `ProductGrid` + pagination controls.
+
+### Files Modified
+
+- `apps/frontend/lib/api/products.ts` — Added `useInfiniteProducts` hook
+- `apps/frontend/app/(shop)/components/InfiniteProductGrid.tsx` — **New component** handling the scroll logic
+- `apps/frontend/app/(shop)/products/page.tsx` — Swapped out the grid component
+
+### Want to See It?
+
+Go to `/products` and just keep scrolling!
+
+---
+
 *Last updated: February 2025*

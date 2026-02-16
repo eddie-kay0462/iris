@@ -1,4 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  useInfiniteQuery,
+} from "@tanstack/react-query";
 import { apiClient } from "./client";
 
 // --- Types ---
@@ -85,6 +90,23 @@ export function useProducts(params: ProductQueryParams = {}) {
       apiClient<PaginatedResponse<Product>>(
         `/products${toSearchParams(params)}`,
       ),
+  });
+}
+
+export function useInfiniteProducts(params: ProductQueryParams = {}) {
+  return useInfiniteQuery({
+    queryKey: ["products", "infinite", params],
+    queryFn: ({ pageParam = 1 }) =>
+      apiClient<PaginatedResponse<Product>>(
+        `/products${toSearchParams({ ...params, page: pageParam as number })}`,
+      ),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      if (lastPage.page < lastPage.totalPages) {
+        return lastPage.page + 1;
+      }
+      return undefined;
+    },
   });
 }
 
