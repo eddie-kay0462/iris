@@ -199,6 +199,7 @@ export default function HomePage() {
               muted
               loop
               playsInline
+              preload="auto"
               className="h-full w-full object-cover object-top"
             />
           </div>
