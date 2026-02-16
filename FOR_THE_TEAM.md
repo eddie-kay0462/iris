@@ -1611,4 +1611,54 @@ Go to `/products` and just keep scrolling!
 
 ---
 
+## Week 3, Day 6 — Multi-Option Variant Selector (Feb 2025)
+
+### What Got Done
+
+**Upgraded the product variant selector to support multiple option groups (Color + Size).** Previously, the `VariantSelector` only rendered `option1` (e.g., just Color). Products with both Color and Size variants (Red/S, Red/M, Blue/S, Blue/M) only showed Color buttons — users had no way to pick a size.
+
+### How It Works Now
+
+1. **Multiple option rows** — The selector extracts up to 3 option groups from the variant data (e.g., Color, Size, Material) and renders a row of buttons for each one.
+2. **Cross-filtering** — When you select Color=Red, only the sizes available in Red are shown as clickable. Unavailable combinations are grayed out.
+3. **Sold out indicators** — If a combination exists but is out of stock, the button shows "(Sold out)" with disabled styling but remains visible.
+4. **Auto-selection** — On page load, the first in-stock variant is automatically selected so the price and stock status are immediately correct.
+5. **Backwards compatible** — Products with only 1 option (just sizes or just colors) still work exactly as before. Products with no variants show no selector.
+
+### What Changed
+
+The **cart, checkout, and backend are untouched** — they already handled multi-option variants correctly. Only the shop-side display needed updating.
+
+### Files Modified
+
+| File | What Changed |
+|------|-------------|
+| `apps/frontend/app/(shop)/components/VariantSelector.tsx` | Full rewrite — extracts option groups, renders per-group button rows, cross-filters availability, exports `findMatchingVariant()` |
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | Manages `selectedOptions` as `Record<string, string>` instead of flat `selectedId`, auto-selects first in-stock variant via `useEffect`, resolves active variant via `useMemo` |
+
+### Want to Test It?
+
+1. Go to a product with multiple variant options (e.g., a shirt with Color + Size combos)
+2. Confirm both Color and Size button rows appear
+3. Select a color → sizes filter to show only what's available for that color
+4. Select a size → price and stock status update to match the exact variant
+5. Out-of-stock combos show "(Sold out)" and are disabled
+6. "Add to cart" adds the correct variant with proper title (e.g., "Red / M")
+7. Products with only 1 option still work as before
+
+### Something Not Working?
+
+**Only one option row showing** — The product's variants might only have `option1` populated. Check the admin product edit page to ensure variants have both `option1` and `option2` filled in.
+
+**Wrong variant selected on load** — The auto-selection picks the first in-stock variant. If all variants are out of stock, it falls back to the first variant.
+
+### Next Up
+
+- Waitlist & Inner Circle pages
+- Admin waitlist management
+- Email notifications (order confirmation, shipping updates)
+- Discount codes / coupons
+
+---
+
 *Last updated: February 2025*

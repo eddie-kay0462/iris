@@ -1,23 +1,92 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useMemo, useCallback, useEffect } from "react";
 import { useProduct, type ProductVariant } from "@/lib/api/products";
 import { useCart } from "@/lib/cart";
 import { ImageGallery } from "../../components/ImageGallery";
-import { VariantSelector } from "../../components/VariantSelector";
+import {
+  VariantSelector,
+  findMatchingVariant,
+  type OptionSlot,
+} from "../../components/VariantSelector";
 
 type PageProps = {
   params: Promise<{ id: string }>;
 };
 
+/** Extract option groups (same logic as VariantSelector) to find the initial variant */
+function getOptionGroups(variants: ProductVariant[]) {
+  const slots = [
+    { nameKey: "option1_name", valueKey: "option1_value", slot: 1 },
+    { nameKey: "option2_name", valueKey: "option2_value", slot: 2 },
+    { nameKey: "option3_name", valueKey: "option3_value", slot: 3 },
+  ] as const;
+
+  const groups: OptionSlot[] = [];
+  for (const { nameKey, slot } of slots) {
+    const name = variants[0]?.[nameKey];
+    if (name) groups.push({ name, slot });
+  }
+  return groups;
+}
+
+/** Build initial selected options from a variant */
+function selectedFromVariant(
+  variant: ProductVariant,
+  groups: OptionSlot[],
+): Record<string, string> {
+  const sel: Record<string, string> = {};
+  for (const g of groups) {
+    const key =
+      g.slot === 1
+        ? "option1_value"
+        : g.slot === 2
+          ? "option2_value"
+          : "option3_value";
+    const val = variant[key];
+    if (val) sel[g.name] = val;
+  }
+  return sel;
+}
+
 export default function ProductDetailPage({ params }: PageProps) {
   const { id } = use(params);
   const { data: product, isLoading, error } = useProduct(id);
   const { addItem } = useCart();
-  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(
-    null,
-  );
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+  const [initialized, setInitialized] = useState(false);
   const [added, setAdded] = useState(false);
+
+  const variants = product?.product_variants || [];
+
+  // Auto-select first in-stock variant on load
+  useEffect(() => {
+    if (initialized || variants.length === 0) return;
+    const groups = getOptionGroups(variants);
+    if (groups.length === 0) {
+      setInitialized(true);
+      return;
+    }
+    // Prefer first in-stock variant, fall back to first variant
+    const firstInStock = variants.find((v) => v.inventory_quantity > 0) || variants[0];
+    setSelectedOptions(selectedFromVariant(firstInStock, groups));
+    setInitialized(true);
+  }, [variants, initialized]);
+
+  // Resolve the active variant from selected options
+  const activeVariant = useMemo(() => {
+    if (variants.length === 0) return null;
+    const groups = getOptionGroups(variants);
+    if (groups.length === 0) return variants[0] || null;
+    return findMatchingVariant(variants, selectedOptions, groups);
+  }, [variants, selectedOptions]);
+
+  const handleOptionSelect = useCallback(
+    (optionName: string, value: string) => {
+      setSelectedOptions((prev) => ({ ...prev, [optionName]: value }));
+    },
+    [],
+  );
 
   if (isLoading) {
     return (
@@ -42,8 +111,7 @@ export default function ProductDetailPage({ params }: PageProps) {
     );
   }
 
-  const variants = product.product_variants || [];
-  const active = selectedVariant || variants[0] || null;
+  const active = activeVariant || variants[0] || null;
   const displayPrice = active?.price ?? product.base_price;
   const comparePrice = active?.compare_at_price ?? null;
   const inStock = active ? active.inventory_quantity > 0 : true;
@@ -112,8 +180,8 @@ export default function ProductDetailPage({ params }: PageProps) {
           {/* Variant selector */}
           <VariantSelector
             variants={variants}
-            selectedId={active?.id || null}
-            onSelect={setSelectedVariant}
+            selected={selectedOptions}
+            onSelect={handleOptionSelect}
           />
 
           {/* Stock status */}
