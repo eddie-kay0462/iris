@@ -190,7 +190,7 @@ export default function HomePage() {
         <div className="sticky top-0 flex h-screen items-center justify-center overflow-hidden">
           {/* Background video — zooms 1× → 1.35× */}
           <div
-            className="absolute inset-0 will-change-transform"
+            className="absolute inset-[-4px] will-change-transform blur-[1.5px]"
             style={{ transform: "scale(calc(1 + var(--p,0) * 0.35))" }}
           >
             <video
@@ -200,7 +200,7 @@ export default function HomePage() {
               loop
               playsInline
               preload="auto"
-              className="h-full w-full object-cover object-top"
+              className="h-full w-full object-cover object-top brightness-[0.7]"
             />
           </div>
 
@@ -209,7 +209,7 @@ export default function HomePage() {
             className="absolute inset-0 transition-none"
             style={{
               background:
-                "linear-gradient(to bottom, rgba(0,0,0,calc(0.25 + var(--p,0) * 0.35)) 0%, rgba(0,0,0,calc(0.15 + var(--p,0) * 0.25)) 50%, rgba(0,0,0,calc(0.35 + var(--p,0) * 0.35)) 100%)",
+                "linear-gradient(to bottom, rgba(0,0,0,calc(0.40 + var(--p,0) * 0.30)) 0%, rgba(0,0,0,calc(0.30 + var(--p,0) * 0.25)) 50%, rgba(0,0,0,calc(0.45 + var(--p,0) * 0.30)) 100%)",
             }}
           />
 
