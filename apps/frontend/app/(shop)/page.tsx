@@ -75,14 +75,12 @@ function useScrollEngine() {
 
 const HOLD_MS = 3500;
 const TRANSITION_MS = 900;
-const SCROLL_IDLE_MS = 2500;
 const REAL_SLIDES = 4;
 const TOTAL_SLIDES = REAL_SLIDES + 1;
 const SLIDE_POSITIONS = Array.from(
   { length: TOTAL_SLIDES },
   (_, i) => i / (TOTAL_SLIDES - 1),
 );
-const MAX_SCROLL_P = SLIDE_POSITIONS[REAL_SLIDES - 1];
 const LAST_IDX = TOTAL_SLIDES - 1;
 
 function easeOutCubic(t: number) {
@@ -94,10 +92,8 @@ function useHeroAutoplay(heroRef: React.RefObject<HTMLElement | null>) {
     const hero = heroRef.current;
     if (!hero) return;
 
-    hero.setAttribute("data-autoplay", "");
     hero.style.setProperty("--p", "0");
 
-    let mode: "autoplay" | "scrolling" = "autoplay";
     let currentP = 0;
     let targetP = 0;
     let transitionStart = 0;
@@ -106,10 +102,9 @@ function useHeroAutoplay(heroRef: React.RefObject<HTMLElement | null>) {
     let slideIdx = 0;
     let rafId: number;
     let holdTimer: ReturnType<typeof setTimeout>;
-    let scrollIdleTimer: ReturnType<typeof setTimeout>;
 
     const tick = (now: number) => {
-      if (mode === "autoplay" && animating) {
+      if (animating) {
         const elapsed = now - transitionStart;
         const t = Math.min(1, elapsed / TRANSITION_MS);
         currentP =
@@ -128,7 +123,6 @@ function useHeroAutoplay(heroRef: React.RefObject<HTMLElement | null>) {
     };
 
     const advance = () => {
-      if (mode !== "autoplay") return;
       slideIdx = (slideIdx + 1) % TOTAL_SLIDES;
       transitionFrom = currentP;
       targetP = SLIDE_POSITIONS[slideIdx];
@@ -137,66 +131,12 @@ function useHeroAutoplay(heroRef: React.RefObject<HTMLElement | null>) {
       holdTimer = setTimeout(advance, HOLD_MS);
     };
 
-    const startAutoplay = () => {
-      mode = "autoplay";
-      let nearest = 0;
-      let minDist = Infinity;
-      for (let i = 0; i < REAL_SLIDES; i++) {
-        const d = Math.abs(SLIDE_POSITIONS[i] - currentP);
-        if (d < minDist) {
-          minDist = d;
-          nearest = i;
-        }
-      }
-      slideIdx = nearest;
-
-      if (minDist < 0.01) {
-        currentP = SLIDE_POSITIONS[nearest];
-        hero.style.setProperty("--p", currentP.toFixed(4));
-        animating = false;
-        holdTimer = setTimeout(advance, HOLD_MS);
-      } else {
-        transitionFrom = currentP;
-        targetP = SLIDE_POSITIONS[nearest];
-        transitionStart = performance.now();
-        animating = true;
-        holdTimer = setTimeout(advance, TRANSITION_MS + HOLD_MS);
-      }
-    };
-
-    const onScroll = () => {
-      if (mode === "autoplay") {
-        mode = "scrolling";
-        animating = false;
-        clearTimeout(holdTimer);
-      }
-
-      const vh = window.innerHeight;
-      const r = hero.getBoundingClientRect();
-      const scrollable = hero.offsetHeight - vh;
-      const rawP = scrollable > 0 ? clamp(-r.top / scrollable) : 0;
-      currentP = rawP * MAX_SCROLL_P;
-      hero.style.setProperty("--p", currentP.toFixed(4));
-
-      clearTimeout(scrollIdleTimer);
-      scrollIdleTimer = setTimeout(() => {
-        const rect = hero.getBoundingClientRect();
-        if (rect.bottom > 0 && rect.top < window.innerHeight) {
-          startAutoplay();
-        }
-      }, SCROLL_IDLE_MS);
-    };
-
     holdTimer = setTimeout(advance, HOLD_MS);
     rafId = requestAnimationFrame(tick);
-    window.addEventListener("scroll", onScroll, { passive: true });
 
     return () => {
       clearTimeout(holdTimer);
-      clearTimeout(scrollIdleTimer);
       cancelAnimationFrame(rafId);
-      hero.removeAttribute("data-autoplay");
-      window.removeEventListener("scroll", onScroll);
     };
   }, [heroRef]);
 }
@@ -329,11 +269,9 @@ export default function HomePage() {
           ══════════════════════════════════════════════════════════════ */}
       <section
         ref={heroRef}
-        data-scene="hscroll"
-        className="relative"
-        style={{ height: "500vh" }}
+        className="relative h-screen overflow-hidden"
       >
-        <div className="sticky top-0 h-screen overflow-hidden">
+        <div className="h-full">
           {/* Horizontal track: 4 × 25% panels = 400% of container.
              Translate by −75% of own width (= 3 panels) over p 0→1.
              Uses % instead of vw to avoid scrollbar-width mismatch on Windows. */}
