@@ -1673,11 +1673,14 @@ The **cart, checkout, and backend are untouched** — they already handled multi
 - Skeleton loading animation while fetching, "You've reached the end" message at the bottom
 - Filters/sort reset the list and infinite scroll continues from there
 
-**2. Added "Quick Add" overlay to product cards.** Each product card now has a `+` button in the bottom-right corner of the image. Click it and a row of available sizes expands with a spring animation (powered by Framer Motion). Selecting a size adds to cart instantly without navigating away.
+**2. Added "Quick Add" overlay to product cards.** Each product card now has a `+` button in the bottom-right corner of the image. Click it and a row of available sizes expands with a smooth staggered animation (powered by Framer Motion). Selecting a size adds to cart instantly without navigating away.
 
-- Spinner → green checkmark → auto-close flow on size selection
+- Sharp square styling (no rounded corners) matching the brand aesthetic
+- Staggered size buttons slide in from left for a premium feel
+- Subtle gray hover highlight so size labels stay readable
+- Spinner → checkmark → auto-close flow on size selection
 - Closes on mouse leave or outside click
-- Detects the "Size" option across all variant slots (option1/option2/option3) automatically
+- Auto-detects the "Size" option across all variant slots (option1/option2/option3)
 - Integrates with the existing `useCart()` context — items appear in the cart immediately
 
 ### Files Created

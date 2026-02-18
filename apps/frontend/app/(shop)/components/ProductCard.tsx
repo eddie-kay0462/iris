@@ -158,39 +158,46 @@ export function ProductCard({ product }: { product: Product }) {
             >
               <AnimatePresence mode="wait">
                 {!quickAddOpen ? (
-                  /* Plus button */
+                  /* Plus button — sharp square */
                   <motion.button
                     key="plus-btn"
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.8, opacity: 0 }}
-                    transition={{ duration: 0.15 }}
+                    initial={{ opacity: 0, scale: 0.85 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    whileHover={{ scale: 1.08 }}
+                    whileTap={{ scale: 0.95 }}
+                    transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
                       setQuickAddOpen(true);
                     }}
-                    className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow-md backdrop-blur-sm transition-colors hover:bg-black hover:text-white dark:bg-black/80 dark:text-white dark:hover:bg-white dark:hover:text-black"
+                    className="flex h-9 w-9 items-center justify-center bg-white/90 text-gray-900 shadow-md backdrop-blur-sm transition-colors hover:bg-black hover:text-white dark:bg-black/80 dark:text-white dark:hover:bg-white dark:hover:text-black"
                     aria-label="Quick add to cart"
                   >
                     <PlusIcon />
                   </motion.button>
                 ) : (
-                  /* Size selector row */
+                  /* Size selector row — sharp edges */
                   <motion.div
                     key="size-row"
-                    initial={{ width: 36, opacity: 0.8 }}
+                    initial={{ width: 36, opacity: 0 }}
                     animate={{ width: "auto", opacity: 1 }}
                     exit={{ width: 36, opacity: 0 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                    className="flex items-center gap-1 overflow-hidden rounded-full bg-white/95 px-1.5 py-1 shadow-lg backdrop-blur-sm dark:bg-black/90"
+                    transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                    className="flex items-center gap-0.5 overflow-hidden bg-white/95 p-1 shadow-lg backdrop-blur-md dark:bg-black/90"
                   >
-                    {sizes.map((size) => (
+                    {sizes.map((size, i) => (
                       <motion.button
                         key={size}
-                        initial={{ opacity: 0, y: 4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.05 }}
+                        initial={{ opacity: 0, x: -6 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{
+                          duration: 0.3,
+                          delay: i * 0.04,
+                          ease: [0.16, 1, 0.3, 1],
+                        }}
+
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -199,11 +206,11 @@ export function ProductCard({ product }: { product: Product }) {
                           }
                         }}
                         disabled={!!addingSize}
-                        className={`flex h-7 min-w-[28px] items-center justify-center rounded-full px-2 text-[10px] font-semibold uppercase tracking-wide transition-all ${addingSize === size
-                          ? "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-                          : successSize === size
-                            ? "bg-green-500 text-white"
-                            : "bg-transparent text-gray-800 hover:bg-black hover:text-white dark:text-gray-200 dark:hover:bg-white dark:hover:text-black"
+                        className={`flex h-7 min-w-[30px] items-center justify-center px-2 text-[10px] font-semibold uppercase tracking-widest transition-all duration-200 ${addingSize === size
+                            ? "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500"
+                            : successSize === size
+                              ? "bg-black text-white dark:bg-white dark:text-black"
+                              : "bg-transparent text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
                           }`}
                       >
                         {addingSize === size ? (
@@ -242,26 +249,27 @@ export function ProductCard({ product }: { product: Product }) {
 
 function PlusIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <line x1="8" y1="3" x2="8" y2="13" />
-      <line x1="3" y1="8" x2="13" y2="8" />
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square">
+      <line x1="7" y1="2" x2="7" y2="12" />
+      <line x1="2" y1="7" x2="12" y2="7" />
     </svg>
   );
 }
 
 function SpinnerIcon() {
   return (
-    <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeOpacity="0.3" />
-      <path d="M8 2a6 6 0 0 1 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <svg className="h-3 w-3 animate-spin" viewBox="0 0 16 16" fill="none">
+      <rect x="2" y="2" width="12" height="12" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.2" />
+      <path d="M8 2h6v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" />
     </svg>
   );
 }
 
 function CheckIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="3,7 6,10 11,4" />
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" strokeLinejoin="miter">
+      <polyline points="2.5,6 5,8.5 9.5,3.5" />
     </svg>
   );
 }
+
