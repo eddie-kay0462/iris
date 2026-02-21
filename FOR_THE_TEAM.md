@@ -1661,4 +1661,61 @@ The **cart, checkout, and backend are untouched** — they already handled multi
 
 ---
 
+## Week 3, Day 6 (cont.) — Infinite Scrolling & Quick Add (Feb 2025)
+
+### What Got Done
+
+**1. Replaced pagination with infinite scrolling.** The `/products` page now loads more items automatically as you scroll down — no more "Next Page" buttons.
+
+- Uses `react-intersection-observer` to detect when the user hits the bottom
+- Switched to `useInfiniteQuery` from TanStack Query for multi-page caching
+- New `InfiniteProductGrid` component replaced the old `ProductGrid` + pagination controls
+- Skeleton loading animation while fetching, "You've reached the end" message at the bottom
+- Filters/sort reset the list and infinite scroll continues from there
+
+**2. Added "Quick Add" overlay to product cards.** Each product card now has a `+` button in the bottom-right corner of the image. Click it and a row of available sizes expands with a smooth staggered animation (powered by Framer Motion). Selecting a size adds to cart instantly without navigating away.
+
+- Sharp square styling (no rounded corners) matching the brand aesthetic
+- Staggered size buttons slide in from left for a premium feel
+- Subtle gray hover highlight so size labels stay readable
+- Spinner → checkmark → auto-close flow on size selection
+- Closes on mouse leave or outside click
+- Auto-detects the "Size" option across all variant slots (option1/option2/option3)
+- Integrates with the existing `useCart()` context — items appear in the cart immediately
+
+### Files Created
+
+| File | What |
+|------|------|
+| `apps/frontend/app/(shop)/components/InfiniteProductGrid.tsx` | Infinite scroll grid with intersection observer |
+
+### Files Modified
+
+| File | What Changed |
+|------|-------------|
+| `apps/frontend/lib/api/products.ts` | Added `useInfiniteProducts` hook |
+| `apps/frontend/app/(shop)/products/page.tsx` | Swapped `ProductGrid` + pagination for `InfiniteProductGrid` |
+| `apps/frontend/app/(shop)/components/ProductCard.tsx` | Added Quick Add overlay with Framer Motion animation + cart integration |
+
+### Dependencies Added
+
+- `react-intersection-observer` — viewport detection for infinite scroll
+- `framer-motion` — expand/collapse animation for Quick Add
+
+### Want to Test It?
+
+1. Go to `/products` and scroll — products load automatically as you reach the bottom
+2. Hover a product card → `+` button appears bottom-right of the image
+3. Click `+` → size buttons expand
+4. Click a size → spinner → checkmark → item added to cart
+5. Click elsewhere on the card → navigates to product detail as before
+
+### Something Not Working?
+
+**`+` button shows colors instead of sizes** — Check that your variants have `option2_name` set to "Size" in the admin product edit page. The component auto-detects which option slot holds sizes.
+
+**`npm install` fails** — Use `npm install --legacy-peer-deps` (react-paystack peer dep issue).
+
+---
+
 *Last updated: February 2025*
