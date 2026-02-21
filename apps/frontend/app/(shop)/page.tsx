@@ -30,6 +30,7 @@ function useScrollEngine() {
       const vh = window.innerHeight;
 
       root.querySelectorAll<HTMLElement>("[data-scene]").forEach((s) => {
+        if (s.hasAttribute("data-autoplay")) return;
         const r = s.getBoundingClientRect();
         const scrollable = s.offsetHeight - vh;
         const p = scrollable > 0 ? clamp(-r.top / scrollable) : 0;
@@ -64,6 +65,80 @@ function useScrollEngine() {
   }, []);
 
   return ref;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Hero autoplay                                                      */
+/*  Cycles slides automatically; pauses while scrolling and resumes    */
+/*  when the user stops scrolling (if the hero is still visible).      */
+/* ------------------------------------------------------------------ */
+
+const HOLD_MS = 3500;
+const TRANSITION_MS = 900;
+const REAL_SLIDES = 4;
+const TOTAL_SLIDES = REAL_SLIDES + 1;
+const SLIDE_POSITIONS = Array.from(
+  { length: TOTAL_SLIDES },
+  (_, i) => i / (TOTAL_SLIDES - 1),
+);
+const LAST_IDX = TOTAL_SLIDES - 1;
+
+function easeOutCubic(t: number) {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function useHeroAutoplay(heroRef: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const hero = heroRef.current;
+    if (!hero) return;
+
+    hero.style.setProperty("--p", "0");
+
+    let currentP = 0;
+    let targetP = 0;
+    let transitionStart = 0;
+    let transitionFrom = 0;
+    let animating = false;
+    let slideIdx = 0;
+    let rafId: number;
+    let holdTimer: ReturnType<typeof setTimeout>;
+
+    const tick = (now: number) => {
+      if (animating) {
+        const elapsed = now - transitionStart;
+        const t = Math.min(1, elapsed / TRANSITION_MS);
+        currentP =
+          transitionFrom + (targetP - transitionFrom) * easeOutCubic(t);
+        hero.style.setProperty("--p", currentP.toFixed(4));
+        if (t >= 1) {
+          animating = false;
+          if (slideIdx === LAST_IDX) {
+            slideIdx = 0;
+            currentP = 0;
+            hero.style.setProperty("--p", "0");
+          }
+        }
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+
+    const advance = () => {
+      slideIdx = (slideIdx + 1) % TOTAL_SLIDES;
+      transitionFrom = currentP;
+      targetP = SLIDE_POSITIONS[slideIdx];
+      transitionStart = performance.now();
+      animating = true;
+      holdTimer = setTimeout(advance, HOLD_MS);
+    };
+
+    holdTimer = setTimeout(advance, HOLD_MS);
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      clearTimeout(holdTimer);
+      cancelAnimationFrame(rafId);
+    };
+  }, [heroRef]);
 }
 
 /* ------------------------------------------------------------------ */
@@ -175,6 +250,11 @@ function NewsletterForm() {
 
 export default function HomePage() {
   const containerRef = useScrollEngine();
+  const heroRef = useRef<HTMLElement>(null);
+  const slides = [...collections, collections[0]];
+  const slideCount = slides.length;
+  const trackShift = ((slideCount - 1) / slideCount) * 100;
+  useHeroAutoplay(heroRef);
 
   return (
     <div
@@ -182,140 +262,31 @@ export default function HomePage() {
       className="bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100"
     >
       {/* ══════════════════════════════════════════════════════════════
-          SCENE 1 — CINEMATIC HERO
-          Deep parallax zoom · title splits apart with expanding
-          letter-spacing & counter-rotation · divider line widens
-          ══════════════════════════════════════════════════════════════ */}
-      <section data-scene="hero" className="relative" style={{ height: "220vh" }}>
-        <div className="sticky top-0 flex h-screen items-center justify-center overflow-hidden">
-          {/* Background video — zooms 1× → 1.35× */}
-          <div
-            className="absolute inset-[-4px] will-change-transform blur-[1.5px]"
-            style={{ transform: "scale(calc(1 + var(--p,0) * 0.35))" }}
-          >
-            <video
-              src="https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/homepage/main-video/1NRI-2.mp4"
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="auto"
-              className="h-full w-full object-cover object-top brightness-[0.7]"
-            />
-          </div>
-
-          {/* Overlay that darkens with scroll */}
-          <div
-            className="absolute inset-0 transition-none"
-            style={{
-              background:
-                "linear-gradient(to bottom, rgba(0,0,0,calc(0.40 + var(--p,0) * 0.30)) 0%, rgba(0,0,0,calc(0.30 + var(--p,0) * 0.25)) 50%, rgba(0,0,0,calc(0.45 + var(--p,0) * 0.30)) 100%)",
-            }}
-          />
-
-          {/* Title block */}
-          <div className="relative text-center">
-            {/* Top line — drifts UP + letter-spacing fans out + slight rotation */}
-            <h1
-              className="text-4xl font-bold uppercase text-white will-change-transform sm:text-6xl lg:text-7xl"
-              style={{
-                opacity: "calc(1 - var(--p,0) * 2.2)",
-                transform:
-                  "translateY(calc(var(--p,0) * -90px)) rotate(calc(var(--p,0) * -1.5deg))",
-                letterSpacing: "calc(0.05em + var(--p,0) * 0.6em)",
-              }}
-            >
-              Intercessory
-            </h1>
-
-            {/* Expanding horizontal divider */}
-            <div
-              className="mx-auto my-4 h-px bg-white/50 transition-none sm:my-6"
-              style={{
-                width: "calc(40px + var(--p,0) * 260px)",
-                opacity: "calc(1 - var(--p,0) * 3)",
-              }}
-            />
-
-            {/* Bottom line — drifts DOWN + fans out + counter-rotation */}
-            <p
-              className="text-4xl font-bold uppercase text-white will-change-transform sm:text-6xl lg:text-7xl"
-              style={{
-                opacity: "calc(1 - var(--p,0) * 2.2)",
-                transform:
-                  "translateY(calc(var(--p,0) * 90px)) rotate(calc(var(--p,0) * 1.5deg))",
-                letterSpacing: "calc(0.05em + var(--p,0) * 0.6em)",
-              }}
-            >
-              Department
-            </p>
-
-            {/* Subtitle */}
-            <p
-              className="mt-6 text-sm text-white/70 will-change-transform sm:text-base"
-              style={{
-                opacity: "calc(1 - var(--p,0) * 3.5)",
-                transform: "translateY(calc(var(--p,0) * 50px))",
-              }}
-            >
-              Realtree Camo Collection
-            </p>
-
-            {/* CTA */}
-            <div
-              className="mt-8"
-              style={{ opacity: "calc(1 - var(--p,0) * 4.5)" }}
-            >
-              <Link
-                href="/products"
-                className="inline-block border border-white/80 bg-white/10 px-10 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] text-white backdrop-blur-sm transition hover:bg-white hover:text-black"
-              >
-                Shop Now
-              </Link>
-            </div>
-          </div>
-
-          {/* Scroll indicator */}
-          <div
-            className="absolute bottom-10 left-1/2 -translate-x-1/2"
-            style={{ opacity: "calc(1 - var(--p,0) * 8)" }}
-          >
-            <div className="flex flex-col items-center gap-2">
-              <span className="text-[9px] uppercase tracking-[0.3em] text-white/40">
-                Scroll
-              </span>
-              <div className="relative h-10 w-px bg-white/20">
-                <div className="absolute inset-x-0 top-0 h-1/2 animate-bounce bg-white/50" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ══════════════════════════════════════════════════════════════
-          SCENE 2 — HORIZONTAL SCROLL SHOWCASE
+          SCENE 1 — HORIZONTAL SCROLL SHOWCASE (HERO)
           Vertical scroll maps to horizontal panel translation.
           4 full-viewport panels glide left as the user scrolls down.
+          Auto-plays until the user scrolls.
           ══════════════════════════════════════════════════════════════ */}
       <section
-        data-scene="hscroll"
-        className="relative"
-        style={{ height: "500vh" }}
+        ref={heroRef}
+        className="relative h-screen overflow-hidden"
       >
-        <div className="sticky top-0 h-screen overflow-hidden">
-          {/* Horizontal track: 4 × 100vw = 400vw → translates 0 … −300vw */}
+        <div className="h-full">
+          {/* Horizontal track: 4 × 25% panels = 400% of container.
+             Translate by −75% of own width (= 3 panels) over p 0→1.
+             Uses % instead of vw to avoid scrollbar-width mismatch on Windows. */}
           <div
             className="flex h-full will-change-transform"
             style={{
-              width: "400vw",
-              transform: "translate3d(calc(var(--p,0) * -300vw), 0px, 0px)",
+              width: `${slideCount * 100}%`,
+              transform: `translate3d(calc(var(--p,0) * -${trackShift}%), 0px, 0px)`,
             }}
           >
-            {collections.map((col, i) => (
+            {slides.map((col, i) => (
               <div
-                key={col.image}
-                className="relative h-full flex-shrink-0"
-                style={{ width: "100vw" }}
+                key={`${col.image}-${i}`}
+                className="relative h-full flex-shrink-0 overflow-hidden"
+                style={{ width: `${100 / slideCount}%` }}
               >
                 {/* Panel image — subtle inner parallax (shifts against scroll) */}
                 <div
@@ -339,7 +310,7 @@ export default function HomePage() {
                 {/* Panel content */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
                   <span className="text-[10px] font-medium uppercase tracking-[0.4em] text-white/40">
-                    {String(i + 1).padStart(2, "0")} /{" "}
+                    {String((i % collections.length) + 1).padStart(2, "0")} /{" "}
                     {String(collections.length).padStart(2, "0")}
                   </span>
                   <h2 className="mt-4 text-3xl font-bold uppercase tracking-wide text-white sm:text-5xl lg:text-6xl">
@@ -357,7 +328,7 @@ export default function HomePage() {
                 </div>
 
                 {/* Thin panel divider on the right */}
-                {i < collections.length - 1 && (
+                {i < slides.length - 1 && (
                   <div className="absolute bottom-0 right-0 top-0 w-px bg-white/10" />
                 )}
               </div>
@@ -369,7 +340,7 @@ export default function HomePage() {
             <div className="h-px w-24 overflow-hidden bg-white/20 sm:w-40">
               <div
                 className="h-full bg-white/70 transition-none"
-                style={{ width: "calc(var(--p,0) * 100%)" }}
+                style={{ width: "calc(min(var(--p,0) / 0.75, 1) * 100%)" }}
               />
             </div>
           </div>
@@ -395,7 +366,7 @@ export default function HomePage() {
           </div>
           <div
             className="pointer-events-none absolute inset-y-0 right-4 flex items-center sm:right-6"
-            style={{ opacity: "calc(1 - var(--p,0))" }}
+            style={{ opacity: "calc(1 - min(var(--p,0) / 0.75, 1))" }}
           >
             <svg
               className="h-5 w-5 text-white/20"
