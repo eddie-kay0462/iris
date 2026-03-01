@@ -15,6 +15,7 @@ import { OrdersModule } from './orders/orders.module';
 import { SettingsModule } from './settings/settings.module';
 import { NewsletterModule } from './newsletter/newsletter.module';
 import { ExportModule } from './export/export.module';
+import { RecommendationsModule } from './recommendations/recommendations.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { ExportModule } from './export/export.module';
     SettingsModule,
     NewsletterModule,
     ExportModule,
+    RecommendationsModule,
   ],
   providers: [
     // Apply JwtAuthGuard globally — use @Public() to skip
@@ -41,4 +43,4 @@ import { ExportModule } from './export/export.module';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }

@@ -1717,5 +1717,155 @@ The **cart, checkout, and backend are untouched** — they already handled multi
 **`npm install` fails** — Use `npm install --legacy-peer-deps` (react-paystack peer dep issue).
 
 ---
+---
 
-*Last updated: February 2025*
+## Week 4 — Personalised Recommendations Integration (Mar 2025)
+
+### What Got Done
+
+**Wired the 1NRI hybrid recommender system into the website.** The recommender (FastAPI service) now serves two live UI features: a "Picked for you" strip on the products page and a "You May Also Like" section on every product detail page.
+
+Everything is built with graceful degradation — if the recommender is offline, both features silently disappear and the rest of the shop keeps working normally.
+
+### How It Works
+
+```
+Browser → Next.js frontend → NestJS backend proxy → FastAPI recommender
+                                    ↓
+                             Supabase (full product records)
+```
+
+1. The frontend calls `/api/recommendations/for-you` or `/api/recommendations/similar/:handle`
+2. NestJS resolves the user's email from the JWT (or `null` for guests)
+3. NestJS calls the FastAPI service, which returns integer product IDs
+4. NestJS maps those IDs back to Supabase handles and fetches full Product records
+5. Full Product arrays (same shape as `/api/products`) are returned to the frontend
+
+**Fallback chain:**
+- Logged-in user with known email → personalised hybrid recommendations
+- Logged-in user with unknown email (not in training data) → popularity fallback (bestsellers)
+- Guest user → popularity fallback
+- Recommender offline → empty array, section disappears
+
+### FastAPI Changes
+
+Three new endpoints added to the recommender (`recommender/src/api/routes.py` + `main.py`):
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /product-map` | Returns full `handle → int_id` map (NestJS loads this at startup) |
+| `GET /recommend/user/by-email?email=...` | Personalised recs by email, falls back to popularity for unknown users |
+| `GET /recommend/user/popular` | Top bestsellers for guests |
+
+The `/product-map` and `/recommend/user/popular` and `/recommend/user/by-email` routes are declared **before** the `{user_id}` catch-all route to avoid path collisions.
+
+`main.py` now loads `user_map.pkl` and `product_map.pkl` at startup and injects them into the router.
+
+### NestJS: New Recommendations Module
+
+Three new files at `apps/backend/src/recommendations/`:
+
+| File | What |
+|------|------|
+| `recommendations.service.ts` | Loads product map from FastAPI, calls recommender, resolves int IDs → handles → full Products. Wraps everything in try/catch with 5-second timeout. |
+| `recommendations.controller.ts` | Two `@Public()` endpoints: `GET /recommendations/for-you` and `GET /recommendations/similar/:handle` |
+| `recommendations.module.ts` | Imports `ProductsModule` to reuse `ProductsService.findOnePublic()` |
+
+`app.module.ts` updated to import `RecommendationsModule`. `apps/backend/.env` has a new line:
+```
+RECOMMENDER_URL=http://localhost:8000
+```
+Change this to the deployed URL when going to production.
+
+### Frontend: New Hook + Components
+
+**`apps/frontend/lib/api/recommendations.ts`** — Two React Query hooks:
+- `usePersonalisedProducts(k?)` — calls `/recommendations/for-you`, returns `Product[]` or `[]` on error
+- `useSimilarProducts(handle, k?)` — calls `/recommendations/similar/:handle`, disabled when handle is empty
+
+Both hooks set `retry: false` — they never retry on failure, so a dead recommender doesn't cause noisy logs or loading spinners.
+
+**`apps/frontend/app/(shop)/components/PersonalisedStrip.tsx`** — NEW component:
+- Horizontally scrollable row of `ProductCard`s
+- Shows a skeleton while loading, renders nothing when empty
+- CSS hides the scrollbar for a clean look
+
+**`products/page.tsx` updated:**
+- Detects login via `hasToken()` (reads localStorage, client-side only via `useEffect`)
+- Renders `<PersonalisedStrip />` above the main grid for logged-in users only
+- Guests see no change
+
+**`product/[id]/page.tsx` updated:**
+- Calls `useSimilarProducts(product.handle)`
+- Renders a "You May Also Like" horizontal scroll section below the product info
+- Only shows if the recommender returns results
+
+### Files Created
+
+| File | What |
+|------|------|
+| `apps/backend/src/recommendations/recommendations.service.ts` | NestJS proxy service |
+| `apps/backend/src/recommendations/recommendations.controller.ts` | Two API endpoints |
+| `apps/backend/src/recommendations/recommendations.module.ts` | Module wiring |
+| `apps/frontend/lib/api/recommendations.ts` | React Query hooks |
+| `apps/frontend/app/(shop)/components/PersonalisedStrip.tsx` | "Picked for you" UI strip |
+| `apps/frontend/lib/api/recommendations.test.ts` | Unit tests for both hooks |
+
+### Files Modified
+
+| File | What Changed |
+|------|-------------|
+| `recommender/src/api/routes.py` | Added `/product-map`, `/recommend/user/by-email`, `/recommend/user/popular` |
+| `recommender/src/api/main.py` | Loads `user_map.pkl` + `product_map.pkl` on startup, calls `attach_maps()` |
+| `apps/backend/src/app.module.ts` | Registered `RecommendationsModule` |
+| `apps/backend/.env` | Added `RECOMMENDER_URL=http://localhost:8000` |
+| `apps/frontend/app/(shop)/products/page.tsx` | Added `PersonalisedStrip` for logged-in users |
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | Added "You May Also Like" section |
+
+### Running It
+
+```bash
+# Terminal 1 — recommender (run retrain first if you haven't)
+cd "Personalised Recommendations/recommender"
+uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+
+# Terminal 2 — NestJS backend
+cd iris/apps/backend
+npm run start:dev
+
+# Terminal 3 — Next.js storefront
+cd iris/apps/frontend
+npm run dev
+```
+
+The recommender is **optional** — the shop works without it. The recommendation sections only appear when the recommender is live.
+
+### Quick Verification
+
+```bash
+# Is the recommender responding?
+curl http://localhost:8000/product-map
+
+# Does the proxy return picks for a guest?
+curl http://localhost:4000/api/recommendations/for-you
+
+# Does similar work?
+curl http://localhost:4000/api/recommendations/similar/some-product-handle
+```
+
+In the browser:
+- `/products` while logged in → "Picked for you" strip appears above the product grid
+- `/products` while logged out → no strip, grid appears as before
+- Any `/product/:handle` → "You May Also Like" section below the product info (if recommender is running)
+
+### Something Not Working?
+
+**`/product-map` returns `{}`** — The recommender hasn't been retrained yet, or `product_map.pkl` is missing. Run `python scripts/retrain_all.py` from the `recommender/` directory.
+
+**"Picked for you" strip not showing even when logged in** — Open DevTools → Application → Local Storage. Look for the `iris_token` key. If it's missing, log out and back in to get a fresh token.
+
+**NestJS logs "Could not load product map"** — The recommender isn't running. Start it first, then restart NestJS (it loads the map on the first request, so a restart isn't strictly required, but it's cleaner).
+
+---
+
+*Last updated: March 2025*

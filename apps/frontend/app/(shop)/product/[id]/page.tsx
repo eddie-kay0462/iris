@@ -9,6 +9,8 @@ import {
   findMatchingVariant,
   type OptionSlot,
 } from "../../components/VariantSelector";
+import { useSimilarProducts } from "@/lib/api/recommendations";
+import { ProductCard } from "../../components/ProductCard";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -87,6 +89,9 @@ export default function ProductDetailPage({ params }: PageProps) {
     },
     [],
   );
+
+  // Similar products — use the product handle so the recommender can look it up
+  const { data: similarProducts } = useSimilarProducts(product?.handle ?? "", 6);
 
   if (isLoading) {
     return (
@@ -227,6 +232,22 @@ export default function ProductDetailPage({ params }: PageProps) {
           )}
         </div>
       </div>
+
+      {/* You May Also Like */}
+      {similarProducts && similarProducts.length > 0 && (
+        <div className="mt-16 border-t border-gray-200 pt-12 dark:border-gray-700">
+          <h2 className="mb-6 text-xs font-semibold uppercase tracking-widest text-gray-900 dark:text-white">
+            You May Also Like
+          </h2>
+          <div className="flex gap-4 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {similarProducts.map((p) => (
+              <div key={p.id} className="w-48 shrink-0">
+                <ProductCard product={p} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
