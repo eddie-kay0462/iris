@@ -1868,4 +1868,114 @@ In the browser:
 
 ---
 
-*Last updated: March 2025*
+## Setting Up the Recommender (New Team Members)
+
+The recommender lives in its own repo: **[1NRI_personalised_recommendations](https://github.com/Kirk-kud/1NRI_personalised_recommendations)**.
+
+### Prerequisites
+
+| Tool | Version | Notes |
+|---|---|---|
+| Python | **3.12.x** | Use pyenv — see below |
+| pyenv | any | `brew install pyenv` |
+| Homebrew OpenSSL | openssl@3 | `brew install openssl` |
+
+> **Important — macOS blake2 fix:** If you install Python via pyenv on macOS, you need to compile it against Homebrew's OpenSSL, otherwise you'll see harmless but noisy `blake2b/blake2s not found` errors on every startup. Do this **before** `pyenv install`:
+>
+> ```bash
+> CPPFLAGS="-I$(brew --prefix openssl)/include" \
+> LDFLAGS="-L$(brew --prefix openssl)/lib" \
+> PYTHON_CONFIGURE_OPTS="--with-openssl=$(brew --prefix openssl)" \
+> pyenv install 3.12.6
+> ```
+
+### Step-by-Step Setup
+
+```bash
+# 1. Clone
+git clone https://github.com/Kirk-kud/1NRI_personalised_recommendations.git
+cd 1NRI_personalised_recommendations
+
+# 2. Create & activate a virtual environment
+cd recommender
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Train all models
+#    This reads the CSVs in data/raw/, cleans them, builds embeddings,
+#    trains the collaborative + hybrid models, and evaluates.
+#    Takes ~2-5 minutes on first run (downloading BERT + CLIP weights).
+python scripts/retrain_all.py
+
+# 5. Start the API (keep this terminal open)
+uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 6. (Optional) Open the admin dashboard in a second terminal
+streamlit run dashboards/admin_app.py
+```
+
+### Verify It's Working
+
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Product map (should return a JSON object with product handles → IDs)
+curl http://localhost:8000/product-map
+
+# Popular items (what guests see)
+curl http://localhost:8000/recommend/user/popular
+
+# Personalised for a known user (by email)
+curl "http://localhost:8000/recommend/user/by-email?email=someone@example.com&k=5"
+```
+
+### Connect to the Rest of the App
+
+Add this to `iris/apps/backend/.env`:
+```
+RECOMMENDER_URL=http://localhost:8000
+```
+
+Then start NestJS and Next.js as normal. The recommender is **optional** — the shop works without it.
+
+### Retraining with New Data
+
+When new Shopify exports are available:
+
+1. Replace the files in `recommender/data/raw/`:
+   - `products_export_1.csv`
+   - `orders_export_1.csv`
+   - `customers_export.csv`
+2. Run `python scripts/retrain_all.py`
+3. Restart uvicorn
+
+> The `rework_product_data.py` script at the repo root can be used to update product handles in `products_export_1.csv` after a database restructure. Run `python rework_product_data.py` from the `1NRI_personalised_recommendations/` root.
+
+### Key Metrics (as of last retrain — March 2026)
+
+| Metric | Collaborative (CF) | Hybrid |
+|---|---|---|
+| Precision@5 | 0.050 | 0.013 |
+| Recall@5 | 0.219 | 0.052 |
+| NDCG@5 | 0.194 | 0.039 |
+| Coverage@20 | 51% | 69% |
+
+The hybrid model covers more of the catalogue (69% vs 51%) because it blends text + image similarity. The CF model has higher precision — expected since it's trained purely on purchase history.
+
+### FAQ
+
+**`ModuleNotFoundError: No module named 'implicit'`** — Make sure your `.venv` is activated: `source .venv/bin/activate`.
+
+**`FAISS index not found`** — You need to run `python scripts/retrain_all.py` first to generate the index files.
+
+**`/product-map` returns `{}`** — `product_map.pkl` is missing from `data/processed/models/`. Retrain.
+
+**Port 8000 already in use** — Something else is running on 8000. Kill it (`lsof -ti:8000 | xargs kill`) or start uvicorn on a different port and update `RECOMMENDER_URL` in the backend `.env`.
+
+---
+
+*Last updated: March 2026*
