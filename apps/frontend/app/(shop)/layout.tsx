@@ -4,9 +4,10 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, X, ShoppingBag, Search } from "lucide-react";
+import { Menu, X, ShoppingBag, Search, User } from "lucide-react";
 import { ThemeProvider, useTheme } from "@/lib/theme/theme-provider";
 import { CartProvider, useCart } from "@/lib/cart";
+import { hasToken } from "@/lib/api/client";
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -50,6 +51,33 @@ function CartLink() {
         </span>
       )}
     </Link>
+  );
+}
+
+function UserLink() {
+  const router = useRouter();
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  useEffect(() => {
+    setLoggedIn(hasToken());
+  }, []);
+
+  function handleClick() {
+    if (loggedIn) {
+      router.push("/profile");
+    } else {
+      router.push("/login");
+    }
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      aria-label={loggedIn ? "My account" : "Log in"}
+      className="p-1 text-gray-600 transition hover:text-black dark:text-gray-400 dark:hover:text-white"
+    >
+      <User className="h-[18px] w-[18px]" strokeWidth={1.5} />
+    </button>
   );
 }
 
@@ -193,6 +221,7 @@ function ShopHeader() {
             <Search className="h-[18px] w-[18px]" strokeWidth={1.5} />
           </button>
           <ThemeToggle />
+          <UserLink />
           <CartLink />
         </div>
       </div>

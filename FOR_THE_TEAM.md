@@ -885,7 +885,7 @@ curl -X POST http://localhost:4000/api/inventory/adjust \
 
 ### Something Not Working?
 
-**No products showing up on storefront** — Make sure the product has `published: true`. Draft/archived products only show in admin.
+**No products showing up on storefront** — (1) **Backend must be running:** from repo root run `cd apps/backend && npm run start:dev` (default port 4000). (2) **Backend needs its own `.env`** in `apps/backend/` with `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` (same values as `apps/frontend/.env.local`). (3) In Supabase, products only show on the storefront when `published = true` and `deleted_at` is null. Draft/archived products only show in admin.
 
 **"Variant not found" when adjusting stock** — Copy the variant ID from the product detail response, not the product ID.
 
@@ -1975,6 +1975,84 @@ The hybrid model covers more of the catalogue (69% vs 51%) because it blends tex
 **`/product-map` returns `{}`** — `product_map.pkl` is missing from `data/processed/models/`. Retrain.
 
 **Port 8000 already in use** — Something else is running on 8000. Kill it (`lsof -ti:8000 | xargs kill`) or start uvicorn on a different port and update `RECOMMENDER_URL` in the backend `.env`.
+
+---
+
+*Last updated: March 2026*
+
+## Week 4 — Recommender Setup & Shop Login (March 2026)
+
+### What Got Done
+
+**Got the ML recommender fully running and added a login button to the storefront.**
+
+### 1. Recommender Setup (Getting Kirk's Code Running)
+
+The recommender was integrated structurally but the actual source code and data were missing. Here's everything that was done to get it live:
+
+**Step 1 — Copy source code from Kirk's repo**
+
+Clone the original recommender repo and copy its contents into `recommender/`:
+
+```bash
+git clone https://github.com/Kirk-kud/1NRI_personalised_recommendations /tmp/1NRI_personalised_recommendations
+
+# Source code
+cp -r /tmp/1NRI_personalised_recommendations/recommender/src/* recommender/src/
+cp -r /tmp/1NRI_personalised_recommendations/recommender/scripts/* recommender/scripts/
+
+# Raw data CSVs (from the repo root data/ folder)
+cp /tmp/1NRI_personalised_recommendations/data/*.csv recommender/data/raw/
+```
+
+**Step 2 — Merge requirements**
+
+Kirk's repo has significantly more dependencies (torch, faiss, sentence-transformers, implicit, etc.). The `recommender/requirements.txt` was updated to include all of them while keeping our extras (`supabase`, `python-dotenv`).
+
+**Step 3 — Install and train**
+
+```bash
+cd recommender
+source .venv/bin/activate
+pip install -r requirements.txt        # takes a few minutes (torch is large)
+python scripts/retrain_all.py          # trains CF + hybrid models, builds FAISS indexes
+uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+**If port 8000 is already in use:**
+```bash
+lsof -ti :8000 | xargs kill -9
+```
+
+### 2. Login Button Added to Store Header
+
+The storefront had no login button — customers had no way to log in from the shop. This meant the "Picked for you" strip was always showing the popularity fallback instead of personalised results.
+
+**Fixed:** Added a `User` icon to the shop header (between theme toggle and cart):
+- **Not logged in** → tapping the icon goes to `/login`
+- **Logged in** → tapping the icon goes to `/profile`
+
+Once a customer logs in, their JWT is sent with every recommendation request and the "Picked for you" section becomes genuinely personalised to them.
+
+**File modified:** `apps/frontend/app/(shop)/layout.tsx`
+
+### How "Picked for You" Works (Quick Summary)
+
+The `PersonalisedStrip` component on the product pages calls `GET /recommendations/for-you` on the NestJS backend. NestJS forwards the request to the Python recommender at `http://localhost:8000`. The recommender blends three signals:
+
+- **50% Collaborative Filtering** — what users with similar purchase history bought
+- **30% Text similarity** — product description/title embeddings (MiniLM)
+- **20% Image similarity** — product image embeddings (OpenCLIP ViT-B-32)
+
+For guests (no JWT) it falls back to the most popular products.
+
+### Something Not Working?
+
+**"Picked for you" shows same products for everyone** — The recommender is likely running but nobody is logged in. Use the new User icon in the header to log in.
+
+**Recommender not starting** — Make sure you've run `python scripts/retrain_all.py` first. Without the model artifacts in `data/processed/models/`, the API can't start.
+
+**`FileNotFoundError` for CSV files** — Copy the raw data: `cp /tmp/1NRI_personalised_recommendations/data/*.csv recommender/data/raw/`
 
 ---
 
