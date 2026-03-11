@@ -16,6 +16,7 @@ import { SettingsModule } from './settings/settings.module';
 import { NewsletterModule } from './newsletter/newsletter.module';
 import { ExportModule } from './export/export.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
+import { ReviewsModule } from './reviews/reviews.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { RecommendationsModule } from './recommendations/recommendations.module'
     NewsletterModule,
     ExportModule,
     RecommendationsModule,
+    ReviewsModule,
   ],
   providers: [
     // Apply JwtAuthGuard globally — use @Public() to skip

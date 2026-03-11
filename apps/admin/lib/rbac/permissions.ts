@@ -49,6 +49,10 @@ export const PERMISSIONS = {
   "users:create": "Create admin users",
   "users:update": "Update admin users",
   "users:delete": "Delete admin users",
+
+  // Review permissions
+  "reviews:read": "View all product reviews",
+  "reviews:moderate": "Approve or delete product reviews",
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -68,6 +72,7 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     "orders:update",
     "customers:read",
     "inventory:read",
+    "reviews:read",
   ],
 
   // Managers can do everything staff can, plus manage products and waitlist
@@ -86,6 +91,8 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     "waitlist:read",
     "waitlist:invite",
     "analytics:read",
+    "reviews:read",
+    "reviews:moderate",
   ],
 
   // Admins can do everything
@@ -111,6 +118,8 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     "users:create",
     "users:update",
     "users:delete",
+    "reviews:read",
+    "reviews:moderate",
   ],
 } as const;
 

@@ -16,6 +16,7 @@ import {
   PanelLeftOpen,
   PanelLeftClose,
   X,
+  Star,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Permission, UserRole } from "@/lib/rbac/permissions";
@@ -36,6 +37,7 @@ const navItems: NavItem[] = [
   { href: "/inventory", label: "Inventory", icon: Warehouse, permission: "inventory:read" },
   { href: "/customers", label: "Customers", icon: Users, permission: "customers:read" },
   { href: "/waitlist", label: "Waitlist", icon: ClipboardList, permission: "waitlist:read" },
+  { href: "/reviews", label: "Reviews", icon: Star, permission: "reviews:read" },
   { href: "/analytics", label: "Analytics", icon: BarChart3, permission: "analytics:read" },
   { href: "/settings", label: "Settings", icon: Settings, permission: "settings:read" },
 ];
