@@ -24,9 +24,21 @@ export class InventoryService {
       .is('product.deleted_at', null);
 
     if (query.search) {
-      q = q.or(
-        `sku.ilike.%${query.search}%,product.title.ilike.%${query.search}%`,
-      );
+      const { data: matchingProducts } = await db
+        .from('products')
+        .select('id')
+        .ilike('title', `%${query.search}%`)
+        .is('deleted_at', null);
+
+      const productIds = (matchingProducts || []).map((p) => p.id);
+
+      if (productIds.length > 0) {
+        q = q.or(
+          `sku.ilike.%${query.search}%,product_id.in.(${productIds.join(',')})`,
+        );
+      } else {
+        q = q.ilike('sku', `%${query.search}%`);
+      }
     }
     if (query.low_stock === 'true') {
       q = q.lt('inventory_quantity', 10).gt('inventory_quantity', 0);
