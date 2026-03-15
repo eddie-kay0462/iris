@@ -177,7 +177,8 @@ export class PopupSalesService {
       (sum, item) => sum + item.unit_price * item.quantity,
       0,
     );
-    const total = Math.round(subtotal * 100) / 100;
+    const discountAmount = Math.round((dto.discount_amount ?? 0) * 100) / 100;
+    const total = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
 
     // Create order
     const { data: order, error: orderError } = await db
@@ -187,11 +188,17 @@ export class PopupSalesService {
         order_number,
         customer_name: dto.customer_name || null,
         customer_phone: dto.customer_phone || null,
+        customer_email: dto.customer_email || null,
         served_by: userId,
         status: 'active',
         payment_method: dto.payment_method || null,
         payment_reference: dto.payment_reference || null,
         subtotal: Math.round(subtotal * 100) / 100,
+        discount_type: dto.discount_type || 'none',
+        discount_amount: discountAmount,
+        discount_reason: dto.discount_reason || null,
+        hold_duration_minutes: dto.hold_duration_minutes || null,
+        hold_note: dto.hold_note || null,
         total,
         notes: dto.notes || null,
       })
@@ -219,11 +226,39 @@ export class PopupSalesService {
 
     if (itemsError) throw itemsError;
 
+    // Insert split payments if provided
+    if (dto.split_payments && dto.split_payments.length > 0) {
+      const splits = dto.split_payments.map((sp) => ({
+        order_id: order.id,
+        method: sp.method,
+        amount: Math.round(sp.amount * 100) / 100,
+        network: sp.network || null,
+        phone: sp.phone || null,
+        reference: sp.reference || null,
+        bank_name: sp.bank_name || null,
+        sent_to_paystack: sp.sent_to_paystack ?? false,
+      }));
+      const { error: splitError } = await db
+        .from('popup_split_payments')
+        .insert(splits);
+      if (splitError) throw splitError;
+    }
+
     return this.findOrder(order.id);
   }
 
   async updateOrder(id: string, dto: UpdatePopupOrderDto) {
     const db = this.supabase.getAdminClient();
+
+    // Fetch current order status so we can detect a transition to 'completed'
+    const { data: existingOrder } = await db
+      .from('popup_orders')
+      .select('id, status')
+      .eq('id', id)
+      .single();
+
+    const wasAlreadyCompleted = existingOrder?.status === 'completed';
+    const isBeingCompleted = dto.status === 'completed' && !wasAlreadyCompleted;
 
     const updatePayload: Record<string, any> = {};
     if (dto.status !== undefined) updatePayload.status = dto.status;
@@ -231,6 +266,12 @@ export class PopupSalesService {
     if (dto.payment_reference !== undefined) updatePayload.payment_reference = dto.payment_reference;
     if (dto.customer_name !== undefined) updatePayload.customer_name = dto.customer_name;
     if (dto.customer_phone !== undefined) updatePayload.customer_phone = dto.customer_phone;
+    if (dto.customer_email !== undefined) updatePayload.customer_email = dto.customer_email;
+    if (dto.discount_type !== undefined) updatePayload.discount_type = dto.discount_type;
+    if (dto.discount_amount !== undefined) updatePayload.discount_amount = dto.discount_amount;
+    if (dto.discount_reason !== undefined) updatePayload.discount_reason = dto.discount_reason;
+    if (dto.hold_duration_minutes !== undefined) updatePayload.hold_duration_minutes = dto.hold_duration_minutes;
+    if (dto.hold_note !== undefined) updatePayload.hold_note = dto.hold_note;
     if (dto.notes !== undefined) updatePayload.notes = dto.notes;
 
     const { data, error } = await db
@@ -241,8 +282,51 @@ export class PopupSalesService {
       .single();
 
     if (error || !data) throw new NotFoundException('Order not found');
+
+    // ── Inventory deduction on completion ─────────────────────────────────────
+    if (isBeingCompleted) {
+      const { data: orderItems } = await db
+        .from('popup_order_items')
+        .select('variant_id, quantity')
+        .eq('order_id', id);
+
+      if (orderItems && orderItems.length > 0) {
+        for (const item of orderItems) {
+          if (!item.variant_id) continue;
+
+          // Read current quantity
+          const { data: variant } = await db
+            .from('product_variants')
+            .select('inventory_quantity')
+            .eq('id', item.variant_id)
+            .single();
+
+          if (!variant) continue;
+
+          const newQty = Math.max(0, (variant.inventory_quantity ?? 0) - item.quantity);
+
+          // Decrement inventory
+          await db
+            .from('product_variants')
+            .update({ inventory_quantity: newQty })
+            .eq('id', item.variant_id);
+
+          // Log movement
+          await db.from('inventory_movements').insert({
+            variant_id: item.variant_id,
+            quantity_change: -item.quantity,
+            quantity_before: variant.inventory_quantity ?? 0,
+            quantity_after: newQty,
+            movement_type: 'sale',
+            notes: `Pop-up order ${id} completed`,
+          });
+        }
+      }
+    }
+
     return data;
   }
+
 
   // ─── Paystack MoMo Charge ────────────────────────────────────────────────────
 

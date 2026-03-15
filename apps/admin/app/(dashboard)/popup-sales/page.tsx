@@ -1,16 +1,24 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Plus,
+  Minus,
   ChevronDown,
   TrendingUp,
   CheckCircle,
+  CheckCircle2,
   Clock,
   AlertCircle,
   MoreVertical,
   X,
   Search,
+  Pause,
+  Trash2,
+  ShoppingCart,
+  Banknote,
+  Smartphone,
+  Landmark,
 } from "lucide-react";
 import {
   usePopupEvents,
@@ -237,11 +245,10 @@ function OrderActionsMenu({
                 onUpdate(order.id, action.status);
                 setOpen(false);
               }}
-              className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${
-                action.status === "cancelled"
-                  ? "text-red-600"
-                  : "text-slate-700"
-              }`}
+              className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${action.status === "cancelled"
+                ? "text-red-600"
+                : "text-slate-700"
+                }`}
             >
               {action.label}
             </button>
@@ -422,15 +429,53 @@ function MoMoChargeModal({
 
 // ─── New Order Modal ──────────────────────────────────────────────────────────
 
+type PaymentMethodLocal = "cash" | "momo" | "bank_transfer";
+type MoMoNetwork = "mtn" | "telecel" | "airteltigo";
+type DiscountType = "none" | "percentage" | "fixed";
+
+interface SplitEntry {
+  id: string;
+  method: PaymentMethodLocal;
+  amount: string;
+  receivedAmount?: string;
+  network?: MoMoNetwork;
+  phone?: string;
+  reference?: string;
+  bankName?: string;
+  sentToPaystack?: boolean;
+}
+
 interface ProductSearchResult {
   id: string;
   title: string;
+  product_images: { src: string; alt_text: string | null; position: number }[];
   product_variants: {
     id: string;
     title: string | null;
     sku: string | null;
     price: number;
+    inventory_quantity?: number;
+    option1_value?: string | null;
+    option2_value?: string | null;
+    option3_value?: string | null;
   }[];
+}
+
+type CartItem = CreateOrderItemInput & {
+  _localId: string;
+};
+
+const HOLD_DURATIONS = [
+  { label: "10 min", value: 10 },
+  { label: "15 min", value: 15 },
+  { label: "20 min", value: 20 },
+  { label: "30 min", value: 30 },
+];
+
+const QUICK_PCT = [5, 10, 15, 20];
+
+function cn(...classes: (string | false | undefined | null)[]) {
+  return classes.filter(Boolean).join(" ");
 }
 
 function NewOrderModal({
@@ -442,277 +487,1080 @@ function NewOrderModal({
 }) {
   const createOrder = useCreatePopupOrder(eventId);
 
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<PopupPaymentMethod | "">("");
-  const [items, setItems] = useState<CreateOrderItemInput[]>([]);
+  // ── Product state ──────────────────────────────────────────────────────────
   const [productSearch, setProductSearch] = useState("");
   const [searchResults, setSearchResults] = useState<ProductSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  // ── Cart state ─────────────────────────────────────────────────────────────
+  const [items, setItems] = useState<CartItem[]>([]);
+
+  // ── Customer state ────────────────────────────────────────────────────────
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerResults, setCustomerResults] = useState<{ id: string; name: string; email: string; phone: string }[]>([]);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [customerForm, setCustomerForm] = useState({ name: "", phone: "", email: "", saveToDatabase: true });
+  const [customerStats, setCustomerStats] = useState<{ totalOrders: number; totalSpent: number } | null>(null);
+  const customerRef = useRef<HTMLDivElement>(null);
+  const customerSearchTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // ── Discount state ─────────────────────────────────────────────────────────
+  const [discountType, setDiscountType] = useState<DiscountType>("none");
+  const [discountValue, setDiscountValue] = useState("");
+  const [discountReason, setDiscountReason] = useState("");
+
+  // ── Payment state ──────────────────────────────────────────────────────────
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodLocal>("cash");
+  const [isSplit, setIsSplit] = useState(false);
+  const [splits, setSplits] = useState<SplitEntry[]>([{ id: "1", method: "cash", amount: "" }]);
+  const [cashReceived, setCashReceived] = useState("");
+  const [momoNetwork, setMomoNetwork] = useState<MoMoNetwork>("mtn");
+  const [momoPhone, setMomoPhone] = useState("");
+  const [momoReference, setMomoReference] = useState("");
+  const [momoSentToPaystack, setMomoSentToPaystack] = useState(false);
+  const [bankName, setBankName] = useState("");
+  const [bankReference, setBankReference] = useState("");
+  const [bankSentToPaystack, setBankSentToPaystack] = useState(false);
+
+  // ── Hold state ─────────────────────────────────────────────────────────────
+  const [showHold, setShowHold] = useState(false);
+  const [holdDuration, setHoldDuration] = useState(15);
+  const [holdNote, setHoldNote] = useState("");
+
+  // ── Product search ─────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!productSearch.trim()) {
-      setSearchResults([]);
-      return;
-    }
+    if (!productSearch.trim()) { setSearchResults([]); return; }
     clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(async () => {
       setSearching(true);
       try {
         const res = await apiClient<{ data: ProductSearchResult[] }>(
-          `/products/admin/list?search=${encodeURIComponent(productSearch)}&limit=8`
+          `/products/admin/list?search=${encodeURIComponent(productSearch)}&limit=12&status=active`
         );
         setSearchResults(res.data || []);
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setSearching(false);
-      }
+      } catch { setSearchResults([]); }
+      finally { setSearching(false); }
     }, 300);
     return () => clearTimeout(searchTimeout.current);
   }, [productSearch]);
 
-  function addItem(
-    product: ProductSearchResult,
-    variant: ProductSearchResult["product_variants"][0]
-  ) {
+  // ── Customer search (best-effort) ──────────────────────────────────────────
+  useEffect(() => {
+    if (!customerSearch.trim()) { setCustomerResults([]); return; }
+    clearTimeout(customerSearchTimeout.current);
+    customerSearchTimeout.current = setTimeout(async () => {
+      try {
+        const res = await apiClient<{ data: { id: string; first_name: string | null; last_name: string | null; email: string | null; phone: string | null }[] }>(
+          `/customers/admin/list?search=${encodeURIComponent(customerSearch)}&limit=6`
+        );
+        setCustomerResults(
+          (res.data || []).map((c) => ({
+            id: c.id,
+            name: [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown",
+            email: c.email || "",
+            phone: c.phone || "",
+          }))
+        );
+      } catch { setCustomerResults([]); }
+    }, 300);
+    return () => clearTimeout(customerSearchTimeout.current);
+  }, [customerSearch]);
+
+  // Customer dropdown close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (customerRef.current && !customerRef.current.contains(e.target as Node)) {
+        setShowCustomerDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // ── Computed ───────────────────────────────────────────────────────────────
+  const subtotal = items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+  const discountNum = parseFloat(discountValue) || 0;
+  const discountAmount =
+    discountType === "percentage" ? (subtotal * discountNum) / 100
+      : discountType === "fixed" ? discountNum
+        : 0;
+  const total = Math.max(0, subtotal - discountAmount);
+  const changeDue = cashReceived ? parseFloat(cashReceived) - total : null;
+  const allocatedAmount = splits.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+  const isAllocatedOk = Math.abs(allocatedAmount - total) < 0.01;
+  const hasAwaitingConfirmation = isSplit
+    ? splits.some((p) => p.sentToPaystack)
+    : (paymentMethod === "momo" && momoSentToPaystack) || (paymentMethod === "bank_transfer" && bankSentToPaystack);
+
+  // ── Cart helpers ───────────────────────────────────────────────────────────
+  const addItem = useCallback((product: ProductSearchResult, variant: ProductSearchResult["product_variants"][0]) => {
     setItems((prev) => {
       const existing = prev.findIndex((i) => i.variant_id === variant.id);
       if (existing >= 0) {
-        return prev.map((i, idx) =>
-          idx === existing ? { ...i, quantity: i.quantity + 1 } : i
-        );
+        return prev.map((item, idx) => idx === existing ? { ...item, quantity: item.quantity + 1 } : item);
       }
-      return [
-        ...prev,
-        {
-          product_id: product.id,
-          variant_id: variant.id,
-          product_name: product.title,
-          variant_title: variant.title || undefined,
-          sku: variant.sku || undefined,
-          quantity: 1,
-          unit_price: variant.price,
-        },
-      ];
+      return [...prev, {
+        _localId: `${variant.id}-${Date.now()}`,
+        product_id: product.id,
+        variant_id: variant.id,
+        product_name: product.title,
+        variant_title: variant.title || undefined,
+        sku: variant.sku || undefined,
+        quantity: 1,
+        unit_price: variant.price,
+      }];
     });
-    setProductSearch("");
-    setSearchResults([]);
-  }
+    // Keep the variant picker open so the user can add multiple sizes
+  }, []);
 
-  function removeItem(idx: number) {
-    setItems((prev) => prev.filter((_, i) => i !== idx));
-  }
+  const updateQty = (localId: string, delta: number) =>
+    setItems((prev) => prev.map((i) => i._localId === localId ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i));
 
-  function updateQty(idx: number, qty: number) {
-    if (qty < 1) return;
-    setItems((prev) =>
-      prev.map((item, i) => (i === idx ? { ...item, quantity: qty } : item))
-    );
-  }
+  const removeItem = (localId: string) => setItems((prev) => prev.filter((i) => i._localId !== localId));
 
-  const total = items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+  // ── Split helpers ──────────────────────────────────────────────────────────
+  const addSplit = () => setSplits((prev) => [...prev, { id: Date.now().toString(), method: "cash", amount: "" }]);
+  const removeSplit = (id: string) => { if (splits.length > 1) setSplits((prev) => prev.filter((p) => p.id !== id)); };
+  const updateSplit = (id: string, field: string, value: unknown) =>
+    setSplits((prev) => prev.map((p) => p.id === id ? { ...p, [field]: value } : p));
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  // ── Submit ─────────────────────────────────────────────────────────────────
+  async function handleSubmit() {
     if (items.length === 0) return;
+    const splitPayloads = isSplit
+      ? splits.filter((p) => parseFloat(p.amount) > 0).map((p) => ({
+        method: p.method as PopupPaymentMethod,
+        amount: parseFloat(p.amount) || 0,
+        network: p.network,
+        phone: p.phone,
+        reference: p.reference,
+        bank_name: p.bankName,
+        sent_to_paystack: p.sentToPaystack,
+      }))
+      : undefined;
+
     await createOrder.mutateAsync({
-      customer_name: customerName || undefined,
-      customer_phone: customerPhone || undefined,
-      payment_method: paymentMethod || undefined,
-      items,
+      customer_name: customerForm.name || undefined,
+      customer_phone: customerForm.phone || undefined,
+      customer_email: customerForm.email || undefined,
+      payment_method: isSplit ? undefined : paymentMethod,
+      payment_reference: isSplit ? undefined : (paymentMethod === "momo" ? momoReference || undefined : paymentMethod === "bank_transfer" ? bankReference || undefined : undefined),
+      discount_type: discountType !== "none" ? discountType : undefined,
+      discount_amount: discountAmount > 0 ? discountAmount : undefined,
+      discount_reason: discountReason || undefined,
+      notes: undefined,
+      split_payments: splitPayloads,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      items: items.map(({ _localId, ...rest }) => rest),
     });
     onClose();
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-slate-900">New Order</h2>
-          <button
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+  async function handleHoldConfirm() {
+    if (items.length === 0) return;
+    await createOrder.mutateAsync({
+      customer_name: customerForm.name || undefined,
+      customer_phone: customerForm.phone || undefined,
+      customer_email: customerForm.email || undefined,
+      discount_type: discountType !== "none" ? discountType : undefined,
+      discount_amount: discountAmount > 0 ? discountAmount : undefined,
+      discount_reason: discountReason || undefined,
+      hold_duration_minutes: holdDuration,
+      hold_note: holdNote || undefined,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      items: items.map(({ _localId, ...rest }) => rest),
+    });
+    // After creating, update status to on_hold — the backend defaults to 'active'
+    // so we rely on the caller to update. For now close and the order shows in "Active";
+    // a follow-up PATCH to on_hold can be done via the actions menu.
+    setShowHold(false);
+    onClose();
+  }
 
-        <form onSubmit={handleSubmit} className="space-y-5 p-6">
-          {/* Customer */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">
-                Customer Name
-              </label>
-              <input
-                type="text"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Optional"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">
-                Phone
-              </label>
-              <input
-                type="text"
-                value={customerPhone}
-                onChange={(e) => setCustomerPhone(e.target.value)}
-                placeholder="Optional"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
-              />
-            </div>
+  // ── Render ──────────────────────────────────────────────────────────────────
+  return (
+    <>
+      {/* ── Backdrop ────────────────────────────────────────────────────────── */}
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        onClick={(e) => e.target === e.currentTarget && onClose()}
+      >
+        {/* ── Modal shell ─────────────────────────────────────────────────── */}
+        <div
+          className="flex flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+          style={{ width: "min(1100px, 100vw - 32px)", height: "min(860px, calc(100vh - 48px))" }}
+        >
+          {/* Header */}
+          <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-200 px-6 py-4">
+            <h2 className="text-base font-semibold text-slate-900">New Pop-up Order</h2>
+            <button
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
-          {/* Product search */}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              Add Items
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={productSearch}
-                onChange={(e) => setProductSearch(e.target.value)}
-                placeholder="Search products..."
-                className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm focus:border-slate-400 focus:outline-none"
-              />
-            </div>
-            {(searchResults.length > 0 || searching) && (
-              <div className="mt-1 max-h-52 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-                {searching && (
-                  <p className="px-3 py-2 text-xs text-slate-400">Searching…</p>
-                )}
-                {searchResults.map((product) =>
-                  product.product_variants.map((variant) => (
-                    <button
-                      key={variant.id}
-                      type="button"
-                      onClick={() => addItem(product, variant)}
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50"
-                    >
-                      <span className="text-slate-800">
-                        {product.title}
-                        {variant.title && (
-                          <span className="ml-1 text-slate-400">
-                            — {variant.title}
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-slate-500">
-                        {formatCurrency(variant.price)}
-                      </span>
-                    </button>
-                  ))
+          {/* Body */}
+          <div className="flex flex-1 overflow-hidden">
+
+            {/* ── LEFT: Product Catalog ─────────────────────────────────── */}
+            <div className="flex flex-col overflow-hidden border-r border-slate-200" style={{ width: "55%" }}>
+              {/* Search bar */}
+              <div className="flex-shrink-0 p-4 pb-3">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    placeholder="Search products…"
+                    className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-sm focus:border-slate-400 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Product results */}
+              <div className="flex-1 overflow-y-auto px-4 pb-4">
+                {!productSearch.trim() ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
+                      <Search className="h-6 w-6 text-slate-400" />
+                    </div>
+                    <p className="text-sm text-slate-400">Search for a product to add it to the order</p>
+                  </div>
+                ) : searching ? (
+                  <div className="space-y-2 pt-1">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="h-16 animate-pulse rounded-lg bg-slate-100" />
+                    ))}
+                  </div>
+                ) : searchResults.length === 0 ? (
+                  <p className="pt-10 text-center text-sm text-slate-400">No products found</p>
+                ) : (
+                  <div className="space-y-1.5 pt-1">
+                    {searchResults.map((product) => {
+                      const thumb = product.product_images
+                        ?.slice().sort((a, b) => a.position - b.position)[0]?.src;
+                      const isExpanded = expandedProduct === product.id;
+                      const inCart = product.product_variants.some((v) =>
+                        items.some((i) => i.variant_id === v.id)
+                      );
+
+                      return (
+                        <div
+                          key={product.id}
+                          className={cn(
+                            "overflow-hidden rounded-lg border transition-colors",
+                            inCart ? "border-slate-800" : "border-slate-200"
+                          )}
+                        >
+                          {/* Product header row */}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedProduct(isExpanded ? null : product.id)}
+                            className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-50"
+                          >
+                            {/* Thumbnail */}
+                            <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-md border border-slate-100 bg-slate-50">
+                              {thumb ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={thumb}
+                                  alt={product.title}
+                                  className="h-full w-full object-cover"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center">
+                                  <ShoppingCart className="h-5 w-5 text-slate-300" />
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Title + variant count */}
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-slate-800">{product.title}</p>
+                              <p className="mt-0.5 text-xs text-slate-400">
+                                {product.product_variants.length === 1
+                                  ? formatCurrency(product.product_variants[0].price)
+                                  : `${product.product_variants.length} variants · from ${formatCurrency(Math.min(...product.product_variants.map(v => v.price)))}`
+                                }
+                              </p>
+                            </div>
+
+                            {/* Cart badge + chevron */}
+                            <div className="flex flex-shrink-0 items-center gap-2">
+                              {inCart && (
+                                <span className="rounded-full bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                  {items.filter((i) => product.product_variants.some((v) => v.id === i.variant_id))
+                                    .reduce((s, i) => s + i.quantity, 0)}
+                                </span>
+                              )}
+                              <ChevronDown
+                                className={cn(
+                                  "h-4 w-4 text-slate-400 transition-transform",
+                                  isExpanded && "rotate-180"
+                                )}
+                              />
+                            </div>
+                          </button>
+
+                          {/* Variant picker */}
+                          {isExpanded && (
+                            <div className="border-t border-slate-100 px-3 pb-3 pt-2">
+                              <div className="grid grid-cols-2 gap-1.5">
+                                {product.product_variants.map((variant) => {
+                                  const lineItem = items.find((i) => i.variant_id === variant.id);
+                                  const outOfStock = (variant.inventory_quantity ?? 999) <= 0;
+                                  const variantLabel = [
+                                    variant.option1_value,
+                                    variant.option2_value,
+                                    variant.option3_value,
+                                  ].filter(Boolean).join(" / ") || variant.title || "Default";
+
+                                  return (
+                                    <div
+                                      key={variant.id}
+                                      className={cn(
+                                        "relative flex flex-col rounded-lg border p-2 transition-all",
+                                        outOfStock
+                                          ? "border-slate-100 bg-slate-50 opacity-50"
+                                          : lineItem
+                                            ? "border-slate-800 bg-slate-900"
+                                            : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                                      )}
+                                    >
+                                      <div className="mb-1 flex items-start justify-between gap-1">
+                                        <span className={cn(
+                                          "text-xs font-medium leading-tight",
+                                          lineItem ? "text-white" : outOfStock ? "text-slate-400" : "text-slate-700"
+                                        )}>
+                                          {variantLabel}
+                                        </span>
+                                        {outOfStock && (
+                                          <span className="shrink-0 rounded bg-red-50 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-red-500">Out</span>
+                                        )}
+                                        {!outOfStock && variant.inventory_quantity !== undefined && variant.inventory_quantity <= 5 && (
+                                          <span className="shrink-0 rounded bg-amber-50 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-600">{variant.inventory_quantity} left</span>
+                                        )}
+                                      </div>
+                                      <p className={cn(
+                                        "mb-2 text-xs",
+                                        lineItem ? "text-slate-300" : "text-slate-500"
+                                      )}>
+                                        {formatCurrency(variant.price)}
+                                      </p>
+                                      {/* Add / qty controls */}
+                                      {outOfStock ? null : lineItem ? (
+                                        <div className="flex items-center justify-between rounded border border-slate-700">
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); updateQty(lineItem._localId, -1); }}
+                                            className="flex h-6 w-6 items-center justify-center text-slate-300 hover:text-white"
+                                          >
+                                            <Minus className="h-2.5 w-2.5" />
+                                          </button>
+                                          <span className="text-xs font-semibold text-white">{lineItem.quantity}</span>
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); updateQty(lineItem._localId, 1); }}
+                                            className="flex h-6 w-6 items-center justify-center text-slate-300 hover:text-white"
+                                          >
+                                            <Plus className="h-2.5 w-2.5" />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); addItem(product, variant); }}
+                                          className="flex w-full items-center justify-center gap-1 rounded border border-slate-200 py-1.5 text-[11px] font-medium text-slate-600 hover:border-slate-900 hover:bg-slate-900 hover:text-white"
+                                        >
+                                          <Plus className="h-2.5 w-2.5" />
+                                          Add
+                                        </button>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
+            </div>
 
-          {/* Line items */}
-          {items.length > 0 && (
-            <div className="space-y-2">
-              {items.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-800">
-                      {item.product_name}
-                      {item.variant_title && (
-                        <span className="ml-1 text-slate-400">
-                          — {item.variant_title}
-                        </span>
+            {/* ── RIGHT: Order Details ──────────────────────────────────── */}
+            <div className="flex flex-col overflow-hidden" style={{ width: "45%" }}>
+              <div className="flex-1 divide-y divide-slate-100 overflow-y-auto">
+
+                {/* CART */}
+                <section className="p-4">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">Cart</p>
+                  {items.length === 0 ? (
+                    <div className="flex items-center gap-3 rounded-lg border border-dashed border-slate-200 p-4">
+                      <ShoppingCart className="h-5 w-5 flex-shrink-0 text-slate-300" />
+                      <p className="text-sm text-slate-400">Add products from the catalog on the left</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {items.map((item) => (
+                        <div key={item._localId} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-medium text-slate-800">
+                              {item.product_name}
+                              {item.variant_title && (
+                                <span className="ml-1 font-normal text-slate-400">— {item.variant_title}</span>
+                              )}
+                            </p>
+                            <p className="mt-0.5 text-xs text-slate-400">{formatCurrency(item.unit_price)} each</p>
+                          </div>
+                          <div className="flex flex-shrink-0 items-center rounded border border-slate-200 bg-white">
+                            <button
+                              onClick={() => updateQty(item._localId, -1)}
+                              className="flex h-6 w-6 items-center justify-center text-slate-500 hover:text-slate-900"
+                            >
+                              <Minus className="h-2.5 w-2.5" />
+                            </button>
+                            <span className="w-5 text-center text-xs font-medium text-slate-800">{item.quantity}</span>
+                            <button
+                              onClick={() => updateQty(item._localId, 1)}
+                              className="flex h-6 w-6 items-center justify-center text-slate-500 hover:text-slate-900"
+                            >
+                              <Plus className="h-2.5 w-2.5" />
+                            </button>
+                          </div>
+                          <span className="w-16 flex-shrink-0 text-right text-xs font-semibold text-slate-700">
+                            {formatCurrency(item.unit_price * item.quantity)}
+                          </span>
+                          <button
+                            onClick={() => removeItem(item._localId)}
+                            className="flex-shrink-0 rounded p-0.5 text-slate-300 hover:bg-red-50 hover:text-red-400"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between border-t border-slate-100 pt-2">
+                        <span className="text-xs text-slate-500">Subtotal</span>
+                        <span className="text-xs font-semibold text-slate-900">{formatCurrency(subtotal)}</span>
+                      </div>
+                    </div>
+                  )}
+                </section>
+
+                {/* CUSTOMER */}
+                <section className="p-4">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">Customer</p>
+
+                  <div className="relative mb-3" ref={customerRef}>
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={customerSearch}
+                      onChange={(e) => { setCustomerSearch(e.target.value); setShowCustomerDropdown(true); }}
+                      onFocus={() => setShowCustomerDropdown(true)}
+                      placeholder="Search by name or phone…"
+                      disabled={!!selectedCustomerId}
+                      className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-8 text-sm focus:border-slate-400 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                    />
+                    {selectedCustomerId && (
+                      <button
+                        onClick={() => {
+                          setSelectedCustomerId(null);
+                          setCustomerStats(null);
+                          setCustomerForm({ name: "", phone: "", email: "", saveToDatabase: true });
+                          setCustomerSearch("");
+                        }}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:text-slate-700"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {showCustomerDropdown && customerResults.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                        {customerResults.map((c) => (
+                          <button
+                            key={c.id}
+                            onClick={() => {
+                              setSelectedCustomerId(c.id);
+                              setCustomerForm({ name: c.name, phone: c.phone, email: c.email, saveToDatabase: false });
+                              setCustomerSearch("");
+                              setShowCustomerDropdown(false);
+                            }}
+                            className="flex w-full flex-col px-3 py-2 text-left hover:bg-slate-50"
+                          >
+                            <span className="text-sm font-medium text-slate-800">{c.name}</span>
+                            <span className="text-xs text-slate-400">{c.email}{c.phone ? ` · ${c.phone}` : ""}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedCustomerId && (
+                    <div className="mb-3 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+                      <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-green-600" />
+                      <span className="text-xs font-medium text-green-800">Returning customer</span>
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">Full Name</label>
+                      <input
+                        type="text"
+                        value={customerForm.name}
+                        onChange={(e) => setCustomerForm((f) => ({ ...f, name: e.target.value }))}
+                        disabled={!!selectedCustomerId}
+                        placeholder="Customer name"
+                        className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-400 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
+                      <div className="flex">
+                        <span className="flex h-9 items-center rounded-l-lg border border-r-0 border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-500">+233</span>
+                        <input
+                          type="tel"
+                          value={customerForm.phone.replace("+233", "")}
+                          onChange={(e) => setCustomerForm((f) => ({ ...f, phone: "+233" + e.target.value }))}
+                          disabled={!!selectedCustomerId}
+                          placeholder="244123456"
+                          className="h-9 flex-1 rounded-r-lg border border-slate-200 px-3 text-sm focus:border-slate-400 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">Email</label>
+                      <input
+                        type="email"
+                        value={customerForm.email}
+                        onChange={(e) => setCustomerForm((f) => ({ ...f, email: e.target.value }))}
+                        disabled={!!selectedCustomerId}
+                        placeholder="customer@email.com"
+                        className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-400 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                      />
+                    </div>
+                    {!selectedCustomerId && (
+                      <label className="flex cursor-pointer items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={customerForm.saveToDatabase}
+                          onChange={(e) => setCustomerForm((f) => ({ ...f, saveToDatabase: e.target.checked }))}
+                          className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+                        />
+                        <span className="text-xs text-slate-600">Save to customer database</span>
+                      </label>
+                    )}
+                  </div>
+                </section>
+
+                {/* DISCOUNT */}
+                <section className="p-4">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">Discount</p>
+                  <div className="mb-3 flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                    {(["none", "percentage", "fixed"] as DiscountType[]).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => { setDiscountType(t); setDiscountValue(""); }}
+                        className={cn(
+                          "flex-1 rounded-md py-1.5 text-xs font-medium transition-all",
+                          discountType === t
+                            ? "bg-white text-slate-900 shadow-sm"
+                            : "text-slate-500 hover:text-slate-700"
+                        )}
+                      >
+                        {t === "none" ? "None" : t === "percentage" ? "% Off" : "GH₵ Off"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {discountType !== "none" && (
+                    <div className="space-y-2.5">
+                      {discountType === "percentage" && (
+                        <div className="flex gap-1.5">
+                          {QUICK_PCT.map((p) => (
+                            <button
+                              key={p}
+                              onClick={() => setDiscountValue(String(p))}
+                              className={cn(
+                                "flex-1 rounded-lg border py-1.5 text-xs font-medium transition-all",
+                                discountValue === String(p)
+                                  ? "border-slate-800 bg-slate-900 text-white"
+                                  : "border-slate-200 text-slate-600 hover:border-slate-400"
+                              )}
+                            >
+                              {p}%
+                            </button>
+                          ))}
+                        </div>
                       )}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      {formatCurrency(item.unit_price)} each
-                    </p>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            type="number"
+                            min="0"
+                            step={discountType === "percentage" ? "1" : "0.01"}
+                            value={discountValue}
+                            onChange={(e) => setDiscountValue(e.target.value)}
+                            placeholder={discountType === "percentage" ? "10" : "5.00"}
+                            className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-400 focus:outline-none"
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          value={discountReason}
+                          onChange={(e) => setDiscountReason(e.target.value)}
+                          placeholder="Reason (optional)"
+                          className="h-9 flex-1 rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-400 focus:outline-none"
+                        />
+                      </div>
+                      {discountAmount > 0 && (
+                        <p className="text-xs font-medium text-emerald-700">Saving {formatCurrency(discountAmount)}</p>
+                      )}
+                    </div>
+                  )}
+                </section>
+
+                {/* PAYMENT */}
+                <section className="p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Payment</p>
+                    <label className="flex cursor-pointer items-center gap-2">
+                      <span className="text-xs text-slate-600">Split</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsSplit((v) => !v)}
+                        className={cn(
+                          "relative h-5 w-9 rounded-full transition-colors focus:outline-none",
+                          isSplit ? "bg-slate-800" : "bg-slate-200"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+                            isSplit ? "translate-x-4" : "translate-x-0.5"
+                          )}
+                        />
+                      </button>
+                    </label>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => updateQty(idx, item.quantity - 1)}
-                      className="flex h-6 w-6 items-center justify-center rounded border border-slate-200 text-slate-500 hover:bg-white"
-                    >
-                      −
-                    </button>
-                    <span className="w-5 text-center text-sm">{item.quantity}</span>
-                    <button
-                      type="button"
-                      onClick={() => updateQty(idx, item.quantity + 1)}
-                      className="flex h-6 w-6 items-center justify-center rounded border border-slate-200 text-slate-500 hover:bg-white"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <p className="w-20 text-right text-sm font-medium text-slate-700">
-                    {formatCurrency(item.unit_price * item.quantity)}
+
+                  {!isSplit ? (
+                    <>
+                      {/* Method selector */}
+                      <div className="mb-4 grid grid-cols-3 gap-2">
+                        {([
+                          { method: "cash" as PaymentMethodLocal, Icon: Banknote, label: "Cash" },
+                          { method: "momo" as PaymentMethodLocal, Icon: Smartphone, label: "MoMo" },
+                          { method: "bank_transfer" as PaymentMethodLocal, Icon: Landmark, label: "Bank Transfer" },
+                        ]).map(({ method, Icon, label }) => (
+                          <button
+                            key={method}
+                            onClick={() => setPaymentMethod(method)}
+                            className={cn(
+                              "flex flex-col items-center gap-1.5 rounded-lg border py-3 text-xs font-medium transition-all",
+                              paymentMethod === method
+                                ? "border-slate-800 bg-slate-900 text-white"
+                                : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                            )}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Cash fields */}
+                      {paymentMethod === "cash" && (
+                        <div className="space-y-2">
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">Amount Received (GH₵)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={cashReceived}
+                              onChange={(e) => setCashReceived(e.target.value)}
+                              placeholder="0.00"
+                              className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-400 focus:outline-none"
+                            />
+                          </div>
+                          {cashReceived && (
+                            <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                              <span className="text-xs text-slate-500">Change Due</span>
+                              <span className={cn("text-sm font-semibold", changeDue !== null && changeDue < 0 ? "text-red-600" : "text-slate-900")}>
+                                {formatCurrency(changeDue !== null ? Math.max(0, changeDue) : 0)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* MoMo fields */}
+                      {paymentMethod === "momo" && (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="mb-1.5 block text-xs font-medium text-slate-600">Network</label>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {(["mtn", "telecel", "airteltigo"] as MoMoNetwork[]).map((net) => (
+                                <button
+                                  key={net}
+                                  onClick={() => setMomoNetwork(net)}
+                                  className={cn(
+                                    "rounded-lg border py-2 text-xs font-semibold transition-all",
+                                    momoNetwork === net
+                                      ? net === "mtn"
+                                        ? "border-yellow-400 bg-yellow-400 text-black"
+                                        : "border-slate-800 bg-slate-900 text-white"
+                                      : "border-slate-200 text-slate-600 hover:border-slate-300"
+                                  )}
+                                >
+                                  {net === "mtn" ? "MTN" : net === "telecel" ? "Telecel" : "AirtelTigo"}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">Phone Number</label>
+                            <div className="flex">
+                              <span className="flex h-9 items-center rounded-l-lg border border-r-0 border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-500">+233</span>
+                              <input
+                                type="tel"
+                                value={momoPhone}
+                                onChange={(e) => setMomoPhone(e.target.value)}
+                                placeholder="244123456"
+                                className="h-9 flex-1 rounded-r-lg border border-slate-200 px-3 text-sm focus:border-slate-400 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">Reference (Optional)</label>
+                            <input
+                              type="text"
+                              value={momoReference}
+                              onChange={(e) => setMomoReference(e.target.value)}
+                              placeholder="MTN-REF-001234"
+                              className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-400 focus:outline-none"
+                            />
+                          </div>
+                          <label className="flex cursor-pointer items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={momoSentToPaystack}
+                              onChange={(e) => setMomoSentToPaystack(e.target.checked)}
+                              className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+                            />
+                            <span className="text-xs text-slate-600">Charge sent to Paystack</span>
+                          </label>
+                          {momoSentToPaystack && (
+                            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                              <Clock className="h-3.5 w-3.5 flex-shrink-0 text-amber-600" />
+                              <p className="text-xs text-amber-800">Awaiting customer confirmation. You can serve the next customer.</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Bank Transfer fields */}
+                      {paymentMethod === "bank_transfer" && (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">Bank Name</label>
+                            <input
+                              type="text"
+                              value={bankName}
+                              onChange={(e) => setBankName(e.target.value)}
+                              placeholder="e.g. GCB, Ecobank…"
+                              className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-400 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">Reference *</label>
+                            <input
+                              type="text"
+                              value={bankReference}
+                              onChange={(e) => setBankReference(e.target.value)}
+                              placeholder="GCB-TRF-567890"
+                              className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-400 focus:outline-none"
+                            />
+                          </div>
+                          <label className="flex cursor-pointer items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={bankSentToPaystack}
+                              onChange={(e) => setBankSentToPaystack(e.target.checked)}
+                              className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+                            />
+                            <span className="text-xs text-slate-600">Charge sent to Paystack</span>
+                          </label>
+                          {bankSentToPaystack && (
+                            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                              <Clock className="h-3.5 w-3.5 flex-shrink-0 text-amber-600" />
+                              <p className="text-xs text-amber-800">Awaiting bank confirmation. You can serve the next customer.</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    /* ── Split Payment Mode ───────────────────────────────── */
+                    <>
+                      <div className="mb-3 space-y-2">
+                        {splits.map((payment, idx) => (
+                          <div key={payment.id} className="rounded-lg border border-slate-200 p-3">
+                            <div className="mb-2 flex items-center justify-between">
+                              <span className="text-xs font-semibold text-slate-700">Payment {idx + 1}</span>
+                              {splits.length > 1 && (
+                                <button
+                                  onClick={() => removeSplit(payment.id)}
+                                  className="flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-500"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="mb-1 block text-xs font-medium text-slate-600">Method</label>
+                                <select
+                                  value={payment.method}
+                                  onChange={(e) => updateSplit(payment.id, "method", e.target.value)}
+                                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs focus:border-slate-400 focus:outline-none"
+                                >
+                                  <option value="cash">Cash</option>
+                                  <option value="momo">Mobile Money</option>
+                                  <option value="bank_transfer">Bank Transfer</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-xs font-medium text-slate-600">Amount (GH₵)</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={payment.amount}
+                                  onChange={(e) => updateSplit(payment.id, "amount", e.target.value)}
+                                  placeholder="0.00"
+                                  className="h-9 w-full rounded-lg border border-slate-200 px-3 text-xs focus:border-slate-400 focus:outline-none"
+                                />
+                              </div>
+                            </div>
+
+                            {payment.method === "momo" && payment.amount && (
+                              <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-2">
+                                <div className="grid grid-cols-3 gap-1">
+                                  {(["mtn", "telecel", "airteltigo"] as MoMoNetwork[]).map((net) => (
+                                    <button
+                                      key={net}
+                                      onClick={() => updateSplit(payment.id, "network", net)}
+                                      className={cn(
+                                        "rounded border py-1.5 text-xs font-medium transition-all",
+                                        payment.network === net ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 hover:border-slate-300"
+                                      )}
+                                    >
+                                      {net === "mtn" ? "MTN" : net === "telecel" ? "Telecel" : "AirtelTigo"}
+                                    </button>
+                                  ))}
+                                </div>
+                                <input
+                                  type="tel"
+                                  value={payment.phone || ""}
+                                  onChange={(e) => updateSplit(payment.id, "phone", e.target.value)}
+                                  placeholder="+233244123456"
+                                  className="h-9 w-full rounded-lg border border-slate-200 px-3 text-xs focus:border-slate-400 focus:outline-none"
+                                />
+                                <label className="flex cursor-pointer items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={payment.sentToPaystack || false}
+                                    onChange={(e) => updateSplit(payment.id, "sentToPaystack", e.target.checked)}
+                                    className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+                                  />
+                                  <span className="text-xs text-slate-600">Sent to Paystack</span>
+                                </label>
+                                {payment.sentToPaystack && (
+                                  <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5">
+                                    <Clock className="h-3 w-3 flex-shrink-0 text-amber-600" />
+                                    <span className="text-xs text-amber-800">Awaiting confirmation.</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {payment.method === "bank_transfer" && payment.amount && (
+                              <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-2">
+                                <input
+                                  value={payment.bankName || ""}
+                                  onChange={(e) => updateSplit(payment.id, "bankName", e.target.value)}
+                                  placeholder="Bank name"
+                                  className="h-9 w-full rounded-lg border border-slate-200 px-3 text-xs focus:border-slate-400 focus:outline-none"
+                                />
+                                <input
+                                  value={payment.reference || ""}
+                                  onChange={(e) => updateSplit(payment.id, "reference", e.target.value)}
+                                  placeholder="Reference *"
+                                  className="h-9 w-full rounded-lg border border-slate-200 px-3 text-xs focus:border-slate-400 focus:outline-none"
+                                />
+                                <label className="flex cursor-pointer items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={payment.sentToPaystack || false}
+                                    onChange={(e) => updateSplit(payment.id, "sentToPaystack", e.target.checked)}
+                                    className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+                                  />
+                                  <span className="text-xs text-slate-600">Sent to Paystack</span>
+                                </label>
+                                {payment.sentToPaystack && (
+                                  <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5">
+                                    <Clock className="h-3 w-3 flex-shrink-0 text-amber-600" />
+                                    <span className="text-xs text-amber-800">Awaiting confirmation.</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={addSplit}
+                        className="mb-3 flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add another payment method
+                      </button>
+
+                      {/* Tally bar */}
+                      <div
+                        className={cn(
+                          "flex items-center justify-between rounded-lg border px-3 py-2 text-xs font-medium",
+                          items.length === 0
+                            ? "border-slate-200 bg-slate-50 text-slate-500"
+                            : isAllocatedOk
+                              ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                              : "border-red-200 bg-red-50 text-red-700"
+                        )}
+                      >
+                        <span>Allocated</span>
+                        <span>{formatCurrency(allocatedAmount)} / {formatCurrency(total)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="h-2" />
+                </section>
+              </div>
+
+              {/* ── Sticky Footer ─────────────────────────────────────────── */}
+              <div className="flex-shrink-0 border-t border-slate-200 bg-white">
+                {createOrder.isError && (
+                  <p className="border-b border-red-100 bg-red-50 px-4 py-2 text-center text-xs text-red-600">
+                    {(createOrder.error as { message?: string })?.message || "Failed to create order. Please try again."}
                   </p>
+                )}
+                <div className="flex items-center gap-3 px-4 py-3">
                   <button
-                    type="button"
-                    onClick={() => removeItem(idx)}
-                    className="text-slate-300 hover:text-red-400"
+                    onClick={() => setShowHold(true)}
+                    disabled={items.length === 0}
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <Pause className="h-3.5 w-3.5" />
+                    Hold
+                  </button>
+                  <div className="flex-1 text-center">
+                    <span className="text-xs text-slate-500">Total </span>
+                    <span className="text-base font-bold text-slate-900">{formatCurrency(total)}</span>
+                  </div>
+                  <button
+                    onClick={handleSubmit}
+                    disabled={items.length === 0 || createOrder.isPending || (isSplit && !isAllocatedOk)}
+                    className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {createOrder.isPending
+                      ? "Saving…"
+                      : hasAwaitingConfirmation
+                        ? "Save & Queue Confirmation"
+                        : "Complete Order"}
                   </button>
                 </div>
-              ))}
-              <div className="flex justify-end pt-1">
-                <p className="text-sm font-semibold text-slate-900">
-                  Total: {formatCurrency(total)}
-                </p>
               </div>
             </div>
-          )}
-
-          {/* Payment method */}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              Payment Method
-            </label>
-            <select
-              value={paymentMethod}
-              onChange={(e) =>
-                setPaymentMethod(e.target.value as PopupPaymentMethod | "")
-              }
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
-            >
-              <option value="">Select (optional)</option>
-              <option value="cash">Cash</option>
-              <option value="momo">MoMo</option>
-              <option value="bank_transfer">Bank Transfer</option>
-            </select>
           </div>
-
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={items.length === 0 || createOrder.isPending}
-              className="flex-1 rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-            >
-              {createOrder.isPending ? "Creating…" : "Create Order"}
-            </button>
-          </div>
-        </form>
+        </div>
       </div>
-    </div>
+
+      {/* ── Hold Sub-Modal ────────────────────────────────────────────────── */}
+      {showHold && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60"
+          onClick={(e) => e.target === e.currentTarget && setShowHold(false)}
+        >
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-1 flex items-center justify-between">
+              <h3 className="font-semibold text-slate-900">Put Order on Hold</h3>
+              <button
+                onClick={() => setShowHold(false)}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="mb-5 text-sm text-slate-500">
+              Items will be reserved. The order moves to the &quot;On Hold&quot; tab.
+            </p>
+            <div className="mb-4">
+              <label className="mb-2 block text-xs font-medium text-slate-600">Hold Duration</label>
+              <div className="flex gap-1 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                {HOLD_DURATIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setHoldDuration(opt.value)}
+                    className={cn(
+                      "flex-1 rounded-md py-2 text-xs font-medium transition-all",
+                      holdDuration === opt.value ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mb-5">
+              <label className="mb-2 block text-xs font-medium text-slate-600">Note (Optional)</label>
+              <textarea
+                value={holdNote}
+                onChange={(e) => setHoldNote(e.target.value)}
+                rows={3}
+                placeholder="e.g. Customer went to ATM…"
+                className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowHold(false)}
+                className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleHoldConfirm}
+                disabled={items.length === 0 || createOrder.isPending}
+                className="flex-1 rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+              >
+                {createOrder.isPending ? "Saving…" : "Confirm Hold"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
-
 // ─── New Event Modal ──────────────────────────────────────────────────────────
 
 function NewEventModal({ onClose }: { onClose: () => void }) {
@@ -863,21 +1711,19 @@ function EventSelector({
                 onSelect(event.id);
                 setOpen(false);
               }}
-              className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm hover:bg-slate-50 ${
-                event.id === selectedId
-                  ? "font-medium text-slate-900"
-                  : "text-slate-700"
-              }`}
+              className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm hover:bg-slate-50 ${event.id === selectedId
+                ? "font-medium text-slate-900"
+                : "text-slate-700"
+                }`}
             >
               <span>{event.name}</span>
               <span
-                className={`text-xs ${
-                  event.status === "active"
-                    ? "text-green-600"
-                    : event.status === "closed"
+                className={`text-xs ${event.status === "active"
+                  ? "text-green-600"
+                  : event.status === "closed"
                     ? "text-slate-400"
                     : "text-amber-500"
-                }`}
+                  }`}
               >
                 {event.status}
               </span>
@@ -952,8 +1798,8 @@ function OrderTable({
         <tbody>
           {orders.map((order) => {
             const staffName = order.profiles
-                  ? [order.profiles.first_name, order.profiles.last_name].filter(Boolean).join(" ") || null
-                  : null;
+              ? [order.profiles.first_name, order.profiles.last_name].filter(Boolean).join(" ") || null
+              : null;
             const itemCount = order.popup_order_items?.length ?? 0;
             return (
               <tr
@@ -1000,9 +1846,8 @@ function OrderTable({
                 </td>
                 <td className="px-5 py-4">
                   <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      STATUS_STYLES[order.status]
-                    }`}
+                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[order.status]
+                      }`}
                   >
                     {STATUS_LABELS[order.status]}
                   </span>
@@ -1145,11 +1990,10 @@ export default function PopupSalesPage() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
-                      activeTab === tab.id
-                        ? "border-b-2 border-slate-900 text-slate-900"
-                        : "text-slate-500 hover:text-slate-700"
-                    }`}
+                    className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${activeTab === tab.id
+                      ? "border-b-2 border-slate-900 text-slate-900"
+                      : "text-slate-500 hover:text-slate-700"
+                      }`}
                   >
                     {tab.label}
                     {tab.id === "awaiting_payment" && awaitingCount > 0 && (
