@@ -1,14 +1,28 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../common/supabase/supabase.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { CreatePopupOrderDto } from './dto/create-popup-order.dto';
 import { UpdatePopupOrderDto } from './dto/update-popup-order.dto';
 import { QueryPopupOrdersDto } from './dto/query-popup-orders.dto';
+import { ChargePopupOrderDto } from './dto/charge-popup-order.dto';
 
 @Injectable()
 export class PopupSalesService {
-  constructor(private supabase: SupabaseService) {}
+  private paystackSecretKey: string;
+
+  constructor(
+    private supabase: SupabaseService,
+    private configService: ConfigService,
+  ) {
+    this.paystackSecretKey = this.configService.get<string>('PAYSTACK_SECRET_KEY', '');
+  }
 
   // ─── Events ────────────────────────────────────────────────────────────────
 
@@ -228,5 +242,134 @@ export class PopupSalesService {
 
     if (error || !data) throw new NotFoundException('Order not found');
     return data;
+  }
+
+  // ─── Paystack MoMo Charge ────────────────────────────────────────────────────
+
+  async chargeOrder(id: string, dto: ChargePopupOrderDto) {
+    if (!this.paystackSecretKey) {
+      throw new InternalServerErrorException('PAYSTACK_SECRET_KEY not configured');
+    }
+
+    const db = this.supabase.getAdminClient();
+    const { data: order, error } = await db
+      .from('popup_orders')
+      .select('id, order_number, total, status')
+      .eq('id', id)
+      .single();
+
+    if (error || !order) throw new NotFoundException('Order not found');
+    if (order.status === 'cancelled' || order.status === 'completed') {
+      throw new BadRequestException(`Cannot charge an order with status "${order.status}"`);
+    }
+
+    // Amount in pesewas (GHS * 100)
+    const amountInPesewas = Math.round(Number(order.total) * 100);
+    const email = `popup-${order.order_number.toLowerCase()}@iris-store.com`;
+
+    const response = await fetch('https://api.paystack.co/charge', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.paystackSecretKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount: amountInPesewas,
+        email,
+        currency: 'GHS',
+        mobile_money: {
+          phone: dto.phone,
+          provider: dto.provider,
+        },
+      }),
+    });
+
+    const result = (await response.json()) as any;
+
+    if (!result.status) {
+      throw new BadRequestException(result.message || 'Paystack charge failed');
+    }
+
+    const reference: string = result.data?.reference;
+    if (!reference) {
+      throw new InternalServerErrorException('No reference returned from Paystack');
+    }
+
+    // Update order: set momo payment method, store reference, move to awaiting_payment
+    await db
+      .from('popup_orders')
+      .update({
+        payment_method: 'momo',
+        payment_reference: reference,
+        status: 'awaiting_payment',
+        customer_phone: dto.phone,
+      })
+      .eq('id', id);
+
+    return {
+      reference,
+      paystack_status: result.data?.status,
+      message: result.data?.status === 'send_otp'
+        ? 'OTP sent to customer. Ask them for the OTP to complete the charge.'
+        : 'MoMo charge initiated. Customer will receive a USSD prompt.',
+    };
+  }
+
+  async submitOtp(id: string, otp: string): Promise<{ paystack_status: string; message: string }> {
+    if (!this.paystackSecretKey) {
+      throw new InternalServerErrorException('PAYSTACK_SECRET_KEY not configured');
+    }
+
+    const db = this.supabase.getAdminClient();
+    const { data: order, error } = await db
+      .from('popup_orders')
+      .select('id, payment_reference, status')
+      .eq('id', id)
+      .single();
+
+    if (error || !order) throw new NotFoundException('Order not found');
+    if (!order.payment_reference) {
+      throw new BadRequestException('No pending charge reference for this order');
+    }
+
+    const response = await fetch('https://api.paystack.co/charge/submit_otp', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.paystackSecretKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ otp, reference: order.payment_reference }),
+    });
+
+    const result = (await response.json()) as any;
+
+    if (!result.status) {
+      throw new BadRequestException(result.message || 'OTP submission failed');
+    }
+
+    return {
+      paystack_status: result.data?.status,
+      message: result.data?.status === 'success'
+        ? 'Payment successful!'
+        : 'OTP accepted. Customer will receive the PIN prompt now.',
+    };
+  }
+
+  // Called by the Paystack webhook when charge.success fires
+  async confirmByReference(reference: string): Promise<boolean> {
+    const db = this.supabase.getAdminClient();
+    const { data, error } = await db
+      .from('popup_orders')
+      .update({ status: 'confirmed' })
+      .eq('payment_reference', reference)
+      .eq('status', 'awaiting_payment')
+      .select('id')
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error confirming popup order by reference:', error.message);
+    }
+
+    return !!data;
   }
 }

@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Post,
   Query,
+  RawBody,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -41,21 +42,23 @@ export class PaymentsController {
   @HttpCode(HttpStatus.OK)
   async handlePaystackWebhook(
     @Req() req: any,
+    @RawBody() rawBody: Buffer,
     @Headers('x-paystack-signature') signature: string,
   ) {
-    const body =
-      typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    console.log('[Paystack Webhook] Received. Signature present:', !!signature);
 
     if (signature) {
       const valid = this.paymentsService.verifyWebhookSignature(
-        body,
+        rawBody.toString('utf8'),
         signature,
       );
+      console.log('[Paystack Webhook] Signature valid:', valid);
       if (!valid) {
         return { ok: false, error: 'Invalid signature' };
       }
     }
 
+    console.log('[Paystack Webhook] Event:', req.body?.event, '| Reference:', req.body?.data?.reference);
     return this.paymentsService.handleWebhook(req.body);
   }
 }

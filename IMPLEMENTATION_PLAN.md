@@ -6,6 +6,8 @@
 
 ---
 
+
+
 ## **🎯 MVP Scope (Must-Have Features)**
 
 ### **Core Requirements**

@@ -209,3 +209,44 @@ export function useUpdatePopupOrder() {
     },
   });
 }
+
+export interface ChargeOrderInput {
+  phone: string;
+  provider: "mtn" | "vod" | "tgo";
+}
+
+export interface ChargeOrderResult {
+  reference: string;
+  paystack_status: string;
+  message: string;
+}
+
+export function useChargePopupOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, dto }: { id: string; dto: ChargeOrderInput }) =>
+      apiClient<ChargeOrderResult>(`/popup-sales/orders/${id}/charge`, {
+        method: "POST",
+        body: dto,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["popup-orders"] });
+      qc.invalidateQueries({ queryKey: ["popup-stats"] });
+    },
+  });
+}
+
+export interface SubmitOtpResult {
+  paystack_status: string;
+  message: string;
+}
+
+export function useSubmitPopupOtp() {
+  return useMutation({
+    mutationFn: ({ id, otp }: { id: string; otp: string }) =>
+      apiClient<SubmitOtpResult>(`/popup-sales/orders/${id}/submit-otp`, {
+        method: "POST",
+        body: { otp },
+      }),
+  });
+}

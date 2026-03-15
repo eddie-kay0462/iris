@@ -19,6 +19,8 @@ import {
   useCreatePopupOrder,
   useUpdatePopupOrder,
   useCreatePopupEvent,
+  useChargePopupOrder,
+  useSubmitPopupOtp,
   type PopupEvent,
   type PopupOrder,
   type PopupOrderStatus,
@@ -126,22 +128,40 @@ function StatsCard({
 function OrderActionsMenu({
   order,
   onUpdate,
+  onChargeMomo,
 }: {
   order: PopupOrder;
   onUpdate: (id: string, status: PopupOrderStatus, paymentMethod?: PopupPaymentMethod) => void;
+  onChargeMomo: (order: PopupOrder) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      if (
+        menuRef.current && !menuRef.current.contains(e.target as Node) &&
+        buttonRef.current && !buttonRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  function handleOpen() {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const menuWidth = 208; // w-52
+    setMenuPos({
+      top: rect.bottom + 4,
+      left: rect.right - menuWidth,
+    });
+    setOpen((v) => !v);
+  }
 
   const actions: { label: string; status: PopupOrderStatus; show: boolean }[] = (
     [
@@ -178,16 +198,38 @@ function OrderActionsMenu({
     ] as { label: string; status: PopupOrderStatus; show: boolean }[]
   ).filter((a) => a.show);
 
+  const showMomoCharge =
+    order.status === "active" || order.status === "on_hold";
+
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
-        onClick={() => setOpen((v) => !v)}
+        ref={buttonRef}
+        onClick={handleOpen}
         className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600"
       >
         <MoreVertical className="h-4 w-4" />
       </button>
       {open && (
-        <div className="absolute right-0 z-20 mt-1 w-52 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+        <div
+          ref={menuRef}
+          style={{ position: "fixed", top: menuPos.top, left: menuPos.left, zIndex: 50 }}
+          className="w-52 rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+        >
+          {showMomoCharge && (
+            <button
+              onClick={() => {
+                onChargeMomo(order);
+                setOpen(false);
+              }}
+              className="w-full px-4 py-2 text-left text-sm font-medium text-violet-700 hover:bg-violet-50"
+            >
+              Charge via MoMo
+            </button>
+          )}
+          {showMomoCharge && actions.length > 0 && (
+            <div className="my-1 border-t border-slate-100" />
+          )}
           {actions.map((action) => (
             <button
               key={action.status}
@@ -206,6 +248,174 @@ function OrderActionsMenu({
           ))}
         </div>
       )}
+    </>
+  );
+}
+
+// ─── MoMo Charge Modal ───────────────────────────────────────────────────────
+
+function MoMoChargeModal({
+  order,
+  onClose,
+}: {
+  order: PopupOrder;
+  onClose: () => void;
+}) {
+  const charge = useChargePopupOrder();
+  const submitOtp = useSubmitPopupOtp();
+  const [phone, setPhone] = useState(order.customer_phone || "");
+  const [provider, setProvider] = useState<"mtn" | "vod" | "tgo">("mtn");
+  const [step, setStep] = useState<"charge" | "otp" | "done">("charge");
+  const [otp, setOtp] = useState("");
+  const [doneMessage, setDoneMessage] = useState("");
+
+  async function handleCharge(e: React.FormEvent) {
+    e.preventDefault();
+    const result = await charge.mutateAsync({ id: order.id, dto: { phone, provider } });
+    if (result.paystack_status === "send_otp") {
+      setStep("otp");
+    } else {
+      setDoneMessage(result.message);
+      setStep("done");
+    }
+  }
+
+  async function handleOtp(e: React.FormEvent) {
+    e.preventDefault();
+    const result = await submitOtp.mutateAsync({ id: order.id, otp });
+    setDoneMessage(result.message);
+    setStep("done");
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-sm rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <h2 className="text-base font-semibold text-slate-900">Charge via MoMo</h2>
+          <button
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="p-6">
+          {step === "done" ? (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-green-50 p-4 text-sm text-green-700">
+                <p className="font-medium">Charge initiated!</p>
+                <p className="mt-1">{doneMessage}</p>
+                <p className="mt-1 text-xs text-green-600">
+                  Order #{order.order_number} is now awaiting payment confirmation.
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="w-full rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
+              >
+                Done
+              </button>
+            </div>
+          ) : step === "otp" ? (
+            <form onSubmit={handleOtp} className="space-y-4">
+              <div className="rounded-lg bg-amber-50 p-4 text-sm text-amber-700">
+                <p className="font-medium">OTP sent to customer</p>
+                <p className="mt-1">Ask the customer for the OTP they received via SMS and enter it below.</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  OTP *
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value)}
+                  placeholder="e.g. 123456"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                />
+              </div>
+              {submitOtp.isError && (
+                <p className="text-xs text-red-500">
+                  {(submitOtp.error as any)?.message || "OTP submission failed. Please try again."}
+                </p>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!otp.trim() || submitOtp.isPending}
+                  className="flex-1 rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {submitOtp.isPending ? "Submitting…" : "Submit OTP"}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleCharge} className="space-y-4">
+              <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                <span className="font-medium">Order:</span> {order.order_number} &nbsp;·&nbsp;
+                <span className="font-medium">Total:</span> {formatCurrency(Number(order.total))}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  MoMo Phone Number *
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="e.g. 0244000000"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Network Provider *
+                </label>
+                <select
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value as "mtn" | "vod" | "tgo")}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                >
+                  <option value="mtn">MTN MoMo</option>
+                  <option value="vod">Vodafone Cash</option>
+                  <option value="tgo">AirtelTigo Money</option>
+                </select>
+              </div>
+              {charge.isError && (
+                <p className="text-xs text-red-500">
+                  {(charge.error as any)?.message || "Charge failed. Please try again."}
+                </p>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!phone.trim() || charge.isPending}
+                  className="flex-1 rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {charge.isPending ? "Sending…" : "Send USSD Prompt"}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -251,7 +461,7 @@ function NewOrderModal({
       setSearching(true);
       try {
         const res = await apiClient<{ data: ProductSearchResult[] }>(
-          `/products?search=${encodeURIComponent(productSearch)}&limit=8`
+          `/products/admin/list?search=${encodeURIComponent(productSearch)}&limit=8`
         );
         setSearchResults(res.data || []);
       } catch {
@@ -698,10 +908,12 @@ function OrderTable({
   orders,
   isLoading,
   onUpdate,
+  onChargeMomo,
 }: {
   orders: PopupOrder[];
   isLoading: boolean;
   onUpdate: (id: string, status: PopupOrderStatus, paymentMethod?: PopupPaymentMethod) => void;
+  onChargeMomo: (order: PopupOrder) => void;
 }) {
   if (isLoading) {
     return (
@@ -799,7 +1011,7 @@ function OrderTable({
                   {timeAgo(order.created_at)}
                 </td>
                 <td className="px-5 py-4">
-                  <OrderActionsMenu order={order} onUpdate={onUpdate} />
+                  <OrderActionsMenu order={order} onUpdate={onUpdate} onChargeMomo={onChargeMomo} />
                 </td>
               </tr>
             );
@@ -818,6 +1030,7 @@ export default function PopupSalesPage() {
   const [activeTab, setActiveTab] = useState<Tab>("active");
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [showNewEvent, setShowNewEvent] = useState(false);
+  const [momoChargeOrder, setMomoChargeOrder] = useState<PopupOrder | null>(null);
 
   // Auto-select first active event, then first event
   useEffect(() => {
@@ -960,6 +1173,7 @@ export default function PopupSalesPage() {
                 orders={orders}
                 isLoading={ordersLoading}
                 onUpdate={handleUpdateOrder}
+                onChargeMomo={setMomoChargeOrder}
               />
             </div>
           </>
@@ -974,6 +1188,12 @@ export default function PopupSalesPage() {
       )}
       {showNewEvent && (
         <NewEventModal onClose={() => setShowNewEvent(false)} />
+      )}
+      {momoChargeOrder && (
+        <MoMoChargeModal
+          order={momoChargeOrder}
+          onClose={() => setMomoChargeOrder(null)}
+        />
       )}
     </>
   );

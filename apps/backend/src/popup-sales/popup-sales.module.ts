@@ -5,5 +5,6 @@ import { PopupSalesService } from './popup-sales.service';
 @Module({
   controllers: [PopupSalesController],
   providers: [PopupSalesService],
+  exports: [PopupSalesService],
 })
 export class PopupSalesModule {}

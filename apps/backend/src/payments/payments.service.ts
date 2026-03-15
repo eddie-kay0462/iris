@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
 import { OrdersService } from '../orders/orders.service';
 import { SupabaseService } from '../common/supabase/supabase.service';
+import { PopupSalesService } from '../popup-sales/popup-sales.service';
 
 @Injectable()
 export class PaymentsService {
@@ -12,6 +13,7 @@ export class PaymentsService {
     private configService: ConfigService,
     private ordersService: OrdersService,
     private supabase: SupabaseService,
+    private popupSalesService: PopupSalesService,
   ) {
     this.secretKey = this.configService.get<string>(
       'PAYSTACK_SECRET_KEY',
@@ -36,7 +38,11 @@ export class PaymentsService {
     if (eventType === 'charge.success') {
       const reference = event?.data?.reference;
       if (reference) {
-        await this.ordersService.confirmPayment(reference);
+        // Try popup order first; if not a popup order, fall through to online orders
+        const confirmedPopup = await this.popupSalesService.confirmByReference(reference);
+        if (!confirmedPopup) {
+          await this.ordersService.confirmPayment(reference);
+        }
       }
     }
 
