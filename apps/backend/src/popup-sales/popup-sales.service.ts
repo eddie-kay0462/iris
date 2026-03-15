@@ -1,0 +1,232 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { SupabaseService } from '../common/supabase/supabase.service';
+import { CreateEventDto } from './dto/create-event.dto';
+import { UpdateEventDto } from './dto/update-event.dto';
+import { CreatePopupOrderDto } from './dto/create-popup-order.dto';
+import { UpdatePopupOrderDto } from './dto/update-popup-order.dto';
+import { QueryPopupOrdersDto } from './dto/query-popup-orders.dto';
+
+@Injectable()
+export class PopupSalesService {
+  constructor(private supabase: SupabaseService) {}
+
+  // ─── Events ────────────────────────────────────────────────────────────────
+
+  async findAllEvents() {
+    const db = this.supabase.getAdminClient();
+    const { data, error } = await db
+      .from('popup_events')
+      .select('*, profiles!popup_events_created_by_fkey(id, first_name, last_name)')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  async createEvent(dto: CreateEventDto, userId: string) {
+    const db = this.supabase.getAdminClient();
+    const { data, error } = await db
+      .from('popup_events')
+      .insert({
+        name: dto.name,
+        description: dto.description || null,
+        location: dto.location || null,
+        event_date: dto.event_date || null,
+        status: dto.status || 'draft',
+        created_by: userId,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async updateEvent(id: string, dto: UpdateEventDto) {
+    const db = this.supabase.getAdminClient();
+    const { data, error } = await db
+      .from('popup_events')
+      .update({ ...dto })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error || !data) throw new NotFoundException('Event not found');
+    return data;
+  }
+
+  // ─── Stats ──────────────────────────────────────────────────────────────────
+
+  async getEventStats(eventId: string) {
+    const db = this.supabase.getAdminClient();
+
+    const { data: orders, error } = await db
+      .from('popup_orders')
+      .select('status, total')
+      .eq('event_id', eventId)
+      .neq('status', 'cancelled');
+
+    if (error) throw error;
+
+    const allOrders = orders || [];
+    const session_revenue = allOrders
+      .filter((o) => o.status === 'completed' || o.status === 'confirmed')
+      .reduce((sum, o) => sum + Number(o.total), 0);
+
+    return {
+      session_revenue: Math.round(session_revenue * 100) / 100,
+      orders_completed: allOrders.filter((o) => o.status === 'completed').length,
+      on_hold: allOrders.filter((o) => o.status === 'on_hold').length,
+      awaiting_payment: allOrders.filter((o) => o.status === 'awaiting_payment').length,
+    };
+  }
+
+  // ─── Orders ─────────────────────────────────────────────────────────────────
+
+  async findOrders(eventId: string, query: QueryPopupOrdersDto) {
+    const db = this.supabase.getAdminClient();
+    const page = parseInt(query.page || '1', 10);
+    const limit = parseInt(query.limit || '50', 10);
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let q = db
+      .from('popup_orders')
+      .select(
+        '*, profiles!popup_orders_served_by_fkey(id, first_name, last_name), popup_order_items(*)',
+        { count: 'exact' },
+      )
+      .eq('event_id', eventId)
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (query.status) {
+      q = q.eq('status', query.status);
+    }
+
+    const { data, count, error } = await q;
+    if (error) throw error;
+
+    return {
+      data: data || [],
+      total: count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((count || 0) / limit),
+    };
+  }
+
+  async findOrder(id: string) {
+    const db = this.supabase.getAdminClient();
+    const { data, error } = await db
+      .from('popup_orders')
+      .select(
+        '*, profiles!popup_orders_served_by_fkey(id, first_name, last_name), popup_order_items(*)',
+      )
+      .eq('id', id)
+      .single();
+
+    if (error || !data) throw new NotFoundException('Order not found');
+    return data;
+  }
+
+  async createOrder(eventId: string, dto: CreatePopupOrderDto, userId: string) {
+    const db = this.supabase.getAdminClient();
+
+    // Verify event exists and is active
+    const { data: event, error: eventError } = await db
+      .from('popup_events')
+      .select('id, status')
+      .eq('id', eventId)
+      .single();
+
+    if (eventError || !event) throw new NotFoundException('Event not found');
+
+    // Generate order number: POP-YYYY-XXXX
+    const year = new Date().getFullYear();
+    const { data: lastOrder } = await db
+      .from('popup_orders')
+      .select('order_number')
+      .like('order_number', `POP-${year}-%`)
+      .order('order_number', { ascending: false })
+      .limit(1);
+
+    let sequence = 1;
+    if (lastOrder && lastOrder.length > 0) {
+      const lastSeq = parseInt(lastOrder[0].order_number.split('-')[2], 10);
+      sequence = lastSeq + 1;
+    }
+    const order_number = `POP-${year}-${String(sequence).padStart(4, '0')}`;
+
+    // Calculate totals
+    const subtotal = dto.items.reduce(
+      (sum, item) => sum + item.unit_price * item.quantity,
+      0,
+    );
+    const total = Math.round(subtotal * 100) / 100;
+
+    // Create order
+    const { data: order, error: orderError } = await db
+      .from('popup_orders')
+      .insert({
+        event_id: eventId,
+        order_number,
+        customer_name: dto.customer_name || null,
+        customer_phone: dto.customer_phone || null,
+        served_by: userId,
+        status: 'active',
+        payment_method: dto.payment_method || null,
+        payment_reference: dto.payment_reference || null,
+        subtotal: Math.round(subtotal * 100) / 100,
+        total,
+        notes: dto.notes || null,
+      })
+      .select()
+      .single();
+
+    if (orderError || !order) throw orderError;
+
+    // Insert order items
+    const items = dto.items.map((item) => ({
+      order_id: order.id,
+      product_id: item.product_id || null,
+      variant_id: item.variant_id || null,
+      product_name: item.product_name,
+      variant_title: item.variant_title || null,
+      sku: item.sku || null,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      total_price: Math.round(item.unit_price * item.quantity * 100) / 100,
+    }));
+
+    const { error: itemsError } = await db
+      .from('popup_order_items')
+      .insert(items);
+
+    if (itemsError) throw itemsError;
+
+    return this.findOrder(order.id);
+  }
+
+  async updateOrder(id: string, dto: UpdatePopupOrderDto) {
+    const db = this.supabase.getAdminClient();
+
+    const updatePayload: Record<string, any> = {};
+    if (dto.status !== undefined) updatePayload.status = dto.status;
+    if (dto.payment_method !== undefined) updatePayload.payment_method = dto.payment_method;
+    if (dto.payment_reference !== undefined) updatePayload.payment_reference = dto.payment_reference;
+    if (dto.customer_name !== undefined) updatePayload.customer_name = dto.customer_name;
+    if (dto.customer_phone !== undefined) updatePayload.customer_phone = dto.customer_phone;
+    if (dto.notes !== undefined) updatePayload.notes = dto.notes;
+
+    const { data, error } = await db
+      .from('popup_orders')
+      .update(updatePayload)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error || !data) throw new NotFoundException('Order not found');
+    return data;
+  }
+}

@@ -53,6 +53,12 @@ export const PERMISSIONS = {
   // Review permissions
   "reviews:read": "View all product reviews",
   "reviews:moderate": "Approve or delete product reviews",
+
+  // Pop-up sales permissions
+  "popup:read": "View pop-up events and orders",
+  "popup:create": "Create pop-up orders",
+  "popup:update": "Update pop-up order status and details",
+  "popup:manage": "Create/close pop-up events and confirm payments",
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -73,6 +79,9 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     "customers:read",
     "inventory:read",
     "reviews:read",
+    "popup:read",
+    "popup:create",
+    "popup:update",
   ],
 
   // Managers can do everything staff can, plus manage products and waitlist
@@ -93,6 +102,10 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     "analytics:read",
     "reviews:read",
     "reviews:moderate",
+    "popup:read",
+    "popup:create",
+    "popup:update",
+    "popup:manage",
   ],
 
   // Admins can do everything
@@ -120,6 +133,10 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     "users:delete",
     "reviews:read",
     "reviews:moderate",
+    "popup:read",
+    "popup:create",
+    "popup:update",
+    "popup:manage",
   ],
 } as const;
 

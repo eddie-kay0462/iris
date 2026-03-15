@@ -17,6 +17,7 @@ import { NewsletterModule } from './newsletter/newsletter.module';
 import { ExportModule } from './export/export.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { PopupSalesModule } from './popup-sales/popup-sales.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { ReviewsModule } from './reviews/reviews.module';
     ExportModule,
     RecommendationsModule,
     ReviewsModule,
+    PopupSalesModule,
   ],
   providers: [
     // Apply JwtAuthGuard globally — use @Public() to skip
