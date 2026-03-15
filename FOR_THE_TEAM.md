@@ -2270,4 +2270,50 @@ GRANT ALL ON TABLE popup_order_items TO anon, authenticated, service_role;
 
 ---
 
-*Last updated: March 2026*
+## 2026-03-15 — Pop-up Sales MoMo Payments & Bug Fixes
+
+### What Got Done
+
+**MTN MoMo cashier-initiated charge**
+
+The pop-up sales order actions menu now has a **Charge via MoMo** option. The cashier enters the customer's MTN number, clicks Send Prompt, and the customer gets a USSD push on their phone to enter their MoMo PIN. No OTP sharing needed — the whole approval happens on the customer's phone.
+
+Two new backend endpoints were added:
+- `POST /popup-sales/orders/:id/charge` — fires the Paystack charge and moves the order to `awaiting_payment`
+- `POST /popup-sales/orders/:id/submit-otp` — handles the OTP step for networks that require it (kept as a backend safety net)
+
+Only MTN is exposed in the UI for now. Vodafone/AirtelTigo require OTP collection from the customer by the cashier, which is a bad idea in a face-to-face setting (OTPs are private). Those networks can be added later via a customer-facing payment link.
+
+**Paystack webhook now actually works**
+
+When a customer paid, the order was staying stuck on "Awaiting" and had to be manually confirmed. The webhook was arriving but the signature check was always failing — NestJS re-serializes the JSON body before your handler sees it, so the bytes don't match what Paystack signed.
+
+Fixed by turning on `rawBody: true` in the NestJS bootstrap and using the raw buffer directly for the HMAC check. Now when a customer approves their payment, the order flips to `confirmed` on its own within 15 seconds (the UI polls automatically).
+
+**Actions dropdown no longer hides below the table**
+
+The ⋮ menu was getting clipped by the table's horizontal scroll container. Fixed by switching to `position: fixed` positioned relative to the button's screen coordinates, so it always pops up inside the viewport.
+
+**Product search in New Order shows all products**
+
+The product search inside the new order modal was only returning published products (it was hitting the public storefront endpoint). Changed it to use the admin endpoint so staff can add any product, including drafts.
+
+### Infrastructure heads-up
+
+- **Use ngrok instead of localhost.run for webhook testing.** `localhost.run` tunnels drop frequently and the URL changes each time, which silently breaks Paystack webhook delivery. `ngrok http 4000` gives a stable URL for the session.
+- **Webhook URL needs the `/api` prefix** — `https://<tunnel>/api/webhooks/paystack`
+- **SSL error on corporate/VPN networks** — if you see `TypeError: fetch failed — self-signed certificate` in the backend logs, start the server with `NODE_OPTIONS=--use-system-ca npm run start:dev`
+
+### Files changed
+
+- `apps/backend/src/main.ts`
+- `apps/backend/src/payments/payments.controller.ts`
+- `apps/backend/src/popup-sales/popup-sales.service.ts`
+- `apps/backend/src/popup-sales/popup-sales.controller.ts`
+- `apps/backend/src/popup-sales/dto/charge-popup-order.dto.ts` *(new)*
+- `apps/admin/lib/api/popup-sales.ts`
+- `apps/admin/app/(dashboard)/popup-sales/page.tsx`
+
+---
+
+*Last updated: 2026-03-15*
