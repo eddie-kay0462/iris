@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class UpdatePopupOrderDto {
   @IsOptional()
@@ -20,6 +20,32 @@ export class UpdatePopupOrderDto {
   @IsOptional()
   @IsString()
   customer_phone?: string;
+
+  @IsOptional()
+  @IsString()
+  customer_email?: string;
+
+  @IsOptional()
+  @IsEnum(['none', 'percentage', 'fixed'])
+  discount_type?: 'none' | 'percentage' | 'fixed';
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discount_amount?: number;
+
+  @IsOptional()
+  @IsString()
+  discount_reason?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  hold_duration_minutes?: number;
+
+  @IsOptional()
+  @IsString()
+  hold_note?: string;
 
   @IsOptional()
   @IsString()

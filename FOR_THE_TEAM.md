@@ -2316,4 +2316,91 @@ The product search inside the new order modal was only returning published produ
 
 ---
 
+## 2026-03-15 — Pop-up Sales Modal Redesign
+
+### What Got Done
+
+**Replaced the simple "New Order" form with a full two-column POS modal** matching the Figma design. The modal is now 1100px wide and splits into a product catalog on the left and order details on the right.
+
+**Left column — Product Catalog**
+- Live search with debounce (hits the admin products endpoint so draft products show up).
+- Displays rich **thumbnail cards** for each product, keeping the interface highly visual.
+- Clicking a product card slides open an **inline variant picker** showing all available options (e.g., Size, Color) with their specific prices.
+- **Live stock badges**: shows exactly how many are left, and automatically disables variants that are out of stock.
+- Add a product → qty controls appear inline right inside the variant chip; search again to keep adding.
+
+**Right column — four scrollable sections**
+
+① **Cart** — added items with +/− qty controls, remove button, and a running subtotal
+
+② **Customer** — search for existing customers by name or phone (dropdown fills the form automatically and shows a "Returning customer" banner), or fill in the manual form (name, +233 phone prefix, email). "Save to database" checkbox for new walk-in customers.
+
+③ **Discount** — segmented control for None / % / GH₵. Quick pills for 5%, 10%, 15%, 20%. Optional reason field. Discount is applied server-side so the saved total is always correct.
+
+④ **Payment Method** — three cards: Cash, MoMo, Bank Transfer. Each reveals its own fields:
+- **Cash** — amount received → live change-due display
+- **MoMo** — MTN / Telecel / AirtelTigo buttons, phone, optional reference, "Sent to Paystack" checkbox
+- **Bank Transfer** — bank name, reference, "Sent to Paystack" checkbox
+- **Split Payment toggle** — add multiple payment rows, each with method + amount + method-specific fields. A live tally bar turns green when the allocated amounts equal the order total.
+
+**Sticky footer** — "Put on Hold" button, total display, and a confirm button that changes label to "Save & Join Confirmation Queue" when any payment is marked "Sent to Paystack".
+
+**Hold sub-modal** — duration picker (10 / 15 / 20 / 30 min) + optional note field.
+
+### Database Changes
+
+A new migration adds 6 columns to `popup_orders` and a new `popup_split_payments` table:
+
+**New columns on `popup_orders`:**
+
+| Column | Type | Purpose |
+|---|---|---|
+| `customer_email` | TEXT | Customer email for the order |
+| `discount_type` | TEXT | `'none'`, `'percentage'`, or `'fixed'` |
+| `discount_amount` | NUMERIC(10,2) | Computed discount in GH₵ |
+| `discount_reason` | TEXT | Optional reason for the discount |
+| `hold_duration_minutes` | INTEGER | How long to hold (10/15/20/30) |
+| `hold_note` | TEXT | Staff note when putting on hold |
+
+**New table `popup_split_payments`:** stores each split entry with method, amount, network, phone, reference, bank name, and Paystack flag.
+
+### Automated Inventory Deduction
+
+- When an order transitions to `completed`, the system **automatically deducts the sold quantity** from `product_variants.inventory_quantity`.
+- Every deduction is securely logged in the `inventory_movements` table with `movement_type='sale'`, leaving a clear, auditable trail of stock changes.
+
+### ⚠️ Applying the Migration (Manual Step Required)
+
+`supabase db push` is blocked by a **pre-existing issue** with the older `20260214100000` migration (the remote DB already has `gender='all'` data but the migration was never tracked). Until that's resolved, apply the new migration directly:
+
+1. Open your [Supabase SQL Editor](https://supabase.com/dashboard/project/krnnifoypyilajatsmva/sql)
+2. Copy and paste the contents of `supabase/migrations/20260315100000_popup_sales_extras.sql`
+3. Click **Run**
+
+That's it. The existing popup orders are unaffected — all new columns are nullable.
+
+> **To fix `supabase db push` long-term:** In Supabase SQL Editor, run:
+> ```sql
+> INSERT INTO supabase_migrations.schema_migrations (version, name)
+> VALUES ('20260214100000', 'replace_unisex_with_all_in_products')
+> ON CONFLICT DO NOTHING;
+> ```
+> This tells the CLI that migration was already applied, so it skips it on the next push.
+
+### Files Changed
+
+**New file:**
+- `supabase/migrations/20260315100000_popup_sales_extras.sql`
+
+**Backend:**
+- `apps/backend/src/popup-sales/dto/create-popup-order.dto.ts` — new fields + `split_payments[]`
+- `apps/backend/src/popup-sales/dto/update-popup-order.dto.ts` — mirrors new optional fields
+- `apps/backend/src/popup-sales/popup-sales.service.ts` — applies discount to total calculation, inserts split payment rows
+
+**Admin frontend:**
+- `apps/admin/lib/api/popup-sales.ts` — updated `PopupOrder` type + new `SplitPaymentInput` + updated `CreateOrderInput`/`UpdateOrderInput`
+- `apps/admin/app/(dashboard)/popup-sales/page.tsx` — full `NewOrderModal` replacement (~1000 lines, all other page functionality untouched)
+
+---
+
 *Last updated: 2026-03-15*

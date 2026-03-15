@@ -46,11 +46,17 @@ export interface PopupOrder {
   order_number: string;
   customer_name: string | null;
   customer_phone: string | null;
+  customer_email: string | null;
   served_by: string | null;
   status: PopupOrderStatus;
   payment_method: PopupPaymentMethod | null;
   payment_reference: string | null;
   subtotal: number;
+  discount_type: 'none' | 'percentage' | 'fixed' | null;
+  discount_amount: number;
+  discount_reason: string | null;
+  hold_duration_minutes: number | null;
+  hold_note: string | null;
   total: number;
   notes: string | null;
   created_at: string;
@@ -84,12 +90,29 @@ export interface CreateOrderItemInput {
   unit_price: number;
 }
 
+export interface SplitPaymentInput {
+  method: PopupPaymentMethod;
+  amount: number;
+  network?: string;
+  phone?: string;
+  reference?: string;
+  bank_name?: string;
+  sent_to_paystack?: boolean;
+}
+
 export interface CreateOrderInput {
   customer_name?: string;
   customer_phone?: string;
+  customer_email?: string;
   payment_method?: PopupPaymentMethod;
   payment_reference?: string;
+  discount_type?: 'none' | 'percentage' | 'fixed';
+  discount_amount?: number;
+  discount_reason?: string;
+  hold_duration_minutes?: number;
+  hold_note?: string;
   notes?: string;
+  split_payments?: SplitPaymentInput[];
   items: CreateOrderItemInput[];
 }
 
@@ -99,6 +122,12 @@ export interface UpdateOrderInput {
   payment_reference?: string;
   customer_name?: string;
   customer_phone?: string;
+  customer_email?: string;
+  discount_type?: 'none' | 'percentage' | 'fixed';
+  discount_amount?: number;
+  discount_reason?: string;
+  hold_duration_minutes?: number;
+  hold_note?: string;
   notes?: string;
 }
 
