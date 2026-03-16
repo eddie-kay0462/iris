@@ -280,6 +280,18 @@ export function useSubmitPopupOtp() {
   });
 }
 
+export interface VerifyPaymentResult {
+  status: string;
+  confirmed: boolean;
+}
+
+export function useVerifyPopupPayment() {
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient<VerifyPaymentResult>(`/popup-sales/orders/${id}/verify-payment`),
+  });
+}
+
 export interface CreatePopupCustomerInput {
   name?: string;
   phone?: string;

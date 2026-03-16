@@ -95,6 +95,12 @@ export class PopupSalesController {
     return this.popupSalesService.submitOtp(id, otp);
   }
 
+  @Get('orders/:id/verify-payment')
+  @RequirePermission('popup:update')
+  verifyPayment(@Param('id') id: string) {
+    return this.popupSalesService.verifyPayment(id);
+  }
+
   // ─── Customers ───────────────────────────────────────────────────────────────
 
   @Post('customers')
