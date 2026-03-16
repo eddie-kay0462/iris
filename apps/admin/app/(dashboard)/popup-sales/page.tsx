@@ -29,6 +29,7 @@ import {
   useCreatePopupEvent,
   useChargePopupOrder,
   useSubmitPopupOtp,
+  useVerifyPopupPayment,
   useCreatePopupCustomer,
   type PopupEvent,
   type PopupOrder,
@@ -134,6 +135,53 @@ function StatsCard({
   );
 }
 
+// ─── Confirm Dialog ───────────────────────────────────────────────────────────
+
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  danger,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  danger?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-sm rounded-xl bg-white shadow-xl">
+        <div className="p-6">
+          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+          <p className="mt-2 text-sm text-slate-500">{message}</p>
+          <div className="mt-5 flex gap-3">
+            <button
+              onClick={onCancel}
+              className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              No, go back
+            </button>
+            <button
+              onClick={onConfirm}
+              className={`flex-1 rounded-lg py-2.5 text-sm font-medium text-white ${
+                danger
+                  ? "bg-red-600 hover:bg-red-700"
+                  : "bg-slate-900 hover:bg-slate-800"
+              }`}
+            >
+              {confirmLabel}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OrderActionsMenu({
   order,
   onUpdate,
@@ -145,6 +193,7 @@ function OrderActionsMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const [confirm, setConfirm] = useState<{ status: PopupOrderStatus; label: string } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -170,6 +219,15 @@ function OrderActionsMenu({
       left: rect.right - menuWidth,
     });
     setOpen((v) => !v);
+  }
+
+  function handleActionClick(action: { label: string; status: PopupOrderStatus }) {
+    setOpen(false);
+    if (action.status === "cancelled" || action.status === "completed") {
+      setConfirm({ status: action.status, label: action.label });
+    } else {
+      onUpdate(order.id, action.status);
+    }
   }
 
   const actions: { label: string; status: PopupOrderStatus; show: boolean }[] = (
@@ -210,6 +268,22 @@ function OrderActionsMenu({
   const showMomoCharge =
     order.status === "active" || order.status === "on_hold" || order.status === "awaiting_payment";
 
+  const confirmConfigs: Partial<Record<PopupOrderStatus, { title: string; message: string; confirmLabel: string; danger: boolean }>> = {
+    cancelled: {
+      title: "Cancel this order?",
+      message: `Order ${order.order_number} will be cancelled. This cannot be undone.`,
+      confirmLabel: "Yes, cancel order",
+      danger: true,
+    },
+    completed: {
+      title: "Mark as completed?",
+      message: `Order ${order.order_number} will be marked as completed and inventory will be deducted.`,
+      confirmLabel: "Yes, complete order",
+      danger: false,
+    },
+  };
+  const confirmConfig = confirm ? confirmConfigs[confirm.status] : null;
+
   return (
     <>
       <button
@@ -242,19 +316,28 @@ function OrderActionsMenu({
           {actions.map((action) => (
             <button
               key={action.status}
-              onClick={() => {
-                onUpdate(order.id, action.status);
-                setOpen(false);
-              }}
-              className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${action.status === "cancelled"
-                ? "text-red-600"
-                : "text-slate-700"
-                }`}
+              onClick={() => handleActionClick(action)}
+              className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${
+                action.status === "cancelled" ? "text-red-600" : "text-slate-700"
+              }`}
             >
               {action.label}
             </button>
           ))}
         </div>
+      )}
+      {confirm && confirmConfig && (
+        <ConfirmDialog
+          title={confirmConfig.title}
+          message={confirmConfig.message}
+          confirmLabel={confirmConfig.confirmLabel}
+          danger={confirmConfig.danger}
+          onConfirm={() => {
+            onUpdate(order.id, confirm.status);
+            setConfirm(null);
+          }}
+          onCancel={() => setConfirm(null)}
+        />
       )}
     </>
   );
@@ -271,11 +354,35 @@ function MoMoChargeModal({
 }) {
   const charge = useChargePopupOrder();
   const submitOtp = useSubmitPopupOtp();
+  const verify = useVerifyPopupPayment();
   const [phone, setPhone] = useState(order.customer_phone || "");
   const [provider, setProvider] = useState<"mtn" | "vod" | "tgo">("mtn");
-  const [step, setStep] = useState<"charge" | "otp" | "done">("charge");
+  const [step, setStep] = useState<"charge" | "otp" | "waiting" | "confirmed">("charge");
   const [otp, setOtp] = useState("");
-  const [doneMessage, setDoneMessage] = useState("");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Start polling Paystack every 5 seconds until payment is confirmed
+  function startPolling(id: string) {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const result = await verify.mutateAsync(id);
+        if (result.confirmed) {
+          clearInterval(pollRef.current!);
+          pollRef.current = null;
+          setStep("confirmed");
+        }
+      } catch {
+        // keep polling silently on transient errors
+      }
+    }, 5000);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
   async function handleCharge(e: React.FormEvent) {
     e.preventDefault();
@@ -283,16 +390,16 @@ function MoMoChargeModal({
     if (result.paystack_status === "send_otp") {
       setStep("otp");
     } else {
-      setDoneMessage(result.message);
-      setStep("done");
+      setStep("waiting");
+      startPolling(order.id);
     }
   }
 
   async function handleOtp(e: React.FormEvent) {
     e.preventDefault();
-    const result = await submitOtp.mutateAsync({ id: order.id, otp });
-    setDoneMessage(result.message);
-    setStep("done");
+    await submitOtp.mutateAsync({ id: order.id, otp });
+    setStep("waiting");
+    startPolling(order.id);
   }
 
   return (
@@ -308,13 +415,12 @@ function MoMoChargeModal({
           </button>
         </div>
         <div className="p-6">
-          {step === "done" ? (
+          {step === "confirmed" ? (
             <div className="space-y-4">
               <div className="rounded-lg bg-green-50 p-4 text-sm text-green-700">
-                <p className="font-medium">Charge initiated!</p>
-                <p className="mt-1">{doneMessage}</p>
-                <p className="mt-1 text-xs text-green-600">
-                  Order #{order.order_number} is now awaiting payment confirmation.
+                <p className="font-medium text-base">✅ Payment confirmed!</p>
+                <p className="mt-1">
+                  Order #{order.order_number} has been paid and confirmed automatically.
                 </p>
               </div>
               <button
@@ -322,6 +428,30 @@ function MoMoChargeModal({
                 className="w-full rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
               >
                 Done
+              </button>
+            </div>
+          ) : step === "waiting" ? (
+            <div className="space-y-4">
+              <div className="flex flex-col items-center gap-3 rounded-lg bg-amber-50 p-6 text-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-amber-300 border-t-amber-600" />
+                <p className="text-sm font-medium text-amber-800">
+                  Waiting for customer to confirm...
+                </p>
+                <p className="text-xs text-amber-700">
+                  The customer should approve the USSD prompt or enter their PIN on their phone.
+                </p>
+                <p className="text-xs text-amber-600">
+                  Order #{order.order_number} · {formatCurrency(Number(order.total))}
+                </p>
+              </div>
+              <p className="text-center text-xs text-slate-400">
+                This will confirm automatically. You can also close and confirm later.
+              </p>
+              <button
+                onClick={onClose}
+                className="w-full rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Close (confirm later)
               </button>
             </div>
           ) : step === "otp" ? (

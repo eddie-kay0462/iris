@@ -454,6 +454,47 @@ export class PopupSalesService {
     };
   }
 
+  // Poll Paystack directly to check charge status, and auto-confirm if successful
+  async verifyPayment(id: string): Promise<{ status: string; confirmed: boolean }> {
+    if (!this.paystackSecretKey) {
+      throw new InternalServerErrorException('PAYSTACK_SECRET_KEY not configured');
+    }
+
+    const db = this.supabase.getAdminClient();
+    const { data: order, error } = await db
+      .from('popup_orders')
+      .select('id, payment_reference, status')
+      .eq('id', id)
+      .single();
+
+    if (error || !order) throw new NotFoundException('Order not found');
+    if (!order.payment_reference) {
+      throw new BadRequestException('No payment reference for this order');
+    }
+
+    // Already confirmed — nothing to do
+    if (order.status === 'confirmed') {
+      return { status: 'confirmed', confirmed: true };
+    }
+
+    const response = await fetch(
+      `https://api.paystack.co/charge/${order.payment_reference}`,
+      {
+        headers: { Authorization: `Bearer ${this.paystackSecretKey}` },
+      },
+    );
+
+    const result = (await response.json()) as any;
+    const paystackStatus: string = result.data?.status ?? 'unknown';
+
+    if (paystackStatus === 'success') {
+      await this.confirmByReference(order.payment_reference);
+      return { status: 'confirmed', confirmed: true };
+    }
+
+    return { status: paystackStatus, confirmed: false };
+  }
+
   // Called by the Paystack webhook when charge.success fires
   async confirmByReference(reference: string): Promise<boolean> {
     const db = this.supabase.getAdminClient();
