@@ -2403,4 +2403,62 @@ That's it. The existing popup orders are unaffected — all new columns are null
 
 ---
 
-*Last updated: 2026-03-15*
+## 2026-03-16 — Automatic MoMo Payment Confirmation & Order Action Safeguards
+
+### What Got Done
+
+Two things shipped today: the MoMo payment flow is now fully automatic (no more manual "Confirm Payment" click), and destructive order actions now ask for confirmation before firing.
+
+---
+
+### 1. Automatic MoMo Payment Confirmation
+
+**The problem:** After a customer paid via MoMo USSD, the order would sit at "Awaiting Payment" until a staff member manually opened the dropdown and clicked "Confirm Payment". This was because Paystack sends a webhook to confirm payment, but webhooks require a public URL — and we were running locally.
+
+**The fix:** Instead of waiting for Paystack to push a webhook to us, the frontend now *polls* Paystack directly every 5 seconds after a charge is initiated. As soon as Paystack confirms the payment, the order is automatically confirmed in the database — no manual step, no ngrok needed.
+
+**How the MoMo modal now works:**
+
+| Step | What happens |
+|---|---|
+| Staff enters phone + network, clicks "Send USSD Prompt" | Charge request sent to Paystack |
+| Modal transitions to **"Waiting…"** screen | Amber spinner: *"Waiting for customer to confirm on their phone…"* |
+| Customer approves on their USSD / enters PIN | Paystack records the payment |
+| Within 5 seconds, the modal detects it | Auto-transitions to **green success screen** |
+| Staff clicks Done | Order is already confirmed — nothing else to do |
+
+The "Close (confirm later)" button is still there if the staff member needs to step away — the order list auto-refreshes every 15 seconds anyway, so it will catch up.
+
+**New backend endpoint:** `GET /popup-sales/orders/:id/verify-payment`
+- Calls `GET https://api.paystack.co/charge/:reference` on Paystack
+- If Paystack says `"success"`, calls `confirmByReference()` to update the order in the DB
+- Returns `{ status, confirmed }` to the frontend
+
+---
+
+### 2. Confirmation Dialogs for Destructive Actions
+
+**Cancel Order** and **Mark as Completed** now show a confirmation dialog before executing. These were the two actions that are hard or impossible to reverse:
+
+- **Cancel Order** → red dialog: *"Order POP-XXXX will be cancelled. This cannot be undone."*
+- **Mark as Completed** → neutral dialog: *"Order POP-XXXX will be marked as completed and inventory will be deducted."*
+
+All other actions (Put on Hold, Reactivate, Mark as Awaiting Payment, Confirm Payment) still fire immediately.
+
+A reusable `ConfirmDialog` component was added — it accepts a `danger` flag that switches the confirm button between red and dark.
+
+---
+
+### Files Changed
+
+**Backend:**
+- `apps/backend/src/popup-sales/popup-sales.service.ts` — added `verifyPayment()` method
+- `apps/backend/src/popup-sales/popup-sales.controller.ts` — added `GET /orders/:id/verify-payment` route
+
+**Admin frontend:**
+- `apps/admin/lib/api/popup-sales.ts` — added `useVerifyPopupPayment` hook
+- `apps/admin/app/(dashboard)/popup-sales/page.tsx` — updated `MoMoChargeModal` (waiting/confirmed steps + polling), added `ConfirmDialog` component, updated `OrderActionsMenu`
+
+---
+
+*Last updated: 2026-03-16*
