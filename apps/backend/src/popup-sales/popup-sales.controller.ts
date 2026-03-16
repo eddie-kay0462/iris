@@ -15,6 +15,7 @@ import { CreatePopupOrderDto } from './dto/create-popup-order.dto';
 import { UpdatePopupOrderDto } from './dto/update-popup-order.dto';
 import { QueryPopupOrdersDto } from './dto/query-popup-orders.dto';
 import { ChargePopupOrderDto } from './dto/charge-popup-order.dto';
+import { CreatePopupCustomerDto } from './dto/create-popup-customer.dto';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -92,5 +93,13 @@ export class PopupSalesController {
   @RequirePermission('popup:update')
   submitOtp(@Param('id') id: string, @Body('otp') otp: string) {
     return this.popupSalesService.submitOtp(id, otp);
+  }
+
+  // ─── Customers ───────────────────────────────────────────────────────────────
+
+  @Post('customers')
+  @RequirePermission('popup:create')
+  findOrCreateCustomer(@Body() dto: CreatePopupCustomerDto) {
+    return this.popupSalesService.findOrCreateCustomer(dto);
   }
 }

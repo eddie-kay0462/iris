@@ -279,3 +279,24 @@ export function useSubmitPopupOtp() {
       }),
   });
 }
+
+export interface CreatePopupCustomerInput {
+  name?: string;
+  phone?: string;
+  email?: string;
+}
+
+export interface CreatePopupCustomerResult {
+  id: string;
+  isNew: boolean;
+}
+
+export function useCreatePopupCustomer() {
+  return useMutation({
+    mutationFn: (dto: CreatePopupCustomerInput) =>
+      apiClient<CreatePopupCustomerResult>("/popup-sales/customers", {
+        method: "POST",
+        body: dto,
+      }),
+  });
+}

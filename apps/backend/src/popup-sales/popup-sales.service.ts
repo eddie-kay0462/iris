@@ -12,6 +12,7 @@ import { CreatePopupOrderDto } from './dto/create-popup-order.dto';
 import { UpdatePopupOrderDto } from './dto/update-popup-order.dto';
 import { QueryPopupOrdersDto } from './dto/query-popup-orders.dto';
 import { ChargePopupOrderDto } from './dto/charge-popup-order.dto';
+import { CreatePopupCustomerDto } from './dto/create-popup-customer.dto';
 
 @Injectable()
 export class PopupSalesService {
@@ -228,16 +229,24 @@ export class PopupSalesService {
 
     // Insert split payments if provided
     if (dto.split_payments && dto.split_payments.length > 0) {
-      const splits = dto.split_payments.map((sp) => ({
-        order_id: order.id,
-        method: sp.method,
-        amount: Math.round(sp.amount * 100) / 100,
-        network: sp.network || null,
-        phone: sp.phone || null,
-        reference: sp.reference || null,
-        bank_name: sp.bank_name || null,
-        sent_to_paystack: sp.sent_to_paystack ?? false,
-      }));
+      const splits = dto.split_payments.map((sp) => {
+        let phone = sp.phone?.trim().replace(/\s+/g, '') || null;
+        if (phone) {
+          if (phone.startsWith('+233')) phone = '0' + phone.slice(4);
+          else if (phone.startsWith('233')) phone = '0' + phone.slice(3);
+          else if (!phone.startsWith('0')) phone = '0' + phone;
+        }
+        return {
+          order_id: order.id,
+          method: sp.method,
+          amount: Math.round(sp.amount * 100) / 100,
+          network: sp.network || null,
+          phone,
+          reference: sp.reference || null,
+          bank_name: sp.bank_name || null,
+          sent_to_paystack: sp.sent_to_paystack ?? false,
+        };
+      });
       const { error: splitError } = await db
         .from('popup_split_payments')
         .insert(splits);
@@ -351,6 +360,12 @@ export class PopupSalesService {
     const amountInPesewas = Math.round(Number(order.total) * 100);
     const email = `popup-${order.order_number.toLowerCase()}@iris-store.com`;
 
+    // Normalize phone to local format (0XXXXXXXXX) expected by Paystack Ghana
+    let phone = dto.phone.trim().replace(/\s+/g, '');
+    if (phone.startsWith('+233')) phone = '0' + phone.slice(4);
+    else if (phone.startsWith('233')) phone = '0' + phone.slice(3);
+    else if (!phone.startsWith('0')) phone = '0' + phone;
+
     const response = await fetch('https://api.paystack.co/charge', {
       method: 'POST',
       headers: {
@@ -362,7 +377,7 @@ export class PopupSalesService {
         email,
         currency: 'GHS',
         mobile_money: {
-          phone: dto.phone,
+          phone,
           provider: dto.provider,
         },
       }),
@@ -455,5 +470,72 @@ export class PopupSalesService {
     }
 
     return !!data;
+  }
+
+  // ─── Customer: find existing or create new profile ───────────────────────────
+
+  async findOrCreateCustomer(dto: CreatePopupCustomerDto): Promise<{ id: string; isNew: boolean }> {
+    if (!dto.email && !dto.phone) {
+      throw new BadRequestException('At least an email or phone is required to save a customer');
+    }
+
+    const db = this.supabase.getAdminClient();
+
+    // Normalize phone to 0XXXXXXXXX before saving
+    let phone = dto.phone?.trim().replace(/\s+/g, '') || null;
+    if (phone) {
+      if (phone.startsWith('+233')) phone = '0' + phone.slice(4);
+      else if (phone.startsWith('233')) phone = '0' + phone.slice(3);
+      else if (!phone.startsWith('0')) phone = '0' + phone;
+    }
+
+    // Check if a profile already exists with this email or phone
+    let existingQuery = db.from('profiles').select('id').eq('role', 'public');
+    if (dto.email && phone) {
+      existingQuery = existingQuery.or(`email.eq.${dto.email},phone_number.eq.${phone}`);
+    } else if (dto.email) {
+      existingQuery = existingQuery.eq('email', dto.email);
+    } else {
+      existingQuery = existingQuery.eq('phone_number', phone);
+    }
+
+    const { data: existing } = await existingQuery.limit(1).maybeSingle();
+    if (existing) {
+      return { id: existing.id, isNew: false };
+    }
+
+    // Split name into first + last
+    const nameParts = (dto.name || '').trim().split(/\s+/).filter(Boolean);
+    const first_name = nameParts[0] || null;
+    const last_name = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
+
+    // Create Supabase auth user (service-role, no password, pre-confirmed)
+    const { data: authData, error: authError } = await db.auth.admin.createUser({
+      ...(dto.email ? { email: dto.email, email_confirm: true } : {}),
+      ...(phone ? { phone, phone_confirm: true } : {}),
+      user_metadata: { first_name, last_name },
+    });
+
+    if (authError || !authData?.user) {
+      throw new InternalServerErrorException(authError?.message || 'Failed to create customer account');
+    }
+
+    // Insert profile record
+    const { error: profileError } = await db.from('profiles').insert({
+      id: authData.user.id,
+      email: dto.email || null,
+      phone_number: phone,
+      first_name,
+      last_name,
+      role: 'public',
+    });
+
+    if (profileError) {
+      // Roll back the auth user if profile insert fails
+      await db.auth.admin.deleteUser(authData.user.id);
+      throw new InternalServerErrorException('Failed to save customer profile');
+    }
+
+    return { id: authData.user.id, isNew: true };
   }
 }

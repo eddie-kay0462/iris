@@ -29,6 +29,7 @@ import {
   useCreatePopupEvent,
   useChargePopupOrder,
   useSubmitPopupOtp,
+  useCreatePopupCustomer,
   type PopupEvent,
   type PopupOrder,
   type PopupOrderStatus,
@@ -207,7 +208,7 @@ function OrderActionsMenu({
   ).filter((a) => a.show);
 
   const showMomoCharge =
-    order.status === "active" || order.status === "on_hold";
+    order.status === "active" || order.status === "on_hold" || order.status === "awaiting_payment";
 
   return (
     <>
@@ -463,6 +464,7 @@ interface ProductSearchResult {
 
 type CartItem = CreateOrderItemInput & {
   _localId: string;
+  inventory_quantity?: number;
 };
 
 const HOLD_DURATIONS = [
@@ -486,6 +488,8 @@ function NewOrderModal({
   onClose: () => void;
 }) {
   const createOrder = useCreatePopupOrder(eventId);
+  const updateOrder = useUpdatePopupOrder();
+  const saveCustomer = useCreatePopupCustomer();
 
   // ── Product state ──────────────────────────────────────────────────────────
   const [productSearch, setProductSearch] = useState("");
@@ -553,15 +557,15 @@ function NewOrderModal({
     clearTimeout(customerSearchTimeout.current);
     customerSearchTimeout.current = setTimeout(async () => {
       try {
-        const res = await apiClient<{ data: { id: string; first_name: string | null; last_name: string | null; email: string | null; phone: string | null }[] }>(
-          `/customers/admin/list?search=${encodeURIComponent(customerSearch)}&limit=6`
+        const res = await apiClient<{ data: { id: string; first_name: string | null; last_name: string | null; email: string | null; phone_number: string | null }[] }>(
+          `/orders/admin/customers?search=${encodeURIComponent(customerSearch)}&limit=6`
         );
         setCustomerResults(
           (res.data || []).map((c) => ({
             id: c.id,
             name: [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown",
             email: c.email || "",
-            phone: c.phone || "",
+            phone: c.phone_number || "",
           }))
         );
       } catch { setCustomerResults([]); }
@@ -611,13 +615,18 @@ function NewOrderModal({
         sku: variant.sku || undefined,
         quantity: 1,
         unit_price: variant.price,
+        inventory_quantity: variant.inventory_quantity,
       }];
     });
     // Keep the variant picker open so the user can add multiple sizes
   }, []);
 
   const updateQty = (localId: string, delta: number) =>
-    setItems((prev) => prev.map((i) => i._localId === localId ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i));
+    setItems((prev) => prev.map((i) => {
+      if (i._localId !== localId) return i;
+      const max = i.inventory_quantity ?? Infinity;
+      return { ...i, quantity: Math.min(max, Math.max(1, i.quantity + delta)) };
+    }));
 
   const removeItem = (localId: string) => setItems((prev) => prev.filter((i) => i._localId !== localId));
 
@@ -630,6 +639,8 @@ function NewOrderModal({
   // ── Submit ─────────────────────────────────────────────────────────────────
   async function handleSubmit() {
     if (items.length === 0) return;
+
+    // For single MoMo payment, create a split entry to persist network/phone/sent_to_paystack
     const splitPayloads = isSplit
       ? splits.filter((p) => parseFloat(p.amount) > 0).map((p) => ({
         method: p.method as PopupPaymentMethod,
@@ -640,9 +651,45 @@ function NewOrderModal({
         bank_name: p.bankName,
         sent_to_paystack: p.sentToPaystack,
       }))
-      : undefined;
+      : paymentMethod === "momo"
+        ? [{ method: "momo" as PopupPaymentMethod, amount: total, network: momoNetwork, phone: momoPhone || undefined, reference: momoReference || undefined, sent_to_paystack: momoSentToPaystack }]
+        : undefined;
 
-    await createOrder.mutateAsync({
+    const newOrder = await createOrder.mutateAsync({
+      customer_name: customerForm.name || undefined,
+      customer_phone: customerForm.phone || (paymentMethod === "momo" && !isSplit ? momoPhone || undefined : undefined),
+      customer_email: customerForm.email || undefined,
+      payment_method: paymentMethod,
+      payment_reference: isSplit ? undefined : (paymentMethod === "momo" ? momoReference || undefined : paymentMethod === "bank_transfer" ? bankReference || undefined : undefined),
+      discount_type: discountType !== "none" ? discountType : undefined,
+      discount_amount: discountAmount > 0 ? discountAmount : undefined,
+      discount_reason: discountReason || undefined,
+      notes: undefined,
+      split_payments: splitPayloads,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      items: items.map(({ _localId, inventory_quantity, ...rest }) => rest),
+    });
+
+    // If MoMo charge was already sent to Paystack, move order to awaiting_payment
+    if (!isSplit && paymentMethod === "momo" && momoSentToPaystack) {
+      await updateOrder.mutateAsync({ id: newOrder.id, dto: { status: "awaiting_payment" } });
+    }
+
+    // Save customer to the database if requested and not already an existing customer
+    if (!selectedCustomerId && customerForm.saveToDatabase && (customerForm.name || customerForm.phone || customerForm.email)) {
+      await saveCustomer.mutateAsync({
+        name: customerForm.name || undefined,
+        phone: customerForm.phone || undefined,
+        email: customerForm.email || undefined,
+      });
+    }
+
+    onClose();
+  }
+
+  async function handleHoldConfirm() {
+    if (items.length === 0) return;
+    const newOrder = await createOrder.mutateAsync({
       customer_name: customerForm.name || undefined,
       customer_phone: customerForm.phone || undefined,
       customer_email: customerForm.email || undefined,
@@ -651,31 +698,12 @@ function NewOrderModal({
       discount_type: discountType !== "none" ? discountType : undefined,
       discount_amount: discountAmount > 0 ? discountAmount : undefined,
       discount_reason: discountReason || undefined,
-      notes: undefined,
-      split_payments: splitPayloads,
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      items: items.map(({ _localId, ...rest }) => rest),
-    });
-    onClose();
-  }
-
-  async function handleHoldConfirm() {
-    if (items.length === 0) return;
-    await createOrder.mutateAsync({
-      customer_name: customerForm.name || undefined,
-      customer_phone: customerForm.phone || undefined,
-      customer_email: customerForm.email || undefined,
-      discount_type: discountType !== "none" ? discountType : undefined,
-      discount_amount: discountAmount > 0 ? discountAmount : undefined,
-      discount_reason: discountReason || undefined,
       hold_duration_minutes: holdDuration,
       hold_note: holdNote || undefined,
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      items: items.map(({ _localId, ...rest }) => rest),
+      items: items.map(({ _localId, inventory_quantity, ...rest }) => rest),
     });
-    // After creating, update status to on_hold — the backend defaults to 'active'
-    // so we rely on the caller to update. For now close and the order shows in "Active";
-    // a follow-up PATCH to on_hold can be done via the actions menu.
+    await updateOrder.mutateAsync({ id: newOrder.id, dto: { status: "on_hold" } });
     setShowHold(false);
     onClose();
   }
@@ -1105,6 +1133,7 @@ function NewOrderModal({
                           <input
                             type="number"
                             min="0"
+                            max={discountType === "percentage" ? 100 : undefined}
                             step={discountType === "percentage" ? "1" : "0.01"}
                             value={discountValue}
                             onChange={(e) => setDiscountValue(e.target.value)}
@@ -1193,9 +1222,11 @@ function NewOrderModal({
                           </div>
                           {cashReceived && (
                             <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                              <span className="text-xs text-slate-500">Change Due</span>
+                              <span className="text-xs text-slate-500">
+                                {changeDue !== null && changeDue < 0 ? "Amount Short" : "Change Due"}
+                              </span>
                               <span className={cn("text-sm font-semibold", changeDue !== null && changeDue < 0 ? "text-red-600" : "text-slate-900")}>
-                                {formatCurrency(changeDue !== null ? Math.max(0, changeDue) : 0)}
+                                {formatCurrency(changeDue !== null ? Math.abs(changeDue) : 0)}
                               </span>
                             </div>
                           )}
