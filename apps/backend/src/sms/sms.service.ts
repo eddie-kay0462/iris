@@ -1,47 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-
-type TermiiResponse = {
-  message: string;
-  message_id?: string;
-  code?: string;
-  balance?: number;
-  user?: string;
-};
+import { LetsfishService } from '../letsfish/letsfish.service';
 
 @Injectable()
 export class SmsService {
-  private apiKey: string;
-  private senderId: string;
+  constructor(private letsfishService: LetsfishService) {}
 
-  constructor(private configService: ConfigService) {
-    this.apiKey = this.configService.get<string>('SMS_PROVIDER_API_KEY', '');
-    this.senderId = this.configService.get<string>('SMS_SENDER_ID', '');
-  }
-
-  async sendSMS(to: string, message: string): Promise<TermiiResponse> {
-    if (!this.apiKey || !this.senderId) {
-      throw new Error('SMS_PROVIDER_API_KEY and SMS_SENDER_ID must be set');
-    }
-
-    const response = await fetch('https://api.ng.termii.com/api/sms/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to,
-        from: this.senderId,
-        sms: message,
-        type: 'plain',
-        channel: 'generic',
-        api_key: this.apiKey,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Termii error: ${response.status}`);
-    }
-
-    return (await response.json()) as TermiiResponse;
+  async sendSMS(to: string, message: string): Promise<{ success: boolean }> {
+    return this.letsfishService.sendSms(to, message);
   }
 }
 

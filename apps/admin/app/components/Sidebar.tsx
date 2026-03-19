@@ -13,6 +13,7 @@ import {
   ClipboardList,
   BarChart3,
   Settings,
+  MessageSquare,
   PanelLeftOpen,
   PanelLeftClose,
   X,
@@ -42,6 +43,7 @@ const navItems: NavItem[] = [
   { href: "/reviews", label: "Reviews", icon: Star, permission: "reviews:read" },
   { href: "/analytics", label: "Analytics", icon: BarChart3, permission: "analytics:read" },
   { href: "/settings", label: "Settings", icon: Settings, permission: "settings:read" },
+  { href: "/settings/communications", label: "Communications", icon: MessageSquare, permission: "settings:read" },
 ];
 
 type SidebarProps = {

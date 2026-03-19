@@ -28,6 +28,15 @@ export default function AdminSettingsPage() {
             Define access levels and permissions.
           </p>
         </Link>
+        <Link
+          className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+          href="/settings/communications"
+        >
+          <h2 className="text-lg font-semibold">Communications</h2>
+          <p className="text-sm text-slate-500">
+            Manage LetsFish SMS and voice OTP settings.
+          </p>
+        </Link>
       </div>
     </section>
   );
