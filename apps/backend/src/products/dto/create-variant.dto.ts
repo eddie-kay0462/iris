@@ -3,6 +3,10 @@ import { IsString, IsOptional, IsNumber, Min } from 'class-validator';
 export class CreateVariantDto {
   @IsOptional()
   @IsString()
+  image_id?: string;
+
+  @IsOptional()
+  @IsString()
   option1_name?: string;
 
   @IsOptional()

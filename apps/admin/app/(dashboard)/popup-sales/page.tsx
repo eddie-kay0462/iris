@@ -167,11 +167,10 @@ function ConfirmDialog({
             </button>
             <button
               onClick={onConfirm}
-              className={`flex-1 rounded-lg py-2.5 text-sm font-medium text-white ${
-                danger
+              className={`flex-1 rounded-lg py-2.5 text-sm font-medium text-white ${danger
                   ? "bg-red-600 hover:bg-red-700"
                   : "bg-slate-900 hover:bg-slate-800"
-              }`}
+                }`}
             >
               {confirmLabel}
             </button>
@@ -317,9 +316,8 @@ function OrderActionsMenu({
             <button
               key={action.status}
               onClick={() => handleActionClick(action)}
-              className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${
-                action.status === "cancelled" ? "text-red-600" : "text-slate-700"
-              }`}
+              className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${action.status === "cancelled" ? "text-red-600" : "text-slate-700"
+                }`}
             >
               {action.label}
             </button>
@@ -672,7 +670,7 @@ function NewOrderModal({
       setSearching(true);
       try {
         const res = await apiClient<{ data: ProductSearchResult[] }>(
-          `/products/admin/list?search=${encodeURIComponent(productSearch)}&limit=12&status=active`
+          `/products/admin/list?search=${encodeURIComponent(productSearch)}&limit=12`
         );
         setSearchResults(res.data || []);
       } catch { setSearchResults([]); }
@@ -741,7 +739,12 @@ function NewOrderModal({
         product_id: product.id,
         variant_id: variant.id,
         product_name: product.title,
-        variant_title: variant.title || undefined,
+        // Build variant_title from option values (product_variants.title is null in the DB)
+        variant_title: [
+          variant.option1_value,
+          variant.option2_value,
+          variant.option3_value,
+        ].filter(Boolean).join(" / ") || variant.title || undefined,
         sku: variant.sku || undefined,
         quantity: 1,
         unit_price: variant.price,

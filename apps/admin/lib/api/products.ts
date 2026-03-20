@@ -14,6 +14,7 @@ export interface ProductImage {
 export interface ProductVariant {
   id: string;
   product_id: string;
+  image_id: string | null;
   option1_name: string | null;
   option1_value: string | null;
   option2_name: string | null;
