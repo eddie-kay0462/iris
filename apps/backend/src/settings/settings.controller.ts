@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Patch,
+  Post,
   Param,
   Body,
   Query,
@@ -9,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
+import { CreateUserDto } from './dto/create-user.dto';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 
@@ -21,6 +23,12 @@ export class SettingsController {
   @RequirePermission('users:read')
   findUsers(@Query() query: { search?: string; page?: string; limit?: string }) {
     return this.settingsService.findAdminUsers(query);
+  }
+
+  @Post('users')
+  @RequirePermission('users:update')
+  createUser(@Body() dto: CreateUserDto) {
+    return this.settingsService.createUser(dto);
   }
 
   @Patch('users/:id/role')

@@ -56,6 +56,24 @@ export function useUpdateUserRole() {
   });
 }
 
+export interface CreateUserPayload {
+  email: string;
+  role: string;
+  first_name?: string;
+  last_name?: string;
+}
+
+export function useCreateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateUserPayload) =>
+      apiClient("/settings/users", { method: "POST", body: payload }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+  });
+}
+
 export function useRoles() {
   return useQuery({
     queryKey: ["roles"],

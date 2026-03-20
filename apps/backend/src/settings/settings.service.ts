@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../common/supabase/supabase.service';
 import { ADMIN_ROLES, UserRole, getPermissionsForRole } from '../common/rbac/permissions';
 
@@ -59,6 +59,35 @@ export class SettingsService {
     if (error) throw error;
 
     return { ...profile, role };
+  }
+
+  async createUser(dto: { email: string; role: string; first_name?: string; last_name?: string }) {
+    const db = this.supabase.getAdminClient();
+
+    // Invite user via Supabase — creates auth user + sends invite email
+    const { data: invited, error: inviteError } = await db.auth.admin.inviteUserByEmail(
+      dto.email,
+      { data: { first_name: dto.first_name, last_name: dto.last_name } },
+    );
+
+    if (inviteError) {
+      throw new BadRequestException(inviteError.message);
+    }
+
+    const userId = invited.user.id;
+
+    // Create profile row with assigned role
+    const { error: profileError } = await db.from('profiles').upsert({
+      id: userId,
+      email: dto.email,
+      first_name: dto.first_name ?? null,
+      last_name: dto.last_name ?? null,
+      role: dto.role,
+    });
+
+    if (profileError) throw profileError;
+
+    return { id: userId, email: dto.email, role: dto.role };
   }
 
   getRoles() {
