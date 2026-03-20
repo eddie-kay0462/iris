@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 
 type Step = "loading" | "set-password" | "success" | "error";
@@ -59,20 +58,20 @@ export default function AcceptInvitePage() {
   return (
     <div className="flex min-h-screen">
       {/* Left panel */}
-      <div className="hidden lg:block lg:w-1/2 relative overflow-hidden">
-        <Image
-          src="/login-bg.jpeg"
-          alt="1NRI editorial"
-          fill
-          className="object-cover object-top"
-          priority
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/10 to-black/80" />
-        <div className="absolute top-10 left-10 right-10 flex items-center gap-3">
+      <div
+        className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative"
+        style={{
+          backgroundImage: "url('/login-bg.jpeg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center top",
+        }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/30 to-black/85" />
+        <div className="relative flex items-center gap-3">
           <span className="text-white text-3xl font-black tracking-tighter">1NRI</span>
           <span className="text-white/40 text-xs font-medium uppercase tracking-[0.2em] mt-1">WorldWide</span>
         </div>
-        <div className="absolute bottom-10 left-10 right-10 space-y-3">
+        <div className="relative space-y-3">
           <div className="h-px w-10 bg-white/30" />
           <p className="text-white/90 text-lg font-light leading-snug">Welcome to the team.</p>
           <p className="text-white/40 text-xs tracking-wide">Set your password to get started.</p>
