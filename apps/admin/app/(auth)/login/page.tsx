@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { apiClient, setToken } from "@/lib/api/client";
 
 /**
@@ -50,18 +51,34 @@ function AdminLoginForm() {
 
   return (
     <div className="flex min-h-screen">
-      {/* Left panel — branding */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-slate-900 p-12">
-        <div>
-          <span className="text-white text-2xl font-bold tracking-tight">1NRI</span>
-          <span className="ml-2 text-slate-400 text-sm font-medium uppercase tracking-widest">Operations</span>
+      {/* Left panel — editorial image */}
+      <div className="hidden lg:block lg:w-1/2 relative overflow-hidden">
+        {/* Full-bleed photo */}
+        <Image
+          src="/login-bg.jpeg"
+          alt="1NRI editorial"
+          fill
+          className="object-cover object-top"
+          priority
+        />
+        {/* Gradient overlay — dark at top and bottom, transparent in middle */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/10 to-black/80" />
+
+        {/* Top — logo */}
+        <div className="absolute top-10 left-10 right-10 flex items-center gap-3">
+          <span className="text-white text-3xl font-black tracking-tighter">1NRI</span>
+          <span className="text-white/40 text-xs font-medium uppercase tracking-[0.2em] mt-1">WorldWide</span>
         </div>
-        <div className="space-y-4">
-          <blockquote className="text-slate-300 text-lg leading-relaxed">
-            "Manage your store, track orders, and keep operations running smoothly."
-          </blockquote>
-          <div className="h-px bg-slate-700" />
-          <p className="text-slate-500 text-sm">Iris Admin Panel &mdash; Internal use only</p>
+
+        {/* Bottom — tagline */}
+        <div className="absolute bottom-10 left-10 right-10 space-y-3">
+          <div className="h-px w-10 bg-white/30" />
+          <p className="text-white/90 text-lg font-light leading-snug">
+            Operations Portal
+          </p>
+          <p className="text-white/40 text-xs tracking-wide">
+            Authorised personnel only &mdash; All activity is monitored.
+          </p>
         </div>
       </div>
 
