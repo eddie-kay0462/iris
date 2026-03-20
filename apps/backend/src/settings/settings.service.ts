@@ -65,9 +65,13 @@ export class SettingsService {
     const db = this.supabase.getAdminClient();
 
     // Invite user via Supabase — creates auth user + sends invite email
+    const adminUrl = process.env.ADMIN_URL || 'http://localhost:3001';
     const { data: invited, error: inviteError } = await db.auth.admin.inviteUserByEmail(
       dto.email,
-      { data: { first_name: dto.first_name, last_name: dto.last_name } },
+      {
+        redirectTo: `${adminUrl}/accept-invite`,
+        data: { first_name: dto.first_name, last_name: dto.last_name },
+      },
     );
 
     if (inviteError) {
