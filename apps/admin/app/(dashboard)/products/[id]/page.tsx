@@ -2,13 +2,9 @@
 
 import { use, useEffect, useState } from "react";
 import { ProductForm } from "../../../components/products/ProductForm";
-import {
-  fetchAdminProduct,
-  useDeleteProduct,
-  usePublishProduct,
-  type Product,
-} from "@/lib/api/products";
+import { type Product, fetchAdminProduct, useDeleteProduct, usePublishProduct } from "@/lib/api/products";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 type AdminProductDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -54,6 +50,17 @@ export default function AdminProductDetailPage({
 
   return (
     <section className="space-y-6">
+      <div className="mb-4">
+        <Link
+          href="/products"
+          className="inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back to all products
+        </Link>
+      </div>
       <header className="flex items-center justify-between">
         <div className="space-y-1">
           <p className="text-xs uppercase tracking-wide text-slate-500">
