@@ -27,6 +27,7 @@
     "@nestjs/cli": "^7.6.0",
     "@nestjs/schematics": "^7.3.1",
     "@types/express": "^5.0.0",
+    "@types/multer": "^2.1.0",
     "@types/node": "^22.0.0",
     "typescript": "^5.7.0"
   }
