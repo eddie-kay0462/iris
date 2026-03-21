@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../common/supabase/supabase.service';
+import { LetsfishService } from '../letsfish/letsfish.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { CreatePopupOrderDto } from './dto/create-popup-order.dto';
@@ -13,6 +14,7 @@ import { UpdatePopupOrderDto } from './dto/update-popup-order.dto';
 import { QueryPopupOrdersDto } from './dto/query-popup-orders.dto';
 import { ChargePopupOrderDto } from './dto/charge-popup-order.dto';
 import { CreatePopupCustomerDto } from './dto/create-popup-customer.dto';
+import { RefundPopupOrderDto } from './dto/refund-popup-order.dto';
 
 @Injectable()
 export class PopupSalesService {
@@ -21,6 +23,7 @@ export class PopupSalesService {
   constructor(
     private supabase: SupabaseService,
     private configService: ConfigService,
+    private letsfish: LetsfishService,
   ) {
     this.paystackSecretKey = this.configService.get<string>('PAYSTACK_SECRET_KEY', '');
   }
@@ -511,6 +514,150 @@ export class PopupSalesService {
     }
 
     return !!data;
+  }
+
+  // ─── Refund ──────────────────────────────────────────────────────────────────
+
+  async refundOrder(id: string, dto: RefundPopupOrderDto, staffId: string) {
+    if (!this.paystackSecretKey) {
+      throw new InternalServerErrorException('PAYSTACK_SECRET_KEY not configured');
+    }
+
+    const db = this.supabase.getAdminClient();
+
+    // Fetch the full order
+    const { data: order, error } = await db
+      .from('popup_orders')
+      .select('*, popup_order_items(*)')
+      .eq('id', id)
+      .single();
+
+    if (error || !order) throw new NotFoundException('Order not found');
+
+    // Only confirmed or completed orders can be refunded
+    if (order.status !== 'confirmed' && order.status !== 'completed') {
+      throw new BadRequestException(
+        `Only confirmed or completed orders can be refunded. Current status: "${order.status}"`,
+      );
+    }
+
+    // Determine refund amount — default to full order total
+    const refundAmount = dto.amount
+      ? Math.round(dto.amount * 100) / 100
+      : Math.round(Number(order.total) * 100) / 100;
+
+    if (refundAmount <= 0 || refundAmount > Number(order.total)) {
+      throw new BadRequestException('Refund amount must be between 0.01 and the order total');
+    }
+
+    // ── Paystack refund for MoMo payments ─────────────────────────────────────
+    let paystackRefundId: string | null = null;
+    let paystackResponse: any = null;
+
+    if (order.payment_method === 'momo' && order.payment_reference) {
+      const amountInPesewas = Math.round(refundAmount * 100);
+
+      const response = await fetch('https://api.paystack.co/refund', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.paystackSecretKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          transaction: order.payment_reference,
+          amount: amountInPesewas,
+        }),
+      });
+
+      paystackResponse = (await response.json()) as any;
+
+      if (!paystackResponse.status) {
+        throw new BadRequestException(
+          paystackResponse.message || 'Paystack refund request failed',
+        );
+      }
+
+      paystackRefundId = paystackResponse.data?.id ?? null;
+    }
+
+    // ── Record the refund ─────────────────────────────────────────────────────
+    const { data: refund, error: refundError } = await db
+      .from('popup_refunds')
+      .insert({
+        order_id: id,
+        amount: refundAmount,
+        reason: dto.reason || null,
+        status: 'processed',
+        initiated_by: staffId,
+        paystack_refund_id: paystackRefundId,
+        paystack_response: paystackResponse,
+        sms_sent: false,
+      })
+      .select()
+      .single();
+
+    if (refundError || !refund) {
+      throw new InternalServerErrorException('Failed to record refund');
+    }
+
+    // ── Update order status to refunded ───────────────────────────────────────
+    await db
+      .from('popup_orders')
+      .update({ status: 'refunded' })
+      .eq('id', id);
+
+    // ── Restore inventory (only if order was completed — that's when stock was deducted) ──
+    if (order.status === 'completed') {
+      const items: { variant_id: string | null; quantity: number }[] =
+        order.popup_order_items ?? [];
+
+      for (const item of items) {
+        if (!item.variant_id) continue;
+
+        const { data: variant } = await db
+          .from('product_variants')
+          .select('inventory_quantity')
+          .eq('id', item.variant_id)
+          .single();
+
+        if (!variant) continue;
+
+        const restoredQty = (variant.inventory_quantity ?? 0) + item.quantity;
+
+        await db
+          .from('product_variants')
+          .update({ inventory_quantity: restoredQty })
+          .eq('id', item.variant_id);
+
+        await db.from('inventory_movements').insert({
+          variant_id: item.variant_id,
+          quantity_change: item.quantity,
+          quantity_before: variant.inventory_quantity ?? 0,
+          quantity_after: restoredQty,
+          movement_type: 'return',
+          notes: `Refund for pop-up order ${id}`,
+        });
+      }
+    }
+
+    // ── Send SMS confirmation to customer ─────────────────────────────────────
+    if (order.customer_phone) {
+      const customerName = order.customer_name ? `, ${order.customer_name}` : '';
+      const message =
+        `Hi${customerName}, your refund of GH₵${refundAmount.toFixed(2)} for order ` +
+        `${order.order_number} has been processed. Thank you.`;
+
+      const smsResult = await this.letsfish.sendSms(order.customer_phone, message);
+
+      if (smsResult.success) {
+        await db
+          .from('popup_refunds')
+          .update({ sms_sent: true })
+          .eq('id', refund.id);
+      }
+    }
+
+    return refund;
   }
 
   // ─── Customer: find existing or create new profile ───────────────────────────

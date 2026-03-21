@@ -19,6 +19,7 @@ import {
   Banknote,
   Smartphone,
   Landmark,
+  RotateCcw,
 } from "lucide-react";
 import {
   usePopupEvents,
@@ -31,6 +32,7 @@ import {
   useSubmitPopupOtp,
   useVerifyPopupPayment,
   useCreatePopupCustomer,
+  useRefundPopupOrder,
   type PopupEvent,
   type PopupOrder,
   type PopupOrderStatus,
@@ -85,6 +87,7 @@ const STATUS_LABELS: Record<PopupOrderStatus, string> = {
   completed: "Completed",
   on_hold: "On Hold",
   cancelled: "Cancelled",
+  refunded: "Refunded",
 };
 
 const STATUS_STYLES: Record<PopupOrderStatus, string> = {
@@ -94,6 +97,7 @@ const STATUS_STYLES: Record<PopupOrderStatus, string> = {
   completed: "bg-slate-100 text-slate-600",
   on_hold: "bg-orange-50 text-orange-700",
   cancelled: "bg-red-50 text-red-500",
+  refunded: "bg-purple-50 text-purple-700",
 };
 
 const PAYMENT_LABELS: Record<PopupPaymentMethod, string> = {
@@ -102,13 +106,14 @@ const PAYMENT_LABELS: Record<PopupPaymentMethod, string> = {
   bank_transfer: "Bank Transfer",
 };
 
-type Tab = "active" | "on_hold" | "completed" | "awaiting_payment";
+type Tab = "active" | "on_hold" | "completed" | "awaiting_payment" | "refunded";
 
 const TABS: { id: Tab; label: string; status: PopupOrderStatus }[] = [
   { id: "active", label: "Active", status: "active" },
   { id: "on_hold", label: "On Hold", status: "on_hold" },
   { id: "completed", label: "Completed", status: "completed" },
   { id: "awaiting_payment", label: "Confirmation Queue", status: "awaiting_payment" },
+  { id: "refunded", label: "Refunded", status: "refunded" },
 ];
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -311,11 +316,13 @@ function OrderActionsMenu({
   onUpdate,
   onChargeMomo,
   onViewDetails,
+  onRefundOrder,
 }: {
   order: PopupOrder;
   onUpdate: (id: string, status: PopupOrderStatus, paymentMethod?: PopupPaymentMethod) => void;
   onChargeMomo: (order: PopupOrder) => void;
   onViewDetails: (order: PopupOrder) => void;
+  onRefundOrder: (order: PopupOrder) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
@@ -431,6 +438,14 @@ function OrderActionsMenu({
           >
             View Details
           </button>
+          {(order.status === "confirmed" || order.status === "completed") && (
+            <button
+              onClick={() => { onRefundOrder(order); setOpen(false); }}
+              className="w-full px-4 py-2 text-left text-sm font-medium text-purple-700 hover:bg-purple-50"
+            >
+              Issue Refund
+            </button>
+          )}
           {(showMomoCharge || actions.length > 0) && (
             <div className="my-1 border-t border-slate-100" />
           )}
@@ -685,6 +700,215 @@ function MoMoChargeModal({
                 </button>
               </div>
             </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Refund Order Modal ───────────────────────────────────────────────────────
+
+function RefundOrderModal({
+  order,
+  onClose,
+}: {
+  order: PopupOrder;
+  onClose: () => void;
+}) {
+  const refund = useRefundPopupOrder();
+  const [reason, setReason] = useState("");
+  const [isFullRefund, setIsFullRefund] = useState(true);
+  const [customAmount, setCustomAmount] = useState("");
+  const [step, setStep] = useState<"form" | "confirm" | "success">("form");
+
+  const orderTotal = Number(order.total);
+  const refundAmount = isFullRefund
+    ? orderTotal
+    : parseFloat(customAmount) || 0;
+  const isAmountValid = refundAmount > 0 && refundAmount <= orderTotal;
+
+  async function handleConfirm() {
+    await refund.mutateAsync({
+      id: order.id,
+      dto: {
+        ...(isFullRefund ? {} : { amount: refundAmount }),
+        ...(reason.trim() ? { reason: reason.trim() } : {}),
+      },
+    });
+    setStep("success");
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-sm rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <div className="flex items-center gap-2">
+            <RotateCcw className="h-4 w-4 text-purple-600" />
+            <h2 className="text-base font-semibold text-slate-900">Issue Refund</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-6">
+          {step === "success" ? (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-green-50 p-4 text-sm text-green-700">
+                <p className="text-base font-medium">Refund processed</p>
+                <p className="mt-1">
+                  GH₵{refundAmount.toFixed(2)} refunded for order {order.order_number}.
+                  {order.customer_phone && " An SMS confirmation has been sent to the customer."}
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="w-full rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
+              >
+                Done
+              </button>
+            </div>
+          ) : step === "confirm" ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-slate-200 p-4 text-sm text-slate-700 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Order</span>
+                  <span className="font-medium">{order.order_number}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Refund amount</span>
+                  <span className="font-semibold text-purple-700">GH₵{refundAmount.toFixed(2)}</span>
+                </div>
+                {order.payment_method && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Payment method</span>
+                    <span className="font-medium capitalize">{order.payment_method === "momo" ? "MoMo" : order.payment_method === "bank_transfer" ? "Bank Transfer" : "Cash"}</span>
+                  </div>
+                )}
+                {reason.trim() && (
+                  <div className="flex justify-between gap-4">
+                    <span className="text-slate-500 shrink-0">Reason</span>
+                    <span className="text-right">{reason}</span>
+                  </div>
+                )}
+              </div>
+              {order.payment_method === "momo" && order.payment_reference && (
+                <p className="rounded-lg bg-purple-50 px-3 py-2 text-xs text-purple-700">
+                  Refund will be sent back to the customer's MoMo number via Paystack.
+                </p>
+              )}
+              {(order.payment_method === "cash" || order.payment_method === "bank_transfer") && (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  This is a {order.payment_method === "cash" ? "cash" : "bank transfer"} order — please handle the physical refund manually.
+                </p>
+              )}
+              {refund.isError && (
+                <p className="text-xs text-red-500">
+                  {(refund.error as any)?.message || "Refund failed. Please try again."}
+                </p>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setStep("form"); refund.reset(); }}
+                  className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                  disabled={refund.isPending}
+                >
+                  Go back
+                </button>
+                <button
+                  onClick={handleConfirm}
+                  disabled={refund.isPending}
+                  className="flex-1 rounded-lg bg-purple-600 py-2.5 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {refund.isPending ? "Processing…" : "Confirm Refund"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                <span className="font-medium">Order:</span> {order.order_number} &nbsp;·&nbsp;
+                <span className="font-medium">Total:</span> GH₵{orderTotal.toFixed(2)}
+              </div>
+
+              {/* Refund type toggle */}
+              <div>
+                <label className="mb-2 block text-xs font-medium text-slate-600">Refund Type</label>
+                <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                  <button
+                    onClick={() => setIsFullRefund(true)}
+                    className={`flex-1 rounded-md py-2 text-xs font-medium transition-all ${isFullRefund ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                  >
+                    Full — GH₵{orderTotal.toFixed(2)}
+                  </button>
+                  <button
+                    onClick={() => setIsFullRefund(false)}
+                    className={`flex-1 rounded-md py-2 text-xs font-medium transition-all ${!isFullRefund ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                  >
+                    Partial
+                  </button>
+                </div>
+              </div>
+
+              {!isFullRefund && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Amount (GH₵) *
+                  </label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    max={orderTotal}
+                    step="0.01"
+                    value={customAmount}
+                    onChange={(e) => setCustomAmount(e.target.value)}
+                    placeholder={`Max ${orderTotal.toFixed(2)}`}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Reason (optional)
+                </label>
+                <select
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                >
+                  <option value="">Select a reason…</option>
+                  <option value="Wrong item delivered">Wrong item delivered</option>
+                  <option value="Item defective or damaged">Item defective or damaged</option>
+                  <option value="Customer changed mind">Customer changed mind</option>
+                  <option value="Duplicate order">Duplicate order</option>
+                  <option value="Out of stock after payment">Out of stock after payment</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => setStep("confirm")}
+                  disabled={!isFullRefund ? !isAmountValid : false}
+                  className="flex-1 rounded-lg bg-purple-600 py-2.5 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+                >
+                  Review Refund →
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -2087,12 +2311,14 @@ function OrderTable({
   onUpdate,
   onChargeMomo,
   onViewDetails,
+  onRefundOrder,
 }: {
   orders: PopupOrder[];
   isLoading: boolean;
   onUpdate: (id: string, status: PopupOrderStatus, paymentMethod?: PopupPaymentMethod) => void;
   onChargeMomo: (order: PopupOrder) => void;
   onViewDetails: (order: PopupOrder) => void;
+  onRefundOrder: (order: PopupOrder) => void;
 }) {
   if (isLoading) {
     return (
@@ -2189,7 +2415,7 @@ function OrderTable({
                   {timeAgo(order.created_at)}
                 </td>
                 <td className="px-5 py-4">
-                  <OrderActionsMenu order={order} onUpdate={onUpdate} onChargeMomo={onChargeMomo} onViewDetails={onViewDetails} />
+                  <OrderActionsMenu order={order} onUpdate={onUpdate} onChargeMomo={onChargeMomo} onViewDetails={onViewDetails} onRefundOrder={onRefundOrder} />
                 </td>
               </tr>
             );
@@ -2210,6 +2436,7 @@ export default function PopupSalesPage() {
   const [showNewEvent, setShowNewEvent] = useState(false);
   const [momoChargeOrder, setMomoChargeOrder] = useState<PopupOrder | null>(null);
   const [detailOrder, setDetailOrder] = useState<PopupOrder | null>(null);
+  const [refundOrder, setRefundOrder] = useState<PopupOrder | null>(null);
 
   // Auto-select first active event, then first event
   useEffect(() => {
@@ -2353,6 +2580,7 @@ export default function PopupSalesPage() {
                 onUpdate={handleUpdateOrder}
                 onChargeMomo={setMomoChargeOrder}
                 onViewDetails={setDetailOrder}
+                onRefundOrder={setRefundOrder}
               />
             </div>
           </>
@@ -2378,6 +2606,12 @@ export default function PopupSalesPage() {
         <OrderDetailModal
           order={detailOrder}
           onClose={() => setDetailOrder(null)}
+        />
+      )}
+      {refundOrder && (
+        <RefundOrderModal
+          order={refundOrder}
+          onClose={() => setRefundOrder(null)}
         />
       )}
     </>
