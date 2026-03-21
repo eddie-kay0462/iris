@@ -316,12 +316,14 @@ function OrderActionsMenu({
   onUpdate,
   onChargeMomo,
   onViewDetails,
+  onEditOrder,
   onRefundOrder,
 }: {
   order: PopupOrder;
   onUpdate: (id: string, status: PopupOrderStatus, paymentMethod?: PopupPaymentMethod) => void;
   onChargeMomo: (order: PopupOrder) => void;
   onViewDetails: (order: PopupOrder) => void;
+  onEditOrder: (order: PopupOrder) => void;
   onRefundOrder: (order: PopupOrder) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -437,6 +439,12 @@ function OrderActionsMenu({
             className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
           >
             View Details
+          </button>
+          <button
+            onClick={() => { onEditOrder(order); setOpen(false); }}
+            className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Edit Order
           </button>
           {(order.status === "confirmed" || order.status === "completed") && (
             <button
@@ -911,6 +919,213 @@ function RefundOrderModal({
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Edit Order Modal ─────────────────────────────────────────────────────────
+
+function EditOrderModal({
+  order,
+  onClose,
+}: {
+  order: PopupOrder;
+  onClose: () => void;
+}) {
+  const updateOrder = useUpdatePopupOrder();
+
+  const [customerName, setCustomerName] = useState(order.customer_name ?? "");
+  const [customerPhone, setCustomerPhone] = useState(order.customer_phone ?? "");
+  const [customerEmail, setCustomerEmail] = useState(order.customer_email ?? "");
+  const [paymentMethod, setPaymentMethod] = useState<PopupPaymentMethod | "">(order.payment_method ?? "");
+  const [paymentReference, setPaymentReference] = useState(order.payment_reference ?? "");
+  const [discountType, setDiscountType] = useState<"none" | "percentage" | "fixed">(order.discount_type ?? "none");
+  const [discountAmount, setDiscountAmount] = useState(order.discount_amount ? String(order.discount_amount) : "");
+  const [discountReason, setDiscountReason] = useState(order.discount_reason ?? "");
+  const [notes, setNotes] = useState(order.notes ?? "");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await updateOrder.mutateAsync({
+      id: order.id,
+      dto: {
+        customer_name: customerName.trim() || undefined,
+        customer_phone: customerPhone.trim() || undefined,
+        customer_email: customerEmail.trim() || undefined,
+        payment_method: paymentMethod || undefined,
+        payment_reference: paymentReference.trim() || undefined,
+        discount_type: discountType,
+        discount_amount: discountType !== "none" && discountAmount ? parseFloat(discountAmount) : 0,
+        discount_reason: discountReason.trim() || undefined,
+        notes: notes.trim() || undefined,
+      },
+    });
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <h3 className="text-base font-semibold text-slate-900">Edit Order — {order.order_number}</h3>
+          <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="max-h-[70vh] overflow-y-auto p-6 space-y-5">
+          {/* Customer info */}
+          <div>
+            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">Customer</p>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Name</label>
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Customer name"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
+                  <input
+                    type="tel"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    placeholder="e.g. 0244000000"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Email</label>
+                  <input
+                    type="email"
+                    value={customerEmail}
+                    onChange={(e) => setCustomerEmail(e.target.value)}
+                    placeholder="email@example.com"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Payment */}
+          <div>
+            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">Payment</p>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Method</label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value as PopupPaymentMethod | "")}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                >
+                  <option value="">— Not set —</option>
+                  <option value="cash">Cash</option>
+                  <option value="momo">MoMo</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Reference</label>
+                <input
+                  type="text"
+                  value={paymentReference}
+                  onChange={(e) => setPaymentReference(e.target.value)}
+                  placeholder="Payment reference"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Discount */}
+          <div>
+            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">Discount</p>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Type</label>
+                <select
+                  value={discountType}
+                  onChange={(e) => setDiscountType(e.target.value as "none" | "percentage" | "fixed")}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                >
+                  <option value="none">No discount</option>
+                  <option value="percentage">Percentage (%)</option>
+                  <option value="fixed">Fixed amount (GH₵)</option>
+                </select>
+              </div>
+              {discountType !== "none" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Amount {discountType === "percentage" ? "(%)" : "(GH₵)"}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={discountAmount}
+                      onChange={(e) => setDiscountAmount(e.target.value)}
+                      placeholder="0"
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">Reason</label>
+                    <input
+                      type="text"
+                      value={discountReason}
+                      onChange={(e) => setDiscountReason(e.target.value)}
+                      placeholder="e.g. Staff discount"
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Notes</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              placeholder="Any additional notes…"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none resize-none"
+            />
+          </div>
+
+          {updateOrder.isError && (
+            <p className="text-xs text-red-500">
+              {(updateOrder.error as any)?.message || "Failed to update order. Please try again."}
+            </p>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={updateOrder.isPending}
+              className="flex-1 rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            >
+              {updateOrder.isPending ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -2311,6 +2526,7 @@ function OrderTable({
   onUpdate,
   onChargeMomo,
   onViewDetails,
+  onEditOrder,
   onRefundOrder,
 }: {
   orders: PopupOrder[];
@@ -2318,6 +2534,7 @@ function OrderTable({
   onUpdate: (id: string, status: PopupOrderStatus, paymentMethod?: PopupPaymentMethod) => void;
   onChargeMomo: (order: PopupOrder) => void;
   onViewDetails: (order: PopupOrder) => void;
+  onEditOrder: (order: PopupOrder) => void;
   onRefundOrder: (order: PopupOrder) => void;
 }) {
   if (isLoading) {
@@ -2415,7 +2632,7 @@ function OrderTable({
                   {timeAgo(order.created_at)}
                 </td>
                 <td className="px-5 py-4">
-                  <OrderActionsMenu order={order} onUpdate={onUpdate} onChargeMomo={onChargeMomo} onViewDetails={onViewDetails} onRefundOrder={onRefundOrder} />
+                  <OrderActionsMenu order={order} onUpdate={onUpdate} onChargeMomo={onChargeMomo} onViewDetails={onViewDetails} onEditOrder={onEditOrder} onRefundOrder={onRefundOrder} />
                 </td>
               </tr>
             );
@@ -2436,6 +2653,7 @@ export default function PopupSalesPage() {
   const [showNewEvent, setShowNewEvent] = useState(false);
   const [momoChargeOrder, setMomoChargeOrder] = useState<PopupOrder | null>(null);
   const [detailOrder, setDetailOrder] = useState<PopupOrder | null>(null);
+  const [editOrder, setEditOrder] = useState<PopupOrder | null>(null);
   const [refundOrder, setRefundOrder] = useState<PopupOrder | null>(null);
 
   // Auto-select first active event, then first event
@@ -2580,6 +2798,7 @@ export default function PopupSalesPage() {
                 onUpdate={handleUpdateOrder}
                 onChargeMomo={setMomoChargeOrder}
                 onViewDetails={setDetailOrder}
+                onEditOrder={setEditOrder}
                 onRefundOrder={setRefundOrder}
               />
             </div>
@@ -2606,6 +2825,12 @@ export default function PopupSalesPage() {
         <OrderDetailModal
           order={detailOrder}
           onClose={() => setDetailOrder(null)}
+        />
+      )}
+      {editOrder && (
+        <EditOrderModal
+          order={editOrder}
+          onClose={() => setEditOrder(null)}
         />
       )}
       {refundOrder && (
