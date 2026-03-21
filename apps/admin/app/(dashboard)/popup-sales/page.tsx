@@ -632,6 +632,7 @@ function NewOrderModal({
   // ── Customer state ────────────────────────────────────────────────────────
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerResults, setCustomerResults] = useState<{ id: string; name: string; email: string; phone: string }[]>([]);
+  const [customerSearching, setCustomerSearching] = useState(false);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [customerForm, setCustomerForm] = useState({ name: "", phone: "", email: "", saveToDatabase: true });
@@ -679,9 +680,10 @@ function NewOrderModal({
     return () => clearTimeout(searchTimeout.current);
   }, [productSearch]);
 
-  // ── Customer search (best-effort) ──────────────────────────────────────────
+  // ── Customer search (profiles table: email, phone_number, first_name, last_name) ──
   useEffect(() => {
-    if (!customerSearch.trim()) { setCustomerResults([]); return; }
+    if (!customerSearch.trim()) { setCustomerResults([]); setCustomerSearching(false); return; }
+    setCustomerSearching(true);
     clearTimeout(customerSearchTimeout.current);
     customerSearchTimeout.current = setTimeout(async () => {
       try {
@@ -697,6 +699,7 @@ function NewOrderModal({
           }))
         );
       } catch { setCustomerResults([]); }
+      finally { setCustomerSearching(false); }
     }, 300);
     return () => clearTimeout(customerSearchTimeout.current);
   }, [customerSearch]);
@@ -711,6 +714,21 @@ function NewOrderModal({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  // ── Auto-fill MoMo phone from customer ────────────────────────────────────
+  // When MoMo is selected or a customer with a phone is chosen, pre-populate
+  // the MoMo number field. The functional updater ensures we never overwrite
+  // a number the user has already typed manually.
+  useEffect(() => {
+    if (paymentMethod !== "momo" || !customerForm.phone) return;
+    // customerForm.phone is stored as +233XXXXXXXXX; the momo field shows digits only
+    const digits = customerForm.phone.startsWith("+233")
+      ? customerForm.phone.slice(4)
+      : customerForm.phone.startsWith("0")
+        ? customerForm.phone.slice(1)
+        : customerForm.phone;
+    setMomoPhone((prev) => (prev ? prev : digits));
+  }, [paymentMethod, customerForm.phone]);
 
   // ── Computed ───────────────────────────────────────────────────────────────
   const subtotal = items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
@@ -1125,7 +1143,7 @@ function NewOrderModal({
                       value={customerSearch}
                       onChange={(e) => { setCustomerSearch(e.target.value); setShowCustomerDropdown(true); }}
                       onFocus={() => setShowCustomerDropdown(true)}
-                      placeholder="Search by name or phone…"
+                      placeholder="Search by email or phone…"
                       disabled={!!selectedCustomerId}
                       className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-8 text-sm focus:border-slate-400 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
                     />
@@ -1142,23 +1160,36 @@ function NewOrderModal({
                         <X className="h-3.5 w-3.5" />
                       </button>
                     )}
-                    {showCustomerDropdown && customerResults.length > 0 && (
+                    {showCustomerDropdown && customerSearch.trim() && (
                       <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
-                        {customerResults.map((c) => (
-                          <button
-                            key={c.id}
-                            onClick={() => {
-                              setSelectedCustomerId(c.id);
-                              setCustomerForm({ name: c.name, phone: c.phone, email: c.email, saveToDatabase: false });
-                              setCustomerSearch("");
-                              setShowCustomerDropdown(false);
-                            }}
-                            className="flex w-full flex-col px-3 py-2 text-left hover:bg-slate-50"
-                          >
-                            <span className="text-sm font-medium text-slate-800">{c.name}</span>
-                            <span className="text-xs text-slate-400">{c.email}{c.phone ? ` · ${c.phone}` : ""}</span>
-                          </button>
-                        ))}
+                        {customerSearching ? (
+                          <p className="px-3 py-2.5 text-xs text-slate-400">Searching…</p>
+                        ) : customerResults.length > 0 ? (
+                          customerResults.map((c) => (
+                            <button
+                              key={c.id}
+                              onClick={() => {
+                                setSelectedCustomerId(c.id);
+                                // Convert 0XXXXXXXXX → +233XXXXXXXXX so the form input
+                                // (which renders +233 as a static prefix) displays correctly
+                                const formPhone = c.phone.startsWith("0")
+                                  ? "+233" + c.phone.slice(1)
+                                  : c.phone;
+                                setCustomerForm({ name: c.name, phone: formPhone, email: c.email, saveToDatabase: false });
+                                setCustomerSearch("");
+                                setShowCustomerDropdown(false);
+                              }}
+                              className="flex w-full flex-col px-3 py-2 text-left hover:bg-slate-50"
+                            >
+                              <span className="text-sm font-medium text-slate-800">{c.name}</span>
+                              <span className="text-xs text-slate-400">
+                                {[c.email, c.phone].filter(Boolean).join(" · ") || "No contact info"}
+                              </span>
+                            </button>
+                          ))
+                        ) : (
+                          <p className="px-3 py-2.5 text-xs text-slate-400">No customer found — fill in the form below to add them.</p>
+                        )}
                       </div>
                     )}
                   </div>

@@ -13,6 +13,22 @@ import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 export class OrdersService {
   constructor(private supabase: SupabaseService) {}
 
+  /**
+   * Sanitize a phone number from the database to a consistent local format (0XXXXXXXXX).
+   * Strips whitespace, escape characters, and non-digit/+ characters, then converts
+   * +233/233 prefixes to the local 0 prefix.
+   */
+  private normalizePhone(raw: string | null | undefined): string | null {
+    if (!raw) return null;
+    // Remove whitespace, control characters, and anything that isn't a digit or +
+    let phone = raw.replace(/[^\d+]/g, '');
+    if (!phone) return null;
+    if (phone.startsWith('+233')) phone = '0' + phone.slice(4);
+    else if (phone.startsWith('233') && phone.length >= 12) phone = '0' + phone.slice(3);
+    if (!phone.startsWith('0')) phone = '0' + phone;
+    return phone;
+  }
+
   private async generateOrderNumber(): Promise<string> {
     const db = this.supabase.getAdminClient();
     const { data } = await db
@@ -429,7 +445,7 @@ export class OrdersService {
 
     if (query.search) {
       q = q.or(
-        `email.ilike.%${query.search}%,first_name.ilike.%${query.search}%,last_name.ilike.%${query.search}%`,
+        `email.ilike.%${query.search}%,phone_number.ilike.%${query.search}%,first_name.ilike.%${query.search}%,last_name.ilike.%${query.search}%`,
       );
     }
 
@@ -464,6 +480,7 @@ export class OrdersService {
 
         return {
           ...profile,
+          phone_number: this.normalizePhone(profile.phone_number),
           order_count: orderCount,
           total_spent: totalSpent,
           last_order_date: lastOrderDate,
@@ -521,6 +538,7 @@ export class OrdersService {
 
     return {
       ...profile,
+      phone_number: this.normalizePhone(profile.phone_number),
       orders: orders || [],
       order_count: orders?.length || 0,
       total_spent: totalSpent,
