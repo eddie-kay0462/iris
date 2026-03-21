@@ -181,14 +181,141 @@ function ConfirmDialog({
   );
 }
 
+// ─── Order Detail Modal ───────────────────────────────────────────────────────
+
+function OrderDetailModal({
+  order,
+  onClose,
+}: {
+  order: PopupOrder;
+  onClose: () => void;
+}) {
+  const staffName = order.profiles
+    ? [order.profiles.first_name, order.profiles.last_name].filter(Boolean).join(" ") || "—"
+    : "—";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <h3 className="text-base font-semibold text-slate-900">{order.order_number}</h3>
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[order.status]}`}>
+              {STATUS_LABELS[order.status]}
+            </span>
+          </div>
+          <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="max-h-[70vh] overflow-y-auto p-6 space-y-5">
+          {/* Customer & Staff */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Customer</p>
+              <p className="mt-1 text-sm font-medium text-slate-800">{order.customer_name || "Walk-in"}</p>
+              {order.customer_phone && <p className="text-xs text-slate-500">{order.customer_phone}</p>}
+              {order.customer_email && <p className="text-xs text-slate-500">{order.customer_email}</p>}
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Served by</p>
+              <div className="mt-1 flex items-center gap-2">
+                <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold text-white ${avatarColor(staffName)}`}>
+                  {initials(staffName)}
+                </span>
+                <p className="text-sm text-slate-800">{staffName}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Items */}
+          <div>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Items</p>
+            <div className="rounded-lg border border-slate-100 divide-y divide-slate-100">
+              {order.popup_order_items?.length ? (
+                order.popup_order_items.map((item) => (
+                  <div key={item.id} className="flex items-start justify-between px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">{item.product_name}</p>
+                      {item.variant_title && <p className="text-xs text-slate-400">{item.variant_title}</p>}
+                      {item.sku && <p className="text-xs text-slate-400">SKU: {item.sku}</p>}
+                    </div>
+                    <div className="text-right shrink-0 ml-4">
+                      <p className="text-sm font-medium text-slate-800">{formatCurrency(Number(item.total_price))}</p>
+                      <p className="text-xs text-slate-400">{item.quantity} × {formatCurrency(Number(item.unit_price))}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="px-4 py-3 text-sm text-slate-400">No items</p>
+              )}
+            </div>
+          </div>
+
+          {/* Totals */}
+          <div className="rounded-lg bg-slate-50 px-4 py-3 space-y-2">
+            <div className="flex justify-between text-sm text-slate-600">
+              <span>Subtotal</span>
+              <span>{formatCurrency(Number(order.subtotal))}</span>
+            </div>
+            {Number(order.discount_amount) > 0 && (
+              <div className="flex justify-between text-sm text-emerald-600">
+                <span>Discount{order.discount_reason ? ` — ${order.discount_reason}` : ""}</span>
+                <span>−{formatCurrency(Number(order.discount_amount))}</span>
+              </div>
+            )}
+            <div className="flex justify-between border-t border-slate-200 pt-2 text-sm font-semibold text-slate-900">
+              <span>Total</span>
+              <span>{formatCurrency(Number(order.total))}</span>
+            </div>
+          </div>
+
+          {/* Payment */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Payment Method</p>
+              <p className="mt-1 text-sm text-slate-800">
+                {order.payment_method ? PAYMENT_LABELS[order.payment_method] : "—"}
+              </p>
+            </div>
+            {order.payment_reference && (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Reference</p>
+                <p className="mt-1 text-sm text-slate-800">{order.payment_reference}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Notes */}
+          {order.notes && (
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Notes</p>
+              <p className="mt-1 text-sm text-slate-600">{order.notes}</p>
+            </div>
+          )}
+
+          {/* Time */}
+          <p className="text-xs text-slate-400">
+            Created {new Date(order.created_at).toLocaleString()}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OrderActionsMenu({
   order,
   onUpdate,
   onChargeMomo,
+  onViewDetails,
 }: {
   order: PopupOrder;
   onUpdate: (id: string, status: PopupOrderStatus, paymentMethod?: PopupPaymentMethod) => void;
   onChargeMomo: (order: PopupOrder) => void;
+  onViewDetails: (order: PopupOrder) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
@@ -298,6 +425,15 @@ function OrderActionsMenu({
           style={{ position: "fixed", top: menuPos.top, left: menuPos.left, zIndex: 50 }}
           className="w-52 rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
         >
+          <button
+            onClick={() => { onViewDetails(order); setOpen(false); }}
+            className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+          >
+            View Details
+          </button>
+          {(showMomoCharge || actions.length > 0) && (
+            <div className="my-1 border-t border-slate-100" />
+          )}
           {showMomoCharge && (
             <button
               onClick={() => {
@@ -1950,11 +2086,13 @@ function OrderTable({
   isLoading,
   onUpdate,
   onChargeMomo,
+  onViewDetails,
 }: {
   orders: PopupOrder[];
   isLoading: boolean;
   onUpdate: (id: string, status: PopupOrderStatus, paymentMethod?: PopupPaymentMethod) => void;
   onChargeMomo: (order: PopupOrder) => void;
+  onViewDetails: (order: PopupOrder) => void;
 }) {
   if (isLoading) {
     return (
@@ -2051,7 +2189,7 @@ function OrderTable({
                   {timeAgo(order.created_at)}
                 </td>
                 <td className="px-5 py-4">
-                  <OrderActionsMenu order={order} onUpdate={onUpdate} onChargeMomo={onChargeMomo} />
+                  <OrderActionsMenu order={order} onUpdate={onUpdate} onChargeMomo={onChargeMomo} onViewDetails={onViewDetails} />
                 </td>
               </tr>
             );
@@ -2071,6 +2209,7 @@ export default function PopupSalesPage() {
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [showNewEvent, setShowNewEvent] = useState(false);
   const [momoChargeOrder, setMomoChargeOrder] = useState<PopupOrder | null>(null);
+  const [detailOrder, setDetailOrder] = useState<PopupOrder | null>(null);
 
   // Auto-select first active event, then first event
   useEffect(() => {
@@ -2213,6 +2352,7 @@ export default function PopupSalesPage() {
                 isLoading={ordersLoading}
                 onUpdate={handleUpdateOrder}
                 onChargeMomo={setMomoChargeOrder}
+                onViewDetails={setDetailOrder}
               />
             </div>
           </>
@@ -2232,6 +2372,12 @@ export default function PopupSalesPage() {
         <MoMoChargeModal
           order={momoChargeOrder}
           onClose={() => setMomoChargeOrder(null)}
+        />
+      )}
+      {detailOrder && (
+        <OrderDetailModal
+          order={detailOrder}
+          onClose={() => setDetailOrder(null)}
         />
       )}
     </>
