@@ -64,7 +64,7 @@ export default function AdminCustomersPage() {
         ? { min_orders: 2 }
         : {};
 
-  const { data, isLoading } = useAdminCustomers({ search, page, ...segmentFilters });
+  const { data, isLoading, error } = useAdminCustomers({ search, page, ...segmentFilters });
   const { data: stats } = useCustomerStats();
 
   const segments: { key: Segment; label: string }[] = [
@@ -146,6 +146,12 @@ export default function AdminCustomersPage() {
           />
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Failed to load customers: {error instanceof Error ? error.message : "Unknown error"}
+        </div>
+      )}
 
       <DataTable
         columns={columns}
