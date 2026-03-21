@@ -95,7 +95,7 @@ export function ProductForm({ mode, product }: ProductFormProps) {
       handle: product?.handle || "",
       base_price: product?.base_price ?? undefined,
       status: product?.status || "draft",
-      gender: product?.gender ?? undefined,
+      gender: product?.gender ?? "all",
       product_type: product?.product_type || "",
       vendor: product?.vendor || "",
       tags: product?.tags || [],
