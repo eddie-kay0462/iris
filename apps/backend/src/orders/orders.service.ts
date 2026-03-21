@@ -429,7 +429,7 @@ export class OrdersService {
 
     if (query.search) {
       q = q.or(
-        `email.ilike.%${query.search}%,first_name.ilike.%${query.search}%,last_name.ilike.%${query.search}%`,
+        `email.ilike.%${query.search}%,phone_number.ilike.%${query.search}%,first_name.ilike.%${query.search}%,last_name.ilike.%${query.search}%`,
       );
     }
 
