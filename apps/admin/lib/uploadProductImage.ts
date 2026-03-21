@@ -1,4 +1,7 @@
-import { supabase } from "./supabase-client";
+import { getToken } from "./api/client";
+
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 
 const BUCKET = "product-images";
 
@@ -7,7 +10,7 @@ const BUCKET = "product-images";
  * JPEG Blob, using the browser's Canvas API.
  */
 function resizeToJpeg(
-  file: File,
+  file: File | Blob,
   width: number,
   height: number,
   quality = 0.85,
@@ -55,8 +58,37 @@ function resizeToJpeg(
 }
 
 /**
- * Upload a product image to Supabase Storage following the project's
- * established folder structure:
+ * Upload a single blob to Supabase Storage via the backend (service-role key).
+ * The backend endpoint is authenticated with the admin JWT.
+ */
+async function uploadViaBackend(
+  blob: Blob,
+  storagePath: string,
+  contentType: string,
+): Promise<void> {
+  const form = new FormData();
+  form.append(
+    "file",
+    new File([blob], storagePath.split("/").pop()!, { type: contentType }),
+  );
+  form.append("path", storagePath);
+
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/products/admin/upload-image`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || `Upload failed: ${res.status}`);
+  }
+}
+
+/**
+ * Upload a product image via the backend (which uses the Supabase service-role
+ * key to bypass storage RLS). Follows the project's folder structure:
  *
  *   originals/{handle}/{prefix}__{type}__{timestamp}.{ext}   ← stored in DB
  *   optimized/{handle}/{prefix}__{type}__800x800.jpg
@@ -69,7 +101,7 @@ function resizeToJpeg(
  * @param colorPrefix  Optional colour / option-1 value (e.g. "black").
  *                     Defaults to "product" when not supplied.
  * @returns The storage path `product-images/originals/…` that should be
- *          stored in `product_images.src`.  The backend's resolveImageUrl()
+ *          stored in `product_images.src`. The backend's resolveImageUrl()
  *          will convert it to a full public URL on read.
  */
 export async function uploadProductImage(
@@ -84,18 +116,11 @@ export async function uploadProductImage(
   const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
   const baseName = `${prefix}__${type}__${ts}`;
 
-  // ── 1. Upload the original file ──────────────────────────────────────────
+  // ── 1. Upload the original file via backend ───────────────────────────────
   const originalPath = `originals/${handle}/${baseName}.${ext}`;
-  const { error: origError } = await supabase.storage
-    .from(BUCKET)
-    .upload(originalPath, file, {
-      contentType: file.type,
-      cacheControl: "31536000",
-      upsert: false,
-    });
-  if (origError) throw new Error(`Original upload failed: ${origError.message}`);
+  await uploadViaBackend(file, originalPath, file.type);
 
-  // ── 2. Generate and upload optimised / thumbnail variants ────────────────
+  // ── 2. Generate resized variants and upload each via backend ──────────────
   const variants: Array<{ w: number; h: number; folder: string; suffix: string }> = [
     { w: 800, h: 800, folder: "optimized", suffix: "800x800" },
     { w: 400, h: 400, folder: "optimized", suffix: "400x400" },
@@ -103,21 +128,16 @@ export async function uploadProductImage(
   ];
 
   for (const v of variants) {
-    const blob = await resizeToJpeg(file, v.w, v.h);
-    const variantPath = `${v.folder}/${handle}/${prefix}__${type}__${v.suffix}.jpg`;
-    const { error } = await supabase.storage
-      .from(BUCKET)
-      .upload(variantPath, blob, {
-        contentType: "image/jpeg",
-        cacheControl: "31536000",
-        upsert: true,
-      });
-    if (error) {
+    try {
+      const blob = await resizeToJpeg(file, v.w, v.h);
+      const variantPath = `${v.folder}/${handle}/${prefix}__${type}__${v.suffix}.jpg`;
+      await uploadViaBackend(blob, variantPath, "image/jpeg");
+    } catch (err) {
       // Non-fatal: log but don't abort the whole upload
-      console.warn(`Variant upload failed (${variantPath}): ${error.message}`);
+      console.warn(`Variant upload failed (${v.folder}/${v.suffix}):`, err);
     }
   }
 
-  // Return the storage path that goes into product_images.src
+  // Return the storage path stored in product_images.src
   return `${BUCKET}/${originalPath}`;
 }
