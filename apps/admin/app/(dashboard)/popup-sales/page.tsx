@@ -20,6 +20,8 @@ import {
   Smartphone,
   Landmark,
   RotateCcw,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import {
   usePopupEvents,
@@ -2655,6 +2657,7 @@ export default function PopupSalesPage() {
   const [detailOrder, setDetailOrder] = useState<PopupOrder | null>(null);
   const [editOrder, setEditOrder] = useState<PopupOrder | null>(null);
   const [refundOrder, setRefundOrder] = useState<PopupOrder | null>(null);
+  const [showRevenue, setShowRevenue] = useState(false);
 
   // Auto-select first active event, then first event
   useEffect(() => {
@@ -2735,12 +2738,24 @@ export default function PopupSalesPage() {
           <>
             {/* Stats */}
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <StatsCard
-                label="Session Revenue"
-                value={stats ? formatCurrency(stats.session_revenue) : "—"}
-                icon={<TrendingUp className="h-4 w-4" />}
-                iconColor="text-emerald-500"
-              />
+              <div className="rounded-lg border border-slate-200 bg-white p-5">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-slate-500">Session Revenue</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowRevenue((v) => !v)}
+                      className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                      title={showRevenue ? "Hide revenue" : "Show revenue"}
+                    >
+                      {showRevenue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                    <span className="text-emerald-500"><TrendingUp className="h-4 w-4" /></span>
+                  </div>
+                </div>
+                <p className={`mt-3 text-2xl font-semibold transition-all select-none ${showRevenue ? "text-slate-900" : "text-slate-300 blur-sm"}`}>
+                  {stats ? formatCurrency(stats.session_revenue) : "—"}
+                </p>
+              </div>
               <StatsCard
                 label="Orders Completed"
                 value={stats?.orders_completed ?? "—"}
