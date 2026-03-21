@@ -108,7 +108,7 @@ export class PopupSalesService {
     let q = db
       .from('popup_orders')
       .select(
-        '*, profiles!popup_orders_served_by_fkey(id, first_name, last_name), popup_order_items(*)',
+        '*, profiles!served_by(id, first_name, last_name), popup_order_items(*)',
         { count: 'exact' },
       )
       .eq('event_id', eventId)
@@ -136,7 +136,7 @@ export class PopupSalesService {
     const { data, error } = await db
       .from('popup_orders')
       .select(
-        '*, profiles!popup_orders_served_by_fkey(id, first_name, last_name), popup_order_items(*)',
+        '*, profiles!served_by(id, first_name, last_name), popup_order_items(*)',
       )
       .eq('id', id)
       .single();
