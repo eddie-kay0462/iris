@@ -715,6 +715,21 @@ function NewOrderModal({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // ── Auto-fill MoMo phone from customer ────────────────────────────────────
+  // When MoMo is selected or a customer with a phone is chosen, pre-populate
+  // the MoMo number field. The functional updater ensures we never overwrite
+  // a number the user has already typed manually.
+  useEffect(() => {
+    if (paymentMethod !== "momo" || !customerForm.phone) return;
+    // customerForm.phone is stored as +233XXXXXXXXX; the momo field shows digits only
+    const digits = customerForm.phone.startsWith("+233")
+      ? customerForm.phone.slice(4)
+      : customerForm.phone.startsWith("0")
+        ? customerForm.phone.slice(1)
+        : customerForm.phone;
+    setMomoPhone((prev) => (prev ? prev : digits));
+  }, [paymentMethod, customerForm.phone]);
+
   // ── Computed ───────────────────────────────────────────────────────────────
   const subtotal = items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
   const discountNum = parseFloat(discountValue) || 0;
@@ -1155,7 +1170,12 @@ function NewOrderModal({
                               key={c.id}
                               onClick={() => {
                                 setSelectedCustomerId(c.id);
-                                setCustomerForm({ name: c.name, phone: c.phone, email: c.email, saveToDatabase: false });
+                                // Convert 0XXXXXXXXX → +233XXXXXXXXX so the form input
+                                // (which renders +233 as a static prefix) displays correctly
+                                const formPhone = c.phone.startsWith("0")
+                                  ? "+233" + c.phone.slice(1)
+                                  : c.phone;
+                                setCustomerForm({ name: c.name, phone: formPhone, email: c.email, saveToDatabase: false });
                                 setCustomerSearch("");
                                 setShowCustomerDropdown(false);
                               }}
