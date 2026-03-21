@@ -18,6 +18,7 @@ export interface LocalVariantDraft {
   inventory_quantity: number;
 }
 
+
 interface VariantsEditorProps {
   /**
    * Saved variants from the DB (edit mode).
