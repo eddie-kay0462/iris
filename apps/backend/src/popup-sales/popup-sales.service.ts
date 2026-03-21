@@ -31,7 +31,7 @@ export class PopupSalesService {
     const db = this.supabase.getAdminClient();
     const { data, error } = await db
       .from('popup_events')
-      .select('*, profiles!popup_events_created_by_fkey(id, first_name, last_name)')
+      .select('*, profiles!created_by(id, first_name, last_name)')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -108,7 +108,7 @@ export class PopupSalesService {
     let q = db
       .from('popup_orders')
       .select(
-        '*, profiles!popup_orders_served_by_fkey(id, first_name, last_name), popup_order_items(*)',
+        '*, profiles!served_by(id, first_name, last_name), popup_order_items(*)',
         { count: 'exact' },
       )
       .eq('event_id', eventId)
@@ -136,7 +136,7 @@ export class PopupSalesService {
     const { data, error } = await db
       .from('popup_orders')
       .select(
-        '*, profiles!popup_orders_served_by_fkey(id, first_name, last_name), popup_order_items(*)',
+        '*, profiles!served_by(id, first_name, last_name), popup_order_items(*)',
       )
       .eq('id', id)
       .single();
