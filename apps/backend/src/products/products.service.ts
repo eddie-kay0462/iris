@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../common/supabase/supabase.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -383,5 +383,29 @@ export class ProductsService {
 
     await Promise.all(updates);
     return { message: 'Images reordered' };
+  }
+
+  // --- Storage upload (service-role, bypasses bucket RLS) ---
+
+  async uploadImageToStorage(
+    file: Express.Multer.File,
+    storagePath: string,
+  ): Promise<{ storagePath: string }> {
+    const db = this.supabase.getAdminClient();
+    const { error } = await db.storage
+      .from('product-images')
+      .upload(storagePath, file.buffer, {
+        contentType: file.mimetype,
+        cacheControl: '31536000',
+        upsert: true,
+      });
+
+    if (error) {
+      throw new InternalServerErrorException(
+        `Storage upload failed: ${error.message}`,
+      );
+    }
+
+    return { storagePath: `product-images/${storagePath}` };
   }
 }

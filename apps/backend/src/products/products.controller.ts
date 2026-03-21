@@ -9,7 +9,10 @@ import {
   Body,
   Query,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -32,6 +35,16 @@ export class ProductsController {
   @RequirePermission('products:read')
   findAdmin(@Query() query: QueryProductsDto) {
     return this.productsService.findAdmin(query);
+  }
+
+  @Post('admin/upload-image')
+  @RequirePermission('products:update')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadImage(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('path') path: string,
+  ) {
+    return this.productsService.uploadImageToStorage(file, path);
   }
 
   // --- Public storefront ---
