@@ -222,9 +222,15 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
                 basePrice={watch("base_price")}
                 variants={product.product_variants || []}
                 productImages={product.product_images || []}
-                onAdd={(data) => addVariant.mutate(data, { onSuccess: onRefresh })}
-                onUpdate={(variantId, data) => updateVariant.mutate({ variantId, data }, { onSuccess: onRefresh })}
-                onDelete={(variantId) => deleteVariant.mutate(variantId, { onSuccess: onRefresh })}
+                onAdd={(data) => addVariant.mutate(data, { onSuccess: onRefresh, onError: (err) => setError(err instanceof Error ? err.message : "Failed to add variant") })}
+                onUpdate={(variantId, data) => updateVariant.mutate({ variantId, data }, { onSuccess: onRefresh, onError: (err) => setError(err instanceof Error ? err.message : "Failed to update variant") })}
+                onDelete={(variantId) => {
+                  if (!confirm("Delete this variant?")) return;
+                  deleteVariant.mutate(variantId, {
+                    onSuccess: onRefresh,
+                    onError: (err) => setError(err instanceof Error ? err.message : "Failed to delete variant"),
+                  });
+                }}
               />
             ) : (
               <VariantsEditor

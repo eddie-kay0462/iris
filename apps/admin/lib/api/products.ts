@@ -255,5 +255,5 @@ export function useReorderImages(productId: string) {
 // --- Direct fetch for product detail (used in edit page) ---
 
 export async function fetchAdminProduct(id: string): Promise<Product> {
-  return apiClient<Product>(`/products/${id}`);
+  return apiClient<Product>(`/products/admin/${id}`);
 }

@@ -318,13 +318,17 @@ export class ProductsService {
 
   async deleteVariant(productId: string, variantId: string) {
     const db = this.supabase.getAdminClient();
-    const { error } = await db
+    const { data, error } = await db
       .from('product_variants')
       .delete()
       .eq('id', variantId)
-      .eq('product_id', productId);
+      .eq('product_id', productId)
+      .select();
 
     if (error) throw error;
+    if (!data || data.length === 0) {
+      throw new NotFoundException('Variant not found');
+    }
     return { message: 'Variant deleted' };
   }
 

@@ -37,6 +37,12 @@ export class ProductsController {
     return this.productsService.findAdmin(query);
   }
 
+  @Get('admin/:id')
+  @RequirePermission('products:read')
+  findOneAdmin(@Param('id') id: string) {
+    return this.productsService.findOneAdmin(id);
+  }
+
   @Post('admin/upload-image')
   @RequirePermission('products:update')
   @UseInterceptors(FileInterceptor('file'))
