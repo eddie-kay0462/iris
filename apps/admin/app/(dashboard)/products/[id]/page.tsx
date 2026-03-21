@@ -92,7 +92,11 @@ export default function AdminProductDetailPage({
           </button>
         </div>
       </header>
-      <ProductForm mode="edit" product={product} />
+      <ProductForm
+        mode="edit"
+        product={product}
+        onRefresh={() => fetchAdminProduct(id).then(setProduct).catch(() => {})}
+      />
     </section>
   );
 }

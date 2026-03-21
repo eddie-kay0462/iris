@@ -55,11 +55,12 @@ const SUGGESTED_TAGS = [
 interface ProductFormProps {
   mode: "create" | "edit";
   product?: Product;
+  onRefresh?: () => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function ProductForm({ mode, product }: ProductFormProps) {
+export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
@@ -95,7 +96,7 @@ export function ProductForm({ mode, product }: ProductFormProps) {
       handle: product?.handle || "",
       base_price: product?.base_price ?? undefined,
       status: product?.status || "draft",
-      gender: product?.gender ?? undefined,
+      gender: product?.gender ?? "all",
       product_type: product?.product_type || "",
       vendor: product?.vendor || "",
       tags: product?.tags || [],
@@ -221,9 +222,9 @@ export function ProductForm({ mode, product }: ProductFormProps) {
                 basePrice={watch("base_price")}
                 variants={product.product_variants || []}
                 productImages={product.product_images || []}
-                onAdd={(data) => addVariant.mutate(data)}
-                onUpdate={(variantId, data) => updateVariant.mutate({ variantId, data })}
-                onDelete={(variantId) => deleteVariant.mutate(variantId)}
+                onAdd={(data) => addVariant.mutate(data, { onSuccess: onRefresh })}
+                onUpdate={(variantId, data) => updateVariant.mutate({ variantId, data }, { onSuccess: onRefresh })}
+                onDelete={(variantId) => deleteVariant.mutate(variantId, { onSuccess: onRefresh })}
               />
             ) : (
               <VariantsEditor
