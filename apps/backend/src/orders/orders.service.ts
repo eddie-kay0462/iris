@@ -437,11 +437,12 @@ export class OrdersService {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    // Get profiles (customers only = role 'public')
+    // Get profiles (customers only = role 'public' or unset)
+    // Use 'not in admin roles' so null roles (pre-migration rows) are included
     let q = db
       .from('profiles')
       .select('*', { count: 'exact' })
-      .eq('role', 'public');
+      .or('role.eq.public,role.is.null');
 
     if (query.search) {
       q = q.or(
@@ -454,7 +455,7 @@ export class OrdersService {
     const { data: profiles, count, error } = await q;
     if (error) throw error;
 
-    // For each profile, get order count and total spent
+    // For each profile, get order count and total spent (regular + popup)
     const enriched = await Promise.all(
       (profiles || []).map(async (profile) => {
         const { data: orders } = await db
@@ -469,7 +470,7 @@ export class OrdersService {
           (sum, o) => sum + Number(o.total),
           0,
         );
-        const lastOrderDate =
+        const lastRegularOrderDate =
           orders && orders.length > 0
             ? orders.sort(
                 (a, b) =>
@@ -478,11 +479,53 @@ export class OrdersService {
               )[0].created_at
             : null;
 
+        // Also count popup orders matched by email or phone
+        const normalizedPhone = this.normalizePhone(profile.phone_number);
+        const popupConditions: string[] = [];
+        if (profile.email) popupConditions.push(`customer_email.eq.${profile.email}`);
+        if (normalizedPhone) popupConditions.push(`customer_phone.eq.${normalizedPhone}`);
+
+        let popupOrderCount = 0;
+        let popupTotal = 0;
+        let lastPopupOrderDate: string | null = null;
+
+        if (popupConditions.length > 0) {
+          const { data: popupOrders } = await db
+            .from('popup_orders')
+            .select('total, created_at')
+            .or(popupConditions.join(','))
+            .neq('status', 'cancelled');
+
+          popupOrderCount = popupOrders?.length || 0;
+          popupTotal = (popupOrders || []).reduce(
+            (sum, o) => sum + Number(o.total),
+            0,
+          );
+          if (popupOrders && popupOrders.length > 0) {
+            lastPopupOrderDate = popupOrders.sort(
+              (a, b) =>
+                new Date(b.created_at).getTime() -
+                new Date(a.created_at).getTime(),
+            )[0].created_at;
+          }
+        }
+
+        const allDates = [lastRegularOrderDate, lastPopupOrderDate].filter(
+          (d): d is string => d !== null,
+        );
+        const lastOrderDate =
+          allDates.length > 0
+            ? allDates.sort(
+                (a, b) =>
+                  new Date(b).getTime() - new Date(a).getTime(),
+              )[0]
+            : null;
+
         return {
           ...profile,
-          phone_number: this.normalizePhone(profile.phone_number),
-          order_count: orderCount,
-          total_spent: totalSpent,
+          phone_number: normalizedPhone,
+          order_count: orderCount + popupOrderCount,
+          total_spent: totalSpent + popupTotal,
           last_order_date: lastOrderDate,
         };
       }),
@@ -524,7 +567,7 @@ export class OrdersService {
       throw new NotFoundException('Customer not found');
     }
 
-    // Get their orders
+    // Get their regular orders
     const { data: orders } = await db
       .from('orders')
       .select('*, order_items(*)')
@@ -532,27 +575,50 @@ export class OrdersService {
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
-    const totalSpent = (orders || [])
+    const regularTotalSpent = (orders || [])
       .filter((o) => !['cancelled', 'refunded'].includes(o.status))
       .reduce((sum, o) => sum + Number(o.total), 0);
 
+    // Also count popup orders matched by email or phone
+    const normalizedPhone = this.normalizePhone(profile.phone_number);
+    const popupConditions: string[] = [];
+    if (profile.email) popupConditions.push(`customer_email.eq.${profile.email}`);
+    if (normalizedPhone) popupConditions.push(`customer_phone.eq.${normalizedPhone}`);
+
+    let popupOrderCount = 0;
+    let popupTotal = 0;
+
+    if (popupConditions.length > 0) {
+      const { data: popupOrders } = await db
+        .from('popup_orders')
+        .select('total')
+        .or(popupConditions.join(','))
+        .neq('status', 'cancelled');
+
+      popupOrderCount = popupOrders?.length || 0;
+      popupTotal = (popupOrders || []).reduce(
+        (sum, o) => sum + Number(o.total),
+        0,
+      );
+    }
+
     return {
       ...profile,
-      phone_number: this.normalizePhone(profile.phone_number),
+      phone_number: normalizedPhone,
       orders: orders || [],
-      order_count: orders?.length || 0,
-      total_spent: totalSpent,
+      order_count: (orders?.length || 0) + popupOrderCount,
+      total_spent: regularTotalSpent + popupTotal,
     };
   }
 
   async getCustomerStats() {
     const db = this.supabase.getAdminClient();
 
-    // Total customers (role = 'public')
+    // Total customers (role = 'public' or unset — excludes admin/staff/manager)
     const { count: totalCustomers } = await db
       .from('profiles')
       .select('*', { count: 'exact', head: true })
-      .eq('role', 'public');
+      .or('role.eq.public,role.is.null');
 
     // New this month
     const startOfMonth = new Date();
@@ -562,7 +628,7 @@ export class OrdersService {
     const { count: newThisMonth } = await db
       .from('profiles')
       .select('*', { count: 'exact', head: true })
-      .eq('role', 'public')
+      .or('role.eq.public,role.is.null')
       .gte('created_at', startOfMonth.toISOString());
 
     // Avg order value
@@ -592,6 +658,26 @@ export class OrdersService {
       }
       spendByUser[o.user_id].amount += Number(o.total);
     });
+
+    // Also add popup order spend, matched back to profiles by email
+    const { data: allPopupOrders } = await db
+      .from('popup_orders')
+      .select('customer_email, total')
+      .neq('status', 'cancelled')
+      .not('customer_email', 'is', null);
+
+    const popupSpendByEmail: Record<string, number> = {};
+    (allPopupOrders || []).forEach((po) => {
+      if (po.customer_email) {
+        popupSpendByEmail[po.customer_email] =
+          (popupSpendByEmail[po.customer_email] || 0) + Number(po.total);
+      }
+    });
+
+    for (const data of Object.values(spendByUser)) {
+      const extra = popupSpendByEmail[data.email] || 0;
+      if (extra > 0) data.amount += extra;
+    }
 
     let topSpender: { name: string; amount: number } | null = null;
     const entries = Object.entries(spendByUser);

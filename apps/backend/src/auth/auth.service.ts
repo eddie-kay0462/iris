@@ -40,6 +40,12 @@ export class AuthService {
 
     const role: UserRole = (profile?.role as UserRole) ?? 'public';
 
+    // Track last login time
+    await supabase
+      .from('profiles')
+      .update({ last_login_at: new Date().toISOString() })
+      .eq('id', authData.user.id);
+
     const token = await this.signToken(
       authData.user.id,
       authData.user.email!,
@@ -217,6 +223,12 @@ export class AuthService {
     if (!ADMIN_ROLES.includes(role)) {
       throw new ForbiddenException('Account does not have admin access');
     }
+
+    // Track last login time
+    await supabase
+      .from('profiles')
+      .update({ last_login_at: new Date().toISOString() })
+      .eq('id', authData.user.id);
 
     const token = await this.signToken(
       authData.user.id,

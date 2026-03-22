@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Menu, X, ShoppingBag, Search, User } from "lucide-react";
 import { ThemeProvider, useTheme } from "@/lib/theme/theme-provider";
 import { CartProvider, useCart } from "@/lib/cart";
-import { hasToken } from "@/lib/api/client";
+import { hasToken, apiClient } from "@/lib/api/client";
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -57,9 +57,20 @@ function CartLink() {
 function UserLink() {
   const router = useRouter();
   const [loggedIn, setLoggedIn] = useState(false);
+  const [avatarLetter, setAvatarLetter] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoggedIn(hasToken());
+    if (!hasToken()) return;
+    setLoggedIn(true);
+    apiClient<{ first_name: string | null; email: string | null }>("/profile")
+      .then((profile) => {
+        const letter =
+          profile.first_name?.[0]?.toUpperCase() ??
+          profile.email?.[0]?.toUpperCase() ??
+          null;
+        setAvatarLetter(letter);
+      })
+      .catch(() => {});
   }, []);
 
   function handleClick() {
@@ -76,7 +87,13 @@ function UserLink() {
       aria-label={loggedIn ? "My account" : "Log in"}
       className="p-1 text-gray-600 transition hover:text-black dark:text-gray-400 dark:hover:text-white"
     >
-      <User className="h-[18px] w-[18px]" strokeWidth={1.5} />
+      {loggedIn && avatarLetter ? (
+        <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-black text-[11px] font-semibold text-white dark:bg-white dark:text-black">
+          {avatarLetter}
+        </span>
+      ) : (
+        <User className="h-[18px] w-[18px]" strokeWidth={1.5} />
+      )}
     </button>
   );
 }

@@ -165,6 +165,16 @@ export default function AdminCustomerDetailPage({
           </p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <Calendar className="h-3.5 w-3.5" /> Last Seen
+          </div>
+          <p className="mt-1 text-sm font-medium text-slate-900">
+            {customer.last_login_at
+              ? new Date(customer.last_login_at).toLocaleDateString()
+              : "—"}
+          </p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
           <div className="flex items-baseline justify-between">
             <div>
               <p className="text-xs text-slate-500">Lifetime Value</p>

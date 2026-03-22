@@ -44,7 +44,7 @@ export class OrdersController {
   }
 
   @Get('admin/customers')
-  @RequirePermission('orders:read')
+  @RequirePermission('customers:read')
   findAdminCustomers(
     @Query() query: { search?: string; page?: string; limit?: string; min_orders?: string; max_orders?: string },
   ) {
@@ -52,7 +52,7 @@ export class OrdersController {
   }
 
   @Get('admin/customers/:id')
-  @RequirePermission('orders:read')
+  @RequirePermission('customers:read')
   findAdminCustomer(@Param('id') id: string) {
     return this.ordersService.findAdminCustomer(id);
   }
