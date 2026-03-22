@@ -10,7 +10,8 @@ export type PopupOrderStatus =
   | "confirmed"
   | "completed"
   | "on_hold"
-  | "cancelled";
+  | "cancelled"
+  | "refunded";
 export type PopupPaymentMethod = "cash" | "momo" | "bank_transfer";
 
 export interface PopupEvent {
@@ -310,5 +311,36 @@ export function useCreatePopupCustomer() {
         method: "POST",
         body: dto,
       }),
+  });
+}
+
+export interface RefundOrderInput {
+  amount?: number;
+  reason?: string;
+}
+
+export interface RefundOrderResult {
+  id: string;
+  order_id: string;
+  amount: number;
+  reason: string | null;
+  status: "pending" | "processed" | "failed";
+  paystack_refund_id: string | null;
+  sms_sent: boolean;
+  created_at: string;
+}
+
+export function useRefundPopupOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, dto }: { id: string; dto: RefundOrderInput }) =>
+      apiClient<RefundOrderResult>(`/popup-sales/orders/${id}/refund`, {
+        method: "POST",
+        body: dto,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["popup-orders"] });
+      qc.invalidateQueries({ queryKey: ["popup-stats"] });
+    },
   });
 }

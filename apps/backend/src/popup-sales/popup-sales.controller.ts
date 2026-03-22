@@ -16,6 +16,7 @@ import { UpdatePopupOrderDto } from './dto/update-popup-order.dto';
 import { QueryPopupOrdersDto } from './dto/query-popup-orders.dto';
 import { ChargePopupOrderDto } from './dto/charge-popup-order.dto';
 import { CreatePopupCustomerDto } from './dto/create-popup-customer.dto';
+import { RefundPopupOrderDto } from './dto/refund-popup-order.dto';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -99,6 +100,16 @@ export class PopupSalesController {
   @RequirePermission('popup:update')
   verifyPayment(@Param('id') id: string) {
     return this.popupSalesService.verifyPayment(id);
+  }
+
+  @Post('orders/:id/refund')
+  @RequirePermission('popup:manage')
+  refundOrder(
+    @Param('id') id: string,
+    @Body() dto: RefundPopupOrderDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.popupSalesService.refundOrder(id, dto, user.sub);
   }
 
   // ─── Customers ───────────────────────────────────────────────────────────────
