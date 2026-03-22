@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Menu } from "lucide-react";
 import { apiClient, clearToken } from "@/lib/api/client";
 
@@ -9,9 +9,22 @@ type HeaderProps = {
   onMenuToggle?: () => void;
 };
 
+interface UserProfile {
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+}
+
 export function Header({ onMenuToggle }: HeaderProps) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    apiClient<UserProfile>("/profile")
+      .then(setProfile)
+      .catch(() => {});
+  }, []);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -24,6 +37,16 @@ export function Header({ onMenuToggle }: HeaderProps) {
       router.push("/login");
     }
   }
+
+  const displayName =
+    profile?.first_name && profile?.last_name
+      ? `${profile.first_name} ${profile.last_name}`
+      : profile?.first_name ?? profile?.email ?? "Admin";
+
+  const avatarLetter =
+    profile?.first_name?.[0]?.toUpperCase() ??
+    profile?.email?.[0]?.toUpperCase() ??
+    "A";
 
   return (
     <header className="border-b border-slate-200 bg-white">
@@ -46,10 +69,12 @@ export function Header({ onMenuToggle }: HeaderProps) {
         </div>
         <div className="flex items-center gap-3">
           <div className="hidden text-right sm:block">
-            <p className="text-sm font-medium">Admin user</p>
-            <p className="text-xs text-slate-500">admin@iris.com</p>
+            <p className="text-sm font-medium">{displayName}</p>
+            <p className="text-xs text-slate-500">{profile?.email ?? ""}</p>
           </div>
-          <div className="h-9 w-9 rounded-full bg-slate-200" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-sm font-semibold text-white">
+            {avatarLetter}
+          </div>
           <button
             onClick={handleLogout}
             disabled={loggingOut}

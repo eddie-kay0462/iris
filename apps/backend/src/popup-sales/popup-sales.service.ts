@@ -34,7 +34,7 @@ export class PopupSalesService {
     const db = this.supabase.getAdminClient();
     const { data, error } = await db
       .from('popup_events')
-      .select('*, profiles!popup_events_created_by_fkey(id, first_name, last_name)')
+      .select('*, profiles!created_by(id, first_name, last_name)')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
