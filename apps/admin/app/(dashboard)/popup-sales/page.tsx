@@ -1221,6 +1221,9 @@ function NewOrderModal({
   const [discountType, setDiscountType] = useState<DiscountType>("none");
   const [discountValue, setDiscountValue] = useState("");
   const [discountReason, setDiscountReason] = useState("");
+  const [showDiscountWarning, setShowDiscountWarning] = useState(false);
+  const pendingAction = useRef<"submit" | "hold" | null>(null);
+  const discountConfirmed = useRef(false);
 
   // ── Payment state ──────────────────────────────────────────────────────────
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodLocal>("cash");
@@ -1315,6 +1318,8 @@ function NewOrderModal({
       : discountType === "fixed" ? discountNum
         : 0;
   const total = Math.max(0, subtotal - discountAmount);
+  const discountPct = subtotal > 0 ? (discountAmount / subtotal) * 100 : 0;
+  const isHighDiscount = discountPct > 30;
   const changeDue = cashReceived ? parseFloat(cashReceived) - total : null;
   const allocatedAmount = splits.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
   const isAllocatedOk = Math.abs(allocatedAmount - total) < 0.01;
@@ -1367,6 +1372,12 @@ function NewOrderModal({
   // ── Submit ─────────────────────────────────────────────────────────────────
   async function handleSubmit() {
     if (items.length === 0) return;
+    if (isHighDiscount && !discountConfirmed.current) {
+      pendingAction.current = "submit";
+      setShowDiscountWarning(true);
+      return;
+    }
+    discountConfirmed.current = false;
 
     // For single MoMo payment, create a split entry to persist network/phone/sent_to_paystack
     const splitPayloads = isSplit
@@ -1417,6 +1428,12 @@ function NewOrderModal({
 
   async function handleHoldConfirm() {
     if (items.length === 0) return;
+    if (isHighDiscount && !discountConfirmed.current) {
+      pendingAction.current = "hold";
+      setShowDiscountWarning(true);
+      return;
+    }
+    discountConfirmed.current = false;
     const newOrder = await createOrder.mutateAsync({
       customer_name: customerForm.name || undefined,
       customer_phone: customerForm.phone || undefined,
@@ -1893,6 +1910,14 @@ function NewOrderModal({
                       {discountAmount > 0 && (
                         <p className="text-xs font-medium text-emerald-700">Saving {formatCurrency(discountAmount)}</p>
                       )}
+                      {isHighDiscount && (
+                        <div className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                          <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 text-amber-600" />
+                          <p className="text-xs font-medium text-amber-800">
+                            Discount is {discountPct.toFixed(0)}% of order value — confirmation required
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </section>
@@ -2325,6 +2350,55 @@ function NewOrderModal({
                 className="flex-1 rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
               >
                 {createOrder.isPending ? "Saving…" : "Confirm Hold"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── High-Discount Confirmation Modal ──────────────────────────── */}
+      {showDiscountWarning && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+              <AlertCircle className="h-5 w-5 text-amber-600" />
+            </div>
+            <h3 className="mb-1 font-semibold text-slate-900">Large discount applied</h3>
+            <p className="mb-1 text-sm text-slate-600">
+              This discount is{" "}
+              <span className="font-semibold text-amber-700">{discountPct.toFixed(0)}%</span> of the
+              order value ({formatCurrency(discountAmount)} off {formatCurrency(subtotal)}).
+            </p>
+            <p className="mb-5 text-sm text-slate-500">
+              Discounts above 30% require confirmation. Please verify this is intentional.
+            </p>
+            {discountReason && (
+              <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <span className="font-medium">Reason: </span>{discountReason}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowDiscountWarning(false);
+                  pendingAction.current = null;
+                }}
+                className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Go back
+              </button>
+              <button
+                onClick={() => {
+                  const action = pendingAction.current;
+                  discountConfirmed.current = true;
+                  setShowDiscountWarning(false);
+                  pendingAction.current = null;
+                  if (action === "submit") handleSubmit();
+                  else if (action === "hold") handleHoldConfirm();
+                }}
+                className="flex-1 rounded-lg bg-amber-600 py-2.5 text-sm font-medium text-white hover:bg-amber-700"
+              >
+                Confirm discount
               </button>
             </div>
           </div>

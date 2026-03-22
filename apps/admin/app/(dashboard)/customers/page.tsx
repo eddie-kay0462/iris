@@ -49,6 +49,14 @@ const columns: Column<AdminCustomer>[] = [
     header: "Joined",
     render: (row) => new Date(row.created_at).toLocaleDateString(),
   },
+  {
+    key: "last_login_at",
+    header: "Last Seen",
+    render: (row) =>
+      row.last_login_at
+        ? new Date(row.last_login_at).toLocaleDateString()
+        : "—",
+  },
 ];
 
 export default function AdminCustomersPage() {
@@ -149,7 +157,7 @@ export default function AdminCustomersPage() {
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          Failed to load customers: {error instanceof Error ? error.message : "Unknown error"}
+          Failed to load customers: {(error as any)?.message || "Unknown error"}
         </div>
       )}
 
