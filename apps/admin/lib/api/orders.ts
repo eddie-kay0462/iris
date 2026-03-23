@@ -171,13 +171,57 @@ export interface AdminCustomer {
   role: string;
   created_at: string;
   last_login_at: string | null;
+  // Combined totals (Iris online + popup + Shopify history)
   order_count: number;
   total_spent: number;
   last_order_date: string | null;
+  // Breakdown
+  iris_order_count: number;
+  shopify_order_count: number;
+  iris_total_spent: number;
+  shopify_total_spent_amt: number;
+}
+
+export interface PopupOrderSummary {
+  id: string;
+  order_number: string;
+  total: number;
+  status: string;
+  payment_method: string | null;
+  created_at: string;
+  popup_events: { name: string } | null;
+}
+
+export interface Address {
+  fullName?: string;
+  address?: string;
+  address2?: string;
+  city?: string;
+  region?: string;
+  postalCode?: string;
+  phone?: string;
+  // Shopify-style keys
+  first_name?: string;
+  last_name?: string;
+  address1?: string;
+  zip?: string;
+  country?: string;
+  province?: string;
 }
 
 export interface AdminCustomerDetail extends AdminCustomer {
   orders: Order[];
+  popup_orders: PopupOrderSummary[];
+  // Metadata
+  billing_address: Address | null;
+  default_address: Address | null;
+  tags: string[];
+  shopify_customer_id: string | null;
+  migrated_from: string | null;
+  email_notifications: boolean;
+  sms_notifications: boolean;
+  shopify_total_orders: number;
+  shopify_total_spent: number;
 }
 
 export interface PaginatedCustomers {

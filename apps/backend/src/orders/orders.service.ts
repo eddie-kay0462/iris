@@ -434,124 +434,174 @@ export class OrdersService {
     const db = this.supabase.getAdminClient();
     const page = parseInt(query.page || '1', 10);
     const limit = parseInt(query.limit || '20', 10);
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
+    const hasOrderFilter = query.min_orders !== undefined || query.max_orders !== undefined;
 
-    // Get profiles (customers only = role 'public' or unset)
-    // Use 'not in admin roles' so null roles (pre-migration rows) are included
-    let q = db
-      .from('profiles')
-      .select('*', { count: 'exact' })
-      .or('role.eq.public,role.is.null');
+    // ── 1. Fetch profiles ────────────────────────────────────────────────────
+    // When an order-count filter is active we must fetch ALL matching profiles
+    // first (no DB-level pagination), because the DB doesn't know order counts.
+    // We then enrich all of them, filter, and paginate in memory.
+    // When there is no filter the DB handles pagination directly (fast path).
 
-    if (query.search) {
-      q = q.or(
-        `email.ilike.%${query.search}%,phone_number.ilike.%${query.search}%,first_name.ilike.%${query.search}%,last_name.ilike.%${query.search}%`,
-      );
-    }
+    const buildBaseQuery = () => {
+      let q = db
+        .from('profiles')
+        .select('*', { count: 'exact' })
+        .or('role.eq.public,role.eq.waitlist,role.eq.inner_circle,role.is.null');
 
-    q = q.order('created_at', { ascending: false }).range(from, to);
-
-    const { data: profiles, count, error } = await q;
-    if (error) throw error;
-
-    // For each profile, get order count and total spent (regular + popup)
-    const enriched = await Promise.all(
-      (profiles || []).map(async (profile) => {
-        const { data: orders } = await db
-          .from('orders')
-          .select('total, created_at')
-          .eq('user_id', profile.id)
-          .is('deleted_at', null)
-          .not('status', 'in', '("cancelled","refunded")');
-
-        const orderCount = orders?.length || 0;
-        const totalSpent = (orders || []).reduce(
-          (sum, o) => sum + Number(o.total),
-          0,
+      if (query.search) {
+        q = q.or(
+          `email.ilike.%${query.search}%,phone_number.ilike.%${query.search}%,first_name.ilike.%${query.search}%,last_name.ilike.%${query.search}%`,
         );
-        const lastRegularOrderDate =
-          orders && orders.length > 0
-            ? orders.sort(
-                (a, b) =>
-                  new Date(b.created_at).getTime() -
-                  new Date(a.created_at).getTime(),
-              )[0].created_at
-            : null;
+      }
 
-        // Also count popup orders matched by email or phone
-        const normalizedPhone = this.normalizePhone(profile.phone_number);
-        const popupConditions: string[] = [];
-        if (profile.email) popupConditions.push(`customer_email.eq.${profile.email}`);
-        if (normalizedPhone) popupConditions.push(`customer_phone.eq.${normalizedPhone}`);
-
-        let popupOrderCount = 0;
-        let popupTotal = 0;
-        let lastPopupOrderDate: string | null = null;
-
-        if (popupConditions.length > 0) {
-          const { data: popupOrders } = await db
-            .from('popup_orders')
-            .select('total, created_at')
-            .or(popupConditions.join(','))
-            .neq('status', 'cancelled');
-
-          popupOrderCount = popupOrders?.length || 0;
-          popupTotal = (popupOrders || []).reduce(
-            (sum, o) => sum + Number(o.total),
-            0,
-          );
-          if (popupOrders && popupOrders.length > 0) {
-            lastPopupOrderDate = popupOrders.sort(
-              (a, b) =>
-                new Date(b.created_at).getTime() -
-                new Date(a.created_at).getTime(),
-            )[0].created_at;
-          }
-        }
-
-        const allDates = [lastRegularOrderDate, lastPopupOrderDate].filter(
-          (d): d is string => d !== null,
-        );
-        const lastOrderDate =
-          allDates.length > 0
-            ? allDates.sort(
-                (a, b) =>
-                  new Date(b).getTime() - new Date(a).getTime(),
-              )[0]
-            : null;
-
-        return {
-          ...profile,
-          phone_number: normalizedPhone,
-          order_count: orderCount + popupOrderCount,
-          total_spent: totalSpent + popupTotal,
-          last_order_date: lastOrderDate,
-        };
-      }),
-    );
-
-    // Apply min/max order count filters
-    let filtered = enriched;
-    if (query.min_orders) {
-      const min = parseInt(query.min_orders, 10);
-      filtered = filtered.filter((c) => c.order_count >= min);
-    }
-    if (query.max_orders) {
-      const max = parseInt(query.max_orders, 10);
-      filtered = filtered.filter((c) => c.order_count <= max);
-    }
-
-    return {
-      data: filtered,
-      total: query.min_orders || query.max_orders ? filtered.length : count || 0,
-      page,
-      limit,
-      totalPages: Math.ceil(
-        (query.min_orders || query.max_orders ? filtered.length : count || 0) /
-          limit,
-      ),
+      return q.order('created_at', { ascending: false });
     };
+
+    let profiles: any[];
+    let dbCount: number;
+
+    if (hasOrderFilter) {
+      // No .range() — fetch the full matching set so we can filter accurately
+      const { data, count, error } = await buildBaseQuery();
+      if (error) throw error;
+      profiles = data || [];
+      dbCount = count || 0;
+    } else {
+      // DB-paginated fast path
+      const from = (page - 1) * limit;
+      const { data, count, error } = await buildBaseQuery().range(from, from + limit - 1);
+      if (error) throw error;
+      profiles = data || [];
+      dbCount = count || 0;
+    }
+
+    if (profiles.length === 0) {
+      return { data: [], total: 0, page, limit, totalPages: 0 };
+    }
+
+    // ── 2. Batch fetch order data for all profiles in one round-trip each ────
+
+    const userIds = profiles.map((p) => p.id).filter(Boolean) as string[];
+    const emails = profiles
+      .map((p) => p.email?.toLowerCase())
+      .filter((e): e is string => !!e);
+    const phones = profiles
+      .map((p) => this.normalizePhone(p.phone_number))
+      .filter((p): p is string => p !== null);
+
+    const [{ data: allOnlineOrders }, { data: popupByEmailData }, { data: popupByPhoneData }] =
+      await Promise.all([
+        userIds.length > 0
+          ? db
+              .from('orders')
+              .select('user_id, total, created_at')
+              .in('user_id', userIds)
+              .is('deleted_at', null)
+              .not('status', 'in', '("cancelled","refunded")')
+          : Promise.resolve({ data: [] }),
+        emails.length > 0
+          ? db
+              .from('popup_orders')
+              .select('id, customer_email, customer_phone, total, created_at')
+              .in('customer_email', emails)
+              .neq('status', 'cancelled')
+          : Promise.resolve({ data: [] }),
+        phones.length > 0
+          ? db
+              .from('popup_orders')
+              .select('id, customer_email, customer_phone, total, created_at')
+              .in('customer_phone', phones)
+              .neq('status', 'cancelled')
+          : Promise.resolve({ data: [] }),
+      ]);
+
+    // Deduplicate popup orders (email + phone queries may return the same row)
+    const popupById = new Map<string, { customer_email: string | null; customer_phone: string | null; total: string; created_at: string }>();
+    for (const po of [...(popupByEmailData || []), ...(popupByPhoneData || [])]) {
+      if (!popupById.has(po.id)) popupById.set(po.id, po);
+    }
+    const allPopupOrders = Array.from(popupById.values());
+
+    // ── 3. Build per-profile aggregation maps ────────────────────────────────
+
+    const onlineByUser = new Map<string, { total: number; count: number; lastDate: string }>();
+    for (const o of allOnlineOrders || []) {
+      const entry = onlineByUser.get(o.user_id) ?? { total: 0, count: 0, lastDate: '' };
+      entry.total += Number(o.total);
+      entry.count += 1;
+      if (o.created_at > entry.lastDate) entry.lastDate = o.created_at;
+      onlineByUser.set(o.user_id, entry);
+    }
+
+    const popupByEmailMap = new Map<string, { total: number; count: number; lastDate: string }>();
+    const popupByPhoneMap = new Map<string, { total: number; count: number; lastDate: string }>();
+    for (const po of allPopupOrders) {
+      const email = po.customer_email?.toLowerCase();
+      const phone = po.customer_phone;
+      // Attribute to email first; only fall back to phone when no email present
+      const key = email || phone;
+      if (!key) continue;
+      const map = email ? popupByEmailMap : popupByPhoneMap;
+      const entry = map.get(key) ?? { total: 0, count: 0, lastDate: '' };
+      entry.total += Number(po.total);
+      entry.count += 1;
+      if (po.created_at > entry.lastDate) entry.lastDate = po.created_at;
+      map.set(key, entry);
+    }
+
+    // ── 4. Enrich each profile ───────────────────────────────────────────────
+
+    const zero = { total: 0, count: 0, lastDate: '' };
+    const enriched = profiles.map((profile) => {
+      const normalizedPhone = this.normalizePhone(profile.phone_number);
+      const email = profile.email?.toLowerCase();
+
+      const online = onlineByUser.get(profile.id) ?? zero;
+      const popupE = email ? (popupByEmailMap.get(email) ?? zero) : zero;
+      // Use phone-based popup only when the profile has no email (avoid double-counting)
+      const popupP = !email && normalizedPhone ? (popupByPhoneMap.get(normalizedPhone) ?? zero) : zero;
+
+      const irisOrderCount = online.count + popupE.count + popupP.count;
+      const irisSpent = online.total + popupE.total + popupP.total;
+      const shopifyOrders = profile.shopify_total_orders ?? 0;
+      const shopifySpent = parseFloat(profile.shopify_total_spent ?? 0);
+
+      const dates = [online.lastDate, popupE.lastDate, popupP.lastDate].filter(Boolean);
+      const lastOrderDate = dates.length > 0 ? dates.sort().reverse()[0] : null;
+
+      return {
+        ...profile,
+        phone_number: normalizedPhone,
+        order_count: irisOrderCount + shopifyOrders,
+        iris_order_count: irisOrderCount,
+        shopify_order_count: shopifyOrders,
+        total_spent: irisSpent + shopifySpent,
+        iris_total_spent: irisSpent,
+        shopify_total_spent_amt: shopifySpent,
+        last_order_date: lastOrderDate || null,
+      };
+    });
+
+    // ── 5. Apply order-count filter and paginate ─────────────────────────────
+
+    if (hasOrderFilter) {
+      const min = query.min_orders !== undefined ? parseInt(query.min_orders, 10) : null;
+      const max = query.max_orders !== undefined ? parseInt(query.max_orders, 10) : null;
+
+      const filtered = enriched.filter((c) => {
+        if (min !== null && c.order_count < min) return false;
+        if (max !== null && c.order_count > max) return false;
+        return true;
+      });
+
+      const total = filtered.length;
+      const start = (page - 1) * limit;
+      const pageData = filtered.slice(start, start + limit);
+
+      return { data: pageData, total, page, limit, totalPages: Math.ceil(total / limit) };
+    }
+
+    return { data: enriched, total: dbCount, page, limit, totalPages: Math.ceil(dbCount / limit) };
   }
 
   async findAdminCustomer(customerId: string) {
@@ -567,7 +617,9 @@ export class OrdersService {
       throw new NotFoundException('Customer not found');
     }
 
-    // Get their regular orders
+    const normalizedPhone = this.normalizePhone(profile.phone_number);
+
+    // Iris online orders (with items for the timeline)
     const { data: orders } = await db
       .from('orders')
       .select('*, order_items(*)')
@@ -575,39 +627,69 @@ export class OrdersService {
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
-    const regularTotalSpent = (orders || [])
+    const irisOnlineSpent = (orders || [])
       .filter((o) => !['cancelled', 'refunded'].includes(o.status))
       .reduce((sum, o) => sum + Number(o.total), 0);
 
-    // Also count popup orders matched by email or phone
-    const normalizedPhone = this.normalizePhone(profile.phone_number);
+    // Popup orders matched by email or phone
     const popupConditions: string[] = [];
     if (profile.email) popupConditions.push(`customer_email.eq.${profile.email}`);
     if (normalizedPhone) popupConditions.push(`customer_phone.eq.${normalizedPhone}`);
 
-    let popupOrderCount = 0;
-    let popupTotal = 0;
-
+    let popupOrders: any[] = [];
     if (popupConditions.length > 0) {
-      const { data: popupOrders } = await db
+      const { data } = await db
         .from('popup_orders')
-        .select('total')
+        .select('id, order_number, total, status, payment_method, created_at, popup_events(name)')
         .or(popupConditions.join(','))
-        .neq('status', 'cancelled');
-
-      popupOrderCount = popupOrders?.length || 0;
-      popupTotal = (popupOrders || []).reduce(
-        (sum, o) => sum + Number(o.total),
-        0,
-      );
+        .neq('status', 'cancelled')
+        .order('created_at', { ascending: false });
+      popupOrders = data || [];
     }
+
+    // Deduplicate popup orders by ID (email+phone match could return same order twice)
+    const seen = new Set<string>();
+    const uniquePopupOrders = popupOrders.filter((po) => {
+      if (seen.has(po.id)) return false;
+      seen.add(po.id);
+      return true;
+    });
+
+    const popupSpent = uniquePopupOrders.reduce((sum, o) => sum + Number(o.total), 0);
+
+    // Historical Shopify data
+    const shopifyOrders = profile.shopify_total_orders ?? 0;
+    const shopifySpent = parseFloat(profile.shopify_total_spent ?? 0);
+
+    // Billing address: prefer most recent order's billing_address, then shipping_address, then default_address
+    const recentOrderWithAddress = (orders || []).find(
+      (o) => o.billing_address || o.shipping_address,
+    );
+    const billingAddress =
+      recentOrderWithAddress?.billing_address ||
+      recentOrderWithAddress?.shipping_address ||
+      profile.default_address ||
+      null;
 
     return {
       ...profile,
       phone_number: normalizedPhone,
+      // Iris orders (full objects for timeline)
       orders: orders || [],
-      order_count: (orders?.length || 0) + popupOrderCount,
-      total_spent: regularTotalSpent + popupTotal,
+      popup_orders: uniquePopupOrders,
+      // Aggregated spend including Shopify history
+      iris_order_count: (orders?.length || 0) + uniquePopupOrders.length,
+      shopify_order_count: shopifyOrders,
+      order_count: (orders?.length || 0) + uniquePopupOrders.length + shopifyOrders,
+      iris_total_spent: irisOnlineSpent + popupSpent,
+      shopify_total_spent_amt: shopifySpent,
+      total_spent: irisOnlineSpent + popupSpent + shopifySpent,
+      // Metadata
+      billing_address: billingAddress,
+      default_address: profile.default_address,
+      tags: profile.tags ?? [],
+      shopify_customer_id: profile.shopify_customer_id,
+      migrated_from: profile.migrated_from,
     };
   }
 
@@ -811,15 +893,16 @@ export class OrdersService {
 
     let imageMap: Record<string, string> = {};
     if (productIds.length > 0) {
+      // product_images uses `src` as the image URL column, ordered by `position`
       const { data: images } = await db
         .from('product_images')
-        .select('product_id, url')
+        .select('product_id, src')
         .in('product_id', productIds)
-        .eq('is_primary', true);
+        .eq('position', 1);
 
       (images || []).forEach((img: any) => {
         if (!imageMap[img.product_id]) {
-          imageMap[img.product_id] = img.url;
+          imageMap[img.product_id] = img.src;
         }
       });
     }
