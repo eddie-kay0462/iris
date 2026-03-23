@@ -11,9 +11,8 @@ async function bootstrap() {
   // CORS for frontend + admin
   app.enableCors({
     origin: [
-      // process.env.FRONTEND_URL || 'http://localhost:3000',
-      // process.env.ADMIN_URL || 'http://localhost:3001',
-      true
+      process.env.FRONTEND_URL || 'http://localhost:3000',
+      process.env.ADMIN_URL || 'http://localhost:3001',
     ],
     credentials: true,
   });
