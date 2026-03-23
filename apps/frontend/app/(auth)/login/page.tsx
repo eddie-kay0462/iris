@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiClient, setToken } from "@/lib/api/client";
 
@@ -11,6 +11,8 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const message = searchParams.get("message");
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -38,6 +40,12 @@ function LoginForm() {
 
   return (
     <div className="w-full space-y-6">
+      {message === "password-updated" && (
+        <div className="rounded border border-green-600 bg-green-950 p-3 text-sm text-green-300 text-center">
+          Password updated successfully. Please log in with your new password.
+        </div>
+      )}
+
       <div className="space-y-2 text-center">
         <h2 className="text-2xl font-semibold">Log in</h2>
         <p className="text-sm text-gray-500">
@@ -93,5 +101,9 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
-  return <LoginForm />;
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
 }
