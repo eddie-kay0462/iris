@@ -9,8 +9,6 @@ import { apiClient, clearToken } from "@/lib/api/client";
 
 const navItems = [
   { href: "/orders", label: "Orders" },
-  { href: "/waitlist", label: "Waitlist" },
-  { href: "/inner-circle", label: "Inner Circle" },
   { href: "/profile", label: "Profile" },
 ];
 
@@ -43,7 +41,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <header className="border-b border-gray-200">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <Link href="/products" className="text-lg font-bold tracking-tight">
-            Iris
+            1NRI
           </Link>
 
           {/* Desktop nav */}

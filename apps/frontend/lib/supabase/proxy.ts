@@ -43,7 +43,7 @@ export async function supabaseProxy(request: NextRequest) {
   const isAuthenticated =
     user && user.exp && user.exp * 1000 > Date.now();
 
-  const protectedCustomerRoutes = ["/profile", "/inner-circle", "/waitlist"];
+  const protectedCustomerRoutes = ["/profile"];
   const isProtectedCustomerRoute = protectedCustomerRoutes.some(
     (route) => pathname === route || pathname.startsWith(route + "/")
   );
