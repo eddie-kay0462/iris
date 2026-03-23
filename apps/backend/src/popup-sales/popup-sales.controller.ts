@@ -54,6 +54,11 @@ export class PopupSalesController {
     return this.popupSalesService.getEventStats(id);
   }
 
+  @Get('events/:id/analytics')
+  @RequirePermission('popup:read')
+  getEventAnalytics(@Param('id') id: string) {
+    return this.popupSalesService.getEventAnalytics(id);
+  }
   // ─── Orders ─────────────────────────────────────────────────────────────────
 
   @Get('events/:id/orders')

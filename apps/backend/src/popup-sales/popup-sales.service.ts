@@ -52,6 +52,7 @@ export class PopupSalesService {
         event_date: dto.event_date || null,
         status: dto.status || 'draft',
         created_by: userId,
+        visitor_count: (dto as any).visitor_count ?? null,
       })
       .select()
       .single();
@@ -71,6 +72,201 @@ export class PopupSalesService {
 
     if (error || !data) throw new NotFoundException('Event not found');
     return data;
+  }
+
+  // ─── Analytics ──────────────────────────────────────────────────────────────
+
+  async getEventAnalytics(eventId: string) {
+    const db = this.supabase.getAdminClient();
+
+    // Fetch event details (includes visitor_count if column exists)
+    const { data: event } = await db
+      .from('popup_events')
+      .select('*')
+      .eq('id', eventId)
+      .single();
+
+    // Fetch all orders with items
+    const { data: orders, error } = await db
+      .from('popup_orders')
+      .select('*, popup_order_items(*)')
+      .eq('event_id', eventId)
+      .neq('status', 'cancelled');
+
+    if (error) throw error;
+    const allOrders = orders || [];
+
+    // ── Revenue & conversion ─────────────────────────────────────────────────
+    const revenueOrders = allOrders.filter(
+      (o) => o.status === 'completed' || o.status === 'confirmed',
+    );
+    const totalRevenue = revenueOrders.reduce((s, o) => s + Number(o.total), 0);
+    const totalTransactions = revenueOrders.length;
+    const totalOrders = allOrders.length;
+    const conversionRate = totalOrders > 0 ? (totalTransactions / totalOrders) * 100 : 0;
+    const aov = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
+
+    const visitorCount: number | null = (event as any)?.visitor_count ?? null;
+    const revenuePerVisitor =
+      visitorCount && visitorCount > 0 ? totalRevenue / visitorCount : null;
+
+    // ── Existing vs New customer AOV ─────────────────────────────────────────
+    // Treat orders with no email AND no phone as walk-ins (new)
+    const existingOrders = revenueOrders.filter(
+      (o) => o.customer_email || o.customer_phone,
+    );
+    const newOrders = revenueOrders.filter(
+      (o) => !o.customer_email && !o.customer_phone,
+    );
+    const existingRevenue = existingOrders.reduce((s, o) => s + Number(o.total), 0);
+    const newRevenue = newOrders.reduce((s, o) => s + Number(o.total), 0);
+    const existingAov =
+      existingOrders.length > 0 ? existingRevenue / existingOrders.length : 0;
+    const newAov = newOrders.length > 0 ? newRevenue / newOrders.length : 0;
+
+    // ── Discount impact ──────────────────────────────────────────────────────
+    const discountedOrders = revenueOrders.filter((o) => Number(o.discount_amount) > 0);
+    const fullPriceOrders = revenueOrders.filter((o) => !Number(o.discount_amount));
+    const discountedRevenue = discountedOrders.reduce((s, o) => s + Number(o.total), 0);
+    const fullPriceRevenue = fullPriceOrders.reduce((s, o) => s + Number(o.total), 0);
+    const avgDiscountPct =
+      discountedOrders.length > 0
+        ? discountedOrders.reduce((s, o) => {
+            const sub = Number(o.subtotal) || Number(o.total);
+            return s + (sub > 0 ? (Number(o.discount_amount) / sub) * 100 : 0);
+          }, 0) / discountedOrders.length
+        : 0;
+
+    // ── Payment method breakdown ─────────────────────────────────────────────
+    const paymentBreakdown: Record<string, { count: number; revenue: number }> = {};
+    for (const o of revenueOrders) {
+      const method = o.payment_method || 'unknown';
+      if (!paymentBreakdown[method]) paymentBreakdown[method] = { count: 0, revenue: 0 };
+      paymentBreakdown[method].count++;
+      paymentBreakdown[method].revenue += Number(o.total);
+    }
+
+    // ── Revenue over time (by hour) ─────────────────────────────────────────
+    const revenueByHour: Record<string, number> = {};
+    for (const o of revenueOrders) {
+      const hour = new Date(o.created_at).getHours();
+      const label = `${String(hour).padStart(2, '0')}:00`;
+      revenueByHour[label] = (revenueByHour[label] || 0) + Number(o.total);
+    }
+
+    // ── Orders by hour ───────────────────────────────────────────────────────
+    const ordersByHour: Record<string, number> = {};
+    for (const o of allOrders) {
+      const hour = new Date(o.created_at).getHours();
+      const label = `${String(hour).padStart(2, '0')}:00`;
+      ordersByHour[label] = (ordersByHour[label] || 0) + 1;
+    }
+
+    // ── Product performance ──────────────────────────────────────────────────
+    const productMap: Record<
+      string,
+      { name: string; unitsSold: number; revenue: number; sku: string | null }
+    > = {};
+    for (const o of revenueOrders) {
+      for (const item of o.popup_order_items ?? []) {
+        const key = item.product_id || item.product_name;
+        if (!productMap[key]) {
+          productMap[key] = {
+            name: item.product_name,
+            unitsSold: 0,
+            revenue: 0,
+            sku: item.sku || null,
+          };
+        }
+        productMap[key].unitsSold += item.quantity;
+        productMap[key].revenue += Number(item.total_price);
+      }
+    }
+    const productPerformance = Object.values(productMap).sort(
+      (a, b) => b.revenue - a.revenue,
+    );
+
+    // ── Status breakdown ─────────────────────────────────────────────────────
+    const statusBreakdown: Record<string, number> = {};
+    for (const o of [...allOrders]) {
+      statusBreakdown[o.status] = (statusBreakdown[o.status] || 0) + 1;
+    }
+
+    // ── Customer capture list ────────────────────────────────────────────────
+    const seen = new Set<string>();
+    const customerCapture: {
+      name: string | null;
+      phone: string | null;
+      email: string | null;
+      totalSpend: number;
+    }[] = [];
+
+    for (const o of allOrders) {
+      const key = o.customer_email || o.customer_phone || o.id;
+      if (!seen.has(key)) {
+        seen.add(key);
+        const spend = revenueOrders
+          .filter(
+            (r) =>
+              (o.customer_email && r.customer_email === o.customer_email) ||
+              (o.customer_phone && r.customer_phone === o.customer_phone),
+          )
+          .reduce((s, r) => s + Number(r.total), 0);
+        customerCapture.push({
+          name: o.customer_name,
+          phone: o.customer_phone,
+          email: o.customer_email,
+          totalSpend: spend,
+        });
+      }
+    }
+
+    // ── 1NRI loyalty discount (5%) tracking ──────────────────────────────────
+    const loyaltyOrders = discountedOrders.filter(
+      (o) =>
+        o.discount_reason &&
+        (o.discount_reason.toLowerCase().includes('1nri') ||
+          o.discount_reason.toLowerCase().includes('loyalty')),
+    );
+
+    return {
+      eventId,
+      eventName: event?.name ?? null,
+      eventDate: event?.event_date ?? null,
+      eventLocation: event?.location ?? null,
+      visitorCount,
+      totalRevenue: Math.round(totalRevenue * 100) / 100,
+      totalTransactions,
+      totalOrders,
+      conversionRate: Math.round(conversionRate * 100) / 100,
+      aov: Math.round(aov * 100) / 100,
+      revenuePerVisitor:
+        revenuePerVisitor !== null ? Math.round(revenuePerVisitor * 100) / 100 : null,
+      existingCustomer: {
+        orderCount: existingOrders.length,
+        aov: Math.round(existingAov * 100) / 100,
+        revenue: Math.round(existingRevenue * 100) / 100,
+      },
+      newCustomer: {
+        orderCount: newOrders.length,
+        aov: Math.round(newAov * 100) / 100,
+        revenue: Math.round(newRevenue * 100) / 100,
+      },
+      discountImpact: {
+        discountedCount: discountedOrders.length,
+        discountedRevenue: Math.round(discountedRevenue * 100) / 100,
+        fullPriceCount: fullPriceOrders.length,
+        fullPriceRevenue: Math.round(fullPriceRevenue * 100) / 100,
+        avgDiscountPct: Math.round(avgDiscountPct * 100) / 100,
+        loyaltyOrderCount: loyaltyOrders.length,
+      },
+      paymentBreakdown,
+      revenueByHour,
+      ordersByHour,
+      productPerformance,
+      statusBreakdown,
+      customerCapture,
+    };
   }
 
   // ─── Stats ──────────────────────────────────────────────────────────────────
