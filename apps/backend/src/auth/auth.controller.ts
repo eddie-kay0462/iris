@@ -10,6 +10,7 @@ import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyOtpDto, ResendOtpDto } from './dto/verify-otp.dto';
+import { SyncSessionDto } from './dto/sync-session.dto';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -56,6 +57,13 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
+  }
+
+  @Public()
+  @Post('sync')
+  @HttpCode(HttpStatus.OK)
+  async syncSession(@Body() dto: SyncSessionDto) {
+    return this.authService.syncSession(dto.access_token);
   }
 
   @Public()

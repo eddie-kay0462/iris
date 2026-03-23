@@ -173,10 +173,53 @@ export class AuthService {
     return { success: true };
   }
 
+  async syncSession(accessToken: string) {
+    const supabase = this.supabaseService.getAdminClient();
+
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(accessToken);
+
+    if (error || !user) {
+      throw new UnauthorizedException('Invalid or expired session');
+    }
+
+    // Fetch existing profile
+    let { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    // Create profile if it doesn't exist yet (e.g. magic-link confirmed email)
+    if (!profile) {
+      await supabase.from('profiles').insert({
+        id: user.id,
+        email: user.email,
+        first_name: user.user_metadata?.first_name ?? null,
+        last_name: user.user_metadata?.last_name ?? null,
+        phone_number: user.user_metadata?.phone_number ?? null,
+        role: 'public',
+      });
+      profile = { role: 'public' };
+    }
+
+    const role: UserRole = (profile.role as UserRole) ?? 'public';
+    const token = await this.signToken(user.id, user.email!, role);
+
+    return {
+      access_token: token,
+      user: { id: user.id, email: user.email, role },
+    };
+  }
+
   async resetPassword(dto: ResetPasswordDto) {
     const supabase = this.supabaseService.getAdminClient();
 
-    const redirectTo = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/update-password`;
+    // Route through the auth callback so the code is exchanged before landing
+    // on the update-password page.
+    const redirectTo = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/api/auth/callback?next=/update-password`;
 
     const { error } = await supabase.auth.resetPasswordForEmail(dto.email, {
       redirectTo,
