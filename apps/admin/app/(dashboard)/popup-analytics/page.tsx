@@ -388,7 +388,7 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
   return (
     <div className="space-y-6 print-body">
       {/* Key metrics */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <MetricCard
           label="Total Revenue"
           value={fmt(totalRevenue)}
@@ -396,13 +396,13 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
           icon={DollarSign}
           accent="bg-emerald-100 text-emerald-600"
         />
-        <MetricCard
+        {/* <MetricCard
           label="Conversion Rate"
           value={pct(conversionRate)}
           sub={`${totalTransactions} of ${totalOrders} orders`}
           icon={TrendingUp}
           accent="bg-blue-100 text-blue-600"
-        />
+        /> */}
         <MetricCard
           label="Avg. Order Value"
           value={fmt(aov)}
