@@ -344,3 +344,45 @@ export function useRefundPopupOrder() {
     },
   });
 }
+
+// ─── Analytics ────────────────────────────────────────────────────────────────
+
+export interface PopupAnalytics {
+  eventId: string;
+  eventName: string | null;
+  eventDate: string | null;
+  eventLocation: string | null;
+  visitorCount: number | null;
+  totalRevenue: number;
+  totalTransactions: number;
+  totalOrders: number;
+  conversionRate: number;
+  aov: number;
+  revenuePerVisitor: number | null;
+  existingCustomer: { orderCount: number; aov: number; revenue: number };
+  newCustomer: { orderCount: number; aov: number; revenue: number };
+  discountImpact: {
+    discountedCount: number;
+    discountedRevenue: number;
+    fullPriceCount: number;
+    fullPriceRevenue: number;
+    avgDiscountPct: number;
+    loyaltyOrderCount: number;
+  };
+  paymentBreakdown: Record<string, { count: number; revenue: number }>;
+  revenueByHour: Record<string, number>;
+  ordersByHour: Record<string, number>;
+  productPerformance: { name: string; unitsSold: number; revenue: number; sku: string | null }[];
+  statusBreakdown: Record<string, number>;
+  customerCapture: { name: string | null; phone: string | null; email: string | null; totalSpend: number }[];
+}
+
+export function usePopupAnalytics(eventId: string | null) {
+  return useQuery({
+    queryKey: ["popup-analytics", eventId],
+    queryFn: () =>
+      apiClient<PopupAnalytics>(`/popup-sales/events/${eventId}/analytics`),
+    enabled: !!eventId,
+  });
+}
+
