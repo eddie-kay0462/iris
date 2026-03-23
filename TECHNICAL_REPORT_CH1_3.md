@@ -50,7 +50,7 @@ Small and medium-sized enterprises (SMEs) in the fashion sector operating in Sub
 
 This report presents the design and development of IRIS (Integrated Retail Intelligence System), a custom e-commerce and ERP platform built specifically for 1NRI Worldwide Ltd., a Ghanaian fashion SME. IRIS replaces the company's collection of ad-hoc digital tools with a unified platform that consolidates product management, order processing, inventory tracking, customer relationships, and business analytics into a single system.
 
-The platform comprises four integrated components: a customer-facing e-commerce storefront, a business management admin dashboard, a RESTful NestJS backend API, and a Python-based machine learning recommendation engine. A distinctive feature of the platform is the Inner Circle membership system — a subscription programme that provides members with exclusive pricing and early access to new collections, managed end-to-end within the platform including waitlist, invitation, and subscription lifecycle management.
+The platform comprises four integrated components: a customer-facing e-commerce storefront, a business management admin dashboard, a RESTful NestJS backend API, and a Python-based machine learning recommendation engine.
 
 The system integrates Paystack for payment processing and LetsFish for transactional SMS communications. A hybrid recommendation engine combining collaborative filtering with text and image similarity provides personalised product discovery for customers. A role-based access control system governs staff access to administrative functions across three tiers: admin, manager, and staff.
 
@@ -107,7 +107,7 @@ Many fashion businesses in the African context rely on ad-hoc digital tools: Wha
 
 Data fragmentation represents the central challenge facing the average fashion SME seeking digital transformation. The success of e-commerce-based brands relies heavily on data-driven insights drawn from across all operational sections [7]. However, the tools at their disposal are often used disjointly, eliminating the possibility for a centralised pool of data from which business intelligence can be adequately generated and utilised. On the other hand, ERP systems available on the market are not targeted towards SMEs, but rather for larger businesses with dedicated, sizeable budgets.
 
-For 1NRI Worldwide Ltd. specifically, this fragmentation manifests in several concrete ways: products and inventory are tracked in spreadsheets disconnected from actual sales, there is no unified view of who the customers are and what they have purchased, and there is no mechanism for building customer loyalty through structured programmes. The company's Inner Circle — a planned exclusive membership tier offering customers discounted pricing and early access to collections — had no digital infrastructure to support it.
+For 1NRI Worldwide Ltd. specifically, this fragmentation manifests in several concrete ways: products and inventory are tracked in spreadsheets disconnected from actual sales, there is no unified view of who the customers are and what they have purchased, and there is no mechanism for building customer loyalty through structured programmes.
 
 ## 1.3 Related Work
 
@@ -143,9 +143,9 @@ The end product is IRIS (Integrated Retail Intelligence System), a purpose-built
 
 IRIS is comprised of four interconnected components:
 
-**Customer-Facing E-commerce Storefront:** A server-side rendered web application that provides customers with a product browsing experience, including advanced filtering by gender, product type, and vendor, a shopping cart, and a checkout flow integrated with Paystack for payment processing. The storefront also supports the Inner Circle membership journey, allowing customers to apply to the waitlist and — upon invitation — subscribe to an exclusive membership tier that grants discounted pricing across the product catalogue.
+**Customer-Facing E-commerce Storefront:** A server-side rendered web application that provides customers with a product browsing experience, including advanced filtering by gender, product type, and vendor, a shopping cart, and a checkout flow integrated with Paystack for payment processing.
 
-**Business Management Admin Dashboard:** A separate web application accessible only to authorised staff, providing a comprehensive view of all business operations. The dashboard supports product management (create, edit, publish), order management (view, update status, export), inventory tracking with movement logs, customer data access, and waitlist management including the ability to send Inner Circle invitations via SMS. The admin dashboard is governed by a role-based access control system with three staff roles: admin, manager, and staff — each with a defined set of permissions.
+**Business Management Admin Dashboard:** A separate web application accessible only to authorised staff, providing a comprehensive view of all business operations. The dashboard supports product management (create, edit, publish), order management (view, update status, export), inventory tracking with movement logs, and customer data access. The admin dashboard is governed by a role-based access control system with three staff roles: admin, manager, and staff — each with a defined set of permissions.
 
 **RESTful Backend API:** A modular NestJS application serving both the customer storefront and the admin dashboard. The backend exposes REST endpoints for authentication, product catalogue operations, order management, inventory, payments, SMS communications, and product recommendations. It communicates with the Supabase database and serves as the orchestration layer for all business logic.
 
@@ -153,7 +153,7 @@ IRIS is comprised of four interconnected components:
 
 **Popup Sales (In-Person POS System):** A fully integrated point-of-sale module designed to support 1NRI's in-person popup events. Staff create and manage popup events, process walk-in customer orders (capturing items, discounts, and customer details), and accept multiple payment methods including cash, MTN Mobile Money (via Paystack's MoMo charge API), and split payments. The system handles the full payment lifecycle for MoMo payments — including OTP submission and payment verification — and supports order holds, cancellations, and partial or full refunds with automated inventory restoration and SMS confirmation to the customer. All popup sales feed into the same shared product catalogue and inventory, ensuring stock levels remain accurate across both online and in-person channels.
 
-The platform integrates Paystack as its payment gateway, supporting online checkout for the storefront, recurring subscriptions for Inner Circle members, and direct Mobile Money charges for in-person popup orders. LetsFish, a pan-African communications API, handles transactional SMS (waitlist confirmations, Inner Circle invitations, order confirmations, refund confirmations) and voice OTP calls. Transactional emails — including signup OTP verification and password reset links — are delivered via Resend, configured as the SMTP provider for the Supabase Auth email system. The entire platform is backed by Supabase, an open-source Backend-as-a-Service built on PostgreSQL, which provides the database, authentication, and row-level security infrastructure.
+The platform integrates Paystack as its payment gateway, supporting online checkout for the storefront and direct Mobile Money charges for in-person popup orders. LetsFish, a pan-African communications API, handles transactional SMS (order confirmations, refund confirmations) and voice OTP calls. Transactional emails — including signup OTP verification and password reset links — are delivered via Resend, configured as the SMTP provider for the Supabase Auth email system. The entire platform is backed by Supabase, an open-source Backend-as-a-Service built on PostgreSQL, which provides the database, authentication, and row-level security infrastructure.
 
 ---
 
@@ -175,11 +175,9 @@ The primary stakeholders for IRIS include:
 
 - **Operations Staff:** Need efficient tools for inventory management, order processing, and supply chain coordination. They require streamlined workflows that reduce manual data entry and facilitate seamless communication between procurement, production, and sales functions. The role-based access model must reflect the reality that different staff members require different levels of system access.
 
-- **Marketing Personnel:** Require the ability to manage collections, launch limited-time promotional events (popup sales), manage the Inner Circle waitlist, and track customer engagement. Their tools must support the brand's strategy of exclusivity and community building.
+- **Marketing Personnel:** Require the ability to manage collections, launch limited-time promotional events (popup sales), and track customer engagement. Their tools must support the brand's strategy and community building.
 
-- **Customers:** Expect a reliable, user-friendly e-commerce experience with support for local payment methods, order tracking capabilities, and responsive customer service. Their requirements include mobile-optimised interfaces and the ability to participate in the Inner Circle membership programme.
-
-- **Inner Circle Members:** A distinct customer segment requiring additional capabilities — exclusive pricing visibility at checkout, priority access to new collections, and a subscription management experience.
+- **Customers:** Expect a reliable, user-friendly e-commerce experience with support for local payment methods, order tracking capabilities, and responsive customer service. Their requirements include mobile-optimised interfaces.
 
 ## 2.3 Functional Requirements
 
@@ -192,30 +190,27 @@ The platform must provide a fully functional customer-facing e-commerce interfac
 The platform must provide comprehensive inventory tracking at the variant level, supporting fashion-specific attributes including size and colour. The system must automatically update inventory levels when sales occur and maintain an audit log of all stock movements, recording the quantity before and after each change, the type of movement, and the responsible staff member.
 
 **FR3: Local Payment Gateway Integration**
-The platform must integrate with Paystack, a major African payment processor, to handle customer payments. The integration must support both one-time purchase payments and recurring subscription billing for the Inner Circle membership, with webhook-based payment confirmation to trigger order fulfilment.
+The platform must integrate with Paystack, a major African payment processor, to handle customer payments. The integration must support one-time purchase payments with webhook-based payment confirmation to trigger order fulfilment.
 
-**FR4: Inner Circle Membership and Waitlist System**
-The platform must support a subscription membership programme (Inner Circle) with end-to-end lifecycle management: customer waitlist application, admin-controlled invitation workflow with time-limited SMS invitation tokens (48-hour expiry), subscription activation via Paystack, and exclusive pricing for active members visible at checkout. Three subscription tiers must be supported: monthly, quarterly, and annual.
+**FR4: Business Management Dashboard**
+The platform must provide a separate, role-gated administrative interface enabling authorised staff to manage all aspects of the business: product catalogue, orders, inventory, customer data, payment records, popup sales events, and system user accounts.
 
-**FR5: Business Management Dashboard**
-The platform must provide a separate, role-gated administrative interface enabling authorised staff to manage all aspects of the business: product catalogue, orders, inventory, customer data, waitlist entries, payment records, popup sales events, and system user accounts.
+**FR5: Customer Relationship Management**
+The platform must maintain comprehensive customer profiles aggregating data from all touchpoints, including purchase history and communication preferences. The admin dashboard must provide access to customer lists and detailed individual profiles.
 
-**FR6: Customer Relationship Management**
-The platform must maintain comprehensive customer profiles aggregating data from all touchpoints, including purchase history, subscription status, and communication preferences. The admin dashboard must provide access to customer lists and detailed individual profiles.
+**FR6: Role-Based Access Control and Multi-User Support**
+The platform must support multiple administrative user accounts with granular permissions control. Three staff roles must be defined — admin, manager, and staff — each with a specific and non-overlapping set of permissions governing access to products, orders, customers, inventory, analytics, settings, and user management.
 
-**FR7: Role-Based Access Control and Multi-User Support**
-The platform must support multiple administrative user accounts with granular permissions control. Three staff roles must be defined — admin, manager, and staff — each with a specific and non-overlapping set of permissions governing access to products, orders, customers, inventory, waitlist, analytics, settings, and user management.
+**FR7: SMS Notification System**
+The platform must send transactional SMS messages to customers at key lifecycle events: order confirmation and refund confirmation. All sent messages must be logged with delivery status.
 
-**FR8: SMS Notification System**
-The platform must send transactional SMS messages to customers and waitlist members at key lifecycle events: waitlist registration confirmation, Inner Circle invitation, subscription confirmation, and order confirmation. All sent messages must be logged with delivery status.
-
-**FR9: Product Recommendations**
+**FR8: Product Recommendations**
 The platform must provide personalised product recommendations to customers. For authenticated customers with a purchase history, recommendations should be derived from their behavioural data. For new or guest users, recommendations should fall back to a popularity-based model. Similar product recommendations should also be available on individual product pages.
 
-**FR10: Popup Sales — In-Person Point of Sale**
+**FR9: Popup Sales — In-Person Point of Sale**
 The platform must support the creation and management of in-person popup sales events. Staff must be able to create events, process walk-in customer orders by selecting products and variants from the shared catalogue, apply discounts, and capture payment via cash, Mobile Money (via Paystack MoMo charge), or split methods. The system must handle the full MoMo payment lifecycle (charge initiation, OTP submission, payment verification), support order holds, and process full or partial refunds with inventory restoration. All popup sales must draw from the same product catalogue and decrement the same inventory as the online store, ensuring stock consistency across channels.
 
-**FR11: Transactional Email**
+**FR10: Transactional Email**
 The platform must send transactional emails to customers at key events: signup OTP verification and password reset. Emails must be delivered reliably and must include appropriate security measures to prevent enumeration attacks.
 
 ## 2.4 Non-Functional Requirements
@@ -247,17 +242,15 @@ The platform must provide well-structured APIs enabling integration with third-p
 
 The functional and non-functional requirements specified in this chapter directly address the core challenges identified in Chapter 1:
 
-**Data Fragmentation:** FR1 (E-commerce Storefront), FR5 (Admin Dashboard), FR2 (Inventory), and FR6 (CRM) consolidate scattered data sources into unified repositories, eliminating the silos that prevent holistic business insight. All transactional data — sales, inventory movements, customer interactions — is stored in a single Supabase PostgreSQL database, queryable from both the storefront and the admin dashboard.
+**Data Fragmentation:** FR1 (E-commerce Storefront), FR4 (Admin Dashboard), FR2 (Inventory), and FR5 (CRM) consolidate scattered data sources into unified repositories, eliminating the silos that prevent holistic business insight. All transactional data — sales, inventory movements, customer interactions — is stored in a single Supabase PostgreSQL database, queryable from both the storefront and the admin dashboard.
 
-**Absence of Customer Loyalty Infrastructure:** FR4 (Inner Circle Membership System) directly addresses the identified gap of having no digital infrastructure for the company's planned exclusive membership programme. The waitlist, invitation, subscription, and exclusive pricing flows are all managed within IRIS.
+**Local Payment Integration:** FR3 (Paystack Integration) addresses the critical need for a payment solution trusted in the Ghanaian market. The Paystack integration handles one-time purchases with webhook-based confirmation ensuring orders are only fulfilled upon payment success.
 
-**Local Payment Integration:** FR3 (Paystack Integration) addresses the critical need for a payment solution trusted in the Ghanaian market. The Paystack integration handles both one-time purchases and recurring Inner Circle subscriptions, with webhook-based confirmation ensuring orders are only fulfilled upon payment success.
+**Communication with Customers:** FR7 (SMS Notification System) replaces ad-hoc WhatsApp messaging with automated, logged, and auditable transactional SMS communications. All messages are sent through the LetsFish API and logged in the database for audit purposes.
 
-**Communication with Customers:** FR8 (SMS Notification System) replaces ad-hoc WhatsApp messaging with automated, logged, and auditable transactional SMS communications. All messages are sent through the LetsFish API and logged in the database for audit purposes.
+**Security and Access Control:** FR6 (RBAC) and NFR4 (Security) address the need for safe multi-user access to business data. The permissions matrix ensures that staff members can only access and modify data within their authorisation scope, reducing the risk of accidental or unauthorised data modification.
 
-**Security and Access Control:** FR7 (RBAC) and NFR4 (Security) address the need for safe multi-user access to business data. The permissions matrix ensures that staff members can only access and modify data within their authorisation scope, reducing the risk of accidental or unauthorised data modification.
-
-**Scalability of Recommendations:** FR9 (Product Recommendations) and NFR1 (Performance) address the opportunity to provide a personalised shopping experience comparable to larger platforms while ensuring system performance does not degrade as the product catalogue and customer base grow.
+**Scalability of Recommendations:** FR8 (Product Recommendations) and NFR1 (Performance) address the opportunity to provide a personalised shopping experience comparable to larger platforms while ensuring system performance does not degrade as the product catalogue and customer base grow.
 
 The subsequent chapters detail the system architecture, implementation approach, and validation methodologies, demonstrating how these requirements are fulfilled in the delivered IRIS platform.
 
@@ -269,17 +262,16 @@ Using the MoSCoW method (Must Have, Should Have, Could Have, Won't Have), requir
 - FR1: Native E-commerce Storefront (core revenue channel)
 - FR2: Integrated Inventory Management (fundamental operational need)
 - FR3: Local Payment Gateway Integration (critical for customer transactions)
-- FR4: Inner Circle Membership and Waitlist System (core business differentiator)
-- FR5: Business Management Dashboard (operational necessity)
-- FR7: Role-Based Access Control (essential for security and multi-user operation)
+- FR4: Business Management Dashboard (operational necessity)
+- FR6: Role-Based Access Control (essential for security and multi-user operation)
 - NFR2: Reliability and Availability
 - NFR4: Security and Data Protection
 
 **Should Have (Phase 2):**
-- FR6: Customer Relationship Management
-- FR8: SMS Notification System
-- FR9: Product Recommendations
-- FR10: Popup Sales Management
+- FR5: Customer Relationship Management
+- FR7: SMS Notification System
+- FR8: Product Recommendations
+- FR9: Popup Sales Management
 - NFR1: Performance and Scalability optimisations
 - NFR5: Usability and User Experience refinements
 
@@ -331,8 +323,7 @@ IRIS employs a four-tier architecture with a separate machine learning microserv
 │   │                          │  │                              │   │
 │   │  • Product browsing      │  │  • Product management        │   │
 │   │  • Cart & checkout       │  │  • Order management          │   │
-│   │  • Inner Circle flow     │  │  • Inventory tracking        │   │
-│   │  • Customer dashboard    │  │  • Waitlist & invitations    │   │
+│   │  • Customer dashboard    │  │  • Inventory tracking        │   │
 │   │  • Recommendations UI    │  │  • Customer data             │   │
 │   └────────────┬─────────────┘  └──────────────┬───────────────┘   │
 └────────────────┼────────────────────────────────┼───────────────────┘
@@ -351,7 +342,7 @@ IRIS employs a four-tier architecture with a separate machine learning microserv
 │                  │  • Profile       • Inventory │                  │
 │                  │  • Orders        • Payments  │                  │
 │                  │  • Collections   • Settings  │                  │
-│                  │  • Waitlist/SMS  • Reviews   │                  │
+│                  │  • SMS           • Reviews   │                  │
 │                  │  • Newsletter    • Export    │                  │
 │                  │  • PopupSales    • Comms     │                  │
 │                  │  • Recommendations (proxy)   │                  │
@@ -397,9 +388,9 @@ IRIS employs a four-tier architecture with a separate machine learning microserv
 
 The presentation layer consists of two independent Next.js 16 applications, both built with React 19 and TypeScript.
 
-**Customer-Facing E-commerce Storefront (Port 3000):** A responsive web application optimised for both desktop and mobile devices. It supports product browsing, variant selection, shopping cart management, Paystack-integrated checkout, and the Inner Circle membership journey. Server-side rendering (SSR) is used for product and collection pages to ensure optimal load performance and search engine discoverability. Client-side state is managed with Zustand (shopping cart) and TanStack Query (server data fetching and caching).
+**Customer-Facing E-commerce Storefront (Port 3000):** A responsive web application optimised for both desktop and mobile devices. It supports product browsing, variant selection, shopping cart management, and Paystack-integrated checkout. Server-side rendering (SSR) is used for product and collection pages to ensure optimal load performance and search engine discoverability. Client-side state is managed with Zustand (shopping cart) and TanStack Query (server data fetching and caching).
 
-**Business Management Admin Dashboard (Port 3001):** A separate web application accessible only to authenticated staff. It provides interfaces for product management, order management, inventory tracking, customer data viewing, waitlist and invitation management, payment records, popup sales administration, and system user/role management. It consumes the same NestJS backend API as the storefront but accesses admin-only endpoints.
+**Business Management Admin Dashboard (Port 3001):** A separate web application accessible only to authenticated staff. It provides interfaces for product management, order management, inventory tracking, customer data viewing, payment records, popup sales administration, and system user/role management. It consumes the same NestJS backend API as the storefront but accesses admin-only endpoints.
 
 Both interfaces are built with Tailwind CSS 4 for styling and use React Hook Form with Zod for form handling and validation.
 
@@ -420,7 +411,7 @@ The database schema models all domain entities required for integrated e-commerc
 ### 3.4.1 Entity Design Overview
 
 **User and Identity Entities:**
-- **`profiles`**: The central user record, keyed to Supabase Auth's `auth.users` table. Stores contact information, role assignment, subscription status and dates, Paystack customer and subscription codes, and notification preferences.
+- **`profiles`**: The central user record, keyed to Supabase Auth's `auth.users` table. Stores contact information, role assignment, and notification preferences.
 
 **Product and Catalogue Entities:**
 - **`products`**: The master product catalogue. Each product has a URL-safe `handle`, title, description, base price, compare-at price, gender target, product type, vendor, tags, and publish status. Soft-deletes are supported via a `deleted_at` field.
@@ -430,18 +421,14 @@ The database schema models all domain entities required for integrated e-commerc
 - **`collection_products`**: Junction table mapping products to collections with a position field for manual ordering.
 
 **Order and Transaction Entities:**
-- **`orders`**: The top-level order record. Contains the customer reference (`user_id` → `profiles`), `order_number`, status, subtotal, discount, total, shipping address (stored as JSON), Paystack payment reference, and a boolean `is_inner_circle_order` flag indicating whether Inner Circle pricing was applied.
+- **`orders`**: The top-level order record. Contains the customer reference (`user_id` → `profiles`), `order_number`, status, subtotal, discount, total, shipping address (stored as JSON), and Paystack payment reference.
 - **`order_items`**: Line items for each order, linking to the order and the product with quantity, unit price, and total price at the time of purchase.
 
 **Inventory Entities:**
 - **`inventory_movements`**: An append-only audit log of every stock change. Records the variant affected, the quantity change (positive or negative), the previous and new quantities, movement type (e.g., "sale", "restock", "adjustment"), and the staff member who made the change.
 
-**Membership and Subscription Entities:**
-- **`waitlist`**: Stores applications from customers wishing to join the Inner Circle. Fields include contact details, location, intent (reason for applying), a `priority_score` for admin-controlled queue management, and status/timestamp fields tracking the full lifecycle from application through invitation to conversion.
-- **`inner_circle_invitations`**: Stores invitation tokens generated when an admin invites a waitlist member. Each record includes the token, a 48-hour `expires_at` timestamp, and a `used_at` field set when the invitation is accepted.
-
 **Communication Entities:**
-- **`sms_logs`**: Records every SMS sent through the platform, including the recipient phone number, message content, type (e.g., "waitlist_confirm", "inner_circle_invite"), status, and timestamp.
+- **`sms_logs`**: Records every SMS sent through the platform, including the recipient phone number, message content, type (e.g., "order_confirm", "popup_refund_confirm"), status, and timestamp.
 - **`communication_logs`**: A broader audit table for all outbound communications (email and SMS), supporting compliance and operational oversight.
 - **`newsletter_subscribers`**: Email addresses of users who have subscribed to marketing communications.
 
@@ -486,7 +473,6 @@ Each order record implements:
 - A human-readable `order_number` for customer-facing references.
 - Status workflow: pending → confirmed → processing → shipped → delivered → cancelled.
 - Payment reconciliation via `paystack_reference`, matched by the Paystack webhook handler.
-- Membership context via `is_inner_circle_order` to distinguish regular and member-priced orders.
 
 ### 3.4.3 Relational Mapping
 
@@ -502,11 +488,6 @@ Core relationships enforced through foreign key constraints:
 - One product → many images (1:N)
 - One product → many collections (N:M via `collection_products`)
 - One variant → many inventory movements (1:N)
-
-**Membership Relationships:**
-- One profile → many waitlist entries (1:N, though typically one active entry)
-- One waitlist entry → many invitations (1:N, though typically one active invitation)
-- Invitation references back to waitlist via `waitlist_id`
 
 **Communication Relationships:**
 - One profile → many SMS logs (1:N)
@@ -551,29 +532,21 @@ Core relationships enforced through foreign key constraints:
         │ 1                                          │ previous_qty      │
         │ N                                          │ new_qty           │
  ┌──────▼──────┐                                     │ movement_type     │
- │ order_items │   ┌──────────────────────────────┐  │ created_by        │
- │─────────────│   │         waitlist             │  └───────────────────┘
- │ id (PK)     │   │──────────────────────────────│
- │ order_id(FK)│   │ id (PK)                      │
- │ product_id  │   │ user_id (FK → profiles)      │
- │ product_name│   │ phone_number                 │
- │ quantity    │   │ intent / location            │
- │ unit_price  │   │ priority_score               │   ┌────────────────────────┐
- │ total_price │   │ status                       │   │inner_circle_invitations│
- └─────────────┘   │ invited_at / converted_at    │1  │────────────────────────│
-                   └──────────────────────────────┘──►│ id (PK)               │
-                                                  N   │ waitlist_id (FK)       │
-                   ┌──────────────────────────────┐   │ invitation_token       │
-                   │        collections           │   │ expires_at             │
-                   │──────────────────────────────│   │ used_at                │
-                   │ id (PK) / title / handle     │   └────────────────────────┘
-                   └──────────────────────────────┘
+ │ order_items │                                     │ created_by        │
+ │─────────────│                                     └───────────────────┘
+ │ id (PK)     │
+ │ order_id(FK)│   ┌──────────────────────────────┐
+ │ product_id  │   │        collections           │
+ │ product_name│   │──────────────────────────────│
+ │ quantity    │   │ id (PK) / title / handle     │
+ │ unit_price  │   └──────────────────────────────┘
+ │ total_price │
+ └─────────────┘
                               │ N:M via collection_products
                               └──────────────────────────────►  products
 
 ENUMS:
-  user_role:         public | waitlist | inner_circle | staff | manager | admin
-  subscription_tier: monthly | quarterly | annual
+  user_role: public | staff | manager | admin
 ```
 
 **Figure 2: IRIS Entity-Relationship Diagram**
@@ -583,7 +556,6 @@ ENUMS:
 **Row-Level Security (RLS):**
 Supabase RLS policies are applied to ensure:
 - Customers can only read and modify their own profile, orders, and order items.
-- Waitlist entries are only readable by the user who submitted them or by admin-scoped service calls.
 - Admin operations (product creation, order status updates, inventory management) are performed via the service role client in the NestJS backend, which bypasses RLS under controlled, authenticated conditions.
 
 **Data Integrity Constraints:**
@@ -690,15 +662,13 @@ IRIS implements a six-role permission model, with three customer-facing roles an
 | Role | Description |
 |---|---|
 | `public` | Standard authenticated customer. Can browse products, place orders, manage their own profile. |
-| `waitlist` | Customer on the Inner Circle waitlist. Has the same storefront access as `public`. |
-| `inner_circle` | Active Inner Circle member. Sees exclusive variant pricing at checkout. |
 
 **Administrative Roles (enforce access to the admin dashboard):**
 
 | Role | Description |
 |---|---|
 | `staff` | Can view orders and update order status. Read-only access to products and customer list. |
-| `manager` | All staff permissions, plus: create/edit/publish products, process refunds, update customer info, manage inventory, manage waitlist and send invitations, view analytics. |
+| `manager` | All staff permissions, plus: create/edit/publish products, process refunds, update customer info, manage inventory, view analytics. |
 | `admin` | All manager permissions, plus: delete products, manage system settings, manage admin user accounts (create, update, delete). |
 
 The full permissions matrix is defined as a compile-time constant in the frontend codebase and enforced at the API layer in the NestJS backend:
@@ -722,9 +692,6 @@ The full permissions matrix is defined as a compile-time constant in the fronten
 ├─────────────────────┼─────────┼─────────┼─────────┤
 │ inventory:read      │    ✓    │    ✓    │    ✓    │
 │ inventory:update    │         │    ✓    │    ✓    │
-├─────────────────────┼─────────┼─────────┼─────────┤
-│ waitlist:read       │         │    ✓    │    ✓    │
-│ waitlist:invite     │         │    ✓    │    ✓    │
 ├─────────────────────┼─────────┼─────────┼─────────┤
 │ analytics:read      │         │    ✓    │    ✓    │
 ├─────────────────────┼─────────┼─────────┼─────────┤
@@ -792,59 +759,6 @@ This section describes the key operational workflows implemented within IRIS.
 ```
 
 **Figure 5: Order Fulfilment Workflow**
-
-### Inner Circle Membership Workflow
-
-```
-     Customer submits waitlist application
-     (name, phone, location, intent)
-                  │
-                  ▼
-     Waitlist entry created in DB
-     Priority_score assigned by admin
-     Confirmation SMS sent to customer
-                  │
-                  ▼
-     Admin reviews waitlist in dashboard
-     (filters, sorts by priority_score)
-                  │
-                  ▼
-     Admin clicks "Invite" on entry
-                  │
-                  ▼
-     System generates unique invitation_token
-     Sets expires_at = now + 48 hours
-     Stores in inner_circle_invitations table
-     Sends invitation SMS with sign-up link
-     (containing token)
-                  │
-                  ▼
-     Customer clicks link within 48 hours
-         ┌────────┴────────┐
-         │ Token valid &   │ Token expired
-         │ not used?       │ or already used
-         └────────┬────────┘
-                  │ Yes           ┌──► Display expiry message
-                  ▼               │    Prompt to request new invite
-     Customer completes
-     Paystack subscription
-     (monthly / quarterly / annual)
-                  │
-                  ▼
-     Profile updated:
-       role → inner_circle
-       subscription_tier → selected
-       subscription_start/end_date → set
-       paystack_subscription_code → stored
-     Invitation used_at → set
-     Waitlist converted_at → set
-                  │
-                  ▼
-     Customer sees Inner Circle pricing
-     on all product variants at checkout
-```
-
-**Figure 6: Inner Circle Membership Lifecycle Workflow**
 
 ### Inventory Management Workflow
 
@@ -923,8 +837,6 @@ Paystack is integrated at two levels within IRIS:
 
 **Backend Webhook Integration:** The authoritative payment confirmation happens via the Paystack webhook. Paystack sends a POST request to `/api/webhooks/paystack` upon a successful charge event. The NestJS `PaymentsService` verifies the HMAC SHA-512 signature of the incoming request body using the configured `PAYSTACK_SECRET_KEY` before processing. On a verified `charge.success` event, the order matching the payment reference is confirmed, its status is updated, and inventory is decremented. This two-step design (frontend callback + backend webhook) ensures that orders are only fulfilled on verified payment, not on optimistic frontend callbacks alone.
 
-**Subscription Management:** For Inner Circle subscriptions, the customer's Paystack customer code and subscription code are stored on their `profiles` record, enabling future subscription management operations (pause, cancel, query status).
-
 ```
      Customer browser                  NestJS Backend            Paystack Servers
           │                                 │                          │
@@ -960,9 +872,6 @@ LetsFish (`https://api.letsfish.africa/v1`) is the pan-African communications pr
 
 | Message Type | Trigger |
 |---|---|
-| `waitlist_confirm` | Customer submits Inner Circle waitlist application |
-| `inner_circle_invite` | Admin sends invitation from the waitlist dashboard (includes 48-hour token link) |
-| `subscription_confirm` | Customer successfully activates Inner Circle subscription |
 | `order_confirm` | Paystack webhook confirms successful online order payment |
 | `popup_refund_confirm` | Staff processes a refund on a popup order |
 
@@ -1323,7 +1232,6 @@ External Services:
 │  • Products (published, stock levels)   │
 │  • Inventory (movements, current qty)   │
 │  • Customers (profile, order history)   │
-│  • Waitlist (priority, status, invite)  │
 │  • Payments (references, amounts)       │
 │  • Popup Sales (active, upcoming)       │
 │  • Communications (SMS logs)            │
@@ -1423,7 +1331,7 @@ External Services:
 | Channel | Provider | Integration Point | Events |
 |---|---|---|---|
 | **Transactional Email** | Resend (via Supabase SMTP) | Supabase Auth | Signup OTP, Password reset |
-| **SMS** | LetsFish (`/v1/sms`) | NestJS LetsfishService | Waitlist confirm, Inner Circle invite, Subscription confirm, Order confirm, Popup refund confirm |
+| **SMS** | LetsFish (`/v1/sms`) | NestJS LetsfishService | Order confirm, Popup refund confirm |
 | **Voice OTP** | LetsFish (`/v1/voice-otp`) | NestJS LetsfishService | OTP delivery via automated phone call |
 
 All LetsFish communications (SMS and voice OTP) are logged to the `communication_logs` table with provider, type, recipient, message, status, and error metadata. Resend delivery is managed at the Supabase infrastructure level and does not require application-level logging.
