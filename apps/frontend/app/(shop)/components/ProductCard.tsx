@@ -56,20 +56,24 @@ function findVariantBySize(
 /* ── Component ───────────────────────────────────────── */
 
 export function ProductCard({ product }: { product: Product }) {
-  const image = product.product_images?.[0];
+  const images = product.product_images || [];
+  const image = images[0];
   const price = product.base_price;
   const { addItem } = useCart();
 
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [addingSize, setAddingSize] = useState<string | null>(null);
   const [successSize, setSuccessSize] = useState<string | null>(null);
+  const [imgIndex, setImgIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const sizes = extractSizes(product.product_variants || []);
   const hasSizes = sizes.length > 0;
+  const currentImage = images[imgIndex] ?? image;
 
   /* Close overlay on mouse leave */
   const handleMouseLeave = useCallback(() => {
+    setImgIndex(0);
     if (quickAddOpen && !addingSize) {
       setQuickAddOpen(false);
       setSuccessSize(null);
@@ -134,11 +138,14 @@ export function ProductCard({ product }: { product: Product }) {
     >
       <Link href={`/product/${product.handle || product.id}`}>
         {/* Image container */}
-        <div className="relative aspect-[3/4] overflow-hidden bg-gray-50 dark:bg-gray-900">
-          {image ? (
+        <div
+          className="relative aspect-[3/4] overflow-hidden bg-gray-50 dark:bg-gray-900"
+          onMouseEnter={() => images.length > 1 && setImgIndex(1)}
+        >
+          {currentImage ? (
             <img
-              src={image.src}
-              alt={image.alt_text || product.title}
+              src={currentImage.src}
+              alt={currentImage.alt_text || product.title}
               className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
             />
           ) : (
