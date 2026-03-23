@@ -20,6 +20,7 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { PopupSalesModule } from './popup-sales/popup-sales.module';
 import { LetsfishModule } from './letsfish/letsfish.module';
 import { CommunicationsModule } from './communications/communications.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { CommunicationsModule } from './communications/communications.module';
     ReviewsModule,
     PopupSalesModule,
     CommunicationsModule,
+    AnalyticsModule,
   ],
   providers: [
     // Apply JwtAuthGuard globally — use @Public() to skip
