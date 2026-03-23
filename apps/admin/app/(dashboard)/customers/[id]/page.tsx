@@ -247,7 +247,7 @@ export default function AdminCustomerDetailPage({
             <div>
               <p className="text-xs text-slate-500">Lifetime Value (All Channels)</p>
               <p className="mt-1 text-xl font-semibold text-slate-900">
-                GH₵{customer.total_spent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                GH₵{(customer.total_spent ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
               <p className="mt-0.5 text-xs text-slate-400">{customer.order_count} total order{customer.order_count !== 1 ? "s" : ""}</p>
             </div>
@@ -261,7 +261,7 @@ export default function AdminCustomerDetailPage({
             <ShoppingBag className="h-4 w-4 text-blue-500" />
             <span className="text-slate-600">Online</span>
             <span className="ml-auto font-medium">
-              {customer.iris_order_count - (customer.popup_orders?.length ?? 0)} orders
+              {(customer.iris_order_count ?? 0) - (customer.popup_orders?.length ?? 0)} orders
             </span>
           </div>
           <div className="flex items-center gap-2 text-sm">
@@ -270,7 +270,7 @@ export default function AdminCustomerDetailPage({
             <span className="ml-auto font-medium">{customer.popup_orders?.length ?? 0} orders</span>
           </div>
           <p className="text-xs text-slate-400 pt-1">
-            Iris spend: GH₵{customer.iris_total_spent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            Iris spend: GH₵{(customer.iris_total_spent ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
 
@@ -281,7 +281,7 @@ export default function AdminCustomerDetailPage({
               {customer.shopify_order_count} order{customer.shopify_order_count !== 1 ? "s" : ""}
             </p>
             <p className="text-sm font-medium text-slate-900">
-              GH₵{customer.shopify_total_spent_amt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              GH₵{(customer.shopify_total_spent_amt ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
             {customer.shopify_customer_id && (
               <p className="text-xs text-slate-400">Shopify ID: {customer.shopify_customer_id}</p>
