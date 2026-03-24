@@ -156,11 +156,31 @@ export default function ProductDetailPage({ params }: PageProps) {
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
         {/* Images */}
-        <ImageGallery images={product.product_images || []} />
+        <ImageGallery images={product.product_images || []} activeImageId={active?.image_id} />
 
         {/* Product info */}
         <div className="space-y-6">
           <div>
+            {/* Merchandising badges */}
+            {(product.is_new_arrival || product.is_best_seller || product.is_featured) && (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {product.is_new_arrival && (
+                  <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                    New Arrival
+                  </span>
+                )}
+                {product.is_best_seller && (
+                  <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                    Best Seller
+                  </span>
+                )}
+                {product.is_featured && (
+                  <span className="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                    Featured
+                  </span>
+                )}
+              </div>
+            )}
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
               {product.title}
             </h1>
@@ -206,14 +226,21 @@ export default function ProductDetailPage({ params }: PageProps) {
           </button>
 
           {/* Description */}
-          {product.description && (
+          {(product.description || product.gsm) && (
             <div className="border-t border-gray-200 pt-6 dark:border-gray-700">
               <h2 className="mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">
                 Description
               </h2>
-              <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-                {product.description}
-              </p>
+              {product.description && (
+                <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                  {product.description}
+                </p>
+              )}
+              {product.gsm && (
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  {product.gsm}gsm fabric
+                </p>
+              )}
             </div>
           )}
 

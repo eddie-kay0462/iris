@@ -12,6 +12,7 @@ import {
   useUpdateVariant,
   useDeleteVariant,
   useAddImage,
+  useUpdateImage,
   useDeleteImage,
   useReorderImages,
   type Product,
@@ -77,6 +78,7 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
   const updateVariant = useUpdateVariant(product?.id || "");
   const deleteVariant = useDeleteVariant(product?.id || "");
   const addImage = useAddImage(product?.id || "");
+  const updateImage = useUpdateImage(product?.id || "");
   const deleteImage = useDeleteImage(product?.id || "");
   const reorderImages = useReorderImages(product?.id || "");
   const addToCollections = useAddCollectionProducts("");
@@ -101,6 +103,18 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
       vendor: product?.vendor || "",
       tags: product?.tags || [],
       published: product?.published ?? false,
+      gsm: product?.gsm ?? undefined,
+      seo_title: product?.seo_title || "",
+      seo_description: product?.seo_description || "",
+      is_new_arrival: product?.is_new_arrival ?? false,
+      is_best_seller: product?.is_best_seller ?? false,
+      is_featured: product?.is_featured ?? false,
+      early_access_start: product?.early_access_start
+        ? product.early_access_start.slice(0, 16)
+        : "",
+      public_release_date: product?.public_release_date
+        ? product.public_release_date.slice(0, 16)
+        : "",
     },
   });
 
@@ -163,6 +177,7 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
         router.push(`/products/${created.id}`);
       } else if (product) {
         await updateMutation.mutateAsync(values as Record<string, unknown>);
+        onRefresh?.();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -265,7 +280,11 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
                 images={product.product_images || []}
                 productId={product.id}
                 productHandle={product.handle}
+                productVariants={product.product_variants || []}
                 onAdd={(src, altText) => addImage.mutate({ src, alt_text: altText })}
+                onUpdateImageType={(imageId, imageType, variantId) =>
+                  updateImage.mutate({ imageId, data: { image_type: imageType, variant_id: variantId } })
+                }
                 onDelete={(imageId) => deleteImage.mutate(imageId)}
                 onReorder={(imageIds) => reorderImages.mutate(imageIds)}
               />
@@ -400,6 +419,53 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
             </div>
           </div>
 
+          {/* Merchandising */}
+          <div className="rounded-lg border border-slate-200 p-4 space-y-3">
+            <h3 className="text-sm font-medium text-slate-700">Merchandising</h3>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" {...register("is_new_arrival")} />
+                New arrival
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" {...register("is_best_seller")} />
+                Best seller
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" {...register("is_featured")} />
+                Featured
+              </label>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">GSM (fabric weight)</label>
+              <input
+                type="number"
+                {...register("gsm")}
+                placeholder="e.g. 320"
+                min={100}
+                max={500}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+              />
+              {errors.gsm && <p className="mt-1 text-xs text-red-500">{errors.gsm.message}</p>}
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">Early access start</label>
+              <input
+                type="datetime-local"
+                {...register("early_access_start")}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">Public release date</label>
+              <input
+                type="datetime-local"
+                {...register("public_release_date")}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+              />
+            </div>
+          </div>
+
           {/* SEO */}
           <div className="rounded-lg border border-slate-200 p-4 space-y-4">
             <h3 className="text-sm font-medium text-slate-700">SEO</h3>
@@ -408,6 +474,23 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
               <input
                 {...register("handle")}
                 placeholder="auto-generated-from-title"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">SEO title</label>
+              <input
+                {...register("seo_title")}
+                placeholder="Override page title for search engines"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">SEO description</label>
+              <textarea
+                {...register("seo_description")}
+                rows={2}
+                placeholder="Override meta description for search engines"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
               />
             </div>

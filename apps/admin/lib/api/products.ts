@@ -9,6 +9,10 @@ export interface ProductImage {
   src: string;
   alt_text: string | null;
   position: number;
+  image_type: "product" | "variant" | "lifestyle";
+  variant_id: string | null;
+  option1_value: string | null;
+  option2_value: string | null;
 }
 
 export interface ProductVariant {
@@ -37,11 +41,19 @@ export interface Product {
   description: string | null;
   base_price: number | null;
   status: "draft" | "active" | "archived";
-  gender: "men" | "women" | "all" | null;
+  gender: "men" | "women" | "all" | "unisex" | null;
   product_type: string | null;
   vendor: string | null;
   tags: string[] | null;
   published: boolean;
+  gsm: number | null;
+  seo_title: string | null;
+  seo_description: string | null;
+  is_new_arrival: boolean;
+  is_best_seller: boolean;
+  is_featured: boolean;
+  early_access_start: string | null;
+  public_release_date: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -110,8 +122,8 @@ export function useAdminProducts(params: ProductQueryParams = {}) {
 export function useAdminProduct(id: string) {
   return useQuery({
     queryKey: ["admin-product", id],
-    queryFn: () => apiClient<Product>(`/products/admin/list?id=${id}`),
-    enabled: false, // We'll use a direct fetch instead
+    queryFn: () => apiClient<Product>(`/products/admin/${id}`),
+    enabled: !!id,
   });
 }
 
@@ -154,8 +166,9 @@ export function usePublishProduct() {
   return useMutation({
     mutationFn: (id: string) =>
       apiClient<Product>(`/products/${id}/publish`, { method: "PATCH" }),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       qc.invalidateQueries({ queryKey: ["admin-products"] });
+      qc.invalidateQueries({ queryKey: ["admin-product", id] });
     },
   });
 }
@@ -231,6 +244,26 @@ export function useDeleteImage(productId: string) {
     mutationFn: (imageId: string) =>
       apiClient(`/products/${productId}/images/${imageId}`, {
         method: "DELETE",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-product", productId] });
+    },
+  });
+}
+
+export function useUpdateImage(productId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      imageId,
+      data,
+    }: {
+      imageId: string;
+      data: { alt_text?: string; image_type?: string; variant_id?: string | null };
+    }) =>
+      apiClient(`/products/${productId}/images/${imageId}`, {
+        method: "PATCH",
+        body: data,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-product", productId] });

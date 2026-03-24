@@ -124,9 +124,28 @@ export class ProductsController {
   @RequirePermission('products:update')
   addImage(
     @Param('id') id: string,
-    @Body() body: { src: string; alt_text?: string },
+    @Body()
+    body: {
+      src: string;
+      alt_text?: string;
+      image_type?: string;
+      variant_id?: string;
+      option1_value?: string;
+      option2_value?: string;
+    },
   ) {
     return this.productsService.addImage(id, body);
+  }
+
+  @Patch(':id/images/:imageId')
+  @RequirePermission('products:update')
+  updateImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+    @Body()
+    body: { alt_text?: string; image_type?: string; variant_id?: string | null },
+  ) {
+    return this.productsService.updateImage(id, imageId, body);
   }
 
   @Delete(':id/images/:imageId')

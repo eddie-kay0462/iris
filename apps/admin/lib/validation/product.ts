@@ -28,12 +28,20 @@ export const productSchema = z.object({
   status: z.enum(["draft", "active", "archived"]).optional(),
   gender: z.preprocess(
     (val) => (val === "" ? "all" : val),
-    z.enum(["men", "women", "all"]).optional()
+    z.enum(["men", "women", "all", "unisex"]).optional()
   ),
   product_type: z.string().optional(),
   vendor: z.string().optional(),
   tags: z.array(z.string()).optional(),
   published: z.boolean().optional(),
+  gsm: z.coerce.number().int().min(100).max(500).optional().nullable(),
+  seo_title: z.string().optional(),
+  seo_description: z.string().optional(),
+  is_new_arrival: z.boolean().optional(),
+  is_best_seller: z.boolean().optional(),
+  is_featured: z.boolean().optional(),
+  early_access_start: z.string().optional().nullable(),
+  public_release_date: z.string().optional().nullable(),
 });
 
 export const stockAdjustmentSchema = z.object({

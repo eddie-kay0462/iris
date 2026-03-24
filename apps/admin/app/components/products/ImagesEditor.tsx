@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useCallback } from "react";
-import type { ProductImage } from "@/lib/api/products";
+import type { ProductImage, ProductVariant } from "@/lib/api/products";
 import { uploadProductImage } from "@/lib/uploadProductImage";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -32,8 +32,12 @@ interface ImagesEditorProps {
    *   responsible for uploading them after the product is created.
    */
   productHandle?: string;
+  /** Variants for associating an image to a specific variant */
+  productVariants?: ProductVariant[];
   /** Called once an image's storage path is ready (edit mode only) */
   onAdd: (storagePath: string, altText?: string) => void;
+  /** Called when admin changes image_type or variant association on a saved image */
+  onUpdateImageType?: (imageId: string, imageType: string, variantId: string | null) => void;
   onDelete: (imageId: string) => void;
   onReorder: (imageIds: string[]) => void;
   /** @deprecated kept for backward compatibility; not used internally */
@@ -52,7 +56,9 @@ interface ImagesEditorProps {
 export function ImagesEditor({
   images,
   productHandle,
+  productVariants = [],
   onAdd,
+  onUpdateImageType,
   onDelete,
   onStagedFile,
   onRemoveStagedFile,
@@ -197,6 +203,40 @@ export function ImagesEditor({
               >
                 <XIcon />
               </button>
+              {/* Image type badge + variant picker (edit mode only) */}
+              {onUpdateImageType && (
+                <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-1 hidden group-hover:block">
+                  <select
+                    value={img.image_type || "product"}
+                    onChange={(e) =>
+                      onUpdateImageType(img.id, e.target.value, img.variant_id)
+                    }
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full rounded border border-slate-600 bg-black/80 px-1 py-0.5 text-[10px] text-white outline-none"
+                  >
+                    <option value="product">Product</option>
+                    <option value="variant">Variant</option>
+                    <option value="lifestyle">Lifestyle</option>
+                  </select>
+                  {productVariants.length > 0 && (
+                    <select
+                      value={img.variant_id || ""}
+                      onChange={(e) =>
+                        onUpdateImageType(img.id, img.image_type || "product", e.target.value || null)
+                      }
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-0.5 w-full rounded border border-slate-600 bg-black/80 px-1 py-0.5 text-[10px] text-white outline-none"
+                    >
+                      <option value="">No variant</option>
+                      {productVariants.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {[v.option1_value, v.option2_value].filter(Boolean).join(" / ") || v.sku || v.id.slice(0, 8)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
             </div>
           ))}
 
