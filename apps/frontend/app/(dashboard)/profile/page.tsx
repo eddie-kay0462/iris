@@ -75,12 +75,14 @@ export default function ProfilePage() {
   };
 
   const inputClass =
-    "w-full border border-gray-300 p-2 rounded focus:outline-none focus:ring-1 focus:ring-black";
+    "w-full border border-gray-300 bg-white text-black p-2 rounded focus:outline-none focus:ring-1 focus:ring-black dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-white";
+
+  const labelClass = "mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300";
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-gray-500">Loading profile...</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Loading profile...</p>
       </div>
     );
   }
@@ -89,7 +91,7 @@ export default function ProfilePage() {
     <div className="mx-auto max-w-lg space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Profile</h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           Update your personal information and notification preferences.
         </p>
       </div>
@@ -98,8 +100,8 @@ export default function ProfilePage() {
         <div
           className={`rounded border p-3 text-sm text-center ${
             message.type === "success"
-              ? "border-green-300 bg-green-50 text-green-800"
-              : "border-red-300 bg-red-50 text-red-800"
+              ? "border-green-300 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-300"
+              : "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-300"
           }`}
         >
           {message.text}
@@ -109,23 +111,19 @@ export default function ProfilePage() {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              First name
-            </label>
+            <label className={labelClass}>First name</label>
             <input {...register("first_name")} className={inputClass} />
             {errors.first_name && (
-              <p className="mt-1 text-xs text-red-600">
+              <p className="mt-1 text-xs text-red-600 dark:text-red-400">
                 {errors.first_name.message}
               </p>
             )}
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Last name
-            </label>
+            <label className={labelClass}>Last name</label>
             <input {...register("last_name")} className={inputClass} />
             {errors.last_name && (
-              <p className="mt-1 text-xs text-red-600">
+              <p className="mt-1 text-xs text-red-600 dark:text-red-400">
                 {errors.last_name.message}
               </p>
             )}
@@ -133,9 +131,7 @@ export default function ProfilePage() {
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Phone number
-          </label>
+          <label className={labelClass}>Phone number</label>
           <input
             {...register("phone_number")}
             type="tel"
@@ -143,8 +139,8 @@ export default function ProfilePage() {
           />
         </div>
 
-        <fieldset className="space-y-3 rounded border border-gray-200 p-4">
-          <legend className="px-1 text-sm font-medium text-gray-700">
+        <fieldset className="space-y-3 rounded border border-gray-200 p-4 dark:border-gray-700">
+          <legend className="px-1 text-sm font-medium text-gray-700 dark:text-gray-300">
             Notifications
           </legend>
           <label className="flex items-center gap-2 text-sm">
@@ -160,7 +156,7 @@ export default function ProfilePage() {
         <button
           type="submit"
           disabled={saving}
-          className="w-full bg-black text-white px-4 py-2 rounded disabled:opacity-50"
+          className="w-full bg-black text-white px-4 py-2 rounded disabled:opacity-50 dark:bg-white dark:text-black"
         >
           {saving ? "Saving..." : "Save changes"}
         </button>

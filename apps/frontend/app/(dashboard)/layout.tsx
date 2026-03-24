@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { Menu, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { apiClient, clearToken } from "@/lib/api/client";
@@ -36,12 +37,19 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white text-black dark:bg-gray-950 dark:text-white">
       {/* Header */}
-      <header className="border-b border-gray-200">
+      <header className="border-b border-gray-200 dark:border-gray-800">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-          <Link href="/products" className="text-lg font-bold tracking-tight">
-            1NRI
+          <Link href="/products" className="flex items-center">
+            <Image
+              src="/homepage_img/no-bg-1NRI.png"
+              alt="1NRI"
+              width={96}
+              height={38}
+              className="h-7 w-auto dark:invert"
+              unoptimized
+            />
           </Link>
 
           {/* Desktop nav */}
@@ -52,8 +60,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 href={item.href}
                 className={`text-sm font-medium transition-colors ${
                   isActive(item.href)
-                    ? "text-black"
-                    : "text-gray-500 hover:text-black"
+                    ? "text-black dark:text-white"
+                    : "text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white"
                 }`}
               >
                 {item.label}
@@ -62,7 +70,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <button
               onClick={handleLogout}
               disabled={loggingOut}
-              className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
             >
               {loggingOut ? "Signing out..." : "Sign out"}
             </button>
@@ -83,7 +91,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
         {/* Mobile dropdown */}
         {mobileOpen && (
-          <nav className="border-t border-gray-200 px-4 py-3 md:hidden">
+          <nav className="border-t border-gray-200 px-4 py-3 md:hidden dark:border-gray-800">
             <div className="flex flex-col gap-3">
               {navItems.map((item) => (
                 <Link
@@ -92,8 +100,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   onClick={() => setMobileOpen(false)}
                   className={`text-sm font-medium ${
                     isActive(item.href)
-                      ? "text-black"
-                      : "text-gray-500 hover:text-black"
+                      ? "text-black dark:text-white"
+                      : "text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white"
                   }`}
                 >
                   {item.label}
@@ -102,7 +110,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               <button
                 onClick={handleLogout}
                 disabled={loggingOut}
-                className="mt-1 w-full rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
               >
                 {loggingOut ? "Signing out..." : "Sign out"}
               </button>
