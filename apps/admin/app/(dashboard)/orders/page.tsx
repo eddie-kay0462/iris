@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAdminOrders, type Order } from "@/lib/api/orders";
+import { useAdminOrders, useUpdateOrderStatus, type Order } from "@/lib/api/orders";
 import { DataTable, type Column } from "../../components/DataTable";
 import { StatusBadge } from "../../components/StatusBadge";
 import { SearchInput } from "../../components/SearchInput";
@@ -11,7 +11,6 @@ import { Download } from "lucide-react";
 import { getToken } from "@/lib/api/client";
 
 const ORDER_STATUSES = [
-  "",
   "pending",
   "paid",
   "processing",
@@ -21,25 +20,43 @@ const ORDER_STATUSES = [
   "refunded",
 ];
 
-const columns: Column<Order>[] = [
-  { key: "order_number", header: "Order" },
-  { key: "email", header: "Customer" },
-  {
-    key: "status",
-    header: "Status",
-    render: (row) => <StatusBadge status={row.status} />,
-  },
-  {
-    key: "total",
-    header: "Total",
-    render: (row) => `GH₵${Number(row.total).toLocaleString()}`,
-  },
-  {
-    key: "created_at",
-    header: "Date",
-    render: (row) => new Date(row.created_at).toLocaleDateString(),
-  },
-];
+function StatusDropdown({
+  order,
+  onUpdate,
+}: {
+  order: Order;
+  onUpdate: (orderId: string, status: string) => void;
+}) {
+  const [pending, setPending] = useState(false);
+
+  async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    e.stopPropagation();
+    const newStatus = e.target.value;
+    if (newStatus === order.status) return;
+    setPending(true);
+    try {
+      await onUpdate(order.id, newStatus);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <select
+      value={order.status}
+      onChange={handleChange}
+      onClick={(e) => e.stopPropagation()}
+      disabled={pending}
+      className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 outline-none focus:border-slate-400 disabled:opacity-50"
+    >
+      {ORDER_STATUSES.map((s) => (
+        <option key={s} value={s}>
+          {s.charAt(0).toUpperCase() + s.slice(1)}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 export default function AdminOrdersPage() {
   const router = useRouter();
@@ -48,6 +65,33 @@ export default function AdminOrdersPage() {
   const [page, setPage] = useState(1);
 
   const { data, isLoading } = useAdminOrders({ search, status, page });
+  const updateStatus = useUpdateOrderStatus();
+
+  function handleStatusUpdate(orderId: string, newStatus: string) {
+    return updateStatus.mutateAsync({ orderId, status: newStatus });
+  }
+
+  const columns: Column<Order>[] = [
+    { key: "order_number", header: "Order" },
+    { key: "email", header: "Customer" },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => (
+        <StatusDropdown order={row} onUpdate={handleStatusUpdate} />
+      ),
+    },
+    {
+      key: "total",
+      header: "Total",
+      render: (row) => `GH₵${Number(row.total).toLocaleString()}`,
+    },
+    {
+      key: "created_at",
+      header: "Date",
+      render: (row) => new Date(row.created_at).toLocaleDateString(),
+    },
+  ];
 
   return (
     <section className="space-y-6">
@@ -100,7 +144,7 @@ export default function AdminOrdersPage() {
           className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
         >
           <option value="">All statuses</option>
-          {ORDER_STATUSES.filter(Boolean).map((s) => (
+          {ORDER_STATUSES.map((s) => (
             <option key={s} value={s}>
               {s.charAt(0).toUpperCase() + s.slice(1)}
             </option>
