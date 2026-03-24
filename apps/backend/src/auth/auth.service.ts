@@ -19,10 +19,13 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto) {
+    // Use a throwaway client for signInWithPassword so the shared adminClient's
+    // session (and Authorization header) is never overwritten with a user JWT.
+    const authClient = this.supabaseService.createAuthClient();
     const supabase = this.supabaseService.getAdminClient();
 
     const { data: authData, error: authError } =
-      await supabase.auth.signInWithPassword({
+      await authClient.auth.signInWithPassword({
         email: dto.email,
         password: dto.password,
       });
@@ -238,10 +241,12 @@ export class AuthService {
   }
 
   async adminLogin(dto: LoginDto) {
+    // Use a throwaway client for signInWithPassword — same reason as login().
+    const authClient = this.supabaseService.createAuthClient();
     const supabase = this.supabaseService.getAdminClient();
 
     const { data: authData, error: authError } =
-      await supabase.auth.signInWithPassword({
+      await authClient.auth.signInWithPassword({
         email: dto.email,
         password: dto.password,
       });
