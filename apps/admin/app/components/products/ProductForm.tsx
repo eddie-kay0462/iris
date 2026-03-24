@@ -2,7 +2,7 @@
 
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { zodResolver } from "@/lib/validation/zod-resolver";
 import { productSchema, type ProductFormValues } from "@/lib/validation/product";
 import {
@@ -71,6 +71,9 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
   const stagedFiles = useRef<Map<string, File>>(new Map());
   const [localVariants, setLocalVariants] = useState<LocalVariantDraft[]>([]);
 
+  // Ref to skip the nav guard for form-internal navigations (e.g. after create)
+  const bypassNavGuard = useRef(false);
+
   // ── Mutations ───────────────────────────────────────────────────────────────
   const createMutation = useCreateProduct();
   const updateMutation = useUpdateProduct(product?.id || "");
@@ -89,7 +92,8 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
     handleSubmit,
     watch,
     setValue,
-    formState: { errors, isSubmitting },
+    reset,
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: {
@@ -117,6 +121,44 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
         : "",
     },
   });
+
+  // ── Unsaved-changes guard ────────────────────────────────────────────────────
+  // 1. Browser close / refresh / external navigation
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
+
+  // 2. Next.js client-side navigation (Link clicks, sidebar, etc.)
+  useEffect(() => {
+    if (!isDirty) return;
+    const originalPush = window.history.pushState.bind(window.history);
+    window.history.pushState = (state, title, url) => {
+      // Skip guard for form-internal navigations (e.g. after successful create)
+      if (bypassNavGuard.current) {
+        bypassNavGuard.current = false;
+        originalPush(state, title, url);
+        return;
+      }
+      // Skip guard if the URL isn't actually changing
+      const newPath = url ? String(url) : "";
+      if (newPath === window.location.pathname + window.location.search) {
+        originalPush(state, title, url);
+        return;
+      }
+      if (window.confirm("You have unsaved changes. Leave without saving?")) {
+        originalPush(state, title, url);
+      }
+    };
+    return () => {
+      window.history.pushState = originalPush;
+    };
+  }, [isDirty]);
 
   // Watch tags so the chip state stays in sync
   const currentTags = watch("tags") as string[] | undefined;
@@ -174,9 +216,11 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
             });
           } catch { /* best effort */ }
         }
+        bypassNavGuard.current = true;
         router.push(`/products/${created.id}`);
       } else if (product) {
         await updateMutation.mutateAsync(values as Record<string, unknown>);
+        reset(values); // clear isDirty so the nav guard doesn't fire after save
         onRefresh?.();
       }
     } catch (err) {
@@ -523,7 +567,11 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
         </button>
         <button
           type="button"
-          onClick={() => router.push("/products")}
+          onClick={() => {
+            if (isDirty && !window.confirm("You have unsaved changes. Leave without saving?")) return;
+            bypassNavGuard.current = true;
+            router.push("/products");
+          }}
           className="text-sm text-slate-500 hover:text-slate-700"
         >
           Cancel
