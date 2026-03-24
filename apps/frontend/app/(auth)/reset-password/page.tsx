@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { apiClient } from "@/lib/api/client";
+import { createClient } from "@/lib/supabase/client";
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState("");
@@ -16,14 +16,20 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      await apiClient("/auth/reset-password", {
-        method: "POST",
-        body: { email },
+      const supabase = createClient();
+      // Build redirectTo from the current origin so the URL is always correct
+      // regardless of which environment (local, staging, production) is running.
+      const redirectTo = `${window.location.origin}/api/auth/callback?next=/update-password`;
+
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo,
       });
+
+      if (resetError) throw resetError;
 
       setSubmitted(true);
     } catch (err: any) {
-      setError(err?.data?.message || err?.data?.error || "Something went wrong");
+      setError(err?.message || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
