@@ -18,7 +18,6 @@ import {
   X,
   Star,
   ShoppingBag,
-  PieChart,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Permission, UserRole } from "@/lib/rbac/permissions";
@@ -36,7 +35,6 @@ const navItems: NavItem[] = [
   { href: "/products", label: "Products", icon: Package, permission: "products:read" },
   { href: "/orders", label: "Orders", icon: ShoppingCart, permission: "orders:read" },
   { href: "/popup-sales", label: "Pop-up Sales", icon: ShoppingBag, permission: "popup:read" },
-  { href: "/popup-analytics", label: "Pop-up Analytics", icon: PieChart, permission: "analytics:read" },
   { href: "/payments", label: "Payments", icon: CreditCard, permission: "orders:read" },
   { href: "/inventory", label: "Inventory", icon: Warehouse, permission: "inventory:read" },
   { href: "/customers", label: "Customers", icon: Users, permission: "customers:read" },
