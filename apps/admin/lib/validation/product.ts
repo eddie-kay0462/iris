@@ -34,7 +34,10 @@ export const productSchema = z.object({
   vendor: z.string().optional(),
   tags: z.array(z.string()).optional(),
   published: z.boolean().optional(),
-  gsm: z.coerce.number().int().min(100).max(500).optional().nullable(),
+  gsm: z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? undefined : Number(val)),
+    z.number().int().min(100, "Min 100gsm").max(500, "Max 500gsm").optional()
+  ),
   seo_title: z.string().optional(),
   seo_description: z.string().optional(),
   is_new_arrival: z.boolean().optional(),
