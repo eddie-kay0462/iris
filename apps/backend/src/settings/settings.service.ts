@@ -106,7 +106,7 @@ export class SettingsService {
 
 const ROLE_DESCRIPTIONS: Record<string, string> = {
   admin: 'Full access to all settings, users, and data.',
-  manager: 'Manage products, orders, customers, analytics, and waitlist.',
+  manager: 'Manage products, orders, customers, and analytics.',
   staff: 'View products, orders, customers, and inventory.',
   public: 'Customer account — no admin access.',
 };

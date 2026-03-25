@@ -149,9 +149,6 @@ export default function CommunicationsSettingsPage() {
         </p>
         <div className="divide-y divide-slate-100 text-sm">
           {[
-            { name: "Waitlist Confirmation", preview: "Hi [name]! You're on the 1NRI Inner Circle waitlist..." },
-            { name: "Inner Circle Invitation", preview: "[name], your Inner Circle invitation is ready! Complete enrollment here: [link] (expires in 48hrs)" },
-            { name: "Subscription Confirmed", preview: "Welcome to Inner Circle, [name]! Your [tier] membership is active..." },
             { name: "Order Confirmation", preview: "Order #[number] confirmed! We'll update you on shipping soon." },
           ].map((t) => (
             <div key={t.name} className="py-3">

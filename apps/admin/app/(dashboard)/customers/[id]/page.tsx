@@ -192,8 +192,6 @@ export default function AdminCustomerDetailPage({
 
   const name = [customer.first_name, customer.last_name].filter(Boolean).join(" ") || "—";
   const roleBadgeColor: Record<string, string> = {
-    inner_circle: "bg-amber-100 text-amber-800",
-    waitlist: "bg-purple-100 text-purple-800",
     public: "bg-slate-100 text-slate-600",
   };
 

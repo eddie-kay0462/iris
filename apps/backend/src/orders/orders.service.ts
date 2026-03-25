@@ -446,7 +446,7 @@ export class OrdersService {
       let q = db
         .from('profiles')
         .select('*', { count: 'exact' })
-        .or('role.eq.public,role.eq.waitlist,role.eq.inner_circle,role.is.null');
+        .or('role.eq.public,role.is.null');
 
       if (query.search) {
         q = q.or(

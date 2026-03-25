@@ -105,7 +105,7 @@ function InviteUserModal({ onClose }: { onClose: () => void }) {
               </select>
               <p className="text-xs text-slate-400">
                 {form.role === "admin" && "Full access to all settings, users, and data."}
-                {form.role === "manager" && "Manage products, orders, customers, analytics, and waitlist."}
+                {form.role === "manager" && "Manage products, orders, customers, and analytics."}
                 {form.role === "staff" && "View products, orders, customers, and inventory."}
               </p>
             </div>

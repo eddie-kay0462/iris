@@ -33,10 +33,6 @@ export const PERMISSIONS = {
   "inventory:read": "View inventory levels",
   "inventory:update": "Update stock quantities",
 
-  // Waitlist permissions
-  "waitlist:read": "View waitlist entries",
-  "waitlist:invite": "Send invitations to waitlist members",
-
   // Analytics permissions
   "analytics:read": "View analytics and reports",
 
@@ -84,7 +80,7 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     "popup:update",
   ],
 
-  // Managers can do everything staff can, plus manage products and waitlist
+  // Managers can do everything staff can, plus manage products
   manager: [
     "products:read",
     "products:create",
@@ -97,8 +93,6 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     "customers:update",
     "inventory:read",
     "inventory:update",
-    "waitlist:read",
-    "waitlist:invite",
     "analytics:read",
     "reviews:read",
     "reviews:moderate",
@@ -122,8 +116,6 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     "customers:update",
     "inventory:read",
     "inventory:update",
-    "waitlist:read",
-    "waitlist:invite",
     "analytics:read",
     "settings:read",
     "settings:update",
