@@ -6,7 +6,9 @@ import {
   IsEnum,
   IsArray,
   ValidateNested,
+  IsDateString,
   Min,
+  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -109,6 +111,40 @@ export class CreateProductDto {
   @IsOptional()
   @IsBoolean()
   published?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(100)
+  @Max(500)
+  gsm?: number;
+
+  @IsOptional()
+  @IsString()
+  seo_title?: string;
+
+  @IsOptional()
+  @IsString()
+  seo_description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  is_new_arrival?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  is_best_seller?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  is_featured?: boolean;
+
+  @IsOptional()
+  @IsDateString()
+  early_access_start?: string;
+
+  @IsOptional()
+  @IsDateString()
+  public_release_date?: string;
 
   @IsOptional()
   @IsArray()

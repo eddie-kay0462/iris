@@ -14,11 +14,16 @@ export interface ProductImage {
   src: string;
   alt_text: string | null;
   position: number;
+  image_type: "product" | "variant" | "lifestyle";
+  variant_id: string | null;
+  option1_value: string | null;
+  option2_value: string | null;
 }
 
 export interface ProductVariant {
   id: string;
   product_id: string;
+  image_id: string | null;
   option1_name: string | null;
   option1_value: string | null;
   option2_name: string | null;
@@ -30,6 +35,7 @@ export interface ProductVariant {
   sku: string | null;
   barcode: string | null;
   inventory_quantity: number;
+  available: boolean;
   weight: number | null;
   weight_unit: string | null;
 }
@@ -41,11 +47,19 @@ export interface Product {
   description: string | null;
   base_price: number | null;
   status: "draft" | "active" | "archived";
-  gender: "men" | "women" | "all" | null;
+  gender: "men" | "women" | "all" | "unisex" | null;
   product_type: string | null;
   vendor: string | null;
   tags: string[] | null;
   published: boolean;
+  gsm: number | null;
+  seo_title: string | null;
+  seo_description: string | null;
+  is_new_arrival: boolean;
+  is_best_seller: boolean;
+  is_featured: boolean;
+  early_access_start: string | null;
+  public_release_date: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

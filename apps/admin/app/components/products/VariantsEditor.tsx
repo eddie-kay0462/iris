@@ -67,6 +67,7 @@ export function VariantsEditor({
     option2_name: "Size",
     option2_value: "",
     price: seedPrice != null ? String(seedPrice) : "",
+    compare_at_price: "",
     sku: "",
     image_id: "",
     inventory_quantity: "0",
@@ -120,6 +121,7 @@ export function VariantsEditor({
       option2_name: form.option2_value ? form.option2_name : undefined,
       option2_value: form.option2_value || undefined,
       price: form.price ? Number(form.price) : undefined,
+      compare_at_price: form.compare_at_price ? Number(form.compare_at_price) : undefined,
       sku: form.sku || undefined,
       image_id: form.image_id || undefined,
       inventory_quantity: Number(form.inventory_quantity) || 0,
@@ -137,6 +139,7 @@ export function VariantsEditor({
       option2_name: v.option2_name || "Size",
       option2_value: v.option2_value || "",
       price: v.price != null ? String(v.price) : "",
+      compare_at_price: v.compare_at_price != null ? String(v.compare_at_price) : "",
       sku: v.sku || "",
       image_id: v.image_id || "",
       inventory_quantity: String(v.inventory_quantity || 0),
@@ -150,6 +153,7 @@ export function VariantsEditor({
       option2_name: form.option2_value ? form.option2_name : undefined,
       option2_value: form.option2_value || undefined,
       price: form.price ? Number(form.price) : undefined,
+      compare_at_price: form.compare_at_price ? Number(form.compare_at_price) : null,
       sku: form.sku || undefined,
       image_id: form.image_id || undefined,
       inventory_quantity: Number(form.inventory_quantity) || 0,
@@ -229,8 +233,8 @@ export function VariantsEditor({
             </div>
           </div>
 
-          {/* Price / SKU / Qty / Image */}
-          <div className="grid grid-cols-4 gap-2">
+          {/* Price / Compare / SKU / Qty / Image */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <div>
               <label className="mb-1 block text-xs text-slate-500">Price (GH₵)</label>
               <input
@@ -238,6 +242,16 @@ export function VariantsEditor({
                 placeholder="0.00"
                 value={form.price}
                 onChange={(e) => setForm({ ...form, price: e.target.value })}
+                className="w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">Compare at (GH₵)</label>
+              <input
+                type="number"
+                placeholder="0.00"
+                value={form.compare_at_price}
+                onChange={(e) => setForm({ ...form, compare_at_price: e.target.value })}
                 className="w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
               />
             </div>
@@ -385,9 +399,17 @@ export function VariantsEditor({
                   <td className="py-2 pr-2">
                     <input
                       type="number"
+                      placeholder="Price"
                       value={form.price}
                       onChange={(e) => setForm({ ...form, price: e.target.value })}
-                      className="w-24 rounded border border-slate-200 px-2 py-1 text-sm"
+                      className="w-20 rounded border border-slate-200 px-2 py-1 text-sm"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Compare"
+                      value={form.compare_at_price}
+                      onChange={(e) => setForm({ ...form, compare_at_price: e.target.value })}
+                      className="mt-1 w-20 rounded border border-slate-200 px-2 py-1 text-sm"
                     />
                   </td>
                   <td className="py-2 pr-2">
@@ -422,7 +444,12 @@ export function VariantsEditor({
                   <td className="py-2">{v.option1_value || "—"}</td>
                   <td className="py-2">{v.option2_value || "—"}</td>
                   <td className="py-2 text-xs text-slate-400">{v.sku || "—"}</td>
-                  <td className="py-2">{v.price != null ? `GH₵${v.price.toLocaleString()}` : "—"}</td>
+                  <td className="py-2">
+                    {v.price != null ? `GH₵${v.price.toLocaleString()}` : "—"}
+                    {v.compare_at_price != null && (
+                      <span className="ml-1 text-xs text-slate-400 line-through">GH₵{v.compare_at_price.toLocaleString()}</span>
+                    )}
+                  </td>
                   <td className="py-2">
                     <span className={
                       v.inventory_quantity === 0 ? "text-red-600 font-medium"

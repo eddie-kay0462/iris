@@ -1,11 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ProductImage } from "@/lib/api/products";
 
-export function ImageGallery({ images }: { images: ProductImage[] }) {
+export function ImageGallery({
+  images,
+  activeImageId,
+}: {
+  images: ProductImage[];
+  activeImageId?: string | null;
+}) {
   const sorted = [...images].sort((a, b) => a.position - b.position);
   const [selected, setSelected] = useState(0);
+
+  // Jump to the variant's image when activeImageId changes
+  useEffect(() => {
+    if (!activeImageId) return;
+    const idx = sorted.findIndex((img) => img.id === activeImageId);
+    if (idx !== -1 && idx !== selected) setSelected(idx);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeImageId]);
 
   if (sorted.length === 0) {
     return (

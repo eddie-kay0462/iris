@@ -334,7 +334,17 @@ export class ProductsService {
 
   // --- Images ---
 
-  async addImage(productId: string, body: { src: string; alt_text?: string }) {
+  async addImage(
+    productId: string,
+    body: {
+      src: string;
+      alt_text?: string;
+      image_type?: string;
+      variant_id?: string;
+      option1_value?: string;
+      option2_value?: string;
+    },
+  ) {
     const db = this.supabase.getAdminClient();
     await this.findOneAdmin(productId);
 
@@ -355,11 +365,33 @@ export class ProductsService {
         src: body.src,
         alt_text: body.alt_text,
         position,
+        image_type: body.image_type || 'product',
+        variant_id: body.variant_id || null,
+        option1_value: body.option1_value || null,
+        option2_value: body.option2_value || null,
       })
       .select()
       .single();
 
     if (error) throw error;
+    return data;
+  }
+
+  async updateImage(
+    productId: string,
+    imageId: string,
+    body: { alt_text?: string; image_type?: string; variant_id?: string | null },
+  ) {
+    const db = this.supabase.getAdminClient();
+    const { data, error } = await db
+      .from('product_images')
+      .update(body)
+      .eq('id', imageId)
+      .eq('product_id', productId)
+      .select()
+      .single();
+
+    if (error || !data) throw new NotFoundException('Image not found');
     return data;
   }
 
