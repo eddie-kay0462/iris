@@ -1646,4 +1646,60 @@ Overall, the platform met all functional and non-functional requirements defined
 
 *End of Chapter 5*
 
-*Chapter 6 (Conclusions and Recommendations) to follow.*
+---
+
+# Chapter 6: Conclusions and Recommendations
+
+## 6.1 Conclusion
+
+1NRI Worldwide Ltd. entered this project managing their fashion e-commerce operations across a fragmented set of disconnected tools — no unified product catalogue, no real-time inventory visibility, no structured order management, and no way to run in-person popup sales alongside their online store. The absence of a centralised platform introduced manual errors, slowed operations, and limited the business's ability to scale.
+
+IRIS addresses these challenges by delivering a fully integrated, four-component e-commerce platform purpose-built for 1NRI's operational context. The customer-facing storefront provides a modern, performant shopping experience with server-side rendered product pages, a managed checkout flow through Paystack, and a personalised AI-powered recommendation engine. The admin dashboard gives 1NRI's team complete control over their product catalogue, inventory, orders, customer data, communications, and financial analytics from a single authenticated interface. The NestJS backend centralises all business logic behind a secure, modular REST API, enforcing JWT authentication and role-based access across every endpoint. The Python recommendation microservice provides hybrid collaborative and content-based filtering, bringing genuine machine learning capability to a small fashion business at a scale that would otherwise be inaccessible.
+
+Testing validated the platform across all critical dimensions. All 74 automated tests passed, covering form validation, RBAC enforcement, route protection, API integration, and component rendering. End-to-end system testing confirmed every major customer and admin journey. User acceptance testing with 1NRI staff resulted in a successful handover, with only minor UX refinements requested — all of which were resolved before final delivery.
+
+IRIS demonstrates that a well-architected, modular platform can meaningfully consolidate operations for an African fashion SME, reduce manual overhead, and provide the data infrastructure needed for informed business decisions. The platform is production-ready and positions 1NRI Worldwide Ltd. for structured, scalable growth.
+
+---
+
+## 6.2 Recommendations
+
+The following recommendations are proposed to extend the platform's impact and prepare it for long-term growth.
+
+### Technical Enhancements
+
+- **Recommendation Model Retraining:** As 1NRI's product catalogue and customer order history grow, the recommendation engine should be retrained periodically on updated interaction data. A scheduled retraining pipeline (e.g., weekly via a cron job triggering the Python service) would keep recommendations fresh without manual intervention.
+
+- **Real-Time Inventory Alerts:** The current inventory system logs all movements but does not proactively alert staff when stock falls below a threshold. Adding a configurable low-stock alert — delivered via SMS through the existing LetsFish integration or as an in-dashboard notification — would prevent stockouts during high-demand periods.
+
+- **Webhook Retry Mechanism:** The current Paystack webhook handler processes events synchronously. Introducing a queue-based retry mechanism (e.g., Bull with Redis) would make payment confirmation more resilient against transient network failures or database timeouts.
+
+- **Automated Export Scheduling:** The export module currently requires manual triggering by an admin. Adding scheduled exports (e.g., weekly order summaries emailed to management) would reduce operational overhead and support regular business reporting without requiring dashboard access.
+
+### User Experience
+
+- **Customer Order Tracking:** The current storefront allows customers to view their order history but does not provide real-time fulfilment status updates. Integrating status change SMS notifications (already supported by the NestJS `SmsModule`) into the customer-facing view — with a simple order status indicator — would significantly improve post-purchase experience.
+
+- **Mobile Responsiveness Audit:** While both frontend applications are built with responsive Tailwind CSS, a formal mobile usability audit with real devices across varying screen sizes would identify any edge cases in the admin dashboard's table-heavy views, which are primarily designed for desktop use.
+
+- **Storefront Search:** The current storefront relies on collection-based navigation. Adding a full-text product search powered by Supabase's built-in PostgreSQL full-text search would improve product discoverability as the catalogue grows.
+
+### Scalability and Deployment
+
+- **Containerised Production Deployment:** The NestJS backend and Python recommendation service are deployment-ready but currently run as standalone Node.js and Python processes. Packaging both in Docker containers and deploying via a managed container service (e.g., Railway, Render, or AWS ECS) would enable zero-downtime deployments, horizontal scaling, and environment parity between staging and production.
+
+- **Content Delivery Network (CDN) for Product Images:** Product images are currently served directly from Supabase Storage. Fronting storage with a CDN (Supabase's built-in CDN or Cloudflare) would reduce image load times for customers accessing the storefront from outside the Supabase region.
+
+- **Performance Load Testing:** As 1NRI grows its customer base and runs promotional popup events that may drive traffic spikes, formal load testing (e.g., using k6 or Locust against the NestJS API) should be conducted to identify bottlenecks before they affect customers.
+
+### Business and Operations
+
+- **Analytics Expansion:** The current analytics module provides aggregate revenue, order volume, and inventory metrics. Extending this with cohort analysis (repeat customer rate), product return-on-investment by collection, and popup event profitability breakdowns would give 1NRI's management team deeper insight into business performance.
+
+- **Multi-Currency Support:** 1NRI serves a diaspora customer base across multiple regions. Extending the storefront to display prices in additional currencies (while settling in GHS) — using a lightweight exchange rate API — would reduce friction for international customers and increase conversion.
+
+By acting on these recommendations, 1NRI Worldwide Ltd. can extend IRIS from a consolidation platform into a proactive business intelligence and growth tool, ensuring the investment made in this platform continues to deliver value as the business scales.
+
+---
+
+*End of Report*
