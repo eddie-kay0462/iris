@@ -5,7 +5,7 @@ import DashboardLayout from "./layout";
 
 // Mock next/navigation
 const mockPush = vi.fn();
-let mockPathname = "/waitlist";
+let mockPathname = "/profile";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
@@ -14,17 +14,16 @@ vi.mock("next/navigation", () => ({
 
 // Mock next/link
 vi.mock("next/link", () => ({
-  default: ({
-    children,
-    href,
-    ...props
-  }: {
-    children: React.ReactNode;
-    href: string;
-  }) => (
-    <a href={href} {...props}>
-      {children}
-    </a>
+  default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
+    <a href={href} {...props}>{children}</a>
+  ),
+}));
+
+// Mock next/image
+vi.mock("next/image", () => ({
+  default: ({ alt, ...props }: { alt: string; [key: string]: any }) => (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img alt={alt} {...props} />
   ),
 }));
 
@@ -34,11 +33,19 @@ vi.mock("lucide-react", () => ({
   X: () => <span data-testid="x-icon">X</span>,
 }));
 
+// Mock apiClient and clearToken
+const mockApiClient = vi.fn();
+const mockClearToken = vi.fn();
+
+vi.mock("@/lib/api/client", () => ({
+  apiClient: (...args: any[]) => mockApiClient(...args),
+  clearToken: () => mockClearToken(),
+}));
+
 describe("DashboardLayout", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockPathname = "/waitlist";
-    global.fetch = vi.fn();
+    mockPathname = "/profile";
   });
 
   it("renders the header with brand link and nav items", () => {
@@ -48,18 +55,13 @@ describe("DashboardLayout", () => {
       </DashboardLayout>
     );
 
-    // Brand
-    const brandLink = screen.getByRole("link", { name: "Iris" });
+    // Brand link points to /products
+    const brandLink = screen.getByRole("link", { name: "1NRI" });
     expect(brandLink).toHaveAttribute("href", "/products");
 
-    // Nav links (desktop nav has them, mobile nav too when open)
-    const waitlistLinks = screen.getAllByRole("link", { name: "Waitlist" });
-    expect(waitlistLinks.length).toBeGreaterThanOrEqual(1);
-
-    const innerCircleLinks = screen.getAllByRole("link", {
-      name: "Inner Circle",
-    });
-    expect(innerCircleLinks.length).toBeGreaterThanOrEqual(1);
+    // Nav links
+    const ordersLinks = screen.getAllByRole("link", { name: "Orders" });
+    expect(ordersLinks.length).toBeGreaterThanOrEqual(1);
 
     const profileLinks = screen.getAllByRole("link", { name: "Profile" });
     expect(profileLinks.length).toBeGreaterThanOrEqual(1);
@@ -94,16 +96,14 @@ describe("DashboardLayout", () => {
       </DashboardLayout>
     );
 
-    // Click hamburger
     const hamburger = screen.getByTestId("menu-icon").closest("button")!;
     await user.click(hamburger);
 
-    // X icon should appear (mobile nav is open)
     expect(screen.getByTestId("x-icon")).toBeInTheDocument();
   });
 
-  it("handles logout", async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
+  it("handles logout — clears token and redirects to login", async () => {
+    mockApiClient.mockResolvedValue({});
 
     const user = userEvent.setup();
     render(
@@ -112,14 +112,12 @@ describe("DashboardLayout", () => {
       </DashboardLayout>
     );
 
-    // Click the first Sign out button (desktop)
     const signOutButtons = screen.getAllByText("Sign out");
     await user.click(signOutButtons[0]);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/auth/logout", {
-        method: "POST",
-      });
+      expect(mockApiClient).toHaveBeenCalledWith("/auth/logout", { method: "POST" });
+      expect(mockClearToken).toHaveBeenCalled();
       expect(mockPush).toHaveBeenCalledWith("/login");
     });
   });
