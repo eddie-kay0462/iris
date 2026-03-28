@@ -1442,6 +1442,14 @@ The popup sales module enables in-person sales without a browser-based checkout.
 
 The `RecommendationsModule` acts as a proxy to the Python FastAPI service. It forwards the customer's user ID and browsing context to the recommender and returns a ranked list of product IDs to the storefront. If the Python service is unreachable, it returns an empty array; the storefront omits the recommendations section without breaking the page.
 
+### Communications (`/api/comms`)
+
+The `CommsModule` centralises all outbound customer communication triggered by business events. It wraps the `LetsfishService` (SMS and voice OTP) and exposes internal methods consumed by other modules — for example, order confirmation SMS triggered by `OrdersModule` after a successful payment webhook, and refund confirmation SMS triggered by `PopupSalesModule` after a Mobile Money refund. Every outbound message is logged to the `communication_logs` table with provider, type, recipient, status, and any error metadata, providing a full audit trail for customer support and compliance purposes.
+
+### Analytics (`/api/analytics`)
+
+The `AnalyticsModule` aggregates business performance data for the admin dashboard. It queries the Supabase database to compute key metrics including total revenue over configurable date ranges, order volume by status, best-selling products, inventory turnover rates, and popup event sales summaries. All queries are performed using the service-role client to ensure accurate aggregate results across all customer records, with results returned as typed DTOs consumed directly by the admin dashboard's overview and reporting pages.
+
 > **[Figure X: VS Code — `apps/api/src` directory showing NestJS module folders]**
 
 ---
