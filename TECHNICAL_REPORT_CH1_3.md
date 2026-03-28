@@ -1530,6 +1530,18 @@ The Settings module allows admin users to create new staff accounts and assign r
 
 > **[Figure X: Settings page showing user list and role assignment]**
 
+**Analytics**
+
+The Analytics section of the admin dashboard presents aggregated business performance data sourced from the `AnalyticsModule`. Staff and managers can view key metrics including total revenue over configurable date ranges, order volume breakdowns by status, best-selling products, inventory turnover rates, and popup event sales summaries. The data is displayed through charts and summary cards, giving 1NRI's management team a real-time view of platform performance without needing to query the database directly.
+
+> **[Figure X: Admin analytics/reporting page showing revenue charts and key metrics]**
+
+**Communications**
+
+The Communications section provides a read-only audit log of all outbound customer messages dispatched by the platform — SMS order confirmations, popup refund confirmations, and voice OTP deliveries. Each record shows the channel (SMS or voice), recipient phone number, message content, delivery status, and timestamp. This gives the operations team full visibility into customer communication history and aids in resolving any delivery disputes or support queries.
+
+> **[Figure X: Admin communications log showing SMS and voice OTP records]**
+
 ---
 
 *End of Chapter 4*
