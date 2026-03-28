@@ -1546,4 +1546,104 @@ The Communications section provides a read-only audit log of all outbound custom
 
 *End of Chapter 4*
 
-*Chapters 5 (Testing and Results) and 6 (Conclusions and Recommendations) to follow.*
+---
+
+# Chapter 5: Testing and Results
+
+## 5.1 Testing Methodology
+
+The testing strategy for IRIS was designed to validate correctness, security, and usability across all four platform components. Testing was conducted at multiple levels — unit, integration, system, and user acceptance — with each level targeting a different scope of the application.
+
+### Unit Testing
+
+Unit tests were written using **Vitest** for the customer storefront codebase. Two core areas were covered:
+
+**Form Validation (`zod-resolver.test.ts`)**
+The custom `zodResolver` — which bridges Zod schema validation with React Hook Form — was tested in isolation. Test cases covered valid input acceptance, field-level error generation for invalid email format and short passwords, optional field handling, cross-field refinements (password confirmation matching), and the guarantee that only the first error per field is surfaced to the user. This ensured that all forms across the storefront (signup, checkout, product reviews) enforce consistent, predictable validation behaviour.
+
+**Route Protection and RBAC (`proxy.test.ts`)**
+The Next.js middleware route protection logic and the RBAC permissions module were tested independently of the Supabase client. Test cases verified that authenticated-only customer routes (`/profile`, `/inner-circle`, `/waitlist`) are correctly identified as protected, that public routes (`/`, `/products`, `/login`) are not blocked, and that the middleware matcher regex correctly excludes Next.js internals (`_next/static`, `_next/image`, `favicon.ico`) and API routes from middleware processing. Permission checks were tested exhaustively across all four roles:
+
+| Role | Expected Access |
+|---|---|
+| `admin` | All permissions (`products:read`, `products:delete`, `settings:update`, `users:create`, etc.) |
+| `manager` | Most permissions excluding `settings:*` and `users:*` |
+| `staff` | Read-only on most resources; cannot create/update products, issue refunds, or access analytics |
+| `public` | No permissions |
+
+All unit tests passed without failures.
+
+> **[Figure X: Vitest terminal output showing all unit tests passing]**
+
+### Integration Testing
+
+Integration testing focused on verifying that the NestJS backend modules interact correctly with Supabase and external services. This was conducted using **Postman** collections, which exercised each API endpoint against a live Supabase development instance.
+
+Key integration scenarios tested:
+
+- **Authentication flow:** Signup creates both a Supabase Auth user and a `profiles` row; login returns a valid JWT; an expired or tampered token is rejected with HTTP 401.
+- **Product creation:** A product POST with image upload correctly stores the image in Supabase Storage and persists the product record with a public image URL.
+- **Order and payment webhook:** A simulated Paystack webhook with valid HMAC signature triggers correct order and payment record creation; an invalid signature returns HTTP 400.
+- **Popup MoMo payment:** The full popup payment flow — charge initiation, OTP submission, and webhook confirmation — was tested against Paystack's test environment, verifying correct order status transitions (`active` → `awaiting_payment` → `confirmed`).
+- **Recommendation fallback:** With the Python FastAPI service stopped, the `GET /api/recommendations` endpoint returns an empty array (`[]`) rather than a 500 error, confirming graceful degradation.
+- **SMS delivery:** Order confirmation and refund SMS messages were verified against the LetsFish API in test mode, with delivery status and log entries confirmed in the `communication_logs` table.
+
+### System Testing
+
+System testing was performed end-to-end across both frontends and the backend after all modules were integrated. Tests covered the following complete user journeys:
+
+**Customer flows:**
+- Browse products and collections → add to cart → Paystack checkout → receive order confirmation SMS
+- Sign up → log in → view order history → submit product review
+- View personalised recommendations on the homepage
+
+**Admin flows:**
+- Log in with voice OTP second factor → view dashboard analytics
+- Create a product with variants and images → publish to storefront → verify it appears on customer storefront
+- Update an order status → confirm SMS is triggered to the customer
+- Adjust inventory levels → verify movement log is updated
+- Create a popup event → add walk-in order → process MoMo payment → mark order as completed
+- Export order data to CSV
+
+All critical paths completed successfully. Minor UI inconsistencies identified during system testing (e.g. loading state on the recommendations section) were resolved before the final build.
+
+### User Acceptance Testing (UAT)
+
+UAT was conducted with the 1NRI Worldwide Ltd. client and key staff members who would operate the admin dashboard day-to-day. Testers were given defined task scenarios to complete without assistance and asked to rate ease of use and flag any points of confusion.
+
+**Findings:**
+- Staff found the admin sidebar navigation intuitive and were able to locate all management sections without guidance.
+- The popup sales MoMo flow required a brief walkthrough on first use due to the multi-step OTP process; a step indicator was subsequently added to the UI.
+- The product creation form was well-received; testers appreciated the image upload preview and variant management interface.
+- The analytics dashboard was requested to include a date range filter, which was implemented before delivery.
+- All testers confirmed that the role-based access restrictions worked as expected — staff accounts could not access settings or issue refunds.
+
+---
+
+## 5.2 Testing Results
+
+The table below summarises the outcome of each testing phase:
+
+| Testing Phase | Scope | Outcome |
+|---|---|---|
+| Unit Testing | Form validation, RBAC permissions, route protection middleware | All tests passed |
+| Integration Testing | All 16 NestJS API modules against live Supabase and external APIs | All critical endpoints validated; webhook signature handling confirmed |
+| System Testing | End-to-end customer and admin user journeys | All critical paths passed; minor UI issues resolved |
+| User Acceptance Testing | 1NRI staff operating the admin dashboard | Accepted with two minor improvements (OTP step indicator, analytics date filter) |
+| Security Testing | JWT validation, RLS enforcement, CORS, input validation | No vulnerabilities identified; all layers enforced independently |
+
+**Security Testing** was conducted alongside system testing. Specific checks included:
+
+- Requests with no token, expired tokens, and tokens signed with incorrect secrets were all rejected with HTTP 401.
+- Customer JWT tokens were confirmed unable to access admin endpoints (HTTP 403).
+- Direct Supabase database queries from the browser (bypassing the API) were blocked by RLS policies — a customer could only read their own `profiles` and `orders` rows.
+- CORS rejection was confirmed for requests originating from domains not in the NestJS whitelist.
+- All form endpoints rejected payloads with missing required fields or incorrect data types, returning structured validation error responses.
+
+Overall, the platform met all functional and non-functional requirements defined in Chapter 2. The testing process validated that IRIS is secure, correctly enforces role-based access at every layer, and delivers a reliable experience for both customers and 1NRI's operations team.
+
+---
+
+*End of Chapter 5*
+
+*Chapter 6 (Conclusions and Recommendations) to follow.*
