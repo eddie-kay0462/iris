@@ -1,0 +1,207 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import { useState } from 'react'
+import {
+  LayoutDashboard,
+  ShoppingBag,
+  Users,
+  Package,
+  Trophy,
+  Menu,
+  X,
+  LogOut,
+  Sun,
+  Moon,
+} from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { useAlly } from '@/lib/ally-context'
+
+const navLinks = [
+  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/sales', label: 'Sales', icon: ShoppingBag },
+  { path: '/customers', label: 'Customers', icon: Users },
+  { path: '/inventory', label: 'Inventory', icon: Package },
+  { path: '/leaderboard', label: 'Leaderboard', icon: Trophy },
+]
+
+function initials(name: string) {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+}
+
+function SidebarContent({
+  onClose,
+  onThemeToggle,
+  isDark,
+}: {
+  onClose?: () => void
+  onThemeToggle: () => void
+  isDark: boolean
+}) {
+  const pathname = usePathname()
+  const router = useRouter()
+  const { ally } = useAlly()
+
+  const isActive = (path: string) =>
+    path === '/' ? pathname === '/' : pathname.startsWith(path)
+
+  async function handleLogout() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+    router.refresh()
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* Brand */}
+      <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-200 dark:border-neutral-800">
+        <h1 className="text-[10px] tracking-[0.25em] uppercase font-medium text-neutral-900 dark:text-neutral-100">
+          Allies — by 1NRI
+        </h1>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 md:hidden"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Ally Profile */}
+      {ally && (
+        <div className="px-6 py-4 border-b border-neutral-200 dark:border-neutral-800">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-neutral-900 dark:bg-neutral-100 flex items-center justify-center text-white dark:text-neutral-900 text-xs font-semibold shrink-0">
+              {initials(ally.full_name)}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate text-neutral-900 dark:text-neutral-100">
+                {ally.full_name}
+              </p>
+              <p className="text-[10px] tracking-[0.15em] uppercase text-neutral-400 truncate">
+                {ally.location}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation */}
+      <nav className="flex-1 py-3 px-3">
+        {navLinks.map((link) => {
+          const Icon = link.icon
+          const active = isActive(link.path)
+          return (
+            <Link
+              key={link.path}
+              href={link.path}
+              onClick={onClose}
+              className={`flex items-center gap-3 px-3 py-2.5 text-xs tracking-[0.1em] uppercase transition-colors rounded-sm mb-0.5 ${
+                active
+                  ? 'border-l-2 border-black dark:border-white bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 pl-[10px]'
+                  : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+              }`}
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              {link.label}
+            </Link>
+          )
+        })}
+      </nav>
+
+      {/* Bottom Actions */}
+      <div className="px-3 py-4 border-t border-neutral-200 dark:border-neutral-800 space-y-1">
+        <button
+          onClick={onThemeToggle}
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-xs tracking-[0.1em] uppercase text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+        >
+          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {isDark ? 'Light Mode' : 'Dark Mode'}
+        </button>
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-xs tracking-[0.1em] uppercase text-neutral-500 dark:text-neutral-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+          Sign Out
+        </button>
+      </div>
+
+      {/* Footer */}
+      <div className="px-6 py-3 border-t border-neutral-200 dark:border-neutral-800">
+        <p className="text-[9px] tracking-[0.2em] uppercase text-neutral-400 leading-relaxed">
+          Faith-inspired streetwear
+        </p>
+      </div>
+    </div>
+  )
+}
+
+export function DashboardShell({ children }: { children: React.ReactNode }) {
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [isDark, setIsDark] = useState(false)
+
+  function toggleTheme() {
+    setIsDark((d) => {
+      const next = !d
+      document.documentElement.classList.toggle('dark', next)
+      return next
+    })
+  }
+
+  return (
+    <div className="flex h-dvh bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 overflow-hidden">
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-y-auto">
+        <SidebarContent onThemeToggle={toggleTheme} isDark={isDark} />
+      </aside>
+
+      {/* Mobile Overlay */}
+      {mobileOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/50 md:hidden"
+            onClick={() => setMobileOpen(false)}
+          />
+          <aside className="fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-neutral-900 flex flex-col md:hidden overflow-y-auto">
+            <SidebarContent
+              onClose={() => setMobileOpen(false)}
+              onThemeToggle={toggleTheme}
+              isDark={isDark}
+            />
+          </aside>
+        </>
+      )}
+
+      {/* Main Pane */}
+      <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
+        {/* Mobile Top Bar */}
+        <header className="md:hidden flex items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="w-9 h-9 flex items-center justify-center text-neutral-600 dark:text-neutral-400"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <span className="text-[10px] tracking-[0.25em] uppercase font-medium">
+            Allies — 1NRI
+          </span>
+          <div className="w-9" />
+        </header>
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-y-auto">
+          {children}
+        </main>
+      </div>
+    </div>
+  )
+}

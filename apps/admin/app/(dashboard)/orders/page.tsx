@@ -3,12 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAdminOrders, useUpdateOrderStatus, type Order } from "@/lib/api/orders";
+import { usePaymentStats } from "@/lib/api/payments";
 import { DataTable, type Column } from "../../components/DataTable";
 import { StatusBadge } from "../../components/StatusBadge";
 import { SearchInput } from "../../components/SearchInput";
 import { Pagination } from "../../components/Pagination";
-import { Download } from "lucide-react";
+import { StatsCard } from "../../components/StatsCard";
+import { Download, DollarSign, Clock, RotateCcw, CreditCard } from "lucide-react";
 import { getToken } from "@/lib/api/client";
+
+function fmt(n: number) {
+  return `GH₵${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 const ORDER_STATUSES = [
   "pending",
@@ -66,6 +72,7 @@ export default function AdminOrdersPage() {
 
   const { data, isLoading } = useAdminOrders({ search, status, page });
   const updateStatus = useUpdateOrderStatus();
+  const { data: payStats } = usePaymentStats();
 
   function handleStatusUpdate(orderId: string, newStatus: string) {
     return updateStatus.mutateAsync({ orderId, status: newStatus });
@@ -123,6 +130,34 @@ export default function AdminOrdersPage() {
           Export CSV
         </button>
       </header>
+
+      {payStats && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatsCard
+            label="Total Collected"
+            value={fmt(payStats.totalCollected)}
+            icon={DollarSign}
+            helperText="Successfully paid"
+          />
+          <StatsCard
+            label="Pending"
+            value={fmt(payStats.totalPending)}
+            icon={Clock}
+            helperText="Awaiting confirmation"
+          />
+          <StatsCard
+            label="Refunded"
+            value={fmt(payStats.totalRefunded)}
+            icon={RotateCcw}
+          />
+          <StatsCard
+            label="Transactions"
+            value={String(payStats.transactionCount)}
+            icon={CreditCard}
+            helperText="Total payment attempts"
+          />
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <div className="flex-1">
