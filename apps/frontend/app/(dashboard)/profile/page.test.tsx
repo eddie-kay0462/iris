@@ -3,10 +3,16 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ProfilePage from "./page";
 
+// Mock apiClient
+const mockApiClient = vi.fn();
+
+vi.mock("@/lib/api/client", () => ({
+  apiClient: (...args: any[]) => mockApiClient(...args),
+}));
+
 describe("ProfilePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    global.fetch = vi.fn();
   });
 
   function mockProfileFetch(profile = {}) {
@@ -19,27 +25,20 @@ describe("ProfilePage", () => {
       ...profile,
     };
 
-    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(
-      async (url: string, options?: RequestInit) => {
-        if (url === "/api/profile" && (!options || options.method !== "PUT")) {
-          return { ok: true, json: async () => defaultProfile };
-        }
-        if (url === "/api/profile" && options?.method === "PUT") {
-          return {
-            ok: true,
-            json: async () => ({ success: true, profile: defaultProfile }),
-          };
-        }
-        return { ok: false, json: async () => ({ error: "Not found" }) };
+    mockApiClient.mockImplementation(async (path: string, options?: any) => {
+      if (path === "/profile" && (!options || options.method !== "PUT")) {
+        return defaultProfile;
       }
-    );
+      if (path === "/profile" && options?.method === "PUT") {
+        return { success: true, profile: defaultProfile };
+      }
+      throw new Error("Not found");
+    });
   }
 
   it("shows loading state initially", () => {
-    // Never resolve the fetch to keep loading state
-    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(
-      () => new Promise(() => {})
-    );
+    // Never resolves — keeps loading state
+    mockApiClient.mockImplementation(() => new Promise(() => {}));
 
     render(<ProfilePage />);
     expect(screen.getByText("Loading profile...")).toBeInTheDocument();
@@ -49,7 +48,6 @@ describe("ProfilePage", () => {
     mockProfileFetch();
     render(<ProfilePage />);
 
-    // Wait for the form to appear and values to be populated by reset()
     await waitFor(() => {
       expect(screen.getByDisplayValue("John")).toBeInTheDocument();
     });
@@ -59,11 +57,7 @@ describe("ProfilePage", () => {
   });
 
   it("shows error when profile fetch fails", async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: false,
-      json: async () => ({ error: "Not found" }),
-    });
-
+    mockApiClient.mockRejectedValue(new Error("Not found"));
     render(<ProfilePage />);
 
     await waitFor(() => {
@@ -77,58 +71,38 @@ describe("ProfilePage", () => {
     const user = userEvent.setup();
     render(<ProfilePage />);
 
-    // Wait for profile data to load into the form
     await waitFor(() => {
       expect(screen.getByDisplayValue("John")).toBeInTheDocument();
     });
 
-    // Clear and type a new name
     const firstNameInput = screen.getByDisplayValue("John");
     await user.clear(firstNameInput);
     await user.type(firstNameInput, "Jane");
 
-    // Submit
     await user.click(screen.getByText("Save changes"));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/profile", {
+      expect(mockApiClient).toHaveBeenCalledWith("/profile", expect.objectContaining({
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: expect.any(String),
-      });
+        body: expect.objectContaining({ first_name: "Jane" }),
+      }));
       expect(screen.getByText("Profile updated.")).toBeInTheDocument();
     });
   });
 
   it("shows error when save fails", async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(
-      async (url: string, options?: RequestInit) => {
-        if (url === "/api/profile" && (!options || options.method !== "PUT")) {
-          return {
-            ok: true,
-            json: async () => ({
-              first_name: "John",
-              last_name: "Doe",
-              phone_number: "",
-              email_notifications: false,
-              sms_notifications: false,
-            }),
-          };
-        }
-        if (url === "/api/profile" && options?.method === "PUT") {
-          return {
-            ok: false,
-            json: async () => ({ error: "Update failed" }),
-          };
-        }
-        return { ok: false, json: async () => ({}) };
+    mockApiClient.mockImplementation(async (path: string, options?: any) => {
+      if (path === "/profile" && (!options || options.method !== "PUT")) {
+        return { first_name: "John", last_name: "Doe", phone_number: "", email_notifications: false, sms_notifications: false };
       }
-    );
+      const error: any = new Error("Update failed");
+      error.data = { error: "Update failed" };
+      throw error;
+    });
 
     const user = userEvent.setup();
     render(<ProfilePage />);
 
-    // Wait for the form to load
     await waitFor(() => {
       expect(screen.getByDisplayValue("John")).toBeInTheDocument();
     });
@@ -140,20 +114,16 @@ describe("ProfilePage", () => {
     });
   });
 
-  it("renders notification checkboxes", async () => {
+  it("renders notification checkboxes with correct initial state", async () => {
     mockProfileFetch({ email_notifications: true, sms_notifications: false });
     render(<ProfilePage />);
 
     await waitFor(() => {
-      const emailCheckbox = screen.getByLabelText(
-        "Email notifications"
-      ) as HTMLInputElement;
+      const emailCheckbox = screen.getByLabelText("Email notifications") as HTMLInputElement;
       expect(emailCheckbox.checked).toBe(true);
     });
 
-    const smsCheckbox = screen.getByLabelText(
-      "SMS notifications"
-    ) as HTMLInputElement;
+    const smsCheckbox = screen.getByLabelText("SMS notifications") as HTMLInputElement;
     expect(smsCheckbox.checked).toBe(false);
   });
 });

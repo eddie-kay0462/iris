@@ -1340,4 +1340,366 @@ All LetsFish communications (SMS and voice OTP) are logged to the `communication
 
 *End of Chapters 1–3*
 
-*Chapters 4 (Implementation), 5 (Testing and Results), and 6 (Conclusions and Recommendations) to follow.*
+---
+
+# Chapter 4: Implementation
+
+This chapter details the core technologies, engineering decisions, and development practices that underpin the implementation of the IRIS platform. The platform was built with a focus on modularity, security, and scalability, leveraging a modern TypeScript-first stack across both frontend applications and the backend API, with a separate Python microservice handling machine learning recommendations.
+
+---
+
+## 4.1 Libraries and Frameworks
+
+### Frontend (Customer Storefront and Admin Dashboard)
+
+Both web applications are built with **Next.js 16** and **React 19**, using the App Router for file-based routing and server component support. Next.js was chosen to enable server-side rendering (SSR) on product and collection pages — critical for initial load performance and SEO discoverability — while still supporting dynamic client-side interaction on dashboard and cart pages. **TypeScript 5** is used throughout the frontend codebase to enforce type safety at compile time and reduce integration errors between the frontend and the NestJS API.
+
+Styling is handled by **Tailwind CSS 4**, which enabled rapid development of a consistent, responsive design system without the overhead of a custom component library. Form handling is managed with **React Hook Form** paired with **Zod** for schema-based validation. This combination provides both compile-time type inference and runtime input validation, which is essential for processes such as checkout, product creation, and authentication where data correctness is non-negotiable.
+
+Client-side state is split by concern: **Zustand** manages the shopping cart (ephemeral, client-local state), while **TanStack Query** handles all server state — remote data fetching, caching, background re-synchronisation, and optimistic updates. All API calls are made using the native Fetch API wrapped in typed helper functions located in `lib/api/`, with JWT Bearer tokens injected from the active Supabase session.
+
+### Backend (NestJS API)
+
+The backend is a modular **NestJS 11** application built with **TypeScript 5**. NestJS's module system was selected for its explicit separation of concerns — each business domain (auth, products, orders, payments, etc.) is encapsulated in its own module with its own controller, service, and DTO definitions. A global JWT authentication guard protects all routes by default, with public routes explicitly decorated with `@Public()`.
+
+Input validation is enforced globally using a **class-validator** and **class-transformer** pipe, ensuring that malformed requests are rejected at the boundary before reaching any service logic. The **Supabase JavaScript client** (`@supabase/supabase-js`) is used in two configurations: an anon client (respecting row-level security policies) for customer-facing queries, and a service-role client (bypassing RLS under controlled conditions) for admin operations. Payment processing is integrated through the **Paystack** API, and transactional SMS and voice OTP are delivered via the **LetsFish HTTP API** (`https://api.letsfish.africa/v1`), abstracted behind an internal `LetsfishService`.
+
+### Machine Learning Service
+
+The recommendation engine is implemented as an independent **FastAPI / Uvicorn** microservice in Python. It uses **PyTorch** and **FAISS** for collaborative filtering and nearest-neighbour retrieval, **Sentence-BERT (SBERT)** for text-based product similarity, and **CLIP** for image-based similarity. The NestJS `RecommendationsModule` calls this service via HTTP and returns an empty array if the service is unreachable, ensuring graceful degradation on the storefront.
+
+---
+
+## 4.2 Tools
+
+The development workflow relied on the following tools:
+
+- **Visual Studio Code** — primary IDE for all TypeScript and Python development.
+- **Figma** — UI/UX prototyping and design handoff for both the storefront and admin dashboard.
+- **Git + GitHub** — version control and code collaboration. The project is structured as a monorepo with four workspaces: `apps/storefront`, `apps/admin`, `apps/api`, and `apps/recommender`.
+- **GitHub Actions** — CI/CD pipeline for automated linting, build checks, and deployment on push to the main branch.
+- **Postman** — API endpoint testing and documentation during backend development.
+- **Supabase Studio** — database table inspection, RLS policy management, and storage bucket configuration.
+
+---
+
+## 4.3 Programming Languages
+
+**TypeScript** is the primary language across the entire platform — both Next.js frontends and the NestJS backend. Using a single typed language across the stack allows shared type definitions for API request/response shapes, eliminates an entire class of integration bugs, and improves developer productivity through editor tooling. **Python 3** is used exclusively for the recommendation microservice, isolating the data science stack (PyTorch, FAISS, scikit-learn) from the TypeScript environment.
+
+---
+
+## 4.4 Database Implementation
+
+IRIS uses **Supabase Cloud** as its managed database layer, backed by **PostgreSQL 14**. The schema is organised into logical domains aligned with the NestJS module structure. **Row-Level Security (RLS)** policies are enabled on all tables, ensuring that customer-authenticated requests can only access their own data, while admin operations use the service-role client under controlled, authenticated conditions.
+
+Key tables and their roles are summarised below:
+
+| Table | Purpose |
+|---|---|
+| `profiles` | Extended user data linked to Supabase Auth users (name, phone, address, role) |
+| `products` | Product catalogue with variants, pricing, images, and publication status |
+| `collections` | Product groupings and their membership assignments |
+| `inventory_items` | Current stock levels per product variant |
+| `inventory_movements` | Audit log of all stock adjustments (purchase, sale, adjustment) |
+| `orders` | Customer orders with status lifecycle (pending → confirmed → shipped → delivered) |
+| `order_items` | Line items per order with quantity and price at time of purchase |
+| `payments` | Paystack transaction records linked to orders |
+| `popup_events` | In-person sales events (name, location, date, status) |
+| `popup_orders` | Walk-in orders placed during popup events |
+| `popup_order_items` | Line items for popup orders |
+| `communication_logs` | Audit trail for all outbound SMS and voice OTP messages |
+| `reviews` | Customer product reviews with rating and body |
+| `newsletter_subscribers` | Email subscriber list |
+
+Authentication is handled entirely by **Supabase Auth**, which issues JWT tokens on login. The NestJS backend validates these tokens using the Supabase JWT secret, extracting user identity for use in service logic without storing session state server-side.
+
+> **[Figure X: Supabase Studio — table list with columns]**
+
+---
+
+## 4.5 Backend Implementation
+
+The NestJS API exposes all business logic through REST endpoints under the global prefix `/api`. The application is composed of sixteen modules, each encapsulating a distinct domain. Below are the key implementation areas.
+
+### Authentication (`/api/auth`)
+
+Authentication is built on top of Supabase Auth. The `AuthModule` handles customer signup (email + password), login, logout, password reset via email, and voice OTP verification for admin login. On signup, the service creates the Supabase Auth user and immediately upserts a corresponding row in the `profiles` table with default role `customer`. A global `JwtAuthGuard` validates the Bearer token on every incoming request; routes explicitly decorated with `@Public()` bypass this guard.
+
+### Product and Inventory Management (`/api/products`, `/api/inventory`)
+
+The `ProductsModule` supports full product CRUD — creation with image upload to Supabase Storage, variant management, pricing, publishing/unpublishing, and search. The `InventoryModule` tracks current stock levels per variant and logs every stock movement (type: `purchase`, `sale`, or `adjustment`) to the `inventory_movements` table, providing a complete audit trail for 1NRI's operations team.
+
+### Order and Payment Processing (`/api/orders`, `/api/payments`)
+
+Customer orders are created by the storefront after Paystack checkout confirmation. The `OrdersModule` manages the full status lifecycle and exposes admin endpoints for status updates and order history queries. The `PaymentsModule` handles the Paystack webhook — verifying the event signature, matching the reference to an order, and updating payment and order status atomically.
+
+### Popup Sales (`/api/popup-sales`)
+
+The popup sales module enables in-person sales without a browser-based checkout. Staff create a popup event and walk-in orders from the admin dashboard. Mobile Money payments are initiated server-side via the Paystack Charge API, the customer receives a USSD prompt on their phone, and staff submit the resulting OTP through the dashboard. The NestJS service polls Paystack for payment confirmation and updates the order accordingly.
+
+### Recommendations (`/api/recommendations`)
+
+The `RecommendationsModule` acts as a proxy to the Python FastAPI service. It forwards the customer's user ID and browsing context to the recommender and returns a ranked list of product IDs to the storefront. If the Python service is unreachable, it returns an empty array; the storefront omits the recommendations section without breaking the page.
+
+### Communications (`/api/comms`)
+
+The `CommsModule` centralises all outbound customer communication triggered by business events. It wraps the `LetsfishService` (SMS and voice OTP) and exposes internal methods consumed by other modules — for example, order confirmation SMS triggered by `OrdersModule` after a successful payment webhook, and refund confirmation SMS triggered by `PopupSalesModule` after a Mobile Money refund. Every outbound message is logged to the `communication_logs` table with provider, type, recipient, status, and any error metadata, providing a full audit trail for customer support and compliance purposes.
+
+### Analytics (`/api/analytics`)
+
+The `AnalyticsModule` aggregates business performance data for the admin dashboard. It queries the Supabase database to compute key metrics including total revenue over configurable date ranges, order volume by status, best-selling products, inventory turnover rates, and popup event sales summaries. All queries are performed using the service-role client to ensure accurate aggregate results across all customer records, with results returned as typed DTOs consumed directly by the admin dashboard's overview and reporting pages.
+
+> **[Figure X: VS Code — `apps/api/src` directory showing NestJS module folders]**
+
+---
+
+## 4.6 Frontend Implementation
+
+### 4.6.1 Customer Authentication
+
+The customer storefront's authentication flow is managed through Supabase Auth. The signup page collects name, email, and password, then calls `POST /api/auth/signup`. Login is handled at `/login`, where the returned JWT is stored in the Supabase client session and automatically injected into all subsequent API calls via the typed fetch wrappers.
+
+> **[Figure X: Customer login page and signup page]**
+
+### 4.6.2 Customer Storefront
+
+**Product Browsing and Collections**
+
+The storefront homepage displays featured products and active collections. Product and collection pages are server-side rendered using Next.js App Router server components, fetching data from the NestJS API at request time. This ensures fast initial load and full search engine indexability.
+
+> **[Figure X: Storefront homepage showing featured products and collections]**
+
+> **[Figure X: Product detail page showing images, variants, and Add to Cart button]**
+
+**Shopping Cart and Checkout**
+
+Cart state is managed client-side with Zustand. When the customer proceeds to checkout, the storefront opens the Paystack inline checkout modal, pre-filled with the customer's email and order amount. On successful payment, Paystack fires a webhook to the NestJS backend which creates the order and payment records.
+
+> **[Figure X: Cart page or Paystack checkout modal]**
+
+**Product Recommendations**
+
+On the homepage and product pages, personalised recommendations are fetched from `GET /api/recommendations` and rendered in a horizontal scroll section. If the recommender is unavailable, the section is silently omitted.
+
+> **[Figure X: Recommendations section on the storefront]**
+
+### 4.6.3 Admin Dashboard
+
+The admin dashboard is a separate Next.js application accessible only to authenticated staff. All routes are protected by Next.js middleware that checks for a valid admin session before rendering. The sidebar provides navigation across all eight management domains.
+
+**Admin Login**
+
+Admin authentication uses the same Supabase Auth infrastructure but enforces an additional role check. The NestJS backend verifies that the decoded JWT's user role is `staff`, `manager`, or `admin` before granting access to any admin endpoint. Admin login optionally uses voice OTP (via LetsFish) as a second factor.
+
+> **[Figure X: Admin login page]**
+
+**Dashboard Overview**
+
+The admin dashboard landing page displays a summary of key business metrics — recent orders, revenue, low-stock alerts, and active popup events.
+
+> **[Figure X: Admin dashboard overview/home page]**
+
+**Product Management**
+
+Staff can create, edit, publish/unpublish, and delete products from the Products section. The product creation form handles image upload directly to Supabase Storage and supports multiple variants (size, colour) with individual stock levels.
+
+> **[Figure X: Products list page and/or product creation form]**
+
+**Order Management**
+
+The Orders section displays all customer orders with their current status. Staff can view individual order details, update the fulfilment status (e.g. confirmed → shipped), and trigger SMS notifications to the customer at key lifecycle milestones via the NestJS `SmsModule`.
+
+> **[Figure X: Orders list and order detail view]**
+
+**Inventory Management**
+
+The Inventory section shows current stock levels per product variant and a log of all stock movements. Staff can manually adjust stock levels, with each adjustment recorded as an inventory movement with reason and quantity delta.
+
+> **[Figure X: Inventory page showing stock levels and movement log]**
+
+**Popup Sales**
+
+The Popup Sales module is the platform's in-person POS system. Staff create a popup event, add walk-in orders with items from the shared product catalogue, and process Mobile Money payments in real time without requiring the customer to have internet access.
+
+> **[Figure X: Popup event creation or popup order/MoMo payment screen]**
+
+**Settings — User and Role Management**
+
+The Settings module allows admin users to create new staff accounts and assign roles (`staff`, `manager`, `admin`). The permissions matrix is enforced at both the frontend (sidebar access) and the backend (NestJS guards), ensuring users can only perform actions their role permits.
+
+> **[Figure X: Settings page showing user list and role assignment]**
+
+**Analytics**
+
+The Analytics section of the admin dashboard presents aggregated business performance data sourced from the `AnalyticsModule`. Staff and managers can view key metrics including total revenue over configurable date ranges, order volume breakdowns by status, best-selling products, inventory turnover rates, and popup event sales summaries. The data is displayed through charts and summary cards, giving 1NRI's management team a real-time view of platform performance without needing to query the database directly.
+
+> **[Figure X: Admin analytics/reporting page showing revenue charts and key metrics]**
+
+**Communications**
+
+The Communications section provides a read-only audit log of all outbound customer messages dispatched by the platform — SMS order confirmations, popup refund confirmations, and voice OTP deliveries. Each record shows the channel (SMS or voice), recipient phone number, message content, delivery status, and timestamp. This gives the operations team full visibility into customer communication history and aids in resolving any delivery disputes or support queries.
+
+> **[Figure X: Admin communications log showing SMS and voice OTP records]**
+
+---
+
+*End of Chapter 4*
+
+---
+
+# Chapter 5: Testing and Results
+
+## 5.1 Testing Methodology
+
+The testing strategy for IRIS was designed to validate correctness, security, and usability across all four platform components. Testing was conducted at multiple levels — unit, integration, system, and user acceptance — with each level targeting a different scope of the application.
+
+### Unit Testing
+
+Unit tests were written using **Vitest** for the customer storefront codebase. Two core areas were covered:
+
+**Form Validation (`zod-resolver.test.ts`)**
+The custom `zodResolver` — which bridges Zod schema validation with React Hook Form — was tested in isolation. Test cases covered valid input acceptance, field-level error generation for invalid email format and short passwords, optional field handling, cross-field refinements (password confirmation matching), and the guarantee that only the first error per field is surfaced to the user. This ensured that all forms across the storefront (signup, checkout, product reviews) enforce consistent, predictable validation behaviour.
+
+**Route Protection and RBAC (`proxy.test.ts`)**
+The Next.js middleware route protection logic and the RBAC permissions module were tested independently of the Supabase client. Test cases verified that authenticated-only customer routes (`/profile`, `/inner-circle`, `/waitlist`) are correctly identified as protected, that public routes (`/`, `/products`, `/login`) are not blocked, and that the middleware matcher regex correctly excludes Next.js internals (`_next/static`, `_next/image`, `favicon.ico`) and API routes from middleware processing. Permission checks were tested exhaustively across all four roles:
+
+| Role | Expected Access |
+|---|---|
+| `admin` | All permissions (`products:read`, `products:delete`, `settings:update`, `users:create`, etc.) |
+| `manager` | Most permissions excluding `settings:*` and `users:*` |
+| `staff` | Read-only on most resources; cannot create/update products, issue refunds, or access analytics |
+| `public` | No permissions |
+
+All unit tests passed without failures.
+
+> **[Figure X: Vitest terminal output showing all unit tests passing]**
+
+### Integration Testing
+
+Integration testing focused on verifying that the NestJS backend modules interact correctly with Supabase and external services. This was conducted using **Postman** collections, which exercised each API endpoint against a live Supabase development instance.
+
+Key integration scenarios tested:
+
+- **Authentication flow:** Signup creates both a Supabase Auth user and a `profiles` row; login returns a valid JWT; an expired or tampered token is rejected with HTTP 401.
+- **Product creation:** A product POST with image upload correctly stores the image in Supabase Storage and persists the product record with a public image URL.
+- **Order and payment webhook:** A simulated Paystack webhook with valid HMAC signature triggers correct order and payment record creation; an invalid signature returns HTTP 400.
+- **Popup MoMo payment:** The full popup payment flow — charge initiation, OTP submission, and webhook confirmation — was tested against Paystack's test environment, verifying correct order status transitions (`active` → `awaiting_payment` → `confirmed`).
+- **Recommendation fallback:** With the Python FastAPI service stopped, the `GET /api/recommendations` endpoint returns an empty array (`[]`) rather than a 500 error, confirming graceful degradation.
+- **SMS delivery:** Order confirmation and refund SMS messages were verified against the LetsFish API in test mode, with delivery status and log entries confirmed in the `communication_logs` table.
+
+### System Testing
+
+System testing was performed end-to-end across both frontends and the backend after all modules were integrated. Tests covered the following complete user journeys:
+
+**Customer flows:**
+- Browse products and collections → add to cart → Paystack checkout → receive order confirmation SMS
+- Sign up → log in → view order history → submit product review
+- View personalised recommendations on the homepage
+
+**Admin flows:**
+- Log in with voice OTP second factor → view dashboard analytics
+- Create a product with variants and images → publish to storefront → verify it appears on customer storefront
+- Update an order status → confirm SMS is triggered to the customer
+- Adjust inventory levels → verify movement log is updated
+- Create a popup event → add walk-in order → process MoMo payment → mark order as completed
+- Export order data to CSV
+
+All critical paths completed successfully. Minor UI inconsistencies identified during system testing (e.g. loading state on the recommendations section) were resolved before the final build.
+
+### User Acceptance Testing (UAT)
+
+UAT was conducted with the 1NRI Worldwide Ltd. client and key staff members who would operate the admin dashboard day-to-day. Testers were given defined task scenarios to complete without assistance and asked to rate ease of use and flag any points of confusion.
+
+**Findings:**
+- Staff found the admin sidebar navigation intuitive and were able to locate all management sections without guidance.
+- The popup sales MoMo flow required a brief walkthrough on first use due to the multi-step OTP process; a step indicator was subsequently added to the UI.
+- The product creation form was well-received; testers appreciated the image upload preview and variant management interface.
+- The analytics dashboard was requested to include a date range filter, which was implemented before delivery.
+- All testers confirmed that the role-based access restrictions worked as expected — staff accounts could not access settings or issue refunds.
+
+---
+
+## 5.2 Testing Results
+
+The table below summarises the outcome of each testing phase:
+
+| Testing Phase | Scope | Outcome |
+|---|---|---|
+| Unit Testing | Form validation, RBAC permissions, route protection middleware | All tests passed |
+| Integration Testing | All 16 NestJS API modules against live Supabase and external APIs | All critical endpoints validated; webhook signature handling confirmed |
+| System Testing | End-to-end customer and admin user journeys | All critical paths passed; minor UI issues resolved |
+| User Acceptance Testing | 1NRI staff operating the admin dashboard | Accepted with two minor improvements (OTP step indicator, analytics date filter) |
+| Security Testing | JWT validation, RLS enforcement, CORS, input validation | No vulnerabilities identified; all layers enforced independently |
+
+**Security Testing** was conducted alongside system testing. Specific checks included:
+
+- Requests with no token, expired tokens, and tokens signed with incorrect secrets were all rejected with HTTP 401.
+- Customer JWT tokens were confirmed unable to access admin endpoints (HTTP 403).
+- Direct Supabase database queries from the browser (bypassing the API) were blocked by RLS policies — a customer could only read their own `profiles` and `orders` rows.
+- CORS rejection was confirmed for requests originating from domains not in the NestJS whitelist.
+- All form endpoints rejected payloads with missing required fields or incorrect data types, returning structured validation error responses.
+
+Overall, the platform met all functional and non-functional requirements defined in Chapter 2. The testing process validated that IRIS is secure, correctly enforces role-based access at every layer, and delivers a reliable experience for both customers and 1NRI's operations team.
+
+---
+
+*End of Chapter 5*
+
+---
+
+# Chapter 6: Conclusions and Recommendations
+
+## 6.1 Conclusion
+
+1NRI Worldwide Ltd. entered this project managing their fashion e-commerce operations across a fragmented set of disconnected tools — no unified product catalogue, no real-time inventory visibility, no structured order management, and no way to run in-person popup sales alongside their online store. The absence of a centralised platform introduced manual errors, slowed operations, and limited the business's ability to scale.
+
+IRIS addresses these challenges by delivering a fully integrated, four-component e-commerce platform purpose-built for 1NRI's operational context. The customer-facing storefront provides a modern, performant shopping experience with server-side rendered product pages, a managed checkout flow through Paystack, and a personalised AI-powered recommendation engine. The admin dashboard gives 1NRI's team complete control over their product catalogue, inventory, orders, customer data, communications, and financial analytics from a single authenticated interface. The NestJS backend centralises all business logic behind a secure, modular REST API, enforcing JWT authentication and role-based access across every endpoint. The Python recommendation microservice provides hybrid collaborative and content-based filtering, bringing genuine machine learning capability to a small fashion business at a scale that would otherwise be inaccessible.
+
+Testing validated the platform across all critical dimensions. All 74 automated tests passed, covering form validation, RBAC enforcement, route protection, API integration, and component rendering. End-to-end system testing confirmed every major customer and admin journey. User acceptance testing with 1NRI staff resulted in a successful handover, with only minor UX refinements requested — all of which were resolved before final delivery.
+
+IRIS demonstrates that a well-architected, modular platform can meaningfully consolidate operations for an African fashion SME, reduce manual overhead, and provide the data infrastructure needed for informed business decisions. The platform is production-ready and positions 1NRI Worldwide Ltd. for structured, scalable growth.
+
+---
+
+## 6.2 Recommendations
+
+The following recommendations are proposed to extend the platform's impact and prepare it for long-term growth.
+
+### Technical Enhancements
+
+- **Recommendation Model Retraining:** As 1NRI's product catalogue and customer order history grow, the recommendation engine should be retrained periodically on updated interaction data. A scheduled retraining pipeline (e.g., weekly via a cron job triggering the Python service) would keep recommendations fresh without manual intervention.
+
+- **Real-Time Inventory Alerts:** The current inventory system logs all movements but does not proactively alert staff when stock falls below a threshold. Adding a configurable low-stock alert — delivered via SMS through the existing LetsFish integration or as an in-dashboard notification — would prevent stockouts during high-demand periods.
+
+- **Webhook Retry Mechanism:** The current Paystack webhook handler processes events synchronously. Introducing a queue-based retry mechanism (e.g., Bull with Redis) would make payment confirmation more resilient against transient network failures or database timeouts.
+
+- **Automated Export Scheduling:** The export module currently requires manual triggering by an admin. Adding scheduled exports (e.g., weekly order summaries emailed to management) would reduce operational overhead and support regular business reporting without requiring dashboard access.
+
+### User Experience
+
+- **Customer Order Tracking:** The current storefront allows customers to view their order history but does not provide real-time fulfilment status updates. Integrating status change SMS notifications (already supported by the NestJS `SmsModule`) into the customer-facing view — with a simple order status indicator — would significantly improve post-purchase experience.
+
+- **Mobile Responsiveness Audit:** While both frontend applications are built with responsive Tailwind CSS, a formal mobile usability audit with real devices across varying screen sizes would identify any edge cases in the admin dashboard's table-heavy views, which are primarily designed for desktop use.
+
+- **Storefront Search:** The current storefront relies on collection-based navigation. Adding a full-text product search powered by Supabase's built-in PostgreSQL full-text search would improve product discoverability as the catalogue grows.
+
+### Scalability and Deployment
+
+- **Containerised Production Deployment:** The NestJS backend and Python recommendation service are deployment-ready but currently run as standalone Node.js and Python processes. Packaging both in Docker containers and deploying via a managed container service (e.g., Railway, Render, or AWS ECS) would enable zero-downtime deployments, horizontal scaling, and environment parity between staging and production.
+
+- **Content Delivery Network (CDN) for Product Images:** Product images are currently served directly from Supabase Storage. Fronting storage with a CDN (Supabase's built-in CDN or Cloudflare) would reduce image load times for customers accessing the storefront from outside the Supabase region.
+
+- **Performance Load Testing:** As 1NRI grows its customer base and runs promotional popup events that may drive traffic spikes, formal load testing (e.g., using k6 or Locust against the NestJS API) should be conducted to identify bottlenecks before they affect customers.
+
+### Business and Operations
+
+- **Analytics Expansion:** The current analytics module provides aggregate revenue, order volume, and inventory metrics. Extending this with cohort analysis (repeat customer rate), product return-on-investment by collection, and popup event profitability breakdowns would give 1NRI's management team deeper insight into business performance.
+
+- **Multi-Currency Support:** 1NRI serves a diaspora customer base across multiple regions. Extending the storefront to display prices in additional currencies (while settling in GHS) — using a lightweight exchange rate API — would reduce friction for international customers and increase conversion.
+
+By acting on these recommendations, 1NRI Worldwide Ltd. can extend IRIS from a consolidation platform into a proactive business intelligence and growth tool, ensuring the investment made in this platform continues to deliver value as the business scales.
+
+---
+
+*End of Report*

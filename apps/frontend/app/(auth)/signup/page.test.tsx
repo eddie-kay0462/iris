@@ -12,36 +12,30 @@ vi.mock("next/navigation", () => ({
 
 // Mock next/link
 vi.mock("next/link", () => ({
-  default: ({
-    children,
-    href,
-    ...props
-  }: {
-    children: React.ReactNode;
-    href: string;
-  }) => (
-    <a href={href} {...props}>
-      {children}
-    </a>
+  default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
+    <a href={href} {...props}>{children}</a>
   ),
+}));
+
+// Mock apiClient
+const mockApiClient = vi.fn();
+
+vi.mock("@/lib/api/client", () => ({
+  apiClient: (...args: any[]) => mockApiClient(...args),
 }));
 
 describe("SignupPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    global.fetch = vi.fn();
   });
 
   it("renders all form fields", () => {
     render(<SignupPage />);
-
     expect(screen.getByText("Create an account")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("First name")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Last name")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Email address")).toBeInTheDocument();
-    expect(
-      screen.getByPlaceholderText("Phone number (optional)")
-    ).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Phone number (optional)")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Password")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Confirm password")).toBeInTheDocument();
     expect(screen.getByText("Sign up")).toBeInTheDocument();
@@ -49,12 +43,10 @@ describe("SignupPage", () => {
 
   it("shows link to login page", () => {
     render(<SignupPage />);
-
-    const loginLink = screen.getByRole("link", { name: "Log in" });
-    expect(loginLink).toHaveAttribute("href", "/login");
+    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
   });
 
-  it("shows validation errors for empty required fields", async () => {
+  it("shows validation error for empty email", async () => {
     const user = userEvent.setup();
     render(<SignupPage />);
 
@@ -69,18 +61,13 @@ describe("SignupPage", () => {
     const user = userEvent.setup();
     render(<SignupPage />);
 
-    await user.type(
-      screen.getByPlaceholderText("Email address"),
-      "test@example.com"
-    );
+    await user.type(screen.getByPlaceholderText("Email address"), "test@example.com");
     await user.type(screen.getByPlaceholderText("Password"), "short");
     await user.type(screen.getByPlaceholderText("Confirm password"), "short");
     await user.click(screen.getByText("Sign up"));
 
     await waitFor(() => {
-      expect(
-        screen.getByText("Password must be at least 8 characters")
-      ).toBeInTheDocument();
+      expect(screen.getByText("Password must be at least 8 characters")).toBeInTheDocument();
     });
   });
 
@@ -88,15 +75,9 @@ describe("SignupPage", () => {
     const user = userEvent.setup();
     render(<SignupPage />);
 
-    await user.type(
-      screen.getByPlaceholderText("Email address"),
-      "test@example.com"
-    );
+    await user.type(screen.getByPlaceholderText("Email address"), "test@example.com");
     await user.type(screen.getByPlaceholderText("Password"), "password123");
-    await user.type(
-      screen.getByPlaceholderText("Confirm password"),
-      "different123"
-    );
+    await user.type(screen.getByPlaceholderText("Confirm password"), "different123");
     await user.click(screen.getByText("Sign up"));
 
     await waitFor(() => {
@@ -104,88 +85,63 @@ describe("SignupPage", () => {
     });
   });
 
-  it("submits form and redirects on success (201)", async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-      status: 201,
-      json: async () => ({ success: true, user: { id: "1", email: "test@example.com" } }),
-    });
+  it("submits form and redirects to verify on success", async () => {
+    mockApiClient.mockResolvedValue({ success: true });
 
     const user = userEvent.setup();
     render(<SignupPage />);
 
     await user.type(screen.getByPlaceholderText("First name"), "John");
     await user.type(screen.getByPlaceholderText("Last name"), "Doe");
-    await user.type(
-      screen.getByPlaceholderText("Email address"),
-      "test@example.com"
-    );
+    await user.type(screen.getByPlaceholderText("Email address"), "test@example.com");
     await user.type(screen.getByPlaceholderText("Password"), "password123");
-    await user.type(
-      screen.getByPlaceholderText("Confirm password"),
-      "password123"
-    );
+    await user.type(screen.getByPlaceholderText("Confirm password"), "password123");
     await user.click(screen.getByText("Sign up"));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/auth/signup", {
+      expect(mockApiClient).toHaveBeenCalledWith("/auth/signup", expect.objectContaining({
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: expect.stringContaining('"email":"test@example.com"'),
-      });
-      expect(mockPush).toHaveBeenCalledWith("/login?registered=true");
+        body: expect.objectContaining({ email: "test@example.com" }),
+      }));
+      expect(mockPush).toHaveBeenCalledWith(
+        "/verify?email=test%40example.com"
+      );
     });
   });
 
-  it("shows server error on 409 (user exists)", async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-      status: 409,
-      json: async () => ({ error: "User already registered" }),
-    });
+  it("shows server error when signup fails", async () => {
+    const error: any = new Error("An account with this email already exists");
+    error.data = { message: "An account with this email already exists" };
+    mockApiClient.mockRejectedValue(error);
 
     const user = userEvent.setup();
     render(<SignupPage />);
 
-    await user.type(
-      screen.getByPlaceholderText("Email address"),
-      "existing@example.com"
-    );
+    await user.type(screen.getByPlaceholderText("Email address"), "existing@example.com");
     await user.type(screen.getByPlaceholderText("Password"), "password123");
-    await user.type(
-      screen.getByPlaceholderText("Confirm password"),
-      "password123"
-    );
+    await user.type(screen.getByPlaceholderText("Confirm password"), "password123");
     await user.click(screen.getByText("Sign up"));
 
     await waitFor(() => {
       expect(
-        screen.getByText("User already registered")
+        screen.getByText("An account with this email already exists")
       ).toBeInTheDocument();
     });
   });
 
-  it("shows network error on fetch failure", async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("Network error")
-    );
+  it("shows fallback error on network failure", async () => {
+    mockApiClient.mockRejectedValue(new Error("fetch failed"));
 
     const user = userEvent.setup();
     render(<SignupPage />);
 
-    await user.type(
-      screen.getByPlaceholderText("Email address"),
-      "test@example.com"
-    );
+    await user.type(screen.getByPlaceholderText("Email address"), "test@example.com");
     await user.type(screen.getByPlaceholderText("Password"), "password123");
-    await user.type(
-      screen.getByPlaceholderText("Confirm password"),
-      "password123"
-    );
+    await user.type(screen.getByPlaceholderText("Confirm password"), "password123");
     await user.click(screen.getByText("Sign up"));
 
     await waitFor(() => {
-      expect(
-        screen.getByText("Network error. Please try again.")
-      ).toBeInTheDocument();
+      expect(screen.getByText("Something went wrong")).toBeInTheDocument();
     });
   });
 });
