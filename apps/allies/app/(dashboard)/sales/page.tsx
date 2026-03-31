@@ -6,8 +6,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useAlly } from '@/lib/ally-context'
 
-type Customer = { id: string; first_name: string | null; last_name: string | null; email: string; phone: string | null }
-type Variant = { id: string; title: string | null; option1_value: string | null; option2_value: string | null; option3_value: string | null; price: number; inventory_quantity: number }
+type Customer = { id: string; first_name: string | null; last_name: string | null; email: string; phone_number: string | null }
+type Variant = { id: string; option1_value: string | null; option2_value: string | null; option3_value: string | null; price: number; sku: string | null; inventory_quantity: number }
 type Product = { id: string; title: string; base_price: number; variants: Variant[] }
 type LineItem = { variantId: string; productId: string; productName: string; variantTitle: string; unitPrice: number; quantity: number }
 
@@ -37,7 +37,7 @@ export default function SalesPage() {
       const supabase = createClient()
       const { data } = await supabase
         .from('products')
-        .select(`id, title, base_price, product_variants(id, title, option1_value, option2_value, option3_value, price, sku, inventory_quantity)`)
+        .select(`id, title, base_price, product_variants(id, option1_value, option2_value, option3_value, price, sku, inventory_quantity)`)
         .eq('published', true)
         .is('deleted_at', null)
         .order('title')
@@ -59,8 +59,8 @@ export default function SalesPage() {
     const supabase = createClient()
     const { data } = await supabase
       .from('profiles')
-      .select('id, first_name, last_name, email, phone')
-      .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`)
+      .select('id, first_name, last_name, email, phone_number')
+      .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%,phone_number.ilike.%${q}%`)
       .limit(8)
     setCustomers(data ?? [])
   }, [])
@@ -75,7 +75,7 @@ export default function SalesPage() {
   )
 
   function getVariantLabel(v: Variant) {
-    return [v.option1_value, v.option2_value, v.option3_value].filter(Boolean).join(' / ') || v.title || 'Default'
+    return [v.option1_value, v.option2_value, v.option3_value].filter(Boolean).join(' / ') || 'Default'
   }
 
   function addProduct(product: Product) {
@@ -136,7 +136,7 @@ export default function SalesPage() {
       .insert({
         ally_id: ally.id,
         customer_name: customerName,
-        customer_phone: selectedCustomer?.phone ?? null,
+        customer_phone: selectedCustomer?.phone_number ?? null,
         customer_email: selectedCustomer?.email ?? null,
         payment_method: paymentMethod,
         subtotal,
@@ -224,7 +224,7 @@ export default function SalesPage() {
                     <button key={c.id} onClick={() => { setSelectedCustomer(c); setShowCustomerDropdown(false) }}
                       className="w-full px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800 border-b border-neutral-100 dark:border-neutral-800 last:border-b-0">
                       <p className="text-sm font-medium">{[c.first_name, c.last_name].filter(Boolean).join(' ') || c.email}</p>
-                      <p className="text-xs text-neutral-500">{c.phone ?? c.email}</p>
+                      <p className="text-xs text-neutral-500">{c.phone_number ?? c.email}</p>
                     </button>
                   ))}
                 </div>

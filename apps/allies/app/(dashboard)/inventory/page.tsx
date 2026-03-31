@@ -39,7 +39,7 @@ export default function InventoryPage() {
       const supabase = createClient()
       const { data } = await supabase
         .from('products')
-        .select(`id, title, status, vendor, tags, base_price, description, product_type, product_variants(id, title, option1_value, option2_value, option3_value, price, inventory_quantity, sku)`)
+        .select(`id, title, status, vendor, tags, base_price, description, product_type, product_variants(id, option1_value, option2_value, option3_value, price, inventory_quantity, sku)`)
         .eq('published', true)
         .is('deleted_at', null)
         .order('title')
