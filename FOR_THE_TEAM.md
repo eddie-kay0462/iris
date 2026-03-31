@@ -2461,4 +2461,235 @@ A reusable `ConfirmDialog` component was added — it accepts a `danger` flag th
 
 ---
 
-*Last updated: 2026-03-16*
+*Last updated: 2026-03-30*
+
+---
+
+## Allies Partner Dashboard + Admin Markets (Mar 2026)
+
+### What Got Done
+
+**Built a brand-new app** — `apps/allies` — a partner-facing dashboard for 1NRI's field partners ("allies"). Also added a **Markets** section to the admin panel, merged the Payments page into Orders, and set up three new Supabase tables.
+
+---
+
+### 1. The Allies App (`apps/allies/`)
+
+A full Next.js 15 app that lives alongside `admin`, `backend`, and `frontend` in the `apps/` folder. It runs on **port 3002** (`http://localhost:3002` locally, `allies.1nri.store` in production).
+
+**What allies can do:**
+
+| Section | What they see |
+|---|---|
+| Dashboard | Today's sales, month earnings, leaderboard rank, recent orders |
+| Record a Sale | Search customers, pick products + variants, choose payment method, auto-calculates commission |
+| Customers | All customers from their own sales, click-to-expand order history |
+| Inventory | Read-only product catalog with stock levels (no edit access) |
+| Leaderboard | All allies ranked by sales, filterable by This Month / This Week / All Time, highlights your own row |
+
+**Key technical decisions:**
+
+- **Framework:** Next.js 15 (App Router) with Tailwind CSS v4 and TypeScript
+- **Auth:** `@supabase/ssr` middleware — all routes behind `/login` redirect if no session
+- **Ally context:** A `useAlly()` hook (via `AllyProvider`) gives every page access to the logged-in ally's profile, including their **per-ally commission rate**
+- **Commission rate:** Stored as a decimal (e.g. `0.15` = 15%) in the `allies` table. Pre-calculated and stored in `ally_sales.commission_amount` at the time of each sale
+- **Mobile-first:** `DashboardShell` uses a hamburger drawer instead of a sidebar on small screens. All tables switch to card lists on mobile
+
+**Running the allies app:**
+
+```bash
+cd apps/allies
+npm install
+npm run dev
+# → http://localhost:3002
+```
+
+**Environment variables** (`apps/allies/.env.local`):
+```
+NEXT_PUBLIC_SUPABASE_URL=https://krnnifoypyilajatsmva.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
+```
+
+---
+
+### 2. New Supabase Tables
+
+Run `apps/allies/supabase-migrations.sql` in the [Supabase SQL Editor](https://supabase.com/dashboard/project/krnnifoypyilajatsmva/sql/new). It creates:
+
+**`allies`** — Partner profiles:
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | Primary key |
+| `user_id` | uuid | References `auth.users` |
+| `full_name` | text | |
+| `email` | text | Unique |
+| `phone` | text | |
+| `location` | text | e.g. "Ashesi University" |
+| `location_type` | text | `'campus'` or `'city'` |
+| `commission_rate` | numeric(5,4) | e.g. `0.15` = 15% |
+| `is_active` | boolean | Inactive allies can't log in |
+
+**`ally_sales`** — Every sale an ally records:
+
+| Column | Notes |
+|---|---|
+| `order_number` | Auto-generated (e.g. `ALS-482910`) |
+| `ally_id` | FK → allies |
+| `customer_name/email/phone` | Optional — walk-in sales allowed |
+| `total` | Sale total |
+| `commission_amount` | Pre-calculated: `total × commission_rate` |
+| `payment_method` | `'cash'`, `'momo'`, or `'bank_transfer'` |
+| `status` | `'completed'`, `'pending'`, `'refunded'` |
+
+**`ally_sale_items`** — Line items per sale (product, variant, qty, unit price).
+
+**RLS policies:**
+- Any authenticated user can read all three tables (needed for the leaderboard)
+- An ally can only insert sales for themselves (enforced by comparing `ally_id` to their auth UID)
+- Only the service role (admin) can insert/delete ally rows
+
+**If you get "permission denied" errors** after running the migration, also run:
+
+```sql
+grant usage on schema public to anon, authenticated, service_role;
+grant all on public.allies to service_role;
+grant all on public.ally_sales to service_role;
+grant all on public.ally_sale_items to service_role;
+grant select, insert, update on public.allies to authenticated;
+grant select, insert, update on public.ally_sales to authenticated;
+grant select, insert on public.ally_sale_items to authenticated;
+```
+
+---
+
+### 3. Admin Panel — Markets Section
+
+The admin sidebar now has a **Markets** nav item (visible to `admin` and `manager` roles).
+
+**What it shows:**
+- Summary cards: total allies, active count, all-time total sales, total earnings paid out
+- Table of all allies with their sales performance (total sales, order count, earnings)
+
+**What admins can do:**
+
+- **Invite Ally** — Opens a modal; fills in name, email, location, commission rate. This sends a Supabase invite email to the ally (they click the link to set their password) and simultaneously creates the `allies` row
+- **Edit Ally** — Slide-in right drawer for updating commission rate, location, location type, and active status
+
+**RBAC:** Two new permissions added to `lib/rbac/permissions.ts`:
+- `markets:read` — view the Markets page (manager + admin)
+- `markets:manage` — invite and edit allies (manager + admin)
+
+**Admin env variable needed** (`apps/admin/.env.local`):
+```
+SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
+NEXT_PUBLIC_ALLIES_URL=https://allies.1nri.store
+```
+
+The service role key is required because inviting users uses `supabase.auth.admin.inviteUserByEmail()` which bypasses RLS.
+
+**Files added/changed in admin:**
+
+| File | What |
+|---|---|
+| `lib/rbac/permissions.ts` | Added `markets:read` + `markets:manage` |
+| `app/components/Sidebar.tsx` | Added Markets nav item; removed Payments nav item |
+| `app/(dashboard)/markets/page.tsx` | Markets page (table + stats) |
+| `app/(dashboard)/markets/actions.ts` | Server actions: `inviteAlly`, `updateAlly` |
+| `app/(dashboard)/markets/components/InviteAllyModal.tsx` | Invite form |
+| `app/(dashboard)/markets/components/EditAllyDrawer.tsx` | Edit drawer |
+
+---
+
+### 4. Payments → merged into Orders
+
+The **Payments** nav item was removed from the admin sidebar. Its four stat cards (Total Collected, Pending, Refunded, Transactions) now appear at the top of the **Orders** page, above the search filters. The `payments/page.tsx` file still exists but is no longer linked from the nav.
+
+---
+
+### Creating a Test Ally (Manual Steps)
+
+Since the `allies` table requires migration to be run first, the fastest way to create a test ally is:
+
+1. **Run the migration** in the [Supabase SQL Editor](https://supabase.com/dashboard/project/krnnifoypyilajatsmva/sql/new) — paste the full `supabase-migrations.sql` file
+
+2. **Create an auth user** — Supabase Dashboard → Authentication → Users → Add user:
+   - Email: `testally@1nri.store`
+   - Password: `Ally1234!`
+   - Copy the UUID shown
+
+3. **Insert the ally row** via SQL editor:
+
+```sql
+insert into public.allies (
+  user_id, full_name, email, phone,
+  location, location_type, commission_rate, is_active
+) values (
+  'YOUR_USER_UUID',
+  'Kwame Asante', 'testally@1nri.store', '+233 24 000 0001',
+  'Ashesi University', 'campus', 0.15, true
+);
+```
+
+4. **Log in** at `http://localhost:3002` with `testally@1nri.store` / `Ally1234!`
+
+Alternatively, once the migration is run, you can use the Invite Ally button in the admin Markets section — it handles steps 2 and 3 automatically.
+
+---
+
+### Files Created (this session)
+
+| Location | File(s) |
+|---|---|
+| `apps/allies/` | Full Next.js 15 app (31 files) |
+| `apps/allies/supabase-migrations.sql` | 3 new tables + RLS + grants |
+| `apps/allies/scripts/seed-test-ally.mjs` | Test ally seed script |
+| `apps/admin/app/(dashboard)/markets/` | Markets page, server actions, 2 UI components |
+
+### Files Modified (this session)
+
+| File | Change |
+|---|---|
+| `apps/admin/lib/rbac/permissions.ts` | Added `markets:read`, `markets:manage`; added both to manager + admin roles |
+| `apps/admin/app/components/Sidebar.tsx` | Added Markets; removed Payments |
+| `apps/admin/app/(dashboard)/orders/page.tsx` | Added payment stat cards at top |
+| `apps/admin/.env.local` | Added `SUPABASE_SERVICE_ROLE_KEY` + `NEXT_PUBLIC_ALLIES_URL` |
+
+---
+
+### Fixes Applied After Initial Setup
+
+#### 1. Inventory & Sales pages: wrong product column name
+
+The allies app was querying `products.is_published` — that column doesn't exist in this project's schema. The correct column is `published` (boolean). Both pages were updated:
+
+- `apps/allies/app/(dashboard)/inventory/page.tsx`
+- `apps/allies/app/(dashboard)/sales/page.tsx`
+
+Changed `.eq('is_published', true)` → `.eq('published', true).is('deleted_at', null)`.
+
+Also fixed: `category` and `sku` don't exist as top-level product columns. The category equivalent is `product_type`, and `sku` is on each `product_variants` row.
+
+#### 2. Migration script: duplicate policy error
+
+If you ran the migration and got:
+```
+ERROR: 42710: policy "allies_select_authenticated" for table "allies" already exists
+```
+...it means the tables were already partially created from an earlier attempt. The migration file has been updated to use `DROP POLICY IF EXISTS` before each `CREATE POLICY`, so it is now safe to run multiple times.
+
+#### 3. Grants not applied (permission denied)
+
+The migration script stops on error, so the `GRANT` statements at the bottom may not have run. If you see `permission denied for table allies`, run this in the Supabase SQL editor:
+
+```sql
+grant usage on schema public to anon, authenticated, service_role;
+grant all on public.allies to service_role;
+grant all on public.ally_sales to service_role;
+grant all on public.ally_sale_items to service_role;
+grant select, insert, update on public.allies to authenticated;
+grant select, insert, update on public.ally_sales to authenticated;
+grant select, insert on public.ally_sale_items to authenticated;
+```
+
+*Last updated: 2026-03-30*

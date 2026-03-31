@@ -55,6 +55,10 @@ export const PERMISSIONS = {
   "popup:create": "Create pop-up orders",
   "popup:update": "Update pop-up order status and details",
   "popup:manage": "Create/close pop-up events and confirm payments",
+
+  // Markets / allies permissions
+  "markets:read": "View allies and their stats",
+  "markets:manage": "Invite, edit, and deactivate allies",
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -100,6 +104,8 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     "popup:create",
     "popup:update",
     "popup:manage",
+    "markets:read",
+    "markets:manage",
   ],
 
   // Admins can do everything
@@ -129,6 +135,8 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     "popup:create",
     "popup:update",
     "popup:manage",
+    "markets:read",
+    "markets:manage",
   ],
 } as const;
 
