@@ -66,6 +66,21 @@ export async function inviteAlly(input: InviteAllyInput) {
   return { success: true }
 }
 
+export async function fetchAllies() {
+  const supabase = getAdminClient()
+  const { data: allyRows, error } = await supabase
+    .from('allies')
+    .select('*')
+    .order('joined_at', { ascending: false })
+  if (error) return { error: error.message, allies: [] }
+
+  const { data: sales } = await supabase
+    .from('ally_sales')
+    .select('ally_id, total, commission_amount')
+
+  return { allies: allyRows ?? [], sales: sales ?? [], error: null }
+}
+
 export async function updateAlly(input: UpdateAllyInput) {
   const supabase = getAdminClient()
   const { id, commission_rate, ...rest } = input

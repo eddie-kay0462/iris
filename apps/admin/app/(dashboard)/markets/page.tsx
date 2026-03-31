@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { UserPlus, Pencil } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { fetchAllies } from './actions'
 import { InviteAllyModal } from './components/InviteAllyModal'
 import { EditAllyDrawer } from './components/EditAllyDrawer'
 
@@ -28,14 +28,11 @@ export default function MarketsPage() {
   const [editingAlly, setEditingAlly] = useState<Ally | null>(null)
 
   async function loadAllies() {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const supabase = createClient() as any
-    const { data: allyRows } = await supabase.from('allies').select('*').order('joined_at', { ascending: false })
-    const { data: sales } = await supabase.from('ally_sales').select('ally_id, total, commission_amount')
+    const { allies: allyRows, sales } = await fetchAllies()
 
     // Aggregate sales per ally
     const map = new Map<string, { total: number; orders: number; earnings: number }>()
-    for (const s of sales ?? []) {
+    for (const s of sales) {
       const existing = map.get(s.ally_id) ?? { total: 0, orders: 0, earnings: 0 }
       map.set(s.ally_id, {
         total: existing.total + Number(s.total),
@@ -44,8 +41,9 @@ export default function MarketsPage() {
       })
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     setAllies(
-      (allyRows ?? []).map((a: any) => {
+      (allyRows as any[]).map((a) => {
         const stats = map.get(a.id) ?? { total: 0, orders: 0, earnings: 0 }
         return { ...a, totalSales: stats.total, totalOrders: stats.orders, totalEarnings: stats.earnings }
       })
