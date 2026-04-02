@@ -36,25 +36,26 @@ export default function CustomersPage() {
     if (!ally) return
     async function load() {
       const supabase = createClient()
-      // Get all distinct customers from this ally's sales
+      // Get all sales that have any customer info
       const { data: sales } = await supabase
         .from('ally_sales')
         .select('customer_name, customer_email, customer_phone, sale_date')
         .eq('ally_id', ally!.id)
-        .not('customer_email', 'is', null)
+        .or('customer_name.not.is.null,customer_email.not.is.null,customer_phone.not.is.null')
         .order('sale_date', { ascending: false })
 
-      // Aggregate by email
+      // Aggregate: key by email > phone > name
       const map = new Map<string, Customer>()
       for (const s of sales ?? []) {
-        if (!s.customer_email) continue
-        const existing = map.get(s.customer_email)
+        if (!s.customer_name && !s.customer_email && !s.customer_phone) continue
+        const key = s.customer_email ?? s.customer_phone ?? s.customer_name!
+        const existing = map.get(key)
         if (existing) {
           existing.totalOrders++
         } else {
-          map.set(s.customer_email, {
-            id: s.customer_email,
-            name: s.customer_name || s.customer_email,
+          map.set(key, {
+            id: key,
+            name: s.customer_name || s.customer_email || s.customer_phone || '',
             email: s.customer_email,
             phone: s.customer_phone,
             totalOrders: 1,
@@ -72,12 +73,21 @@ export default function CustomersPage() {
     setSelected(customer)
     setLoadingSales(true)
     const supabase = createClient()
-    const { data: sales } = await supabase
+    let query = supabase
       .from('ally_sales')
       .select('id, order_number, total, payment_method, sale_date, ally_sale_items(product_name, variant_title, quantity)')
       .eq('ally_id', ally!.id)
-      .eq('customer_email', customer.email)
       .order('sale_date', { ascending: false })
+
+    if (customer.email) {
+      query = query.eq('customer_email', customer.email)
+    } else if (customer.phone) {
+      query = query.eq('customer_phone', customer.phone)
+    } else {
+      query = query.eq('customer_name', customer.name)
+    }
+
+    const { data: sales } = await query
 
     setSelectedSales(
       (sales ?? []).map((s: any) => ({

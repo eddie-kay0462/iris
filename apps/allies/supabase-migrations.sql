@@ -123,3 +123,21 @@ grant select, insert, update on public.ally_sales to authenticated;
 grant select, insert on public.ally_sale_items to authenticated;
 
 
+-- ================================================
+-- NOTE: Customer search (profiles table)
+-- ================================================
+-- The allies app searches the profiles table to find existing customers
+-- when recording a sale. The profiles RLS policy only allows users to
+-- select their own profile (auth.uid() = id), which would block ally
+-- searches for other customers.
+--
+-- Resolution: customer search is handled via a server action that uses
+-- the service role key, bypassing RLS. No additional policy changes are
+-- needed on the profiles table.
+--
+-- The ally_sales table stores customer data denormalized
+-- (customer_name, customer_email, customer_phone) so customer records
+-- in the customers view are always sourced from ally_sales directly,
+-- not from profiles.
+
+
