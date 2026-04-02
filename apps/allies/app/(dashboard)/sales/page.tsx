@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Search, Plus, Minus, ArrowLeft, X } from 'lucide-react'
+import { Search, Plus, Minus, ArrowLeft, X, UserPlus } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useAlly } from '@/lib/ally-context'
+import { searchCustomers } from './actions'
 
-type Customer = { id: string; first_name: string | null; last_name: string | null; email: string; phone_number: string | null }
+type Customer = { id: string; first_name: string | null; last_name: string | null; email: string | null; phone_number: string | null }
 type Variant = { id: string; option1_value: string | null; option2_value: string | null; option3_value: string | null; price: number; sku: string | null; inventory_quantity: number }
 type Product = { id: string; title: string; base_price: number; variants: Variant[] }
 type LineItem = { variantId: string; productId: string; productName: string; variantTitle: string; unitPrice: number; quantity: number }
@@ -25,6 +26,8 @@ export default function SalesPage() {
   const [productSearch, setProductSearch] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
+  const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
+  const [newCustomer, setNewCustomer] = useState({ first_name: '', last_name: '', email: '', phone_number: '' })
   const [lineItems, setLineItems] = useState<LineItem[]>([])
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
   const [notes, setNotes] = useState('')
@@ -53,22 +56,17 @@ export default function SalesPage() {
     loadProducts()
   }, [])
 
-  // Search customers with debounce
-  const searchCustomers = useCallback(async (q: string) => {
+  // Search customers via server action (bypasses profiles RLS)
+  const runSearch = useCallback(async (q: string) => {
     if (!q.trim()) { setCustomers([]); return }
-    const supabase = createClient()
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, first_name, last_name, email, phone_number')
-      .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%,phone_number.ilike.%${q}%`)
-      .limit(8)
-    setCustomers(data ?? [])
+    const results = await searchCustomers(q)
+    setCustomers(results)
   }, [])
 
   useEffect(() => {
-    const t = setTimeout(() => searchCustomers(customerSearch), 300)
+    const t = setTimeout(() => runSearch(customerSearch), 300)
     return () => clearTimeout(t)
-  }, [customerSearch, searchCustomers])
+  }, [customerSearch, runSearch])
 
   const filteredProducts = products.filter((p) =>
     p.title.toLowerCase().includes(productSearch.toLowerCase())
@@ -118,6 +116,26 @@ export default function SalesPage() {
     setLineItems((prev) => prev.filter((_, i) => i !== index))
   }
 
+  function confirmNewCustomer() {
+    if (!newCustomer.first_name.trim() && !newCustomer.phone_number.trim() && !newCustomer.email.trim()) return
+    setSelectedCustomer({
+      id: 'new',
+      first_name: newCustomer.first_name.trim() || null,
+      last_name: newCustomer.last_name.trim() || null,
+      email: newCustomer.email.trim() || null,
+      phone_number: newCustomer.phone_number.trim() || null,
+    })
+    setShowNewCustomerForm(false)
+    setShowCustomerDropdown(false)
+  }
+
+  function clearCustomer() {
+    setSelectedCustomer(null)
+    setCustomerSearch('')
+    setShowNewCustomerForm(false)
+    setNewCustomer({ first_name: '', last_name: '', email: '', phone_number: '' })
+  }
+
   const subtotal = lineItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const commissionRate = ally?.commission_rate ?? 0.15
   const commission = subtotal * commissionRate
@@ -128,7 +146,7 @@ export default function SalesPage() {
 
     const supabase = createClient()
     const customerName = selectedCustomer
-      ? [selectedCustomer.first_name, selectedCustomer.last_name].filter(Boolean).join(' ')
+      ? [selectedCustomer.first_name, selectedCustomer.last_name].filter(Boolean).join(' ') || null
       : null
 
     const { data: sale, error } = await supabase
@@ -166,6 +184,10 @@ export default function SalesPage() {
     setSubmitting(false)
   }
 
+  const selectedCustomerLabel = selectedCustomer
+    ? [selectedCustomer.first_name, selectedCustomer.last_name].filter(Boolean).join(' ') || selectedCustomer.email || selectedCustomer.phone_number || 'New customer'
+    : ''
+
   if (submitted) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 py-12 text-center">
@@ -174,7 +196,7 @@ export default function SalesPage() {
         <p className="text-sm text-neutral-500 mb-2">Commission: <span className="font-semibold text-neutral-900 dark:text-neutral-100">{formatCurrency(commission)}</span></p>
         <p className="text-xs text-neutral-400 mb-8">({(commissionRate * 100).toFixed(0)}% of {formatCurrency(subtotal)})</p>
         <div className="flex flex-col md:flex-row gap-3">
-          <button onClick={() => { setSubmitted(false); setLineItems([]); setSelectedCustomer(null); setCustomerSearch(''); setNotes('') }}
+          <button onClick={() => { setSubmitted(false); setLineItems([]); setSelectedCustomer(null); setCustomerSearch(''); setNotes(''); setNewCustomer({ first_name: '', last_name: '', email: '', phone_number: '' }) }}
             className="px-8 py-3 bg-black dark:bg-white text-white dark:text-black text-xs tracking-[0.2em] uppercase hover:bg-neutral-800 transition-colors">
             Record Another
           </button>
@@ -203,33 +225,131 @@ export default function SalesPage() {
           {/* Customer Search */}
           <div className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 md:p-6">
             <label className="block text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-3">Customer (Optional)</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-              <input
-                type="text"
-                placeholder="Search by name, email or phone"
-                value={selectedCustomer ? [selectedCustomer.first_name, selectedCustomer.last_name].filter(Boolean).join(' ') : customerSearch}
-                onChange={(e) => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setShowCustomerDropdown(true) }}
-                onFocus={() => setShowCustomerDropdown(true)}
-                className="w-full pl-10 pr-8 py-2.5 border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
-              />
-              {selectedCustomer && (
-                <button onClick={() => { setSelectedCustomer(null); setCustomerSearch('') }} className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <X className="w-3 h-3 text-neutral-400" />
-                </button>
-              )}
-              {showCustomerDropdown && !selectedCustomer && customers.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 max-h-48 overflow-y-auto shadow-sm">
-                  {customers.map((c) => (
-                    <button key={c.id} onClick={() => { setSelectedCustomer(c); setShowCustomerDropdown(false) }}
-                      className="w-full px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800 border-b border-neutral-100 dark:border-neutral-800 last:border-b-0">
-                      <p className="text-sm font-medium">{[c.first_name, c.last_name].filter(Boolean).join(' ') || c.email}</p>
-                      <p className="text-xs text-neutral-500">{c.phone_number ?? c.email}</p>
-                    </button>
-                  ))}
+
+            {showNewCustomerForm ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 mb-1">First Name</label>
+                    <input
+                      type="text"
+                      value={newCustomer.first_name}
+                      onChange={(e) => setNewCustomer((p) => ({ ...p, first_name: e.target.value }))}
+                      placeholder="First name"
+                      className="w-full px-3 py-2 border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-neutral-400 mb-1">Last Name</label>
+                    <input
+                      type="text"
+                      value={newCustomer.last_name}
+                      onChange={(e) => setNewCustomer((p) => ({ ...p, last_name: e.target.value }))}
+                      placeholder="Last name"
+                      className="w-full px-3 py-2 border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                    />
+                  </div>
                 </div>
-              )}
-            </div>
+                <div>
+                  <label className="block text-[10px] text-neutral-400 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    value={newCustomer.phone_number}
+                    onChange={(e) => setNewCustomer((p) => ({ ...p, phone_number: e.target.value }))}
+                    placeholder="+233 ..."
+                    className="w-full px-3 py-2 border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-neutral-400 mb-1">Email (Optional)</label>
+                  <input
+                    type="email"
+                    value={newCustomer.email}
+                    onChange={(e) => setNewCustomer((p) => ({ ...p, email: e.target.value }))}
+                    placeholder="customer@example.com"
+                    className="w-full px-3 py-2 border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                  />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={confirmNewCustomer}
+                    className="flex-1 py-2 bg-black dark:bg-white text-white dark:text-black text-xs tracking-[0.15em] uppercase hover:bg-neutral-800 transition-colors"
+                  >
+                    Use this customer
+                  </button>
+                  <button
+                    onClick={() => { setShowNewCustomerForm(false); setNewCustomer({ first_name: '', last_name: '', email: '', phone_number: '' }) }}
+                    className="px-4 py-2 border border-neutral-200 dark:border-neutral-800 text-xs hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name, email or phone"
+                  value={selectedCustomer ? selectedCustomerLabel : customerSearch}
+                  onChange={(e) => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setShowCustomerDropdown(true) }}
+                  onFocus={() => setShowCustomerDropdown(true)}
+                  className="w-full pl-10 pr-8 py-2.5 border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                />
+                {selectedCustomer && (
+                  <button onClick={clearCustomer} className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <X className="w-3 h-3 text-neutral-400" />
+                  </button>
+                )}
+                {showCustomerDropdown && !selectedCustomer && (
+                  <div className="absolute z-10 w-full mt-1 border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm">
+                    {customers.length > 0 ? (
+                      <>
+                        {customers.map((c) => (
+                          <button key={c.id} onClick={() => { setSelectedCustomer(c); setShowCustomerDropdown(false) }}
+                            className="w-full px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800 border-b border-neutral-100 dark:border-neutral-800 last:border-b-0">
+                            <p className="text-sm font-medium">{[c.first_name, c.last_name].filter(Boolean).join(' ') || c.email}</p>
+                            <p className="text-xs text-neutral-500">{c.phone_number ?? c.email}</p>
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => { setShowNewCustomerForm(true); setShowCustomerDropdown(false) }}
+                          className="w-full px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800 flex items-center gap-2 text-neutral-500 border-t border-neutral-100 dark:border-neutral-800"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          <span className="text-xs">Add new customer</span>
+                        </button>
+                      </>
+                    ) : customerSearch.trim() ? (
+                      <button
+                        onClick={() => { setShowNewCustomerForm(true); setShowCustomerDropdown(false) }}
+                        className="w-full px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800 flex items-center gap-2"
+                      >
+                        <UserPlus className="w-3.5 h-3.5 text-neutral-400" />
+                        <div>
+                          <p className="text-sm font-medium">No results — add new customer</p>
+                          <p className="text-xs text-neutral-400">Enter their details manually</p>
+                        </div>
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Selected customer badge */}
+            {selectedCustomer && !showNewCustomerForm && (
+              <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{selectedCustomerLabel}</p>
+                  {selectedCustomer.phone_number && <p className="text-xs text-neutral-500">{selectedCustomer.phone_number}</p>}
+                  {selectedCustomer.email && <p className="text-xs text-neutral-500">{selectedCustomer.email}</p>}
+                </div>
+                <button onClick={clearCustomer} className="shrink-0 text-neutral-400 hover:text-neutral-600">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Product Search & Add */}
