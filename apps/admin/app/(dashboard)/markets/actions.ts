@@ -72,7 +72,7 @@ export async function fetchAllies() {
     .from('allies')
     .select('*')
     .order('joined_at', { ascending: false })
-  if (error) return { error: error.message, allies: [] }
+  if (error) return { error: error.message, allies: [], sales: [] }
 
   const { data: sales } = await supabase
     .from('ally_sales')
