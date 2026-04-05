@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const next = searchParams.get("next") ?? "/";
 
   if (!code) {
-    return NextResponse.redirect(new URL("/auth/auth-error", request.url));
+    return NextResponse.redirect(new URL("/login?error=auth-callback-failed", request.url));
   }
 
   try {
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
 
     if (error) {
       console.error("Auth callback error:", error.message);
-      return NextResponse.redirect(new URL("/auth/auth-error", request.url));
+      return NextResponse.redirect(new URL("/login?error=auth-callback-failed", request.url));
     }
 
     // Password reset: the update-password page uses the Supabase session
@@ -50,6 +50,6 @@ export async function GET(request: Request) {
     );
   } catch (err) {
     console.error("Auth callback error:", err);
-    return NextResponse.redirect(new URL("/auth/auth-error", request.url));
+    return NextResponse.redirect(new URL("/login?error=auth-callback-failed", request.url));
   }
 }

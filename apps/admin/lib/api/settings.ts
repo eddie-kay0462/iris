@@ -80,3 +80,10 @@ export function useRoles() {
     queryFn: () => apiClient<RoleInfo[]>("/settings/roles"),
   });
 }
+
+export function useResetUserPassword() {
+  return useMutation({
+    mutationFn: (userId: string) =>
+      apiClient(`/settings/users/${userId}/reset-password`, { method: "POST" }),
+  });
+}
