@@ -5,6 +5,7 @@ import {
   useAdminUsers,
   useUpdateUserRole,
   useCreateUser,
+  useResetUserPassword,
   type AdminUser,
 } from "@/lib/api/settings";
 import { DataTable, type Column } from "../../../components/DataTable";
@@ -18,13 +19,13 @@ const INVITE_ROLES = ["admin", "manager", "staff"];
 function InviteUserModal({ onClose }: { onClose: () => void }) {
   const createUser = useCreateUser();
   const [form, setForm] = useState({ email: "", role: "staff", first_name: "", last_name: "" });
-  const [success, setSuccess] = useState(false);
+  const [result, setResult] = useState<{ existing_user?: boolean } | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await createUser.mutateAsync(form);
-      setSuccess(true);
+      const data = await createUser.mutateAsync(form) as { existing_user?: boolean };
+      setResult(data);
     } catch {
       // error shown below
     }
@@ -38,14 +39,25 @@ function InviteUserModal({ onClose }: { onClose: () => void }) {
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
         </div>
 
-        {success ? (
+        {result ? (
           <div className="px-6 py-8 text-center space-y-3">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50">
               <span className="text-emerald-500 text-xl">&#10003;</span>
             </div>
-            <p className="font-medium text-slate-900">Invite sent!</p>
+            <p className="font-medium text-slate-900">
+              {result.existing_user ? "Access granted!" : "Invite sent!"}
+            </p>
             <p className="text-sm text-slate-500">
-              <strong>{form.email}</strong> will receive an email to set their password and access the admin panel.
+              {result.existing_user ? (
+                <>
+                  <strong>{form.email}</strong> already had an account. Their role has been updated
+                  and they&apos;ve been sent a password reset email to access the admin panel.
+                </>
+              ) : (
+                <>
+                  <strong>{form.email}</strong> will receive an email to set their password and access the admin panel.
+                </>
+              )}
             </p>
             <button
               onClick={onClose}
@@ -168,12 +180,23 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [showInvite, setShowInvite] = useState(false);
+  const [resetSent, setResetSent] = useState<string | null>(null);
 
   const { data, isLoading } = useAdminUsers({ search, page });
   const updateRole = useUpdateUserRole();
+  const resetPassword = useResetUserPassword();
 
   const handleRoleUpdate = (userId: string, role: string) => {
     updateRole.mutate({ userId, role });
+  };
+
+  const handleResetPassword = (userId: string) => {
+    resetPassword.mutate(userId, {
+      onSuccess: () => {
+        setResetSent(userId);
+        setTimeout(() => setResetSent(null), 3000);
+      },
+    });
   };
 
   const columns: Column<AdminUser>[] = [
@@ -213,6 +236,22 @@ export default function AdminUsersPage() {
         row.last_login_at
           ? new Date(row.last_login_at).toLocaleDateString()
           : "Never",
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (row) =>
+        resetSent === row.id ? (
+          <span className="text-xs text-emerald-600 font-medium">Reset sent</span>
+        ) : (
+          <button
+            onClick={() => handleResetPassword(row.id)}
+            disabled={resetPassword.isPending}
+            className="text-xs text-slate-500 hover:text-slate-900 disabled:opacity-50"
+          >
+            Send password reset
+          </button>
+        ),
     },
   ];
 

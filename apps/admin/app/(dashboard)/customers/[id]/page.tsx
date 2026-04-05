@@ -1,9 +1,10 @@
 "use client";
 
-import { use, useMemo } from "react";
+import { use, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Mail, Phone, Calendar, MapPin, Tag, ShoppingBag, Store } from "lucide-react";
 import { useAdminCustomer, type Order, type Address, type PopupOrderSummary } from "@/lib/api/orders";
+import { useResetUserPassword } from "@/lib/api/settings";
 import { StatusBadge } from "../../../components/StatusBadge";
 
 function Avatar({ name }: { name: string }) {
@@ -169,6 +170,15 @@ export default function AdminCustomerDetailPage({
 }) {
   const { id } = use(params);
   const { data: customer, isLoading, error } = useAdminCustomer(id);
+  const resetPassword = useResetUserPassword();
+  const [resetSent, setResetSent] = useState(false);
+
+  const handleResetPassword = () => {
+    if (!customer) return;
+    resetPassword.mutate(customer.id, {
+      onSuccess: () => setResetSent(true),
+    });
+  };
 
   if (isLoading) {
     return (
@@ -202,26 +212,44 @@ export default function AdminCustomerDetailPage({
       </Link>
 
       {/* Header */}
-      <header className="flex items-center gap-4">
-        <Avatar name={name} />
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold">{name}</h1>
-            {customer.role && (
-              <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${roleBadgeColor[customer.role] ?? "bg-slate-100 text-slate-600"}`}>
-                {customer.role.replace("_", " ")}
-              </span>
+      <header className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Avatar name={name} />
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-semibold">{name}</h1>
+              {customer.role && (
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${roleBadgeColor[customer.role] ?? "bg-slate-100 text-slate-600"}`}>
+                  {customer.role.replace("_", " ")}
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-slate-500">{customer.email}</p>
+            {customer.tags && customer.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {customer.tags.map((tag) => (
+                  <span key={tag} className="flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                    <Tag className="h-2.5 w-2.5" /> {tag}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
-          <p className="text-sm text-slate-500">{customer.email}</p>
-          {customer.tags && customer.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {customer.tags.map((tag) => (
-                <span key={tag} className="flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                  <Tag className="h-2.5 w-2.5" /> {tag}
-                </span>
-              ))}
-            </div>
+        </div>
+        <div className="flex-shrink-0">
+          {resetSent ? (
+            <span className="inline-flex items-center rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+              Password reset email sent
+            </span>
+          ) : (
+            <button
+              onClick={handleResetPassword}
+              disabled={resetPassword.isPending}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Mail className="h-4 w-4" />
+              Send password reset
+            </button>
           )}
         </div>
       </header>

@@ -63,9 +63,9 @@ export class SettingsService {
 
   async createUser(dto: { email: string; role: string; first_name?: string; last_name?: string }) {
     const db = this.supabase.getAdminClient();
-
-    // Invite user via Supabase — creates auth user + sends invite email
     const adminUrl = process.env.ADMIN_URL || 'http://localhost:3001';
+
+    // Attempt to invite via Supabase
     const { data: invited, error: inviteError } = await db.auth.admin.inviteUserByEmail(
       dto.email,
       {
@@ -75,6 +75,44 @@ export class SettingsService {
     );
 
     if (inviteError) {
+      // If the user already exists (e.g. registered as a customer), look them up in
+      // the profiles table, upgrade their role, and send a password reset email so
+      // they can set a new password and access the admin panel.
+      const isAlreadyRegistered =
+        inviteError.message.toLowerCase().includes('already') ||
+        inviteError.message.toLowerCase().includes('registered') ||
+        inviteError.message.toLowerCase().includes('exists') ||
+        inviteError.status === 422;
+
+      if (isAlreadyRegistered) {
+        const { data: profile, error: profileLookupError } = await db
+          .from('profiles')
+          .select('id, email, first_name, last_name')
+          .eq('email', dto.email)
+          .single();
+
+        if (profileLookupError || !profile) {
+          throw new BadRequestException(inviteError.message);
+        }
+
+        const { error: profileUpdateError } = await db.from('profiles').upsert({
+          id: profile.id,
+          email: dto.email,
+          first_name: dto.first_name ?? profile.first_name,
+          last_name: dto.last_name ?? profile.last_name,
+          role: dto.role,
+        });
+
+        if (profileUpdateError) throw profileUpdateError;
+
+        // Send password reset email pointing to admin accept-invite page
+        await db.auth.resetPasswordForEmail(dto.email, {
+          redirectTo: `${adminUrl}/accept-invite`,
+        });
+
+        return { id: profile.id, email: dto.email, role: dto.role, existing_user: true };
+      }
+
       throw new BadRequestException(inviteError.message);
     }
 
@@ -91,7 +129,29 @@ export class SettingsService {
 
     if (profileError) throw profileError;
 
-    return { id: userId, email: dto.email, role: dto.role };
+    return { id: userId, email: dto.email, role: dto.role, existing_user: false };
+  }
+
+  async sendPasswordReset(userId: string) {
+    const db = this.supabase.getAdminClient();
+
+    const { data: profile, error: findError } = await db
+      .from('profiles')
+      .select('id, email')
+      .eq('id', userId)
+      .single();
+
+    if (findError || !profile) {
+      throw new NotFoundException('User not found');
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+    await db.auth.resetPasswordForEmail(profile.email, {
+      redirectTo: `${frontendUrl}/api/auth/callback?next=/update-password`,
+    });
+
+    return { success: true, message: 'Password reset email sent' };
   }
 
   getRoles() {
