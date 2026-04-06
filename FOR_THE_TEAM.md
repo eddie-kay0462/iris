@@ -2692,4 +2692,28 @@ grant select, insert, update on public.ally_sales to authenticated;
 grant select, insert on public.ally_sale_items to authenticated;
 ```
 
-*Last updated: 2026-03-30*
+---
+
+## Global Analytics & Revenue Targets Update (April 2026)
+
+### What Got Done
+
+**Upgraded the admin dashboard with dynamic brand analytics and centralized general settings.**
+
+1. **Global Database Revenue Targets** — Previously, the yearly revenue target progress bar relied on local browser storage (`localStorage`), meaning each admin saw different target data unless they manually configured it themselves. We migrated this to a global, database-backed `revenue_targets` schema in Supabase. Now, the main dashboard provides a secure, read-only UI tracking global progress.
+2. **New General Settings Hub** — To decouple configuration from the dashboard's display logic, we created a new dedicated **General Settings** page (`/settings/general`). This page features a clean, secure form for selecting any financial year and updating the global goal on behalf of all admins.
+3. **Dynamic Brand Analytics** — We implemented a powerful brand-filtering engine inside the core dashboard UI. The top selector now toggles all primary KPIs across "All Brands", "1NRI", or "Unlikely Alliances", dynamically pivoting the Revenue, Orders, and AOV data in real-time. We also solved hook ordering issues across these dynamic toggles, implicitly ensuring robust rendering cycles.
+4. **Historical Auto-Scrolling Revenue Charts** — The primary dashboard revenue chart was expanded to support horizontal scrolling for wide-reaching historic data, ensuring past metrics remain accessible while automatically anchoring visually to the present date on mount.
+5. **Fixed AOV Calculations** — Identified and solved an issue with the "All-Channels" Average Order Value calculation mathematically deflating. Previously, the backend incorrectly logged canceled and refunded orders into the `totalOrders` divisor alongside valid ones, breaking accuracy. We updated the pipeline queries ensuring canceled and refunded orders never artificially compromise AOV accuracy. 
+
+### Files Modified & Created
+
+- `supabase/migrations/20260406000000_create_revenue_targets.sql` *(New table for tracking global targets)*
+- `apps/backend/src/orders/orders.controller.ts` & `orders.service.ts` *(Endpoints & DB fetching algorithms added for Revenue Targets; AOV cancellation-stripping patched)*
+- `apps/backend/src/orders/dto/set-revenue-target.dto.ts` *(Added DTO)*
+- `apps/admin/app/(dashboard)/settings/general/page.tsx` *(New standalone UI form to set global brand configuration)*
+- `apps/admin/app/(dashboard)/components/RevenueLineChart.tsx` *(Made graph side-scrollable; stabilized React hooks)*
+- `apps/admin/app/(dashboard)/components/RevenueTarget.tsx` *(Gutted inline editing; implemented pure read-only loading logic)*
+- `apps/admin/app/components/Sidebar.tsx` *(Added navigation node to General Settings panel)*
+
+*Last updated: 2026-04-06*

@@ -238,6 +238,7 @@ export interface AnalyticsTopProduct {
   unitsSold: number;
   productId: string | null;
   imageUrl: string | null;
+  vendor: string | null;
 }
 
 export interface AnalyticsData {
@@ -250,6 +251,10 @@ export interface AnalyticsData {
   previousPeriodRevenue: number;
   previousPeriodOrders: number;
   funnelCounts: Record<string, number>;
+  brandRevenue: Record<string, number>;
+  brandRevenueByDay: Record<string, Record<string, number>>;
+  brandOrderCount: Record<string, number>;
+  popupRevenue: number;
 }
 
 export interface CustomerStats {
@@ -342,5 +347,27 @@ export function useAnalytics(params: { from_date?: string; to_date?: string } = 
       apiClient<AnalyticsData>(
         `/orders/admin/analytics${toSearchParams(params as OrderQueryParams)}`,
       ),
+  });
+}
+
+export function useRevenueTarget(year: number) {
+  return useQuery({
+    queryKey: ["admin-revenue-target", year],
+    queryFn: () =>
+      apiClient<number | null>(`/orders/admin/revenue-target/${year}`),
+  });
+}
+
+export function useUpdateRevenueTarget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ year, target }: { year: number; target: number }) =>
+      apiClient<{ target: number }>(`/orders/admin/revenue-target/${year}`, {
+        method: "POST",
+        body: { target },
+      }),
+    onSuccess: (_, { year }) => {
+      qc.invalidateQueries({ queryKey: ["admin-revenue-target", year] });
+    },
   });
 }
