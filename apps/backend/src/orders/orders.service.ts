@@ -812,11 +812,29 @@ export class OrdersService {
     const ordersByDay: Record<string, number> = {};
 
     (orders || []).forEach((o) => {
-      const day = o.created_at.slice(0, 10);
-      ordersByDay[day] = (ordersByDay[day] || 0) + 1;
       if (!['cancelled', 'refunded'].includes(o.status)) {
+        const day = o.created_at.slice(0, 10);
+        ordersByDay[day] = (ordersByDay[day] || 0) + 1;
         revenueByDay[day] = (revenueByDay[day] || 0) + Number(o.total);
       }
+    });
+
+    // ── Popup orders: add to combined revenueByDay / ordersByDay ──────────────
+    const { data: popupOrdersData } = await db
+      .from('popup_orders')
+      .select('total, status, created_at')
+      .gte('created_at', fromDate)
+      .lte('created_at', toDate)
+      .not('status', 'in', '("cancelled","refunded")');
+
+    let popupRevenue = 0;
+    let popupOrderCount = 0;
+    (popupOrdersData || []).forEach((po) => {
+      const day = po.created_at.slice(0, 10);
+      revenueByDay[day] = (revenueByDay[day] || 0) + Number(po.total);
+      ordersByDay[day] = (ordersByDay[day] || 0) + 1;
+      popupRevenue += Number(po.total);
+      popupOrderCount += 1;
     });
 
     // Previous period comparison
@@ -863,28 +881,77 @@ export class OrdersService {
     // Top products by revenue
     const { data: topItems } = await db
       .from('order_items')
-      .select('product_id, product_name, quantity, total_price, order:orders!inner(status, created_at, deleted_at)')
+      .select('order_id, product_id, product_name, quantity, total_price, order:orders!inner(status, created_at, deleted_at), product:products(vendor)')
       .gte('orders.created_at', fromDate)
       .lte('orders.created_at', toDate)
       .is('orders.deleted_at', null);
 
     const productMap: Record<
       string,
-      { name: string; revenue: number; unitsSold: number; productId: string | null }
+      { name: string; revenue: number; unitsSold: number; productId: string | null; vendor: string | null }
     > = {};
     (topItems || []).forEach((item: any) => {
       if (['cancelled', 'refunded'].includes(item.order?.status)) return;
       const name = item.product_name;
       if (!productMap[name]) {
-        productMap[name] = { name, revenue: 0, unitsSold: 0, productId: item.product_id || null };
+        productMap[name] = { name, revenue: 0, unitsSold: 0, productId: item.product_id || null, vendor: item.product?.vendor || null };
       }
       productMap[name].revenue += Number(item.total_price);
       productMap[name].unitsSold += item.quantity;
     });
 
+    // ── Brand revenue breakdown ────────────────────────────────────────────────
+    // Computed from storefront order items (vendor via products table)
+    const brandRevenue: Record<string, number> = {};
+    const brandRevenueByDay: Record<string, Record<string, number>> = {};
+    const brandOrders: Record<string, Set<string>> = {};
+
+    const applyVendorMetrics = (
+      vendor: string,
+      amount: number,
+      day: string | undefined,
+      orderId: string,
+    ) => {
+      brandRevenue[vendor] = (brandRevenue[vendor] || 0) + amount;
+      if (day) {
+        if (!brandRevenueByDay[vendor]) brandRevenueByDay[vendor] = {};
+        brandRevenueByDay[vendor][day] =
+          (brandRevenueByDay[vendor][day] || 0) + amount;
+      }
+      if (!brandOrders[vendor]) brandOrders[vendor] = new Set();
+      brandOrders[vendor].add(orderId);
+    };
+
+    (topItems || []).forEach((item: any) => {
+      if (['cancelled', 'refunded'].includes(item.order?.status)) return;
+      applyVendorMetrics(
+        item.product?.vendor || '1NRI',
+        Number(item.total_price),
+        item.order?.created_at?.slice(0, 10),
+        `online_${item.order_id}`
+      );
+    });
+
+    // Also attribute popup order items to vendors
+    const { data: popupItemsBrand } = await db
+      .from('popup_order_items')
+      .select('popup_order_id, total_price, product:products(vendor), order:popup_orders!inner(created_at, status)')
+      .gte('popup_orders.created_at', fromDate)
+      .lte('popup_orders.created_at', toDate);
+
+    (popupItemsBrand || []).forEach((item: any) => {
+      if (['cancelled', 'refunded'].includes(item.order?.status)) return;
+      applyVendorMetrics(
+        item.product?.vendor || '1NRI',
+        Number(item.total_price),
+        item.order?.created_at?.slice(0, 10),
+        `popup_${item.popup_order_id}`
+      );
+    });
+
     const topProducts = Object.values(productMap)
       .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10);
+      .slice(0, 50);
 
     // Batch-fetch product images for top products
     const productIds = topProducts
@@ -918,20 +985,55 @@ export class OrdersService {
       statusBreakdown[o.status] = (statusBreakdown[o.status] || 0) + 1;
     });
 
+    const brandOrderCount: Record<string, number> = {};
+    for (const [vendor, orderSet] of Object.entries(brandOrders)) {
+      brandOrderCount[vendor] = orderSet.size;
+    }
+
     return {
       revenueByDay,
       ordersByDay,
       topProducts: topProductsWithImages,
       statusBreakdown,
-      totalOrders: orders?.length || 0,
-      totalRevenue: validOrders.reduce(
-        (sum, o) => sum + Number(o.total),
-        0,
-      ),
+      totalOrders: (orders?.length || 0) + popupOrderCount,
+      totalRevenue:
+        validOrders.reduce((sum, o) => sum + Number(o.total), 0) + popupRevenue,
       previousPeriodRevenue,
       previousPeriodOrders,
       funnelCounts,
+      brandRevenue,
+      brandRevenueByDay,
+      brandOrderCount,
+      popupRevenue,
     };
+  }
+
+  // --- Revenue Targets ---
+
+  async getRevenueTarget(year: number) {
+    const db = this.supabase.getAdminClient();
+    const { data } = await db
+      .from('revenue_targets')
+      .select('target')
+      .eq('year', year);
+    
+    // Return the number if found, otherwise null
+    return data && data.length > 0 ? data[0].target : null;
+  }
+
+  async setRevenueTarget(year: number, target: number) {
+    const db = this.supabase.getAdminClient();
+    const { data, error } = await db
+      .from('revenue_targets')
+      .upsert({ year, target, updated_at: new Date().toISOString() })
+      .select('target')
+      .single();
+    
+    if (error) {
+      console.error('Failed to set revenue target:', error);
+      throw new Error(`DB Error: ${error.message}`);
+    }
+    return data;
   }
 
   async confirmPayment(paymentReference: string) {

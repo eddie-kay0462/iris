@@ -18,6 +18,7 @@ import {
   Star,
   ShoppingBag,
   Store,
+  Sliders,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Permission, UserRole } from "@/lib/rbac/permissions";
@@ -41,6 +42,7 @@ const navItems: NavItem[] = [
   { href: "/reviews", label: "Reviews", icon: Star, permission: "reviews:read" },
   { href: "/analytics", label: "Analytics", icon: BarChart3, permission: "analytics:read" },
   { href: "/settings", label: "Settings", icon: Settings, permission: "settings:read" },
+  { href: "/settings/general", label: "General", icon: Sliders, permission: "settings:read" },
   { href: "/settings/communications", label: "Communications", icon: MessageSquare, permission: "settings:read" },
 ];
 
