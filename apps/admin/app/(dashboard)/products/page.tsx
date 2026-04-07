@@ -54,17 +54,25 @@ export default function AdminProductsPage() {
   const qc = useQueryClient();
 
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
+  const [statusTab, setStatusTab] = useState<"all" | "active" | "draft" | "unpublished">("all");
   const [gender, setGender] = useState("");
+  const [brand, setBrand] = useState<"" | "Unlikely Alliances" | "1NRI">("");
   const [page, setPage] = useState(1);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [adjustItem, setAdjustItem] = useState<InventoryItem | null>(null);
   const [showMovements, setShowMovements] = useState(false);
 
+  const statusParam = statusTab === "active" ? "active"
+    : statusTab === "draft" ? "draft"
+    : undefined;
+  const publishedParam = statusTab === "unpublished" ? "false" : undefined;
+
   const { data, isLoading } = useAdminProducts({
     search,
-    status: status || undefined,
+    status: statusParam,
+    published: publishedParam,
     gender: gender || undefined,
+    vendor: brand || undefined,
     page,
     limit: 20,
   });
@@ -151,7 +159,7 @@ export default function AdminProductsPage() {
         )}
       </div>
 
-      {/* Filters */}
+      {/* Search + brand switch + gender filter */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="w-64">
           <SearchInput
@@ -163,19 +171,24 @@ export default function AdminProductsPage() {
             placeholder="Search products..."
           />
         </div>
-        <select
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            setPage(1);
-          }}
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-        >
-          <option value="">All statuses</option>
-          <option value="active">Active</option>
-          <option value="draft">Draft</option>
-          <option value="archived">Archived</option>
-        </select>
+
+        {/* 3-state brand switch */}
+        <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+          {(["", "1NRI", "Unlikely Alliances"] as const).map((b) => (
+            <button
+              key={b || "both"}
+              onClick={() => { setBrand(b); setPage(1); }}
+              className={`rounded-md px-3 py-1 text-sm font-medium transition-colors whitespace-nowrap ${
+                brand === b
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {b === "" ? "Both" : b}
+            </button>
+          ))}
+        </div>
+
         <select
           value={gender}
           onChange={(e) => {
@@ -195,6 +208,23 @@ export default function AdminProductsPage() {
         >
           {showMovements ? "Hide" : "Show"} movement history
         </button>
+      </div>
+
+      {/* Status tab bar */}
+      <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 w-fit">
+        {(["all", "active", "draft", "unpublished"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => { setStatusTab(tab); setPage(1); }}
+            className={`rounded-md px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
+              statusTab === tab
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            {tab === "all" ? "All" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </button>
+        ))}
       </div>
 
       {/* Products accordion table */}

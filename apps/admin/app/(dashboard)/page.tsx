@@ -338,7 +338,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* ── Revenue Chart ─────────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="-mx-6 rounded-none border-x-0 border-y border-slate-200 bg-white px-6 py-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold text-slate-700">Revenue over time (All-time)</h2>
@@ -356,11 +356,11 @@ export default function AdminDashboardPage() {
         </div>
 
         {allTimeLoading ? (
-          <div className="h-64 animate-pulse rounded-lg bg-slate-100" />
+          <div className="h-96 animate-pulse rounded-lg bg-slate-100" />
         ) : (
           <RevenueLineChart
             data={displayRevenueByDay}
-            height={240}
+            height={360}
             color={
               brandFilter === "Unlikely Alliances"
                 ? "#8b5cf6"
