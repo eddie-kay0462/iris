@@ -12,6 +12,7 @@ import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { QueryOrdersDto } from './dto/query-orders.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { SetRevenueTargetDto } from './dto/set-revenue-target.dto';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -41,6 +42,21 @@ export class OrdersController {
     @Query() query: { from_date?: string; to_date?: string },
   ) {
     return this.ordersService.getAnalytics(query);
+  }
+
+  @Get('admin/revenue-target/:year')
+  @RequirePermission('orders:read')
+  getRevenueTarget(@Param('year') year: string) {
+    return this.ordersService.getRevenueTarget(Number(year));
+  }
+
+  @Post('admin/revenue-target/:year')
+  @RequirePermission('orders:update')
+  setRevenueTarget(
+    @Param('year') year: string,
+    @Body() dto: SetRevenueTargetDto,
+  ) {
+    return this.ordersService.setRevenueTarget(Number(year), dto.target);
   }
 
   @Get('admin/customers')

@@ -46,6 +46,12 @@ function LoginForm() {
         </div>
       )}
 
+      {searchParams.get("error") === "auth-callback-failed" && (
+        <div className="rounded border border-red-600 bg-red-950 p-3 text-sm text-red-300 text-center">
+          The authentication link was invalid or has expired. Please try again.
+        </div>
+      )}
+
       <div className="space-y-2 text-center">
         <h2 className="text-2xl font-semibold">Log in</h2>
         <p className="text-sm text-gray-500">

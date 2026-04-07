@@ -40,6 +40,12 @@ export class SettingsController {
     return this.settingsService.updateUserRole(id, dto.role);
   }
 
+  @Post('users/:id/reset-password')
+  @RequirePermission('users:update')
+  sendPasswordReset(@Param('id') id: string) {
+    return this.settingsService.sendPasswordReset(id);
+  }
+
   @Get('roles')
   @RequirePermission('settings:read')
   getRoles() {

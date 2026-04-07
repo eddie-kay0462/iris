@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS popup_refunds (
 -- 3. RLS
 ALTER TABLE popup_refunds ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Staff can read popup_refunds" ON popup_refunds;
 CREATE POLICY "Staff can read popup_refunds"
   ON popup_refunds FOR SELECT
   USING (
@@ -31,6 +32,7 @@ CREATE POLICY "Staff can read popup_refunds"
     )
   );
 
+DROP POLICY IF EXISTS "Managers can manage popup_refunds" ON popup_refunds;
 CREATE POLICY "Managers can manage popup_refunds"
   ON popup_refunds FOR ALL
   USING (

@@ -15,6 +15,9 @@ async function bootstrap() {
       process.env.ADMIN_URL || 'http://localhost:3001',
       'http://localhost:3002',
       'http://localhost:3003',
+      'https://1nri.store',
+      /\.1nri\.store$/,
+      /\.vercel\.app$/,
     ],
     credentials: true,
   });
