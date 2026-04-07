@@ -353,8 +353,12 @@ export function useAnalytics(params: { from_date?: string; to_date?: string } = 
 export function useRevenueTarget(year: number) {
   return useQuery({
     queryKey: ["admin-revenue-target", year],
-    queryFn: () =>
-      apiClient<number | null>(`/orders/admin/revenue-target/${year}`),
+    queryFn: async () => {
+      const res = await apiClient<{ target: number | null }>(
+        `/orders/admin/revenue-target/${year}`
+      );
+      return res.target;
+    },
   });
 }
 

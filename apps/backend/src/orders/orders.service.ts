@@ -1017,8 +1017,8 @@ export class OrdersService {
       .select('target')
       .eq('year', year);
     
-    // Return the number if found, otherwise null
-    return data && data.length > 0 ? data[0].target : null;
+    const target = data && data.length > 0 ? Number(data[0].target) : null;
+    return { target };
   }
 
   async setRevenueTarget(year: number, target: number) {
@@ -1033,7 +1033,7 @@ export class OrdersService {
       console.error('Failed to set revenue target:', error);
       throw new Error(`DB Error: ${error.message}`);
     }
-    return data;
+    return { target: Number(data.target) };
   }
 
   async confirmPayment(paymentReference: string) {
