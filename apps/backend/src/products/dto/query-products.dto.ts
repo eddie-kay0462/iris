@@ -19,6 +19,10 @@ export class QueryProductsDto {
 
   @IsOptional()
   @IsString()
+  vendor?: string;
+
+  @IsOptional()
+  @IsString()
   sort_by?: string;
 
   @IsOptional()
