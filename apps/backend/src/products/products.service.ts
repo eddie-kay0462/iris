@@ -157,6 +157,9 @@ export class ProductsService {
     } else if (query.published === 'false') {
       q = q.eq('published', false);
     }
+    if (query.vendor) {
+      q = q.eq('vendor', query.vendor);
+    }
 
     const sortBy = query.sort_by || 'created_at';
     const sortOrder = query.sort_order === 'asc';

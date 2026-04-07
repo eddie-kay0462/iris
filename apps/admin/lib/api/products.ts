@@ -74,6 +74,7 @@ export interface ProductQueryParams {
   status?: string;
   gender?: string;
   published?: string;
+  vendor?: string;
   sort_by?: string;
   sort_order?: string;
   page?: number;
