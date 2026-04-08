@@ -17,10 +17,7 @@ export default function LoginPage() {
     setLoading(true)
 
     const supabase = createClient()
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
 
     if (authError) {
       setError(authError.message)
@@ -33,68 +30,110 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-neutral-950 flex flex-col items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        {/* Brand */}
-        <div className="mb-10 text-center">
-          <p className="text-[10px] tracking-[0.4em] uppercase text-neutral-400 dark:text-neutral-500 mb-3">
-            By 1NRI
-          </p>
-          <h1 className="text-2xl font-bold uppercase tracking-wide text-neutral-900 dark:text-neutral-100">
-            Allies
-          </h1>
-          <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
-            Partner sales dashboard
-          </p>
+    <div className="flex min-h-screen">
+      {/* Left panel — editorial image */}
+      <div
+        className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative"
+        style={{
+          backgroundImage: "url('/login-bg.jpeg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center top",
+        }}
+      >
+        {/* Dark overlay */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/20 to-black/80" />
+
+        {/* Top — logo */}
+        <div className="relative flex items-center gap-3">
+          <span className="text-white text-3xl font-black tracking-tighter">1NRI</span>
+          <span className="text-white/40 text-xs font-medium uppercase tracking-[0.2em] mt-1">WorldWide</span>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-2">
-              Email
-            </label>
-            <input
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="your@email.com"
-              className="w-full rounded-md px-4 py-3 border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
-            />
+        {/* Bottom — tagline */}
+        <div className="relative space-y-3">
+          <div className="h-px w-10 bg-white/30" />
+          <p className="text-white/90 text-lg font-light leading-snug">
+            Allies Portal
+          </p>
+          <p className="text-white/40 text-xs tracking-wide">
+            Partner sales dashboard &mdash; Faith-inspired streetwear.
+          </p>
+        </div>
+      </div>
+
+      {/* Right panel — form */}
+      <div className="flex w-full lg:w-1/2 flex-col items-center justify-center bg-white px-8 py-12">
+        <div className="w-full max-w-sm">
+          {/* Mobile logo */}
+          <div className="mb-10 lg:hidden">
+            <span className="text-slate-900 text-2xl font-bold tracking-tight">1NRI</span>
+            <span className="ml-2 text-slate-400 text-sm font-medium uppercase tracking-widest">Allies</span>
           </div>
-          <div>
-            <label className="block text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-2">
-              Password
-            </label>
-            <input
-              type="password"
-              required
-              autoComplete="current-password"
-              value={email && password ? password : password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full rounded-md px-4 py-3 border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
-            />
-          </div>
+
+          <h1 className="text-2xl font-semibold text-slate-900">Welcome back</h1>
+          <p className="mt-2 text-sm text-slate-500">
+            Sign in to your Allies account to continue.
+          </p>
 
           {error && (
-            <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+            <div className="mt-6 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+              <span className="mt-0.5 text-red-400">&#10005;</span>
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-black dark:bg-white text-white dark:text-black py-3 text-xs tracking-[0.2em] uppercase font-medium hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed mt-2"
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
+          <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-slate-700">
+                Email address
+              </label>
+              <input
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@email.com"
+                disabled={loading}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-50"
+              />
+            </div>
 
-        <p className="mt-8 text-center text-[9px] tracking-[0.3em] uppercase text-neutral-400">
-          Faith-inspired streetwear for the bold &amp; the believing
-        </p>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-slate-700">
+                Password
+              </label>
+              <input
+                type="password"
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;"
+                disabled={loading}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-50"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading && (
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                </svg>
+              )}
+              {loading ? 'Signing in...' : 'Sign in'}
+            </button>
+          </form>
+
+          <p className="mt-8 text-center text-xs text-slate-400">
+            Access restricted to authorised allies only.
+          </p>
+        </div>
       </div>
     </div>
   )

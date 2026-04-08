@@ -40,6 +40,34 @@ export default function SalesPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [showCustomerRequired, setShowCustomerRequired] = useState(false)
+  const [monthlyTotal, setMonthlyTotal] = useState(0)
+  const [monthlyQuota, setMonthlyQuota] = useState(0)
+
+  // Load monthly quota progress and global commission settings
+  useEffect(() => {
+    if (!ally) return
+    async function loadQuotaData() {
+      const supabase = createClient()
+      const now = new Date()
+      const periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+
+      const [{ data: sales }, { data: settings }] = await Promise.all([
+        supabase
+          .from('ally_sales')
+          .select('total')
+          .eq('ally_id', ally!.id)
+          .gte('sale_date', periodStart),
+        supabase
+          .from('commission_settings')
+          .select('default_quota')
+          .single(),
+      ])
+
+      setMonthlyTotal((sales ?? []).reduce((s, r) => s + Number(r.total), 0))
+      setMonthlyQuota(Number(settings?.default_quota ?? 0))
+    }
+    loadQuotaData()
+  }, [ally])
 
   // Load products on mount
   useEffect(() => {
@@ -154,7 +182,20 @@ export default function SalesPage() {
 
   const subtotal = lineItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const commissionRate = ally?.commission_rate ?? 0.15
-  const commission = subtotal * commissionRate
+  const commissionQuota = ally?.commission_quota ?? monthlyQuota
+
+  // Quota-aware commission calculation
+  function calcCommission(saleAmount: number, cumulativeBefore: number, quota: number, rate: number) {
+    if (quota === 0) return saleAmount * rate
+    if (cumulativeBefore >= quota) return saleAmount * rate
+    const portionAbove = (cumulativeBefore + saleAmount) - quota
+    if (portionAbove <= 0) return 0
+    return portionAbove * rate
+  }
+
+  const commission = calcCommission(subtotal, monthlyTotal, commissionQuota, commissionRate)
+  const quotaProgress = commissionQuota > 0 ? Math.min(monthlyTotal / commissionQuota, 1) : 1
+  const quotaUnlocked = commissionQuota === 0 || monthlyTotal >= commissionQuota
 
   async function handleSubmit() {
     if (!ally || lineItems.length === 0) return
@@ -169,6 +210,17 @@ export default function SalesPage() {
     setSubmitting(true)
     const supabase = createClient()
 
+    // Re-fetch latest monthly total server-side to avoid race conditions
+    const now = new Date()
+    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+    const { data: currentSales } = await supabase
+      .from('ally_sales')
+      .select('total')
+      .eq('ally_id', ally.id)
+      .gte('sale_date', periodStart)
+    const latestCumulative = (currentSales ?? []).reduce((s, r) => s + Number(r.total), 0)
+    const finalCommission = calcCommission(subtotal, latestCumulative, commissionQuota, commissionRate)
+
     const { data: sale, error } = await supabase
       .from('ally_sales')
       .insert({
@@ -179,7 +231,7 @@ export default function SalesPage() {
         payment_method: paymentMethod,
         subtotal,
         total: subtotal,
-        commission_amount: commission,
+        commission_amount: finalCommission,
         notes: notes.trim() || null,
         status: 'completed',
       })
@@ -215,7 +267,13 @@ export default function SalesPage() {
           <p className="text-xs text-neutral-400 mb-3">Customer: <span className="text-neutral-700 dark:text-neutral-300 font-medium">{selectedCustomerLabel}</span></p>
         )}
         <p className="text-sm text-neutral-500 mb-2">Commission: <span className="font-semibold text-neutral-900 dark:text-neutral-100">{formatCurrency(commission)}</span></p>
-        <p className="text-xs text-neutral-400 mb-8">({(commissionRate * 100).toFixed(0)}% of {formatCurrency(subtotal)})</p>
+        <p className="text-xs text-neutral-400 mb-8">
+          {commission > 0
+            ? `${(commissionRate * 100).toFixed(0)}% on qualifying amount`
+            : commissionQuota > 0
+              ? `Quota not yet reached — ${formatCurrency(commissionQuota - monthlyTotal - subtotal > 0 ? commissionQuota - monthlyTotal - subtotal : 0)} remaining`
+              : `${(commissionRate * 100).toFixed(0)}% of ${formatCurrency(subtotal)}`}
+        </p>
         <div className="flex flex-col md:flex-row gap-3">
           <button onClick={() => { setSubmitted(false); setLineItems([]); setSelectedCustomer(null); setCustomerSearch(''); setNotes(''); setNewCustomer({ first_name: '', last_name: '', email: '', phone_number: '' }); setShowCustomerRequired(false) }}
             className="px-8 py-3 rounded-md bg-black dark:bg-white text-white dark:text-black text-xs tracking-[0.2em] uppercase hover:bg-neutral-800 transition-colors">
@@ -475,6 +533,27 @@ export default function SalesPage() {
               </div>
             )}
 
+            {/* Quota progress bar */}
+            {commissionQuota > 0 && (
+              <div className="mb-4 rounded-md border border-slate-200 dark:border-neutral-800 bg-slate-50 dark:bg-neutral-800/50 p-3">
+                <div className="flex justify-between text-[10px] tracking-[0.2em] uppercase text-neutral-400 mb-2">
+                  <span>Monthly Sales Quota</span>
+                  <span>{quotaUnlocked ? 'Unlocked' : `${formatCurrency(monthlyTotal)} / ${formatCurrency(commissionQuota)}`}</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-slate-200 dark:bg-neutral-700 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${quotaUnlocked ? 'bg-green-500' : 'bg-black dark:bg-white'}`}
+                    style={{ width: `${quotaProgress * 100}%` }}
+                  />
+                </div>
+                {!quotaUnlocked && (
+                  <p className="text-[10px] text-neutral-400 mt-1.5">
+                    {formatCurrency(commissionQuota - monthlyTotal)} more to unlock {(commissionRate * 100).toFixed(0)}% commission
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="border-t border-slate-200 dark:border-neutral-800 pt-4 mb-5 space-y-2">
               <div className="flex justify-between text-sm">
                 <span>Subtotal</span>
@@ -482,7 +561,7 @@ export default function SalesPage() {
               </div>
               <div className="flex justify-between text-sm border-t border-slate-100 dark:border-neutral-800 pt-2">
                 <span className="text-[10px] tracking-[0.2em] uppercase text-neutral-400">
-                  Your Commission ({(commissionRate * 100).toFixed(0)}%)
+                  Your Commission ({(commissionRate * 100).toFixed(0)}%{commissionQuota > 0 && !quotaUnlocked && subtotal > 0 ? ' — partial' : ''})
                 </span>
                 <span className="font-bold text-base text-neutral-900 dark:text-neutral-100">{formatCurrency(commission)}</span>
               </div>

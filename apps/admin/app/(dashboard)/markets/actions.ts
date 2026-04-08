@@ -26,7 +26,35 @@ export type UpdateAllyInput = {
   location?: string
   location_type?: 'campus' | 'city'
   commission_rate?: number
+  commission_quota?: number | null  // null = use global default, 0 = no quota
   is_active?: boolean
+}
+
+export type CommissionSettings = {
+  default_quota: number
+  default_rate: number
+  period: 'monthly' | 'all_time'
+}
+
+export async function getCommissionSettings(): Promise<CommissionSettings> {
+  const supabase = getAdminClient()
+  const { data } = await supabase
+    .from('commission_settings')
+    .select('default_quota, default_rate, period')
+    .single()
+  return data ?? { default_quota: 0, default_rate: 0.15, period: 'monthly' }
+}
+
+export async function updateCommissionSettings(input: Partial<CommissionSettings>) {
+  const supabase = getAdminClient()
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (input.default_quota !== undefined) updates.default_quota = input.default_quota
+  if (input.default_rate !== undefined) updates.default_rate = input.default_rate / 100
+  if (input.period !== undefined) updates.period = input.period
+  const { error } = await supabase.from('commission_settings').update(updates).neq('id', '00000000-0000-0000-0000-000000000000')
+  if (error) return { error: error.message }
+  revalidatePath('/markets')
+  return { success: true }
 }
 
 export async function inviteAlly(input: InviteAllyInput) {
@@ -83,11 +111,15 @@ export async function fetchAllies() {
 
 export async function updateAlly(input: UpdateAllyInput) {
   const supabase = getAdminClient()
-  const { id, commission_rate, ...rest } = input
+  const { id, commission_rate, commission_quota, ...rest } = input
 
   const updates: Record<string, unknown> = { ...rest }
   if (commission_rate !== undefined) {
     updates.commission_rate = commission_rate / 100
+  }
+  if (commission_quota !== undefined) {
+    // null means "use global default", 0+ means explicit override
+    updates.commission_quota = commission_quota
   }
 
   const { error } = await supabase.from('allies').update(updates).eq('id', id)

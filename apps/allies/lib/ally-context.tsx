@@ -12,6 +12,7 @@ export type Ally = {
   location: string
   location_type: 'campus' | 'city'
   commission_rate: number
+  commission_quota: number | null  // null = use global default from commission_settings
   is_active: boolean
   joined_at: string
   created_at: string
