@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Search, Plus, Minus, ArrowLeft, X, UserPlus } from 'lucide-react'
+import { Search, Plus, Minus, ArrowLeft, X, UserPlus, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useAlly } from '@/lib/ally-context'
-import { searchCustomers } from './actions'
+import { searchCustomers, createCustomer } from './actions'
 
 type Customer = { id: string; first_name: string | null; last_name: string | null; email: string | null; phone_number: string | null }
 type Variant = { id: string; option1_value: string | null; option2_value: string | null; option3_value: string | null; price: number; sku: string | null; inventory_quantity: number }
@@ -18,6 +18,10 @@ function formatCurrency(n: number) {
   return `GH₵ ${n.toFixed(2)}`
 }
 
+function customerDisplayName(c: Customer) {
+  return [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email || c.phone_number || 'Customer'
+}
+
 export default function SalesPage() {
   const { ally } = useAlly()
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -28,11 +32,14 @@ export default function SalesPage() {
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
   const [newCustomer, setNewCustomer] = useState({ first_name: '', last_name: '', email: '', phone_number: '' })
+  const [savingCustomer, setSavingCustomer] = useState(false)
+  const [customerError, setCustomerError] = useState('')
   const [lineItems, setLineItems] = useState<LineItem[]>([])
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [showCustomerRequired, setShowCustomerRequired] = useState(false)
 
   // Load products on mount
   useEffect(() => {
@@ -116,23 +123,32 @@ export default function SalesPage() {
     setLineItems((prev) => prev.filter((_, i) => i !== index))
   }
 
-  function confirmNewCustomer() {
-    if (!newCustomer.first_name.trim() && !newCustomer.phone_number.trim() && !newCustomer.email.trim()) return
-    setSelectedCustomer({
-      id: 'new',
-      first_name: newCustomer.first_name.trim() || null,
-      last_name: newCustomer.last_name.trim() || null,
-      email: newCustomer.email.trim() || null,
-      phone_number: newCustomer.phone_number.trim() || null,
-    })
+  async function confirmNewCustomer() {
+    const hasName = newCustomer.first_name.trim() || newCustomer.last_name.trim()
+    const hasContact = newCustomer.phone_number.trim() || newCustomer.email.trim()
+    if (!hasName && !hasContact) {
+      setCustomerError('Enter at least a name or contact detail.')
+      return
+    }
+    setCustomerError('')
+    setSavingCustomer(true)
+    const result = await createCustomer(newCustomer)
+    setSavingCustomer(false)
+    if (!result) {
+      setCustomerError('Could not save customer. Please try again.')
+      return
+    }
+    setSelectedCustomer(result)
     setShowNewCustomerForm(false)
     setShowCustomerDropdown(false)
+    setShowCustomerRequired(false)
   }
 
   function clearCustomer() {
     setSelectedCustomer(null)
     setCustomerSearch('')
     setShowNewCustomerForm(false)
+    setCustomerError('')
     setNewCustomer({ first_name: '', last_name: '', email: '', phone_number: '' })
   }
 
@@ -142,20 +158,24 @@ export default function SalesPage() {
 
   async function handleSubmit() {
     if (!ally || lineItems.length === 0) return
-    setSubmitting(true)
 
+    // Customer is required
+    if (!selectedCustomer) {
+      setShowCustomerRequired(true)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+
+    setSubmitting(true)
     const supabase = createClient()
-    const customerName = selectedCustomer
-      ? [selectedCustomer.first_name, selectedCustomer.last_name].filter(Boolean).join(' ') || null
-      : null
 
     const { data: sale, error } = await supabase
       .from('ally_sales')
       .insert({
         ally_id: ally.id,
-        customer_name: customerName,
-        customer_phone: selectedCustomer?.phone_number ?? null,
-        customer_email: selectedCustomer?.email ?? null,
+        customer_name: customerDisplayName(selectedCustomer),
+        customer_phone: selectedCustomer.phone_number ?? null,
+        customer_email: selectedCustomer.email ?? null,
         payment_method: paymentMethod,
         subtotal,
         total: subtotal,
@@ -184,19 +204,20 @@ export default function SalesPage() {
     setSubmitting(false)
   }
 
-  const selectedCustomerLabel = selectedCustomer
-    ? [selectedCustomer.first_name, selectedCustomer.last_name].filter(Boolean).join(' ') || selectedCustomer.email || selectedCustomer.phone_number || 'New customer'
-    : ''
+  const selectedCustomerLabel = selectedCustomer ? customerDisplayName(selectedCustomer) : ''
 
   if (submitted) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 py-12 text-center">
         <div className="text-4xl mb-4">✓</div>
         <h2 className="text-lg font-semibold uppercase tracking-wide mb-2">Sale Recorded</h2>
+        {selectedCustomer && (
+          <p className="text-xs text-neutral-400 mb-3">Customer: <span className="text-neutral-700 dark:text-neutral-300 font-medium">{selectedCustomerLabel}</span></p>
+        )}
         <p className="text-sm text-neutral-500 mb-2">Commission: <span className="font-semibold text-neutral-900 dark:text-neutral-100">{formatCurrency(commission)}</span></p>
         <p className="text-xs text-neutral-400 mb-8">({(commissionRate * 100).toFixed(0)}% of {formatCurrency(subtotal)})</p>
         <div className="flex flex-col md:flex-row gap-3">
-          <button onClick={() => { setSubmitted(false); setLineItems([]); setSelectedCustomer(null); setCustomerSearch(''); setNotes(''); setNewCustomer({ first_name: '', last_name: '', email: '', phone_number: '' }) }}
+          <button onClick={() => { setSubmitted(false); setLineItems([]); setSelectedCustomer(null); setCustomerSearch(''); setNotes(''); setNewCustomer({ first_name: '', last_name: '', email: '', phone_number: '' }); setShowCustomerRequired(false) }}
             className="px-8 py-3 bg-black dark:bg-white text-white dark:text-black text-xs tracking-[0.2em] uppercase hover:bg-neutral-800 transition-colors">
             Record Another
           </button>
@@ -222,9 +243,16 @@ export default function SalesPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
         {/* Left — Customer + Products */}
         <div className="space-y-4 md:space-y-6">
-          {/* Customer Search */}
-          <div className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 md:p-6">
-            <label className="block text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-3">Customer (Optional)</label>
+          {/* Customer — required */}
+          <div className={`border bg-white dark:bg-neutral-900 p-4 md:p-6 ${showCustomerRequired && !selectedCustomer ? 'border-red-400' : 'border-neutral-200 dark:border-neutral-800'}`}>
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-[10px] tracking-[0.3em] uppercase text-neutral-400">Customer <span className="text-red-500">*</span></label>
+              {showCustomerRequired && !selectedCustomer && (
+                <span className="flex items-center gap-1 text-[10px] text-red-500">
+                  <AlertCircle className="w-3 h-3" /> Required
+                </span>
+              )}
+            </div>
 
             {showNewCustomerForm ? (
               <div className="space-y-3">
@@ -251,7 +279,7 @@ export default function SalesPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-[10px] text-neutral-400 mb-1">Phone</label>
+                  <label className="block text-[10px] text-neutral-400 mb-1">Phone <span className="text-neutral-300">(recommended)</span></label>
                   <input
                     type="tel"
                     value={newCustomer.phone_number}
@@ -261,7 +289,7 @@ export default function SalesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-neutral-400 mb-1">Email (Optional)</label>
+                  <label className="block text-[10px] text-neutral-400 mb-1">Email <span className="text-neutral-300">(optional)</span></label>
                   <input
                     type="email"
                     value={newCustomer.email}
@@ -270,15 +298,19 @@ export default function SalesPage() {
                     className="w-full px-3 py-2 border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
                   />
                 </div>
+                {customerError && (
+                  <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{customerError}</p>
+                )}
                 <div className="flex gap-2 pt-1">
                   <button
                     onClick={confirmNewCustomer}
-                    className="flex-1 py-2 bg-black dark:bg-white text-white dark:text-black text-xs tracking-[0.15em] uppercase hover:bg-neutral-800 transition-colors"
+                    disabled={savingCustomer}
+                    className="flex-1 py-2 bg-black dark:bg-white text-white dark:text-black text-xs tracking-[0.15em] uppercase hover:bg-neutral-800 transition-colors disabled:opacity-50"
                   >
-                    Use this customer
+                    {savingCustomer ? 'Saving...' : 'Save & use customer'}
                   </button>
                   <button
-                    onClick={() => { setShowNewCustomerForm(false); setNewCustomer({ first_name: '', last_name: '', email: '', phone_number: '' }) }}
+                    onClick={() => { setShowNewCustomerForm(false); setCustomerError(''); setNewCustomer({ first_name: '', last_name: '', email: '', phone_number: '' }) }}
                     className="px-4 py-2 border border-neutral-200 dark:border-neutral-800 text-xs hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
                   >
                     Cancel
@@ -292,7 +324,7 @@ export default function SalesPage() {
                   type="text"
                   placeholder="Search by name, email or phone"
                   value={selectedCustomer ? selectedCustomerLabel : customerSearch}
-                  onChange={(e) => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setShowCustomerDropdown(true) }}
+                  onChange={(e) => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setShowCustomerDropdown(true); setShowCustomerRequired(false) }}
                   onFocus={() => setShowCustomerDropdown(true)}
                   className="w-full pl-10 pr-8 py-2.5 border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
                 />
@@ -306,7 +338,7 @@ export default function SalesPage() {
                     {customers.length > 0 ? (
                       <>
                         {customers.map((c) => (
-                          <button key={c.id} onClick={() => { setSelectedCustomer(c); setShowCustomerDropdown(false) }}
+                          <button key={c.id} onClick={() => { setSelectedCustomer(c); setShowCustomerDropdown(false); setShowCustomerRequired(false) }}
                             className="w-full px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800 border-b border-neutral-100 dark:border-neutral-800 last:border-b-0">
                             <p className="text-sm font-medium">{[c.first_name, c.last_name].filter(Boolean).join(' ') || c.email}</p>
                             <p className="text-xs text-neutral-500">{c.phone_number ?? c.email}</p>
@@ -328,10 +360,18 @@ export default function SalesPage() {
                         <UserPlus className="w-3.5 h-3.5 text-neutral-400" />
                         <div>
                           <p className="text-sm font-medium">No results — add new customer</p>
-                          <p className="text-xs text-neutral-400">Enter their details manually</p>
+                          <p className="text-xs text-neutral-400">Enter their details to save to the system</p>
                         </div>
                       </button>
-                    ) : null}
+                    ) : (
+                      <button
+                        onClick={() => { setShowNewCustomerForm(true); setShowCustomerDropdown(false) }}
+                        className="w-full px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800 flex items-center gap-2 text-neutral-500"
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        <span className="text-xs">Add new customer</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -339,11 +379,15 @@ export default function SalesPage() {
 
             {/* Selected customer badge */}
             {selectedCustomer && !showNewCustomerForm && (
-              <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
+              <div className="mt-3 flex items-center gap-3 px-3 py-2.5 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
+                <div className="w-8 h-8 rounded-full bg-black dark:bg-white flex items-center justify-center shrink-0">
+                  <span className="text-xs font-semibold text-white dark:text-black">
+                    {(selectedCustomer.first_name?.[0] ?? selectedCustomer.email?.[0] ?? '?').toUpperCase()}
+                  </span>
+                </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{selectedCustomerLabel}</p>
-                  {selectedCustomer.phone_number && <p className="text-xs text-neutral-500">{selectedCustomer.phone_number}</p>}
-                  {selectedCustomer.email && <p className="text-xs text-neutral-500">{selectedCustomer.email}</p>}
+                  <p className="text-xs text-neutral-500">{selectedCustomer.phone_number ?? selectedCustomer.email ?? 'No contact info'}</p>
                 </div>
                 <button onClick={clearCustomer} className="shrink-0 text-neutral-400 hover:text-neutral-600">
                   <X className="w-3.5 h-3.5" />
@@ -467,6 +511,13 @@ export default function SalesPage() {
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Any additional notes"
                 className="w-full px-3 py-2 border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white resize-none" />
             </div>
+
+            {showCustomerRequired && !selectedCustomer && (
+              <p className="mb-3 text-xs text-red-500 flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                Please select or add a customer before confirming the sale.
+              </p>
+            )}
 
             <button
               onClick={handleSubmit}
