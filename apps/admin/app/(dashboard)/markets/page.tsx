@@ -5,6 +5,7 @@ import { UserPlus, Pencil } from 'lucide-react'
 import { fetchAllies } from './actions'
 import { InviteAllyModal } from './components/InviteAllyModal'
 import { EditAllyDrawer } from './components/EditAllyDrawer'
+import { CommissionSettingsCard } from './components/CommissionSettingsCard'
 
 type Ally = {
   id: string
@@ -14,6 +15,7 @@ type Ally = {
   location: string
   location_type: 'campus' | 'city'
   commission_rate: number
+  commission_quota: number | null
   is_active: boolean
   joined_at: string
   totalSales: number
@@ -72,6 +74,8 @@ export default function MarketsPage() {
           Invite Ally
         </button>
       </header>
+
+      <CommissionSettingsCard />
 
       {/* Summary Stats */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

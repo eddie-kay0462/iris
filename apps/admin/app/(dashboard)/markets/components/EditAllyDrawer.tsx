@@ -12,6 +12,7 @@ type Ally = {
   location: string
   location_type: 'campus' | 'city'
   commission_rate: number
+  commission_quota: number | null
   is_active: boolean
   joined_at: string
   totalSales?: number
@@ -27,6 +28,8 @@ export function EditAllyDrawer({ ally, onClose, onSuccess }: Props) {
     location_type: ally.location_type,
     commission_rate: Math.round(ally.commission_rate * 100),
     is_active: ally.is_active,
+    quota_override: ally.commission_quota !== null,
+    commission_quota: ally.commission_quota ?? 0,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -43,6 +46,7 @@ export function EditAllyDrawer({ ally, onClose, onSuccess }: Props) {
       location: form.location,
       location_type: form.location_type,
       commission_rate: form.commission_rate,
+      commission_quota: form.quota_override ? form.commission_quota : null,
       is_active: form.is_active,
     })
     if (result.error) { setError(result.error); setLoading(false); return }
@@ -107,6 +111,40 @@ export function EditAllyDrawer({ ally, onClose, onSuccess }: Props) {
                   className="w-24 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none" />
                 <span className="text-sm text-slate-500">{form.commission_rate}% per sale</span>
               </div>
+            </div>
+
+            {/* Quota override */}
+            <div className="rounded-lg border border-slate-200 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Custom Sales Quota</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Override the global quota for this ally</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => update('quota_override', !form.quota_override)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.quota_override ? 'bg-slate-900' : 'bg-slate-200'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.quota_override ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+              {form.quota_override && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Quota Amount (GH₵)</label>
+                  <div className="flex items-center gap-3">
+                    <input type="number" min="0" step="100"
+                      value={form.commission_quota}
+                      onChange={(e) => update('commission_quota', Number(e.target.value))}
+                      className="w-32 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none" />
+                    <span className="text-xs text-slate-400">
+                      {form.commission_quota === 0 ? 'Commission from first sale' : `Commission unlocks after GH₵ ${form.commission_quota.toLocaleString()} in sales`}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {!form.quota_override && (
+                <p className="text-xs text-slate-400">Using global default quota</p>
+              )}
             </div>
             <div className="flex items-center justify-between py-2">
               <div>

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -61,14 +61,14 @@ function SidebarContent({
   return (
     <div className="flex h-full flex-col">
       {/* Brand */}
-      <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-200 dark:border-neutral-800">
-        <h1 className="text-[10px] tracking-[0.25em] uppercase font-medium text-neutral-900 dark:text-neutral-100">
+      <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-800">
+        <h1 className="text-[10px] tracking-[0.25em] uppercase font-medium text-neutral-100">
           Allies — by 1NRI
         </h1>
         {onClose && (
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 md:hidden"
+            className="w-8 h-8 flex items-center justify-center text-neutral-400 hover:text-white transition-colors md:hidden"
           >
             <X className="w-4 h-4" />
           </button>
@@ -77,13 +77,13 @@ function SidebarContent({
 
       {/* Ally Profile */}
       {ally && (
-        <div className="px-6 py-4 border-b border-neutral-200 dark:border-neutral-800">
+        <div className="px-6 py-4 border-b border-neutral-800">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-neutral-900 dark:bg-neutral-100 flex items-center justify-center text-white dark:text-neutral-900 text-xs font-semibold shrink-0">
+            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-black text-xs font-semibold shrink-0">
               {initials(ally.full_name)}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-medium truncate text-neutral-900 dark:text-neutral-100">
+              <p className="text-sm font-medium truncate text-neutral-100">
                 {ally.full_name}
               </p>
               <p className="text-[10px] tracking-[0.15em] uppercase text-neutral-400 truncate">
@@ -104,10 +104,10 @@ function SidebarContent({
               key={link.path}
               href={link.path}
               onClick={onClose}
-              className={`flex items-center gap-3 px-3 py-2.5 text-xs tracking-[0.1em] uppercase transition-colors rounded-sm mb-0.5 ${
+              className={`flex items-center gap-3 px-3 py-2.5 text-xs tracking-[0.1em] uppercase transition-colors rounded-md mb-0.5 ${
                 active
-                  ? 'border-l-2 border-black dark:border-white bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 pl-[10px]'
-                  : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                  ? 'bg-white/10 text-white'
+                  : 'text-neutral-400 hover:bg-white/5 hover:text-white'
               }`}
             >
               <Icon className="w-4 h-4 shrink-0" />
@@ -118,17 +118,17 @@ function SidebarContent({
       </nav>
 
       {/* Bottom Actions */}
-      <div className="px-3 py-4 border-t border-neutral-200 dark:border-neutral-800 space-y-1">
+      <div className="px-3 py-4 border-t border-neutral-800 space-y-1">
         <button
           onClick={onThemeToggle}
-          className="w-full flex items-center gap-3 px-3 py-2.5 text-xs tracking-[0.1em] uppercase text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-xs tracking-[0.1em] uppercase text-neutral-400 hover:text-white hover:bg-white/5 transition-colors rounded-md"
         >
           {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           {isDark ? 'Light Mode' : 'Dark Mode'}
         </button>
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 text-xs tracking-[0.1em] uppercase text-neutral-500 dark:text-neutral-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-xs tracking-[0.1em] uppercase text-neutral-400 hover:text-red-400 hover:bg-white/5 transition-colors rounded-md"
         >
           <LogOut className="w-4 h-4" />
           Sign Out
@@ -136,8 +136,8 @@ function SidebarContent({
       </div>
 
       {/* Footer */}
-      <div className="px-6 py-3 border-t border-neutral-200 dark:border-neutral-800">
-        <p className="text-[9px] tracking-[0.2em] uppercase text-neutral-400 leading-relaxed">
+      <div className="px-6 py-3 border-t border-neutral-800">
+        <p className="text-[9px] tracking-[0.2em] uppercase text-neutral-600 leading-relaxed">
           Faith-inspired streetwear
         </p>
       </div>
@@ -149,6 +149,18 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [isDark, setIsDark] = useState(false)
 
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const apply = (dark: boolean) => {
+      setIsDark(dark)
+      document.documentElement.classList.toggle('dark', dark)
+    }
+    apply(mq.matches)
+    const handler = (e: MediaQueryListEvent) => apply(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
   function toggleTheme() {
     setIsDark((d) => {
       const next = !d
@@ -158,9 +170,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-dvh bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 overflow-hidden">
+    <div className="flex h-dvh bg-slate-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 overflow-hidden">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-y-auto">
+      <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-neutral-800 bg-black overflow-y-auto">
         <SidebarContent onThemeToggle={toggleTheme} isDark={isDark} />
       </aside>
 
@@ -171,7 +183,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             className="fixed inset-0 z-40 bg-black/50 md:hidden"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-neutral-900 flex flex-col md:hidden overflow-y-auto">
+          <aside className="fixed inset-y-0 left-0 z-50 w-72 bg-black flex flex-col md:hidden overflow-y-auto">
             <SidebarContent
               onClose={() => setMobileOpen(false)}
               onThemeToggle={toggleTheme}

@@ -82,7 +82,7 @@ export default function LeaderboardPage() {
     <div className="p-4 md:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h2 className="text-sm tracking-[0.15em] uppercase">Leaderboard</h2>
-        <div className="flex border-b border-neutral-200 dark:border-neutral-800">
+        <div className="flex border-b border-slate-200 dark:border-neutral-800">
           {(['month', 'week', 'all'] as Period[]).map((p) => (
             <button key={p} onClick={() => setPeriod(p)}
               className={`px-4 md:px-6 py-2.5 text-xs tracking-[0.15em] uppercase transition-colors relative ${period === p ? 'text-neutral-900 dark:text-neutral-100' : 'text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'}`}>
@@ -101,7 +101,7 @@ export default function LeaderboardPage() {
             { label: 'Your Sales', value: `GH₵ ${myRow.totalSales.toLocaleString(undefined, { minimumFractionDigits: 0 })}` },
             { label: 'Your Earnings', value: `GH₵ ${myRow.earnings.toFixed(0)}` },
           ].map((s) => (
-            <div key={s.label} className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-3 md:p-5">
+            <div key={s.label} className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm p-3 md:p-5">
               <p className="text-[9px] md:text-[10px] tracking-[0.25em] uppercase text-neutral-400 mb-2">{s.label}</p>
               <p className="text-base md:text-2xl font-semibold">{s.value}</p>
             </div>
@@ -109,13 +109,13 @@ export default function LeaderboardPage() {
         </div>
       )}
 
-      <div className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+      <div className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm overflow-hidden">
         {/* Mobile cards */}
         <div className="md:hidden">
           {loading ? <div className="p-6 text-sm text-neutral-400 text-center">Loading...</div>
             : rows.map((row, i) => (
               <div key={row.id}
-                className={`flex items-center gap-3 px-4 py-4 border-b border-neutral-100 dark:border-neutral-800 last:border-b-0 ${row.isMe ? 'bg-neutral-100 dark:bg-neutral-800 border-l-2 border-l-black dark:border-l-white' : ''}`}>
+                className={`flex items-center gap-3 px-4 py-4 border-b border-slate-100 dark:border-neutral-800 last:border-b-0 ${row.isMe ? 'bg-blue-50 dark:bg-neutral-800 border-l-2 border-l-black dark:border-l-white' : ''}`}>
                 <div className="w-10 text-center">
                   {medal(i + 1) ? <span className="text-xl">{medal(i + 1)}</span> : <span className="text-xl font-semibold text-neutral-400">{String(i + 1).padStart(2, '0')}</span>}
                 </div>
@@ -137,7 +137,7 @@ export default function LeaderboardPage() {
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-neutral-200 dark:border-neutral-800">
+              <tr className="bg-slate-100 dark:bg-neutral-800/60 border-b border-slate-200 dark:border-neutral-700">
                 {['Rank', 'Ally', 'Location', 'Total Sales', 'Orders', 'Earnings'].map((h) => (
                   <th key={h} className={`px-6 py-3 text-[10px] tracking-[0.3em] uppercase text-neutral-400 font-medium ${h === 'Total Sales' || h === 'Orders' || h === 'Earnings' ? 'text-right' : 'text-left'}`}>{h}</th>
                 ))}
@@ -146,7 +146,7 @@ export default function LeaderboardPage() {
             <tbody>
               {loading ? <tr><td colSpan={6} className="px-6 py-6 text-sm text-neutral-400 text-center">Loading...</td></tr>
                 : rows.map((row, i) => (
-                  <tr key={row.id} className={`border-b border-neutral-200 dark:border-neutral-800 transition-colors last:border-b-0 ${row.isMe ? 'bg-neutral-100 dark:bg-neutral-800 border-l-2 border-l-black dark:border-l-white' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800'}`}>
+                  <tr key={row.id} className={`border-b border-slate-100 dark:border-neutral-800 transition-colors last:border-b-0 ${row.isMe ? 'bg-blue-50 dark:bg-neutral-800 border-l-2 border-l-black dark:border-l-white' : 'hover:bg-slate-50 dark:hover:bg-neutral-800'}`}>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         {medal(i + 1) && <span className="text-lg">{medal(i + 1)}</span>}
@@ -154,7 +154,7 @@ export default function LeaderboardPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm font-medium">{row.full_name}{row.isMe ? <span className="ml-2 text-xs text-neutral-400">(You)</span> : ''}</td>
-                    <td className="px-6 py-4"><span className="text-[10px] tracking-[0.15em] uppercase px-2 py-1 bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300">{row.location}</span></td>
+                    <td className="px-6 py-4"><span className="text-[10px] tracking-[0.15em] uppercase px-2 py-1 rounded-full bg-slate-100 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300">{row.location}</span></td>
                     <td className="px-6 py-4 text-right text-sm font-medium">GH₵ {row.totalSales.toLocaleString()}</td>
                     <td className="px-6 py-4 text-right text-sm">{row.totalOrders}</td>
                     <td className="px-6 py-4 text-right text-base font-semibold">GH₵ {row.earnings.toFixed(2)}</td>
