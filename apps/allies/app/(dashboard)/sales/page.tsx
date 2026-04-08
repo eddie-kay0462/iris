@@ -218,10 +218,10 @@ export default function SalesPage() {
         <p className="text-xs text-neutral-400 mb-8">({(commissionRate * 100).toFixed(0)}% of {formatCurrency(subtotal)})</p>
         <div className="flex flex-col md:flex-row gap-3">
           <button onClick={() => { setSubmitted(false); setLineItems([]); setSelectedCustomer(null); setCustomerSearch(''); setNotes(''); setNewCustomer({ first_name: '', last_name: '', email: '', phone_number: '' }); setShowCustomerRequired(false) }}
-            className="px-8 py-3 bg-black dark:bg-white text-white dark:text-black text-xs tracking-[0.2em] uppercase hover:bg-neutral-800 transition-colors">
+            className="px-8 py-3 rounded-md bg-black dark:bg-white text-white dark:text-black text-xs tracking-[0.2em] uppercase hover:bg-neutral-800 transition-colors">
             Record Another
           </button>
-          <Link href="/" className="px-8 py-3 border border-neutral-300 dark:border-neutral-700 text-xs tracking-[0.2em] uppercase hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors text-center">
+          <Link href="/" className="px-8 py-3 rounded-md border border-slate-200 dark:border-neutral-700 text-xs tracking-[0.2em] uppercase hover:bg-slate-50 dark:hover:bg-neutral-800 transition-colors text-center">
             Back to Dashboard
           </Link>
         </div>
@@ -233,7 +233,7 @@ export default function SalesPage() {
     <div className="p-4 md:p-8">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6 md:mb-8">
-        <Link href="/" className="w-9 h-9 border border-neutral-200 dark:border-neutral-800 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+        <Link href="/" className="w-9 h-9 rounded-md border border-slate-200 dark:border-neutral-800 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-neutral-800 transition-colors">
           <ArrowLeft className="w-4 h-4" />
         </Link>
         <h2 className="text-sm tracking-[0.15em] uppercase">Record a Sale</h2>
@@ -244,7 +244,7 @@ export default function SalesPage() {
         {/* Left — Customer + Products */}
         <div className="space-y-4 md:space-y-6">
           {/* Customer — required */}
-          <div className={`border bg-white dark:bg-neutral-900 p-4 md:p-6 ${showCustomerRequired && !selectedCustomer ? 'border-red-400' : 'border-neutral-200 dark:border-neutral-800'}`}>
+          <div className={`rounded-lg bg-white dark:bg-neutral-900 shadow-sm p-4 md:p-6 border ${showCustomerRequired && !selectedCustomer ? 'border-red-400' : 'border-slate-200 dark:border-neutral-800'}`}>
             <div className="flex items-center justify-between mb-3">
               <label className="block text-[10px] tracking-[0.3em] uppercase text-neutral-400">Customer <span className="text-red-500">*</span></label>
               {showCustomerRequired && !selectedCustomer && (
@@ -264,7 +264,7 @@ export default function SalesPage() {
                       value={newCustomer.first_name}
                       onChange={(e) => setNewCustomer((p) => ({ ...p, first_name: e.target.value }))}
                       placeholder="First name"
-                      className="w-full px-3 py-2 border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                      className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
                     />
                   </div>
                   <div>
@@ -274,7 +274,7 @@ export default function SalesPage() {
                       value={newCustomer.last_name}
                       onChange={(e) => setNewCustomer((p) => ({ ...p, last_name: e.target.value }))}
                       placeholder="Last name"
-                      className="w-full px-3 py-2 border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                      className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
                     />
                   </div>
                 </div>
@@ -285,7 +285,7 @@ export default function SalesPage() {
                     value={newCustomer.phone_number}
                     onChange={(e) => setNewCustomer((p) => ({ ...p, phone_number: e.target.value }))}
                     placeholder="+233 ..."
-                    className="w-full px-3 py-2 border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                    className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
                   />
                 </div>
                 <div>
@@ -295,7 +295,7 @@ export default function SalesPage() {
                     value={newCustomer.email}
                     onChange={(e) => setNewCustomer((p) => ({ ...p, email: e.target.value }))}
                     placeholder="customer@example.com"
-                    className="w-full px-3 py-2 border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                    className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
                   />
                 </div>
                 {customerError && (
@@ -305,13 +305,13 @@ export default function SalesPage() {
                   <button
                     onClick={confirmNewCustomer}
                     disabled={savingCustomer}
-                    className="flex-1 py-2 bg-black dark:bg-white text-white dark:text-black text-xs tracking-[0.15em] uppercase hover:bg-neutral-800 transition-colors disabled:opacity-50"
+                    className="flex-1 py-2 rounded-md bg-black dark:bg-white text-white dark:text-black text-xs tracking-[0.15em] uppercase hover:bg-neutral-800 transition-colors disabled:opacity-50"
                   >
                     {savingCustomer ? 'Saving...' : 'Save & use customer'}
                   </button>
                   <button
                     onClick={() => { setShowNewCustomerForm(false); setCustomerError(''); setNewCustomer({ first_name: '', last_name: '', email: '', phone_number: '' }) }}
-                    className="px-4 py-2 border border-neutral-200 dark:border-neutral-800 text-xs hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
+                    className="px-4 py-2 rounded-md border border-slate-200 dark:border-neutral-800 text-xs hover:bg-slate-50 dark:hover:bg-neutral-800 transition-colors"
                   >
                     Cancel
                   </button>
@@ -326,7 +326,7 @@ export default function SalesPage() {
                   value={selectedCustomer ? selectedCustomerLabel : customerSearch}
                   onChange={(e) => { setCustomerSearch(e.target.value); setSelectedCustomer(null); setShowCustomerDropdown(true); setShowCustomerRequired(false) }}
                   onFocus={() => setShowCustomerDropdown(true)}
-                  className="w-full pl-10 pr-8 py-2.5 border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                  className="w-full pl-10 pr-8 py-2.5 rounded-md border border-slate-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
                 />
                 {selectedCustomer && (
                   <button onClick={clearCustomer} className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -334,19 +334,19 @@ export default function SalesPage() {
                   </button>
                 )}
                 {showCustomerDropdown && !selectedCustomer && (
-                  <div className="absolute z-10 w-full mt-1 border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm">
+                  <div className="absolute z-10 w-full mt-1 rounded-md border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-md">
                     {customers.length > 0 ? (
                       <>
                         {customers.map((c) => (
                           <button key={c.id} onClick={() => { setSelectedCustomer(c); setShowCustomerDropdown(false); setShowCustomerRequired(false) }}
-                            className="w-full px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800 border-b border-neutral-100 dark:border-neutral-800 last:border-b-0">
+                            className="w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-neutral-800 border-b border-slate-100 dark:border-neutral-800 last:border-b-0">
                             <p className="text-sm font-medium">{[c.first_name, c.last_name].filter(Boolean).join(' ') || c.email}</p>
                             <p className="text-xs text-neutral-500">{c.phone_number ?? c.email}</p>
                           </button>
                         ))}
                         <button
                           onClick={() => { setShowNewCustomerForm(true); setShowCustomerDropdown(false) }}
-                          className="w-full px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800 flex items-center gap-2 text-neutral-500 border-t border-neutral-100 dark:border-neutral-800"
+                          className="w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-neutral-800 flex items-center gap-2 text-neutral-500 border-t border-slate-100 dark:border-neutral-800"
                         >
                           <UserPlus className="w-3.5 h-3.5" />
                           <span className="text-xs">Add new customer</span>
@@ -355,7 +355,7 @@ export default function SalesPage() {
                     ) : customerSearch.trim() ? (
                       <button
                         onClick={() => { setShowNewCustomerForm(true); setShowCustomerDropdown(false) }}
-                        className="w-full px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800 flex items-center gap-2"
+                        className="w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-neutral-800 flex items-center gap-2"
                       >
                         <UserPlus className="w-3.5 h-3.5 text-neutral-400" />
                         <div>
@@ -366,7 +366,7 @@ export default function SalesPage() {
                     ) : (
                       <button
                         onClick={() => { setShowNewCustomerForm(true); setShowCustomerDropdown(false) }}
-                        className="w-full px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800 flex items-center gap-2 text-neutral-500"
+                        className="w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-neutral-800 flex items-center gap-2 text-neutral-500"
                       >
                         <UserPlus className="w-3.5 h-3.5" />
                         <span className="text-xs">Add new customer</span>
@@ -379,7 +379,7 @@ export default function SalesPage() {
 
             {/* Selected customer badge */}
             {selectedCustomer && !showNewCustomerForm && (
-              <div className="mt-3 flex items-center gap-3 px-3 py-2.5 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
+              <div className="mt-3 flex items-center gap-3 px-3 py-2.5 rounded-md bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700">
                 <div className="w-8 h-8 rounded-full bg-black dark:bg-white flex items-center justify-center shrink-0">
                   <span className="text-xs font-semibold text-white dark:text-black">
                     {(selectedCustomer.first_name?.[0] ?? selectedCustomer.email?.[0] ?? '?').toUpperCase()}
@@ -397,17 +397,17 @@ export default function SalesPage() {
           </div>
 
           {/* Product Search & Add */}
-          <div className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 md:p-6">
+          <div className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm p-4 md:p-6">
             <label className="block text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-3">Add Items</label>
             <div className="relative mb-3">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
               <input type="text" placeholder="Search products" value={productSearch} onChange={(e) => setProductSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white" />
+                className="w-full pl-10 pr-4 py-2.5 rounded-md border border-slate-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white" />
             </div>
             <div className="space-y-2 max-h-56 overflow-y-auto">
               {filteredProducts.map((p) => (
                 <button key={p.id} onClick={() => addProduct(p)}
-                  className="w-full px-4 py-3 border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-left transition-colors flex justify-between items-center">
+                  className="w-full px-4 py-3 rounded-md border border-slate-200 dark:border-neutral-800 hover:bg-slate-50 dark:hover:bg-neutral-800 text-left transition-colors flex justify-between items-center">
                   <span className="text-sm font-medium">{p.title}</span>
                   <span className="text-sm text-neutral-500 ml-2 shrink-0">GH₵ {p.base_price}</span>
                 </button>
@@ -420,7 +420,7 @@ export default function SalesPage() {
 
           {/* Line Items */}
           {lineItems.length > 0 && (
-            <div className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 md:p-6">
+            <div className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm p-4 md:p-6">
               <label className="block text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-3">Items in Order</label>
               <div className="space-y-4">
                 {lineItems.map((item, index) => {
@@ -432,7 +432,7 @@ export default function SalesPage() {
                         <div className="flex flex-wrap gap-2">
                           {product && product.variants.length > 1 && (
                             <select value={item.variantId} onChange={(e) => changeVariant(index, e.target.value, product)}
-                              className="px-2 py-1 border border-neutral-200 dark:border-neutral-800 bg-transparent text-xs focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white">
+                              className="px-2 py-1 rounded-md border border-slate-200 dark:border-neutral-800 bg-transparent text-xs focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white">
                               {product.variants.map((v) => (
                                 <option key={v.id} value={v.id}>{getVariantLabel(v)}</option>
                               ))}
@@ -459,7 +459,7 @@ export default function SalesPage() {
 
         {/* Right — Order Summary */}
         <div>
-          <div className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 md:p-6 md:sticky md:top-6">
+          <div className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm p-4 md:p-6 md:sticky md:top-6">
             <h3 className="text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-4">Order Summary</h3>
 
             {lineItems.length === 0 ? (
@@ -475,12 +475,12 @@ export default function SalesPage() {
               </div>
             )}
 
-            <div className="border-t border-neutral-200 dark:border-neutral-800 pt-4 mb-5 space-y-2">
+            <div className="border-t border-slate-200 dark:border-neutral-800 pt-4 mb-5 space-y-2">
               <div className="flex justify-between text-sm">
                 <span>Subtotal</span>
                 <span className="font-medium">{formatCurrency(subtotal)}</span>
               </div>
-              <div className="flex justify-between text-sm border-t border-neutral-100 dark:border-neutral-800 pt-2">
+              <div className="flex justify-between text-sm border-t border-slate-100 dark:border-neutral-800 pt-2">
                 <span className="text-[10px] tracking-[0.2em] uppercase text-neutral-400">
                   Your Commission ({(commissionRate * 100).toFixed(0)}%)
                 </span>
@@ -494,10 +494,10 @@ export default function SalesPage() {
               <div className="grid grid-cols-3 gap-2">
                 {(['cash', 'momo', 'bank_transfer'] as PaymentMethod[]).map((m) => (
                   <button key={m} onClick={() => setPaymentMethod(m)}
-                    className={`py-2.5 text-[10px] tracking-[0.1em] uppercase border transition-colors ${
+                    className={`py-2.5 rounded-md text-[10px] tracking-[0.1em] uppercase border transition-colors ${
                       paymentMethod === m
                         ? 'bg-black dark:bg-white text-white dark:text-black border-black dark:border-white'
-                        : 'border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+                        : 'border-slate-200 dark:border-neutral-800 hover:bg-slate-50 dark:hover:bg-neutral-800'
                     }`}>
                     {m === 'bank_transfer' ? 'Bank' : m.charAt(0).toUpperCase() + m.slice(1)}
                   </button>
@@ -509,7 +509,7 @@ export default function SalesPage() {
             <div className="mb-6">
               <label className="block text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-2">Notes (Optional)</label>
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Any additional notes"
-                className="w-full px-3 py-2 border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white resize-none" />
+                className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white resize-none" />
             </div>
 
             {showCustomerRequired && !selectedCustomer && (
@@ -522,7 +522,7 @@ export default function SalesPage() {
             <button
               onClick={handleSubmit}
               disabled={lineItems.length === 0 || submitting}
-              className="w-full bg-black dark:bg-white text-white dark:text-black py-4 text-xs tracking-[0.2em] uppercase font-medium hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="w-full rounded-md bg-black dark:bg-white text-white dark:text-black py-4 text-xs tracking-[0.2em] uppercase font-medium hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
               {submitting ? 'Recording...' : 'Confirm Sale'}
             </button>

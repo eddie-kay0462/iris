@@ -110,7 +110,7 @@ export default function DashboardPage() {
         {statCards.map((stat) => (
           <div
             key={stat.label}
-            className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 md:p-6"
+            className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm p-4 md:p-6"
           >
             <div className="flex items-center justify-between mb-3">
               <p className="text-[9px] md:text-[10px] tracking-[0.25em] uppercase text-neutral-400">
@@ -126,8 +126,8 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent Sales */}
-      <div className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
-        <div className="px-4 md:px-6 py-4 border-b border-neutral-200 dark:border-neutral-800">
+      <div className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm overflow-hidden">
+        <div className="px-4 md:px-6 py-4 border-b border-slate-200 dark:border-neutral-800">
           <h3 className="text-xs tracking-[0.15em] uppercase">Recent Sales</h3>
         </div>
 
@@ -141,7 +141,7 @@ export default function DashboardPage() {
             recentSales.map((sale) => (
               <div
                 key={sale.id}
-                className="flex items-center justify-between px-4 py-4 border-b border-neutral-100 dark:border-neutral-800 last:border-b-0"
+                className="flex items-center justify-between px-4 py-4 border-b border-slate-100 dark:border-neutral-800 last:border-b-0"
               >
                 <div>
                   <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
@@ -151,10 +151,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold">{formatCurrency(Number(sale.total))}</p>
-                  <span className={`inline-block mt-0.5 text-[9px] tracking-[0.15em] uppercase px-2 py-0.5 ${
+                  <span className={`inline-flex items-center mt-0.5 rounded-full text-[9px] tracking-[0.1em] uppercase font-medium px-2 py-0.5 ${
                     sale.status === 'completed'
-                      ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300'
-                      : 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300'
+                      ? 'bg-green-100 dark:bg-green-950 text-green-800 dark:text-green-300'
+                      : 'bg-yellow-100 dark:bg-yellow-950 text-yellow-800 dark:text-yellow-300'
                   }`}>
                     {sale.status}
                   </span>
@@ -168,7 +168,7 @@ export default function DashboardPage() {
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-neutral-200 dark:border-neutral-800">
+              <tr className="bg-slate-100 dark:bg-neutral-800/60 border-b border-slate-200 dark:border-neutral-700">
                 {['Order Ref', 'Customer', 'Total', 'Commission', 'Payment', 'Status'].map((h) => (
                   <th key={h} className="text-left px-6 py-3 text-[10px] tracking-[0.3em] uppercase text-neutral-400 font-medium">
                     {h}
@@ -185,7 +185,7 @@ export default function DashboardPage() {
                 recentSales.map((sale, i) => (
                   <tr
                     key={sale.id}
-                    className={`border-b border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors ${
+                    className={`border-b border-slate-100 dark:border-neutral-800 hover:bg-slate-50 dark:hover:bg-neutral-800 transition-colors ${
                       i === recentSales.length - 1 ? 'border-b-0' : ''
                     }`}
                   >
@@ -195,10 +195,10 @@ export default function DashboardPage() {
                     <td className="px-6 py-4 text-sm text-neutral-500">{formatCurrency(Number(sale.commission_amount))}</td>
                     <td className="px-6 py-4 text-sm capitalize">{sale.payment_method.replace('_', ' ')}</td>
                     <td className="px-6 py-4">
-                      <span className={`inline-block px-2 py-1 text-[10px] tracking-[0.15em] uppercase ${
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] tracking-[0.1em] uppercase font-medium ${
                         sale.status === 'completed'
-                          ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300'
-                          : 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300'
+                          ? 'bg-green-100 dark:bg-green-950 text-green-800 dark:text-green-300'
+                          : 'bg-yellow-100 dark:bg-yellow-950 text-yellow-800 dark:text-yellow-300'
                       }`}>
                         {sale.status}
                       </span>
@@ -214,7 +214,7 @@ export default function DashboardPage() {
       {/* Quick Record CTA */}
       <Link
         href="/sales"
-        className="w-full bg-black dark:bg-white text-white dark:text-black px-6 py-4 text-xs tracking-[0.2em] uppercase font-medium flex items-center justify-center gap-2 hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors"
+        className="w-full rounded-md bg-black dark:bg-white text-white dark:text-black px-6 py-4 text-xs tracking-[0.2em] uppercase font-medium flex items-center justify-center gap-2 hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors"
       >
         Record a Sale
         <ArrowRight className="w-4 h-4" />

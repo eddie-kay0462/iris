@@ -1,7 +1,10 @@
 @import 'tailwindcss';
 
+/* Use class-based dark mode so the .dark toggle on <html> controls all dark: utilities */
+@variant dark (&:where(.dark, .dark *));
+
 @theme {
-  --color-background: #fafafa;
+  --color-background: #f8fafc;
   --color-foreground: #0a0a0a;
   --font-sans: var(--font-geist-sans);
 }
@@ -40,7 +43,7 @@ button, a {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d4d4d4;
+  background: #cbd5e1;
 }
 .dark ::-webkit-scrollbar-thumb {
   background: #404040;

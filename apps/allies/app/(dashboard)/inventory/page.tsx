@@ -93,7 +93,7 @@ export default function InventoryPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
             <input type="text" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 pr-4 py-2 border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white w-44" />
+              className="pl-9 pr-4 py-2 rounded-md border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white w-44" />
           </div>
         </div>
       </div>
@@ -101,13 +101,13 @@ export default function InventoryPage() {
       <div className="flex gap-2 overflow-x-auto pb-2 mb-5">
         {CATEGORIES.map((cat) => (
           <button key={cat} onClick={() => setCategory(cat)}
-            className={`shrink-0 px-4 py-2 text-xs tracking-[0.1em] uppercase border transition-colors ${category === cat ? 'bg-black dark:bg-white text-white dark:text-black border-black dark:border-white' : 'border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800'}`}>
+            className={`shrink-0 px-4 py-2 rounded-md text-xs tracking-[0.1em] uppercase border transition-colors ${category === cat ? 'bg-black dark:bg-white text-white dark:text-black border-black dark:border-white' : 'border-slate-200 dark:border-neutral-800 hover:bg-slate-50 dark:hover:bg-neutral-800'}`}>
             {cat}
           </button>
         ))}
       </div>
 
-      <div className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+      <div className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm overflow-hidden">
         {/* Mobile: tap to open detail modal */}
         <div className="md:hidden">
           {loading ? (
@@ -118,7 +118,7 @@ export default function InventoryPage() {
             const minStock = p.sizes.length ? Math.min(...p.sizes.map((s) => s.stock)) : 0
             return (
               <button key={p.id} onClick={() => setSelectedMobile(p)}
-                className="w-full flex items-center justify-between px-4 py-4 border-b border-neutral-100 dark:border-neutral-800 last:border-b-0 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-left">
+                className="w-full flex items-center justify-between px-4 py-4 border-b border-slate-100 dark:border-neutral-800 last:border-b-0 hover:bg-slate-50 dark:hover:bg-neutral-800 text-left">
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{p.title}</p>
                   <p className="text-xs text-neutral-400 mt-0.5">{p.product_type ?? '—'} · {p.sizes.length} variant{p.sizes.length !== 1 ? 's' : ''}</p>
@@ -136,7 +136,7 @@ export default function InventoryPage() {
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-neutral-200 dark:border-neutral-800">
+              <tr className="bg-slate-100 dark:bg-neutral-800/60 border-b border-slate-200 dark:border-neutral-700">
                 <th className="w-8 px-3 py-3" />
                 {['Product', 'Category', 'Price', 'Variants', 'Stock'].map((h) => (
                   <th key={h} className="text-left px-6 py-3 text-[10px] tracking-[0.3em] uppercase text-neutral-400 font-medium">{h}</th>
@@ -157,7 +157,7 @@ export default function InventoryPage() {
                   <>
                     {/* Product row */}
                     <tr key={p.id}
-                      className={`${!isLast || isExpanded ? 'border-b' : ''} border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800 cursor-pointer transition-colors`}
+                      className={`${!isLast || isExpanded ? 'border-b' : ''} border-slate-100 dark:border-neutral-800 hover:bg-slate-50 dark:hover:bg-neutral-800 cursor-pointer transition-colors`}
                       onClick={() => toggleExpanded(p.id)}
                     >
                       <td className="px-3 py-4 text-neutral-400">
@@ -183,7 +183,7 @@ export default function InventoryPage() {
                       const isLastVariant = vi === p.sizes.length - 1
                       return (
                         <tr key={s.id}
-                          className={`${!isLastVariant || !isLast ? 'border-b' : ''} border-neutral-100 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800/50`}
+                          className={`${!isLastVariant || !isLast ? 'border-b' : ''} border-slate-100 dark:border-neutral-800 bg-slate-50 dark:bg-neutral-800/50`}
                         >
                           <td className="px-3 py-2" />
                           <td className="px-6 py-2 pl-12 text-sm text-neutral-600 dark:text-neutral-400">{s.size}</td>
@@ -211,13 +211,13 @@ export default function InventoryPage() {
       {/* Mobile detail modal */}
       {selectedMobile && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 w-full max-w-lg max-h-[85vh] flex flex-col">
-            <div className="px-5 py-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
+          <div className="bg-white dark:bg-neutral-900 rounded-lg border border-slate-200 dark:border-neutral-800 shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-200 dark:border-neutral-800 flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-medium uppercase tracking-[0.1em]">{selectedMobile.title}</h3>
                 {selectedMobile.product_type && <p className="text-xs text-neutral-400 mt-0.5">{selectedMobile.product_type}</p>}
               </div>
-              <button onClick={() => setSelectedMobile(null)} className="w-9 h-9 border border-neutral-200 dark:border-neutral-800 flex items-center justify-center hover:bg-neutral-50 dark:hover:bg-neutral-800">
+              <button onClick={() => setSelectedMobile(null)} className="w-9 h-9 rounded-md border border-slate-200 dark:border-neutral-800 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-neutral-800">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -235,7 +235,7 @@ export default function InventoryPage() {
               <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-3">Stock by Variant</p>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {selectedMobile.sizes.map((s) => (
-                  <div key={s.id} className="border border-neutral-200 dark:border-neutral-800 p-3 text-center">
+                  <div key={s.id} className="rounded-md border border-slate-200 dark:border-neutral-800 p-3 text-center">
                     <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400 mb-2">{s.size}</p>
                     <div className="flex items-center justify-center gap-1.5 mb-1">
                       <div className={`w-2 h-2 rounded-full ${stockColor(s.stock)}`} />
