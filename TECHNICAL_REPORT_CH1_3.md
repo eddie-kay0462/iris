@@ -46,15 +46,13 @@ Finally, to our families — thank you for your patience and unwavering support 
 
 ## Abstract
 
-Small and medium-sized enterprises (SMEs) in the fashion sector operating in Sub-Saharan Africa face a fundamental operational challenge: their business data is fragmented across disconnected tools — WhatsApp for customer communication, Instagram for marketing, third-party payment processors, and manual spreadsheets for inventory. This fragmentation prevents business owners from deriving the cross-channel insights necessary for informed, data-driven decision making.
+Small and medium-sized enterprises (SMEs) in the fashion sector across Sub-Saharan Africa operate in a fragmented digital environment, relying on disconnected tools — WhatsApp for customer communication, social media for marketing, third-party payment processors, and manual spreadsheets for inventory — that prevent cross-channel data integration and informed decision-making. Existing enterprise resource planning (ERP) solutions are ill-suited to this context due to prohibitive licensing costs, limited regional payment integration, and designs optimised for larger Western enterprises rather than African SMEs.
 
-This report presents the design and development of IRIS (Integrated Retail Intelligence System), a custom e-commerce and ERP platform built specifically for 1NRI Worldwide Ltd., a Ghanaian fashion SME. IRIS replaces the company's collection of ad-hoc digital tools with a unified platform that consolidates product management, order processing, inventory tracking, customer relationships, and business analytics into a single system.
+This report presents the design and development of IRIS (Integrated Retail Intelligence System), a purpose-built e-commerce and business management platform developed for 1NRI Worldwide Ltd., a Ghanaian fashion SME. IRIS consolidates product management, inventory tracking, order processing, customer relationship management, in-person point-of-sale operations, and business analytics into a single unified system, replacing the company's ad-hoc collection of digital tools.
 
-The platform comprises four integrated components: a customer-facing e-commerce storefront, a business management admin dashboard, a RESTful NestJS backend API, and a Python-based machine learning recommendation engine.
+The platform is composed of four integrated components: a server-side rendered customer-facing storefront; a role-gated administrative dashboard supporting three access tiers (admin, manager, and staff); a modular RESTful NestJS backend API backed by a Supabase PostgreSQL database; and a Python FastAPI machine learning service implementing a hybrid recommendation engine that combines collaborative filtering, sentence-embedding text similarity, and CLIP-based image similarity via a FAISS nearest-neighbour index. The system integrates Paystack for both online and Mobile Money payments, LetsFish for transactional SMS communications, and Resend for transactional email delivery.
 
-The system integrates Paystack for payment processing and LetsFish for transactional SMS communications. A hybrid recommendation engine combining collaborative filtering with text and image similarity provides personalised product discovery for customers. A role-based access control system governs staff access to administrative functions across three tiers: admin, manager, and staff.
-
-This report describes the requirements, architectural design, and technical implementation of the IRIS platform, demonstrating how a contextually designed digital solution can address the specific operational realities of African fashion SMEs.
+This report covers the requirements analysis, architectural design, and technical implementation of IRIS across Chapters 1 through 3, demonstrating how a contextually grounded, full-stack digital solution can close the ERP accessibility gap for fashion SMEs operating in the African market.
 
 ---
 
