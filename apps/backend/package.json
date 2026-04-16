@@ -1,7 +1,7 @@
 {
   "name": "iris-backend",
   "version": "0.0.1",
-  "description": "Iris e-commerce NestJS backend",
+  "description": "Iris E-Commerce NestJS Backend",
   "private": true,
   "scripts": {
     "build": "nest build",

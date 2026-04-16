@@ -32,6 +32,8 @@ export interface ProductVariant {
   inventory_quantity: number;
   weight: number | null;
   weight_unit: string | null;
+  preorder_enabled: boolean;
+  preorder_limit: number | null;
 }
 
 export interface Product {

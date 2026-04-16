@@ -24,7 +24,10 @@ export const productSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
   handle: z.string().optional(),
-  base_price: z.coerce.number().min(0, "Price must be positive").optional(),
+  base_price: z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? undefined : Number(val)),
+    z.number().min(0, "Price must be positive").optional()
+  ),
   status: z.enum(["draft", "active", "archived"]).optional(),
   gender: z.preprocess(
     (val) => (val === "" ? "all" : val),

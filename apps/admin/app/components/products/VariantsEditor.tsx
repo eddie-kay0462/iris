@@ -71,6 +71,8 @@ export function VariantsEditor({
     sku: "",
     image_id: "",
     inventory_quantity: "0",
+    preorder_enabled: false,
+    preorder_limit: "",
   });
 
   const [form, setForm] = useState(defaultForm(basePrice));
@@ -125,6 +127,8 @@ export function VariantsEditor({
       sku: form.sku || undefined,
       image_id: form.image_id || undefined,
       inventory_quantity: Number(form.inventory_quantity) || 0,
+      preorder_enabled: form.preorder_enabled,
+      preorder_limit: form.preorder_enabled && form.preorder_limit ? Number(form.preorder_limit) : null,
     });
     setForm(defaultForm(basePrice));
     setAutoSku(true);
@@ -143,6 +147,8 @@ export function VariantsEditor({
       sku: v.sku || "",
       image_id: v.image_id || "",
       inventory_quantity: String(v.inventory_quantity || 0),
+      preorder_enabled: v.preorder_enabled ?? false,
+      preorder_limit: v.preorder_limit != null ? String(v.preorder_limit) : "",
     });
   }
 
@@ -157,6 +163,8 @@ export function VariantsEditor({
       sku: form.sku || undefined,
       image_id: form.image_id || undefined,
       inventory_quantity: Number(form.inventory_quantity) || 0,
+      preorder_enabled: form.preorder_enabled,
+      preorder_limit: form.preorder_enabled && form.preorder_limit ? Number(form.preorder_limit) : null,
     });
     setEditing(null);
     setForm(defaultForm(basePrice));
@@ -305,6 +313,37 @@ export function VariantsEditor({
               </div>
             )}
           </div>
+
+          {/* Preorder settings */}
+          <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5">
+            <div>
+              <p className="text-xs font-medium text-slate-700">Allow Pre-orders</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">
+                {form.preorder_enabled ? "Customers can reserve this variant when out of stock" : "Pre-orders disabled"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, preorder_enabled: !f.preorder_enabled, preorder_limit: "" }))}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${form.preorder_enabled ? "bg-slate-900" : "bg-slate-200"}`}
+            >
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${form.preorder_enabled ? "translate-x-4" : "translate-x-0.5"}`} />
+            </button>
+          </div>
+          {form.preorder_enabled && (
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">Pre-order Limit (optional)</label>
+              <input
+                type="number"
+                min={1}
+                placeholder="No limit"
+                value={form.preorder_limit}
+                onChange={(e) => setForm({ ...form, preorder_limit: e.target.value })}
+                className="w-32 rounded border border-slate-200 px-2 py-1.5 text-sm"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">Leave blank to allow unlimited pre-orders</p>
+            </div>
+          )}
 
           <div className="flex gap-2">
             <button

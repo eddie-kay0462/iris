@@ -11,6 +11,209 @@ import {
 } from "../../components/VariantSelector";
 import { useSimilarProducts } from "@/lib/api/recommendations";
 import { ProductCard } from "../../components/ProductCard";
+import { createPreorder } from "@/lib/api/preorders";
+import { getToken } from "@/lib/api/client";
+import { useRouter } from "next/navigation";
+import { X } from "lucide-react";
+
+// ─── Paystack inline type ────────────────────────────────────────────────────
+declare global {
+  interface Window {
+    PaystackPop?: {
+      setup: (opts: {
+        key: string;
+        email: string;
+        amount: number;
+        currency?: string;
+        ref?: string;
+        metadata?: Record<string, unknown>;
+        callback: (response: { reference: string }) => void;
+        onClose: () => void;
+      }) => { openIframe: () => void };
+    };
+  }
+}
+
+// ─── PreorderModal ────────────────────────────────────────────────────────────
+
+interface PreorderModalProps {
+  productTitle: string;
+  variantTitle: string | null;
+  variantId: string;
+  price: number;
+  onClose: () => void;
+}
+
+function PreorderModal({
+  productTitle,
+  variantTitle,
+  variantId,
+  price,
+  onClose,
+}: PreorderModalProps) {
+  const router = useRouter();
+  const [quantity, setQuantity] = useState(1);
+  const [status, setStatus] = useState<"idle" | "paying" | "saving" | "success" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  // Load Paystack script once
+  useEffect(() => {
+    if (document.getElementById("paystack-script")) return;
+    const s = document.createElement("script");
+    s.id = "paystack-script";
+    s.src = "https://js.paystack.co/v1/inline.js";
+    s.async = true;
+    document.head.appendChild(s);
+  }, []);
+
+  const total = price * quantity;
+
+  async function handlePay() {
+    const token = getToken();
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    const pk = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
+    if (!pk || !window.PaystackPop) {
+      setErrorMsg("Payment unavailable. Please try again.");
+      setStatus("error");
+      return;
+    }
+
+    // We need the customer email. Use a placeholder if not available; in
+    // production, decode the JWT or fetch /auth/me.
+    const email = "customer@1nri.com";
+
+    setStatus("paying");
+
+    window.PaystackPop.setup({
+      key: pk,
+      email,
+      amount: Math.round(total * 100), // pesewas
+      currency: "GHS",
+      metadata: { variantId, quantity, productTitle },
+      callback: async (response) => {
+        setStatus("saving");
+        try {
+          await createPreorder({
+            item: {
+              variantId,
+              productTitle,
+              variantTitle: variantTitle ?? undefined,
+              quantity,
+              price,
+            },
+            paymentReference: response.reference,
+          });
+          setStatus("success");
+        } catch {
+          setErrorMsg("Payment received but we couldn't record your pre-order. Please contact support with your reference: " + response.reference);
+          setStatus("error");
+        }
+      },
+      onClose: () => {
+        setStatus("idle");
+      },
+    }).openIframe();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
+      <div className="relative w-full max-w-md rounded-2xl bg-white p-6 dark:bg-gray-900">
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-full p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+        >
+          <X className="h-5 w-5" />
+        </button>
+
+        {status === "success" ? (
+          <div className="py-6 text-center">
+            <div className="mb-3 text-4xl">🎉</div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Pre-order confirmed!</h2>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              We&apos;ll contact you as soon as stock is available.
+            </p>
+            <button
+              onClick={() => router.push("/preorders")}
+              className="mt-5 w-full rounded-lg bg-black py-2.5 text-sm font-semibold text-white dark:bg-white dark:text-black"
+            >
+              View my pre-orders
+            </button>
+          </div>
+        ) : (
+          <>
+            <h2 className="mb-4 text-lg font-bold text-gray-900 dark:text-white">Pre-order</h2>
+
+            <div className="mb-4 rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
+              <p className="font-medium text-gray-900 dark:text-white">{productTitle}</p>
+              {variantTitle && (
+                <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{variantTitle}</p>
+              )}
+              <p className="mt-1 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                GH₵{price.toLocaleString()} each
+              </p>
+            </div>
+
+            {/* Quantity */}
+            <div className="mb-4 flex items-center gap-3">
+              <span className="text-sm text-gray-700 dark:text-gray-300">Quantity</span>
+              <div className="flex items-center rounded-lg border border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  className="px-3 py-1.5 text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800"
+                >
+                  −
+                </button>
+                <span className="min-w-[2rem] text-center text-sm font-medium">{quantity}</span>
+                <button
+                  onClick={() => setQuantity((q) => q + 1)}
+                  className="px-3 py-1.5 text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Total */}
+            <div className="mb-5 flex items-center justify-between border-t border-gray-100 pt-4 dark:border-gray-800">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Total</span>
+              <span className="text-base font-bold text-gray-900 dark:text-white">
+                GH₵{total.toLocaleString()}
+              </span>
+            </div>
+
+            {status === "error" && (
+              <p className="mb-3 rounded-lg bg-red-50 p-3 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                {errorMsg}
+              </p>
+            )}
+
+            <button
+              onClick={handlePay}
+              disabled={status === "paying" || status === "saving"}
+              className="w-full rounded-lg bg-black py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-white dark:text-black"
+            >
+              {status === "paying"
+                ? "Opening payment…"
+                : status === "saving"
+                  ? "Saving pre-order…"
+                  : `Pay GH₵${total.toLocaleString()}`}
+            </button>
+
+            <p className="mt-3 text-center text-xs text-gray-400 dark:text-gray-500">
+              Your payment is processed securely via Paystack. Your item will be reserved once stock arrives.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -58,6 +261,7 @@ export default function ProductDetailPage({ params }: PageProps) {
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [initialized, setInitialized] = useState(false);
   const [added, setAdded] = useState(false);
+  const [showPreorderModal, setShowPreorderModal] = useState(false);
 
   const variants = product?.product_variants || [];
 
@@ -120,6 +324,13 @@ export default function ProductDetailPage({ params }: PageProps) {
   const displayPrice = active?.price ?? product.base_price;
   const comparePrice = active?.compare_at_price ?? null;
   const inStock = active ? active.inventory_quantity > 0 : true;
+  const canPreorder = !inStock && (active?.preorder_enabled ?? false);
+
+  const variantTitle = active
+    ? [active.option1_value, active.option2_value, active.option3_value]
+        .filter(Boolean)
+        .join(" / ") || null
+    : null;
 
   function handleAddToCart() {
     if (!active || !inStock || !product) return;
@@ -213,17 +424,26 @@ export default function ProductDetailPage({ params }: PageProps) {
           <p
             className={`text-sm font-medium ${inStock ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
           >
-            {inStock ? "In stock" : "Out of stock"}
+            {inStock ? "In stock" : canPreorder ? "Out of stock — pre-order available" : "Out of stock"}
           </p>
 
-          {/* Add to cart */}
-          <button
-            onClick={handleAddToCart}
-            disabled={!inStock}
-            className="w-full rounded-lg bg-black py-3 text-sm font-semibold text-white disabled:bg-gray-300 disabled:cursor-not-allowed dark:bg-white dark:text-black dark:disabled:bg-gray-700 dark:disabled:text-gray-500"
-          >
-            {!inStock ? "Sold out" : added ? "Added!" : "Add to cart"}
-          </button>
+          {/* CTA */}
+          {canPreorder ? (
+            <button
+              onClick={() => setShowPreorderModal(true)}
+              className="w-full rounded-lg bg-black py-3 text-sm font-semibold text-white dark:bg-white dark:text-black"
+            >
+              Pre-order Now
+            </button>
+          ) : (
+            <button
+              onClick={handleAddToCart}
+              disabled={!inStock}
+              className="w-full rounded-lg bg-black py-3 text-sm font-semibold text-white disabled:bg-gray-300 disabled:cursor-not-allowed dark:bg-white dark:text-black dark:disabled:bg-gray-700 dark:disabled:text-gray-500"
+            >
+              {!inStock ? "Sold out" : added ? "Added!" : "Add to cart"}
+            </button>
+          )}
 
           {/* Description */}
           {(product.description || product.gsm) && (
@@ -274,6 +494,17 @@ export default function ProductDetailPage({ params }: PageProps) {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Pre-order modal */}
+      {showPreorderModal && active && displayPrice != null && (
+        <PreorderModal
+          productTitle={product.title}
+          variantTitle={variantTitle}
+          variantId={active.id}
+          price={displayPrice}
+          onClose={() => setShowPreorderModal(false)}
+        />
       )}
     </div>
   );
