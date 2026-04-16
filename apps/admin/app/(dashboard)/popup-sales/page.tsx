@@ -23,6 +23,7 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
+import { useCreatePopupPreorder } from "@/lib/api/preorders";
 import {
   usePopupEvents,
   usePopupStats,
@@ -1195,6 +1196,10 @@ function NewOrderModal({
   const createOrder = useCreatePopupOrder(eventId);
   const updateOrder = useUpdatePopupOrder();
   const saveCustomer = useCreatePopupCustomer();
+  const createPreorder = useCreatePopupPreorder();
+
+  // ── Pre-order mode ─────────────────────────────────────────────────────────
+  const [isPreorderMode, setIsPreorderMode] = useState(false);
 
   // ── Product state ──────────────────────────────────────────────────────────
   const [productSearch, setProductSearch] = useState("");
@@ -1372,6 +1377,32 @@ function NewOrderModal({
   // ── Submit ─────────────────────────────────────────────────────────────────
   async function handleSubmit() {
     if (items.length === 0) return;
+
+    // ── Pre-order mode path ────────────────────────────────────────────────
+    if (isPreorderMode) {
+      await createPreorder.mutateAsync({
+        items: items
+          .filter((item) => !!item.variant_id)
+          .map((item) => ({
+            variantId: item.variant_id!,
+            productTitle: item.product_name,
+            variantTitle: item.variant_title ?? undefined,
+            quantity: item.quantity,
+            price: item.unit_price,
+          })),
+        customer_name: customerForm.name || undefined,
+        customer_email: customerForm.email || undefined,
+        customer_phone: customerForm.phone,
+        payment_method: (paymentMethod as "cash" | "momo" | "bank_transfer") ?? "pending",
+        payment_reference:
+          paymentMethod === "momo" ? momoReference || undefined :
+          paymentMethod === "bank_transfer" ? bankReference || undefined : undefined,
+        notes: undefined,
+      });
+      onClose();
+      return;
+    }
+
     if (isHighDiscount && !discountConfirmed.current) {
       pendingAction.current = "submit";
       setShowDiscountWarning(true);
@@ -1468,7 +1499,24 @@ function NewOrderModal({
         >
           {/* Header */}
           <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-200 px-6 py-4">
-            <h2 className="text-base font-semibold text-slate-900">New Pop-up Order</h2>
+            <div className="flex items-center gap-4">
+              <h2 className="text-base font-semibold text-slate-900">
+                {isPreorderMode ? "New Pop-up Pre-order" : "New Pop-up Order"}
+              </h2>
+              {/* Pre-order mode toggle */}
+              <button
+                type="button"
+                onClick={() => setIsPreorderMode((v) => !v)}
+                className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  isPreorderMode
+                    ? "border-purple-300 bg-purple-100 text-purple-700"
+                    : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${isPreorderMode ? "bg-purple-500" : "bg-slate-300"}`} />
+                Pre-order Mode
+              </button>
+            </div>
             <button
               onClick={onClose}
               className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"

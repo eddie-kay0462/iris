@@ -10,6 +10,7 @@ import { apiClient, clearToken } from "@/lib/api/client";
 
 const navItems = [
   { href: "/orders", label: "Orders" },
+  { href: "/preorders", label: "Pre-orders" },
   { href: "/profile", label: "Profile" },
 ];
 

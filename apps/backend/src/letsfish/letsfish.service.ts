@@ -33,7 +33,16 @@ export class LetsfishService {
 
   // LetsFish expects international format without +: 233241234567
   private normalizePhone(phone: string): string {
-    return phone.trim().replace(/\s+/g, '').replace(/^\+/, '');
+    // Remove spaces and strip leading +
+    let p = phone.trim().replace(/\s+/g, '').replace(/^\+/, '');
+
+    // Ghanaian local format: starts with 0, exactly 10 digits (0 + 9-digit subscriber)
+    // e.g. 0241234567 → 233241234567
+    if (/^0\d{9}$/.test(p)) {
+      p = '233' + p.slice(1);
+    }
+
+    return p;
   }
 
   async sendSms(phone: string, message: string): Promise<{ success: boolean; messageId?: string }> {
@@ -62,7 +71,10 @@ export class LetsfishService {
       const data = (await response.json()) as any;
       success = response.ok && data.success === true;
       messageId = data.data?.[0]?.reference;
-      if (!success) errorMessage = data.message || `HTTP ${response.status}`;
+      if (!success)
+        errorMessage =
+          data.message || data.error || JSON.stringify(data) || `HTTP ${response.status}`;
+      if (!success) this.logger.error(`LetsFish SMS rejected: ${errorMessage}`);
     } catch (err: any) {
       errorMessage = err.message;
       this.logger.error(`LetsFish SMS error: ${err.message}`);

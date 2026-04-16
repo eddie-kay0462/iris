@@ -9,6 +9,8 @@ import {
 } from '@nestjs/common';
 import { CommunicationsService } from './communications.service';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
+import { BulkSmsDto } from './dto/bulk-sms.dto';
+import { RecipientPreviewDto } from './dto/recipient-preview.dto';
 
 @Controller('communications')
 export class CommunicationsController {
@@ -44,5 +46,25 @@ export class CommunicationsController {
   @RequirePermission('settings:update')
   async testCall(@Body() body: { phone: string; otp: string }) {
     return this.communicationsService.sendTestCall(body.phone, body.otp);
+  }
+
+  @Get('phone-counts')
+  @RequirePermission('settings:read')
+  async getPhoneCounts() {
+    return this.communicationsService.getPhoneCounts();
+  }
+
+  @Post('recipient-preview')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('settings:read')
+  async recipientPreview(@Body() body: RecipientPreviewDto) {
+    return this.communicationsService.getRecipientPreview(body);
+  }
+
+  @Post('bulk-sms')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('settings:update')
+  async bulkSms(@Body() body: BulkSmsDto) {
+    return this.communicationsService.sendBulkSms(body);
   }
 }

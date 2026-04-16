@@ -18,6 +18,7 @@ import { ExportModule } from './export/export.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { PopupSalesModule } from './popup-sales/popup-sales.module';
+import { PreordersModule } from './preorders/preorders.module';
 import { LetsfishModule } from './letsfish/letsfish.module';
 import { CommunicationsModule } from './communications/communications.module';
 import { AnalyticsModule } from './analytics/analytics.module';
@@ -42,6 +43,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     RecommendationsModule,
     ReviewsModule,
     PopupSalesModule,
+    PreordersModule,
     CommunicationsModule,
     AnalyticsModule,
   ],
