@@ -77,6 +77,7 @@ export default function CommunicationsSettingsPage() {
 
   // Bulk SMS state
   const [phoneCounts, setPhoneCounts] = useState<PhoneCounts | null>(null);
+  const [phoneCountsLoading, setPhoneCountsLoading] = useState(false);
   const [bulkFilter, setBulkFilter] = useState<"all" | "sms_opted_in">("all");
   const [bulkMessage, setBulkMessage] = useState("");
   const [bulkSending, setBulkSending] = useState(false);

@@ -68,13 +68,21 @@ export class LetsfishService {
         }),
       });
 
-      const data = (await response.json()) as any;
+      const text = await response.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error(`LetsFish returned non-JSON (HTTP ${response.status}): ${text.substring(0, 200)}`);
+      }
+
       success = response.ok && data.success === true;
       messageId = data.data?.[0]?.reference;
-      if (!success)
-        errorMessage =
-          data.message || data.error || JSON.stringify(data) || `HTTP ${response.status}`;
-      if (!success) this.logger.error(`LetsFish SMS rejected: ${errorMessage}`);
+      if (!success) {
+        const errObj = data.error || data;
+        errorMessage = errObj.detail || errObj.message || errObj.title || JSON.stringify(errObj);
+        this.logger.error(`LetsFish SMS rejected: ${errorMessage}`);
+      }
     } catch (err: any) {
       errorMessage = err.message;
       this.logger.error(`LetsFish SMS error: ${err.message}`);
@@ -103,10 +111,20 @@ export class LetsfishService {
         body: JSON.stringify({ otp, phone: this.normalizePhone(phone) }),
       });
 
-      const data = (await response.json()) as any;
+      const text = await response.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error(`LetsFish returned non-JSON (HTTP ${response.status}): ${text.substring(0, 200)}`);
+      }
+
       success = response.ok && data.success === true;
       callId = data.data?.call_id;
-      if (!success) errorMessage = data.message || `HTTP ${response.status}`;
+      if (!success) {
+        const errObj = data.error || data;
+        errorMessage = errObj.detail || errObj.message || errObj.title || JSON.stringify(errObj);
+      }
     } catch (err: any) {
       errorMessage = err.message;
       this.logger.error(`LetsFish Voice OTP error: ${err.message}`);
