@@ -27,6 +27,15 @@ export class LetsfishService {
     return `Bearer ${this.appId}.${this.appSecret}`;
   }
 
+  private get baseHeaders(): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Authorization': this.authHeader,
+      'User-Agent': 'Mozilla/5.0 (compatible; Iris/1.0)',
+    };
+  }
+
   isConfigured(): boolean {
     return !!(this.appId && this.appSecret);
   }
@@ -57,10 +66,7 @@ export class LetsfishService {
     try {
       const response = await fetch(`${this.baseUrl}/sms`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: this.authHeader,
-        },
+        headers: this.baseHeaders,
         body: JSON.stringify({
           sender_id: this.senderId,
           message,
@@ -104,10 +110,7 @@ export class LetsfishService {
     try {
       const response = await fetch(`${this.baseUrl}/voice-otp`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: this.authHeader,
-        },
+        headers: this.baseHeaders,
         body: JSON.stringify({ otp, phone: this.normalizePhone(phone) }),
       });
 

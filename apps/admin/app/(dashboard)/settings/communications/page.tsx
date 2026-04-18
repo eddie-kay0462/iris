@@ -90,13 +90,19 @@ export default function CommunicationsSettingsPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [confirmingSend, setConfirmingSend] = useState(false);
 
+  function refreshPhoneCounts() {
+    setPhoneCountsLoading(true);
+    apiClient<PhoneCounts>("/communications/phone-counts")
+      .then(setPhoneCounts)
+      .catch(() => setPhoneCounts({ total: 0, sms_opted_in: 0 }))
+      .finally(() => setPhoneCountsLoading(false));
+  }
+
   useEffect(() => {
     apiClient<StatusData>("/communications/status")
       .then(setStatus)
       .catch(() => setStatus(null));
-    apiClient<PhoneCounts>("/communications/phone-counts")
-      .then(setPhoneCounts)
-      .catch(() => setPhoneCounts({ total: 0, sms_opted_in: 0 }));
+    refreshPhoneCounts();
   }, []);
 
   useEffect(() => {
@@ -360,7 +366,17 @@ export default function CommunicationsSettingsPage() {
 
         {/* Recipient filter */}
         <div className="space-y-2">
-          <p className="text-xs font-medium text-slate-600">Recipients</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-medium text-slate-600">Recipients</p>
+            <button
+              onClick={refreshPhoneCounts}
+              disabled={phoneCountsLoading}
+              className="text-slate-400 hover:text-slate-600 disabled:opacity-40"
+              title="Refresh counts"
+            >
+              <RefreshCw className={`h-3 w-3 ${phoneCountsLoading ? "animate-spin" : ""}`} />
+            </button>
+          </div>
           <div className="flex flex-col gap-2">
             {(
               [
