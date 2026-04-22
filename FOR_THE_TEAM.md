@@ -2717,3 +2717,234 @@ grant select, insert on public.ally_sale_items to authenticated;
 - `apps/admin/app/components/Sidebar.tsx` *(Added navigation node to General Settings panel)*
 
 *Last updated: 2026-04-06*
+
+---
+
+## Allies App: Final Deployment Touches (April 8, 2026)
+
+### What Got Done
+
+After the initial Allies app launch, several rounds of polish landed before deployment.
+
+**1. Inventory page — accordion layout**
+
+The inventory page was reworked to show products in an accordion pattern. Each product row expands to reveal its variant breakdown (size/color, stock counts, SKU). This avoids a wall of flat rows and makes it easier to scan stock across a large catalog.
+
+**2. Sales page — real customer data**
+
+The sales page was previously using placeholder/mock data. It now pulls live Supabase records and joins ally sales with the full order/customer context. A separate `sales/actions.ts` server action was added to keep the data fetching clean and out of the component.
+
+**3. Customers page — full customer list**
+
+The customers page was rebuilt to show all customers associated with an ally's sales. Each row shows the customer name, last order date, total spent, and order count — all derived from the `ally_sales` and `ally_sale_items` tables.
+
+**4. Commission Settings — admin-side control**
+
+A new `CommissionSettingsCard` component was added to the admin Markets page. Admins can now set a default commission rate (%), default sales quota, and quota period (monthly or all-time) from the UI. This setting applies globally to all allies unless overridden per-ally.
+
+**5. Per-ally overrides via Edit Drawer**
+
+An `EditAllyDrawer` was added to the admin Markets page. Clicking "Edit" on any ally opens a slide-over panel where you can:
+- Change the ally's location and location type (campus / city)
+- Update their individual commission rate
+- Set or remove a per-ally quota override
+- Toggle the ally active/inactive
+
+**6. Commission quota migration**
+
+A migration (`20260408200000_add_commission_quota.sql`) was added to support the new quota fields on the `allies` table and a new `commission_settings` table for the global defaults.
+
+**7. Allies login page — background image + fixes**
+
+The login page got a background image (`login-bg.jpeg`) and a UI cleanup pass. Several layout and alignment issues were fixed alongside the visual update.
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `apps/allies/app/(dashboard)/inventory/page.tsx` | Rebuilt with accordion layout per product |
+| `apps/allies/app/(dashboard)/sales/page.tsx` | Wired to live Supabase data; added filter/sort |
+| `apps/allies/app/(dashboard)/sales/actions.ts` | New server actions file for sales data fetching |
+| `apps/allies/app/(dashboard)/customers/page.tsx` | Full customer list with order stats |
+| `apps/allies/app/(dashboard)/page.tsx` | Dashboard stat cards polished |
+| `apps/allies/app/(dashboard)/DashboardShell.tsx` | Layout refinements |
+| `apps/allies/app/(auth)/login/page.tsx` | Background image, UI fixes |
+| `apps/allies/app/globals.css` | Minor global style tweaks |
+| `apps/admin/app/(dashboard)/markets/page.tsx` | Added CommissionSettingsCard + EditAllyDrawer |
+| `apps/admin/app/(dashboard)/markets/actions.ts` | Server actions for updating ally + commission settings |
+| `apps/admin/app/(dashboard)/markets/components/CommissionSettingsCard.tsx` | New component |
+| `apps/admin/app/(dashboard)/markets/components/EditAllyDrawer.tsx` | New component |
+| `supabase/migrations/20260408200000_add_commission_quota.sql` | Adds `commission_quota` to allies + `commission_settings` table |
+
+---
+
+## Preorders System (April 16, 2026)
+
+### What Got Done
+
+A full preorders system was built across the backend, admin panel, and customer-facing storefront. This lets customers pay for items that are out of stock or not yet available, and lets admin staff manage fulfillment once stock arrives.
+
+### How it works
+
+**On the storefront (`apps/frontend`)**
+
+When a product variant has `preorder_enabled = true` in the database, the product detail page shows a "Pre-order" button instead of "Add to cart". The customer pays via Paystack as normal — the payment goes through, and a preorder record is created. Customers can view their active preorders in their account dashboard.
+
+**In the admin panel (`apps/admin`)**
+
+A new **Preorders** page (`/preorders`) shows all open preorders with filtering by status. From here, admins can:
+- View order details (customer, product, variant, payment method, reference)
+- Cancel a preorder
+- Initiate a refund (via Paystack API, with SMS notification to the customer)
+- Mark stock as held when inventory arrives
+
+**Popup sales source**
+
+There's also a separate endpoint and UI for creating preorders from in-person popup sales (`source: 'popup'`). These don't require a Paystack reference — payment method can be cash, MoMo, bank transfer, or "pending". The admin popup sales page (`/popup-sales`) was updated to support this flow.
+
+**Per-variant limits**
+
+Each variant can have an optional `preorder_limit`. If the limit is set, the system rejects new preorders once the cap is hit. The admin can see how many slots remain.
+
+**Preorder status flow**
+
+```
+pending → stock_held → fulfilled
+       ↘ cancelled
+       ↘ refunded
+```
+
+### Database
+
+Two migrations were added:
+
+- `supabase/migrations/20260409000000_create_preorders.sql` — Creates the `preorders` and `preorder_refunds` tables; adds `preorder_enabled` and `preorder_limit` columns to `product_variants`
+- `supabase/migrations/20260409000001_fix_preorders_schema.sql` — Follow-up schema fixes
+
+**Run both migrations** in the Supabase SQL Editor if they haven't been applied yet.
+
+### API Endpoints (backend)
+
+| Method | Endpoint | Permission | What it does |
+|--------|----------|-----------|--------------|
+| `POST` | `/preorders` | authenticated | Create a preorder (customer, online) |
+| `GET` | `/preorders/my` | authenticated | List the logged-in user's preorders |
+| `POST` | `/admin/preorders/popup` | `popup:create` | Create a popup (in-person) preorder |
+| `GET` | `/admin/preorders` | `orders:read` | List all preorders (paginated, filterable) |
+| `GET` | `/admin/preorders/stats` | `orders:read` | Aggregated preorder stats |
+| `GET` | `/admin/preorders/:id` | `orders:read` | Get a single preorder |
+| `PATCH` | `/admin/preorders/:id/cancel` | `orders:update` | Cancel a preorder |
+| `POST` | `/admin/preorders/restock/:variantId` | `inventory:update` | Notify customers stock has arrived |
+| `POST` | `/admin/preorders/:id/refund` | `orders:refund` | Refund via Paystack + send SMS |
+
+### Files Created
+
+| Location | What it is |
+|----------|-----------|
+| `apps/backend/src/preorders/preorders.service.ts` | Core business logic |
+| `apps/backend/src/preorders/preorders.controller.ts` | Route handlers |
+| `apps/backend/src/preorders/preorders.module.ts` | NestJS module wiring |
+| `apps/backend/src/preorders/dto/*.ts` | Request validation DTOs (5 files) |
+| `apps/admin/app/(dashboard)/preorders/page.tsx` | Admin preorders dashboard |
+| `apps/admin/lib/api/preorders.ts` | Admin API client helpers |
+| `apps/frontend/app/(dashboard)/preorders/page.tsx` | Customer "my preorders" page |
+| `apps/frontend/lib/api/preorders.ts` | Frontend API client helpers |
+| `supabase/migrations/20260409000000_create_preorders.sql` | DB schema |
+| `supabase/migrations/20260409000001_fix_preorders_schema.sql` | DB schema fixes |
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `apps/admin/app/components/Sidebar.tsx` | Added Preorders nav link |
+| `apps/admin/app/components/products/VariantsEditor.tsx` | Added preorder toggle + limit field per variant |
+| `apps/admin/app/components/products/ProductForm.tsx` | Minor field changes |
+| `apps/admin/app/(dashboard)/popup-sales/page.tsx` | Added popup preorder creation flow |
+| `apps/admin/lib/validation/product.ts` | Updated validation for new variant fields |
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | Pre-order button + Paystack flow |
+| `apps/frontend/app/(dashboard)/layout.tsx` | Added preorders link to customer dashboard |
+| `apps/backend/src/app.module.ts` | Registered PreordersModule |
+
+### Note
+
+The commit message says "needs more changes" — the preorders system is functional but consider it in active development. Test thoroughly before treating it as production-ready.
+
+---
+
+## Bulk SMS & Communications Page (April 16–18, 2026)
+
+### What Got Done
+
+A full **Communications** settings page was built in the admin panel, giving admins the ability to send bulk SMS messages to customers via the LetsFish provider. This sits under Settings → Communications in the admin sidebar.
+
+### What the page does
+
+**Provider status** — Shows whether LetsFish credentials are configured and which base URL is in use.
+
+**Phone counts** — Displays how many customer profiles have a phone number on file, and how many have opted into SMS notifications.
+
+**Recipient preview** — Before sending, admins can preview exactly who will receive the message. The preview table is paginated and shows name, phone, and a personalized version of the message (with `[name]` replaced by the customer's first name). Filter options: "All customers with a phone" or "SMS opted-in only".
+
+**Message composer** — A text area with real-time character and segment counting. Handles both standard GSM-7 (160 chars/segment) and Unicode messages (70 chars/segment) correctly.
+
+**Send bulk SMS** — Once reviewed, the admin can send. The backend processes recipients in batches of 5 with 200ms gaps between batches to avoid hitting the provider rate limit. Results (succeeded / failed / error detail) are shown after sending.
+
+**Test SMS & Test Call** — A test panel lets admins send a single SMS or trigger a voice OTP call to any phone number to verify the integration is working.
+
+**Communication logs** — A paginated table of all past outbound messages (SMS and voice OTP), including status (sent / delivered / failed), recipient, message content, and timestamp.
+
+### Message personalization
+
+Use `[name]` anywhere in the message body. The backend replaces it with the customer's first name. If a customer has no first name on file, it falls back to "there" (e.g., "Hi there,").
+
+### Backend changes
+
+The `LetsfishService` was updated with:
+- Proper base request headers (`Content-Type`, `Accept`, `Authorization`, `User-Agent`) — previously these were missing and caused API rejections
+- Structured error logging so failures appear in the backend logs with full details
+- Correct color coding of failed SMS status in the UI response (was showing success color on failure)
+
+The `CommunicationsService` and `CommunicationsController` are the main additions. All endpoints require admin-level permissions.
+
+### API Endpoints (backend)
+
+| Method | Endpoint | Permission | What it does |
+|--------|----------|-----------|--------------|
+| `GET` | `/communications/status` | `settings:read` | Provider health check |
+| `GET` | `/communications/logs` | `settings:read` | Paginated communication log |
+| `GET` | `/communications/phone-counts` | `settings:read` | Total phones + opted-in count |
+| `POST` | `/communications/recipient-preview` | `settings:read` | Paginated preview of who will receive the message |
+| `POST` | `/communications/test-sms` | `settings:update` | Send a test SMS to a single number |
+| `POST` | `/communications/test-call` | `settings:update` | Make a test voice OTP call |
+| `POST` | `/communications/bulk-sms` | `settings:update` | Send bulk SMS to all matching recipients |
+
+### Files Created
+
+| Location | What it is |
+|----------|-----------|
+| `apps/backend/src/communications/communications.service.ts` | Bulk SMS logic, recipient querying, personalization |
+| `apps/backend/src/communications/communications.controller.ts` | Route handlers |
+| `apps/backend/src/communications/dto/bulk-sms.dto.ts` | Request DTO for bulk send |
+| `apps/backend/src/communications/dto/recipient-preview.dto.ts` | Request DTO for preview |
+| `apps/admin/app/(dashboard)/settings/communications/page.tsx` | Full admin communications UI |
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `apps/backend/src/letsfish/letsfish.service.ts` | Added base headers; added structured error logging; fixed failed-send detection |
+
+### Environment Variables Required
+
+The LetsFish integration reads from these env vars in `apps/backend/.env`:
+
+```
+LETSFISH_APP_ID=your_app_id
+LETSFISH_APP_SECRET=your_app_secret
+LETSFISH_BASE_URL=https://api.letsfish.africa/v1   # optional, this is the default
+LETSFISH_SENDER_ID=Iris                             # optional, defaults to "Iris"
+```
+
+Without `LETSFISH_APP_ID` and `LETSFISH_APP_SECRET` set, the provider shows as "not configured" and all send attempts will throw an error.
+
+*Last updated: 2026-04-22*

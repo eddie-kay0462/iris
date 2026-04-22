@@ -301,7 +301,7 @@ export default function CommunicationsSettingsPage() {
               Send SMS
             </button>
             {smsResult && (
-              <p className={`text-xs ${smsResult.startsWith("Error") ? "text-red-500" : "text-emerald-600"}`}>
+              <p className={`text-xs ${smsResult.includes("failed") ? "text-red-500" : "text-emerald-600"}`}>
                 {smsResult}
               </p>
             )}
