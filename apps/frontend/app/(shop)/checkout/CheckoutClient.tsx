@@ -57,14 +57,22 @@ const SHIPPING_OPTIONS = [
     estimate: "2-3 business days",
     price: 68,
   },
+  {
+    id: "pickup",
+    label: "Pickup",
+    estimate: "Collect at our location — no delivery fee",
+    price: 0,
+  },
 ];
 
-function validateForm(form: ShippingForm): Record<string, string> {
+function validateForm(form: ShippingForm, isPickup: boolean): Record<string, string> {
   const errors: Record<string, string> = {};
   if (!form.fullName.trim()) errors.fullName = "Full name is required";
-  if (!form.address.trim()) errors.address = "Address is required";
   if (!form.phone.trim()) errors.phone = "Phone number is required";
-  if (!form.state.trim()) errors.state = "State is required";
+  if (!isPickup) {
+    if (!form.address.trim()) errors.address = "Address is required";
+    if (!form.state.trim()) errors.state = "State is required";
+  }
   return errors;
 }
 
@@ -177,7 +185,7 @@ export default function CheckoutClient() {
   }
 
   function handleValidateAndPay() {
-    const validationErrors = validateForm(form);
+    const validationErrors = validateForm(form, shippingOption === "pickup");
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       return false;
@@ -199,11 +207,11 @@ export default function CheckoutClient() {
         })),
         shippingAddress: {
           fullName: form.fullName,
-          address: form.address,
-          address2: form.label || undefined,
-          city: form.state,
-          region: form.state,
-          postalCode: form.postalCode || undefined,
+          address: shippingOption === "pickup" ? "Pickup" : form.address,
+          address2: shippingOption === "pickup" ? undefined : (form.label || undefined),
+          city: shippingOption === "pickup" ? "Pickup" : form.state,
+          region: shippingOption === "pickup" ? "Pickup" : form.state,
+          postalCode: shippingOption === "pickup" ? undefined : (form.postalCode || undefined),
           phone: form.phone,
         },
         paymentReference: reference,
@@ -257,12 +265,12 @@ export default function CheckoutClient() {
             </div>
 
             <p className="mb-4 text-sm font-medium text-gray-700 dark:text-gray-300">
-              Shipping address
+              {shippingOption === "pickup" ? "Your details" : "Shipping address"}
             </p>
 
             <div className="space-y-4">
               {/* Row: Full name / Address */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className={`grid gap-4 ${shippingOption === "pickup" ? "grid-cols-1" : "grid-cols-2"}`}>
                 <div>
                   <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
                     Full name
@@ -280,55 +288,59 @@ export default function CheckoutClient() {
                     </p>
                   )}
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                    Address
-                  </label>
-                  <input
-                    type="text"
-                    value={form.address}
-                    onChange={(e) => handleChange("address", e.target.value)}
-                    placeholder="Address"
-                    className={inputClass}
-                  />
-                  {errors.address && (
-                    <p className="mt-1 text-xs text-red-500">
-                      {errors.address}
-                    </p>
-                  )}
-                </div>
+                {shippingOption !== "pickup" && (
+                  <div>
+                    <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                      Address
+                    </label>
+                    <input
+                      type="text"
+                      value={form.address}
+                      onChange={(e) => handleChange("address", e.target.value)}
+                      placeholder="Address"
+                      className={inputClass}
+                    />
+                    {errors.address && (
+                      <p className="mt-1 text-xs text-red-500">
+                        {errors.address}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Row: Email / Label */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => handleChange("email", e.target.value)}
-                    placeholder="Email"
-                    className={inputClass}
-                  />
+              {/* Row: Email / Label — hidden for pickup */}
+              {shippingOption !== "pickup" && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => handleChange("email", e.target.value)}
+                      placeholder="Email"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                      Label
+                    </label>
+                    <input
+                      type="text"
+                      value={form.label}
+                      onChange={(e) => handleChange("label", e.target.value)}
+                      placeholder="Label (e.g. Home, Office)"
+                      className={inputClass}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                    Label
-                  </label>
-                  <input
-                    type="text"
-                    value={form.label}
-                    onChange={(e) => handleChange("label", e.target.value)}
-                    placeholder="Label (e.g. Home, Office)"
-                    className={inputClass}
-                  />
-                </div>
-              </div>
+              )}
 
               {/* Row: Phone / State */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className={`grid gap-4 ${shippingOption === "pickup" ? "grid-cols-1" : "grid-cols-2"}`}>
                 <div>
                   <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
                     Phone number
@@ -344,36 +356,40 @@ export default function CheckoutClient() {
                     <p className="mt-1 text-xs text-red-500">{errors.phone}</p>
                   )}
                 </div>
-                <div>
+                {shippingOption !== "pickup" && (
+                  <div>
+                    <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                      State
+                    </label>
+                    <input
+                      type="text"
+                      value={form.state}
+                      onChange={(e) => handleChange("state", e.target.value)}
+                      placeholder="State"
+                      className={inputClass}
+                    />
+                    {errors.state && (
+                      <p className="mt-1 text-xs text-red-500">{errors.state}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Row: Postal code — hidden for pickup */}
+              {shippingOption !== "pickup" && (
+                <div className="w-1/2 pr-2">
                   <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                    State
+                    Postal code
                   </label>
                   <input
                     type="text"
-                    value={form.state}
-                    onChange={(e) => handleChange("state", e.target.value)}
-                    placeholder="State"
+                    value={form.postalCode}
+                    onChange={(e) => handleChange("postalCode", e.target.value)}
+                    placeholder="Postal code"
                     className={inputClass}
                   />
-                  {errors.state && (
-                    <p className="mt-1 text-xs text-red-500">{errors.state}</p>
-                  )}
                 </div>
-              </div>
-
-              {/* Row: Postal code */}
-              <div className="w-1/2 pr-2">
-                <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                  Postal code
-                </label>
-                <input
-                  type="text"
-                  value={form.postalCode}
-                  onChange={(e) => handleChange("postalCode", e.target.value)}
-                  placeholder="Postal code"
-                  className={inputClass}
-                />
-              </div>
+              )}
             </div>
           </div>
 
@@ -483,8 +499,8 @@ export default function CheckoutClient() {
               <span className="text-gray-500 dark:text-gray-400">
                 Shipping/Delivery
               </span>
-              <span className="text-gray-900 dark:text-white">
-                GH₵ {shippingCost.toLocaleString()}
+              <span className={shippingOption === "pickup" ? "font-medium text-green-600 dark:text-green-400" : "text-gray-900 dark:text-white"}>
+                {shippingOption === "pickup" ? "Free" : `GH₵ ${shippingCost.toLocaleString()}`}
               </span>
             </div>
             <div className="flex justify-between border-t border-gray-200 pt-3 text-sm font-semibold dark:border-gray-700">
