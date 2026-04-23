@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { usePaystackPayment } from "react-paystack";
 import { useCart } from "@/lib/cart";
-import { useCreateOrder } from "@/lib/api/orders";
+import { useCreatePendingOrder, useConfirmPayment } from "@/lib/api/orders";
 import { hasToken, getToken } from "@/lib/api/client";
 import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
 import { Check, Pencil } from "lucide-react";
@@ -90,7 +90,7 @@ function PayNowButton({
   reference: string;
   onSuccess: (ref: any) => void;
   onClose: () => void;
-  onBeforeOpen: () => boolean;
+  onBeforeOpen: () => Promise<boolean>;
   disabled: boolean;
 }) {
   const config = {
@@ -106,8 +106,9 @@ function PayNowButton({
   return (
     <button
       type="button"
-      onClick={() => {
-        if (!onBeforeOpen()) return;
+      onClick={async () => {
+        const ok = await onBeforeOpen();
+        if (!ok) return;
         initializePayment({ onSuccess, onClose });
       }}
       disabled={disabled}
@@ -121,12 +122,15 @@ function PayNowButton({
 export default function CheckoutClient() {
   const router = useRouter();
   const { items, subtotal, clearCart } = useCart();
-  const createOrder = useCreateOrder();
+  const createPendingOrder = useCreatePendingOrder();
+  const confirmPayment = useConfirmPayment();
   const [form, setForm] = useState<ShippingForm>(EMPTY_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [email, setEmail] = useState("");
   const [reference, setReference] = useState("");
+  const [pendingOrderNumber, setPendingOrderNumber] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [shippingOption, setShippingOption] = useState("standard");
   const [promoCode, setPromoCode] = useState("");
@@ -184,19 +188,24 @@ export default function CheckoutClient() {
     }
   }
 
-  function handleValidateAndPay() {
+  /**
+   * Step 1 — runs on Pay Now click, BEFORE Paystack opens.
+   * Validates the form, then pre-creates the order in `pending` state on the
+   * backend so the customer can never pay without an order existing first.
+   * Returns true only if both validation and order creation succeed.
+   */
+  async function handleValidateAndPay(): Promise<boolean> {
+    setCreateError(null);
+
     const validationErrors = validateForm(form, shippingOption === "pickup");
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       return false;
     }
-    return true;
-  }
 
-  async function handlePaymentSuccess() {
     setProcessing(true);
     try {
-      const order = await createOrder.mutateAsync({
+      const order = await createPendingOrder.mutateAsync({
         items: items.map((i) => ({
           variantId: i.variantId,
           productId: i.productId,
@@ -208,21 +217,51 @@ export default function CheckoutClient() {
         shippingAddress: {
           fullName: form.fullName,
           address: shippingOption === "pickup" ? "Pickup" : form.address,
-          address2: shippingOption === "pickup" ? undefined : (form.label || undefined),
+          address2:
+            shippingOption === "pickup" ? undefined : form.label || undefined,
           city: shippingOption === "pickup" ? "Pickup" : form.state,
           region: shippingOption === "pickup" ? "Pickup" : form.state,
-          postalCode: shippingOption === "pickup" ? undefined : (form.postalCode || undefined),
+          postalCode:
+            shippingOption === "pickup"
+              ? undefined
+              : form.postalCode || undefined,
           phone: form.phone,
         },
         paymentReference: reference,
       });
 
-      clearCart();
-      router.push(`/checkout/confirmation?order=${order.order_number}`);
+      setPendingOrderNumber(order.order_number);
+      return true;
     } catch (err: any) {
-      alert(err?.message || "Failed to create order. Please contact support.");
+      setCreateError(
+        err?.message || "Could not start your order. Please try again.",
+      );
       setProcessing(false);
+      return false;
     }
+  }
+
+  /**
+   * Step 2 — runs after Paystack reports a successful charge.
+   * Confirms the order on the backend (idempotent — the Paystack webhook also
+   * confirms the same reference as a safety net).
+   */
+  async function handlePaymentSuccess() {
+    try {
+      await confirmPayment.mutateAsync(reference);
+    } catch {
+      // Don't block the redirect: the webhook will still finalize the order.
+    } finally {
+      clearCart();
+      const orderNum = pendingOrderNumber ?? reference;
+      router.push(`/checkout/confirmation?order=${orderNum}`);
+    }
+  }
+
+  function handlePaymentClose() {
+    // Customer closed the Paystack modal without paying. The pending order
+    // still exists on the backend; allow them to retry without re-creating.
+    setProcessing(false);
   }
 
   const inputClass =
@@ -415,10 +454,8 @@ export default function CheckoutClient() {
               </p>
             )}
 
-            {createOrder.isError && (
-              <p className="mb-4 text-sm text-red-500">
-                {(createOrder.error as any)?.message || "Order creation failed"}
-              </p>
+            {createError && (
+              <p className="mb-4 text-sm text-red-500">{createError}</p>
             )}
 
             <PayNowButton
@@ -428,7 +465,7 @@ export default function CheckoutClient() {
               disabled={processing}
               onBeforeOpen={handleValidateAndPay}
               onSuccess={handlePaymentSuccess}
-              onClose={() => {}}
+              onClose={handlePaymentClose}
             />
           </div>
         </div>

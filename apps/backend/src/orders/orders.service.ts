@@ -1036,25 +1036,154 @@ export class OrdersService {
     return { target: Number(data.target) };
   }
 
-  async confirmPayment(paymentReference: string) {
+  /**
+   * Create an order in `pending` state BEFORE payment is initiated.
+   * Validates stock and inserts order + items, but does not deduct inventory yet.
+   * Idempotent: returns the existing order if one already exists for the same
+   * payment_reference (so retries / double-clicks are safe).
+   */
+  async createPending(dto: CreateOrderDto, userId: string, email: string) {
     const db = this.supabase.getAdminClient();
-    const { data, error } = await db
+
+    // Idempotency: if an order with this reference already exists, return it.
+    const { data: existing } = await db
       .from('orders')
-      .select('id, payment_status')
-      .eq('payment_reference', paymentReference)
+      .select('*, order_items(*)')
+      .eq('payment_reference', dto.paymentReference)
+      .maybeSingle();
+    if (existing) return existing;
+
+    // 1. Validate stock for all items
+    for (const item of dto.items) {
+      const { data: variant, error } = await db
+        .from('product_variants')
+        .select('id, inventory_quantity, sku')
+        .eq('id', item.variantId)
+        .single();
+
+      if (error || !variant) {
+        throw new BadRequestException(`Variant ${item.variantId} not found`);
+      }
+
+      if (variant.inventory_quantity < item.quantity) {
+        throw new BadRequestException(
+          `Insufficient stock for "${item.productTitle}". Available: ${variant.inventory_quantity}`,
+        );
+      }
+    }
+
+    // 2. Calculate totals
+    const subtotal = dto.items.reduce(
+      (sum, i) => sum + i.price * i.quantity,
+      0,
+    );
+    const total = subtotal;
+
+    // 3. Generate order number
+    const orderNumber = await this.generateOrderNumber();
+
+    // 4. Insert order as pending
+    const { data: order, error: orderError } = await db
+      .from('orders')
+      .insert({
+        user_id: userId,
+        email,
+        order_number: orderNumber,
+        status: 'pending',
+        subtotal,
+        total,
+        currency: 'GHS',
+        shipping_address: dto.shippingAddress,
+        payment_provider: 'paystack',
+        payment_reference: dto.paymentReference,
+        payment_status: 'pending',
+      })
+      .select()
       .single();
 
-    if (error || !data) return; // Order not found — might not exist yet
+    if (orderError) throw orderError;
 
-    if (data.payment_status === 'paid') return; // Already confirmed
+    // 5. Insert order items
+    const orderItems = dto.items.map((item) => ({
+      order_id: order.id,
+      product_id: item.productId,
+      variant_id: item.variantId,
+      product_name: item.productTitle,
+      variant_title: item.variantTitle || null,
+      quantity: item.quantity,
+      unit_price: item.price,
+      total_price: item.price * item.quantity,
+    }));
 
-    await db
+    const { error: itemsError } = await db
+      .from('order_items')
+      .insert(orderItems);
+
+    if (itemsError) throw itemsError;
+
+    return this.findOne(order.id);
+  }
+
+  /**
+   * Mark an order as paid by its payment_reference.
+   * Idempotent: safe to call multiple times (frontend success callback +
+   * Paystack webhook). Deducts inventory exactly once on the first transition
+   * to paid.
+   */
+  async confirmPayment(paymentReference: string) {
+    const db = this.supabase.getAdminClient();
+    const { data: order, error } = await db
+      .from('orders')
+      .select('id, payment_status, order_number, user_id, order_items(*)')
+      .eq('payment_reference', paymentReference)
+      .maybeSingle();
+
+    if (error || !order) return null; // Order not found — might not exist yet
+    if (order.payment_status === 'paid') {
+      return this.findOne(order.id); // Already confirmed
+    }
+
+    // Flip to paid
+    const { error: updateError } = await db
       .from('orders')
       .update({
         payment_status: 'paid',
         status: 'paid',
         updated_at: new Date().toISOString(),
       })
-      .eq('id', data.id);
+      .eq('id', order.id);
+
+    if (updateError) throw updateError;
+
+    // Deduct inventory now that payment is confirmed
+    for (const item of order.order_items || []) {
+      if (!item.variant_id) continue;
+
+      const { data: variant } = await db
+        .from('product_variants')
+        .select('inventory_quantity')
+        .eq('id', item.variant_id)
+        .single();
+
+      const previousQty = variant?.inventory_quantity ?? 0;
+      const newQty = Math.max(0, previousQty - item.quantity);
+
+      await db
+        .from('product_variants')
+        .update({ inventory_quantity: newQty })
+        .eq('id', item.variant_id);
+
+      await db.from('inventory_movements').insert({
+        variant_id: item.variant_id,
+        quantity_change: -item.quantity,
+        quantity_before: previousQty,
+        quantity_after: newQty,
+        movement_type: 'sale',
+        notes: `Order ${order.order_number}`,
+        created_by: order.user_id,
+      });
+    }
+
+    return this.findOne(order.id);
   }
 }

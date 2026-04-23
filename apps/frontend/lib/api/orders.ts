@@ -94,29 +94,66 @@ function toSearchParams(params: OrderQueryParams): string {
 
 // --- Customer Hooks ---
 
+export interface CreateOrderInput {
+  items: {
+    variantId: string;
+    productId: string;
+    productTitle: string;
+    variantTitle?: string;
+    price: number;
+    quantity: number;
+  }[];
+  shippingAddress: {
+    fullName: string;
+    address: string;
+    address2?: string;
+    city: string;
+    region: string;
+    postalCode?: string;
+    phone: string;
+  };
+  paymentReference: string;
+}
+
 export function useCreateOrder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: {
-      items: {
-        variantId: string;
-        productId: string;
-        productTitle: string;
-        variantTitle?: string;
-        price: number;
-        quantity: number;
-      }[];
-      shippingAddress: {
-        fullName: string;
-        address: string;
-        address2?: string;
-        city: string;
-        region: string;
-        postalCode?: string;
-        phone: string;
-      };
-      paymentReference: string;
-    }) => apiClient<Order>("/orders", { method: "POST", body: data }),
+    mutationFn: (data: CreateOrderInput) =>
+      apiClient<Order>("/orders", { method: "POST", body: data }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-orders"] });
+    },
+  });
+}
+
+/**
+ * Create a pending order BEFORE opening Paystack. This guarantees that even
+ * if the success callback never fires the order still exists and the webhook
+ * can finalize it. Idempotent on `paymentReference`.
+ */
+export function useCreatePendingOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateOrderInput) =>
+      apiClient<Order>("/orders/create-pending", { method: "POST", body: data }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-orders"] });
+    },
+  });
+}
+
+/**
+ * Confirm a Paystack payment by reference. Idempotent — the Paystack webhook
+ * also calls the same backend method as a safety net.
+ */
+export function useConfirmPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (reference: string) =>
+      apiClient<Order>("/orders/confirm-payment", {
+        method: "POST",
+        body: { reference },
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my-orders"] });
     },
