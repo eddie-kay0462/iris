@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
@@ -62,9 +63,7 @@ function SidebarContent({
     <div className="flex h-full flex-col">
       {/* Brand */}
       <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-800">
-        <h1 className="text-[10px] tracking-[0.25em] uppercase font-medium text-neutral-100">
-          Allies — by 1NRI
-        </h1>
+        <Image src="/allies_logo.png" alt="Allies" width={80} height={20} className="invert" />
         {onClose && (
           <button
             onClick={onClose}
@@ -203,9 +202,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <span className="text-[10px] tracking-[0.25em] uppercase font-medium">
-            Allies — 1NRI
-          </span>
+          <Image src="/allies_logo.png" alt="Allies" width={60} height={16} className="dark:invert" />
           <div className="w-9" />
         </header>
 
