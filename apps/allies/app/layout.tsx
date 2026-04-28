@@ -8,8 +8,8 @@ const geist = Geist({
 })
 
 export const metadata: Metadata = {
-  title: 'Allies — 1NRI Partner Dashboard',
-  description: 'Sales dashboard for 1NRI partners and allies.',
+  title: '1NRI&UA Allies Dashboard',
+  description: 'Sales dashboard for 1NRI and Unlikely Alliances allies.',
 }
 
 export default function RootLayout({
