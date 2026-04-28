@@ -59,6 +59,7 @@ CREATE INDEX idx_preorders_user    ON preorders(user_id);
 ALTER TABLE preorders        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE preorder_refunds ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "users_see_own_preorders" ON preorders;
 CREATE POLICY "users_see_own_preorders" ON preorders
   FOR SELECT TO authenticated
   USING (user_id = auth.uid());
