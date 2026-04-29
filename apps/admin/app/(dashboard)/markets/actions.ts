@@ -2,6 +2,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
+import { logActivity } from '@/lib/logActivity'
 
 // Admin client using service role key (needed to invite users)
 function getAdminClient() {
@@ -53,6 +54,7 @@ export async function updateCommissionSettings(input: Partial<CommissionSettings
   if (input.period !== undefined) updates.period = input.period
   const { error } = await supabase.from('commission_settings').update(updates).neq('id', '00000000-0000-0000-0000-000000000000')
   if (error) return { error: error.message }
+  await logActivity({ action: 'updated', entity_type: 'commission_settings', changes: updates })
   revalidatePath('/markets')
   return { success: true }
 }
@@ -90,6 +92,11 @@ export async function inviteAlly(input: InviteAllyInput) {
     return { error: insertError.message }
   }
 
+  await logActivity({
+    action: 'invited',
+    entity_type: 'ally',
+    changes: { full_name: input.full_name, email: input.email, location: input.location },
+  })
   revalidatePath('/markets')
   return { success: true }
 }
@@ -125,6 +132,38 @@ export async function updateAlly(input: UpdateAllyInput) {
   const { error } = await supabase.from('allies').update(updates).eq('id', id)
   if (error) return { error: error.message }
 
+  await logActivity({ action: 'updated', entity_type: 'ally', entity_id: id, changes: updates })
   revalidatePath('/markets')
   return { success: true }
+}
+
+export type AllyActivityData = {
+  logins: { logged_in_at: string }[]
+  sales: { total: number; commission_amount: number; sale_date: string }[]
+}
+
+export async function fetchAllyActivity(allyId: string): Promise<AllyActivityData> {
+  const supabase = getAdminClient()
+
+  const [{ data: logins }, { data: sales }] = await Promise.all([
+    supabase
+      .from('ally_logins')
+      .select('logged_in_at')
+      .eq('ally_id', allyId)
+      .order('logged_in_at', { ascending: false }),
+    supabase
+      .from('ally_sales')
+      .select('total, commission_amount, sale_date')
+      .eq('ally_id', allyId)
+      .order('sale_date', { ascending: false }),
+  ])
+
+  return {
+    logins: logins ?? [],
+    sales: (sales ?? []).map((s: any) => ({
+      total: Number(s.total),
+      commission_amount: Number(s.commission_amount),
+      sale_date: s.sale_date,
+    })),
+  }
 }

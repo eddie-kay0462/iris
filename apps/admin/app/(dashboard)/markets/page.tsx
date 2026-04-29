@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { UserPlus, Pencil } from 'lucide-react'
+import { UserPlus, Pencil, Activity } from 'lucide-react'
 import { fetchAllies } from './actions'
 import { InviteAllyModal } from './components/InviteAllyModal'
 import { EditAllyDrawer } from './components/EditAllyDrawer'
+import { AllyActivityDrawer } from './components/AllyActivityDrawer'
 import { CommissionSettingsCard } from './components/CommissionSettingsCard'
 
 type Ally = {
@@ -28,6 +29,7 @@ export default function MarketsPage() {
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
   const [editingAlly, setEditingAlly] = useState<Ally | null>(null)
+  const [activityAlly, setActivityAlly] = useState<Ally | null>(null)
 
   async function loadAllies() {
     const { allies: allyRows, sales } = await fetchAllies()
@@ -101,7 +103,7 @@ export default function MarketsPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-100">
-                {['Ally', 'Location', 'Commission', 'Total Sales', 'Orders', 'Earnings', 'Status', ''].map((h) => (
+                {['Ally', 'Location', 'Commission', 'Total Sales', 'Orders', 'Earnings', 'Status', '', ''].map((h) => (
                   <th key={h} className={`px-6 py-3 text-xs font-medium uppercase tracking-wide text-slate-400 ${h === 'Total Sales' || h === 'Orders' || h === 'Earnings' ? 'text-right' : 'text-left'}`}>{h}</th>
                 ))}
               </tr>
@@ -135,6 +137,15 @@ export default function MarketsPage() {
                     </td>
                     <td className="px-6 py-4">
                       <button
+                        onClick={() => setActivityAlly(ally)}
+                        className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors"
+                      >
+                        <Activity className="h-3 w-3" />
+                        Activity
+                      </button>
+                    </td>
+                    <td className="px-3 py-4">
+                      <button
                         onClick={() => setEditingAlly(ally)}
                         className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors"
                       >
@@ -156,6 +167,14 @@ export default function MarketsPage() {
 
       {editingAlly && (
         <EditAllyDrawer ally={editingAlly} onClose={() => setEditingAlly(null)} onSuccess={loadAllies} />
+      )}
+
+      {activityAlly && (
+        <AllyActivityDrawer
+          allyId={activityAlly.id}
+          allyName={activityAlly.full_name}
+          onClose={() => setActivityAlly(null)}
+        />
       )}
     </section>
   )
