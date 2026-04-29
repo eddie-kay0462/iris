@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { UserPlus, Pencil, Activity } from 'lucide-react'
 import { fetchAllies } from './actions'
+import { Avatar } from '../../components/Avatar'
 import { InviteAllyModal } from './components/InviteAllyModal'
 import { EditAllyDrawer } from './components/EditAllyDrawer'
 import { AllyActivityDrawer } from './components/AllyActivityDrawer'
@@ -19,6 +20,7 @@ type Ally = {
   commission_quota: number | null
   is_active: boolean
   joined_at: string
+  avatar_url?: string | null
   totalSales: number
   totalOrders: number
   totalEarnings: number
@@ -117,8 +119,13 @@ export default function MarketsPage() {
                 allies.map((ally, i) => (
                   <tr key={ally.id} className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${i === allies.length - 1 ? 'border-b-0' : ''}`}>
                     <td className="px-6 py-4">
-                      <p className="text-sm font-medium text-slate-900">{ally.full_name}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{ally.email}</p>
+                      <div className="flex items-center gap-3">
+                        <Avatar url={ally.avatar_url} name={ally.full_name} size={32} />
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">{ally.full_name}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">{ally.email}</p>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-sm text-slate-700">{ally.location}</p>

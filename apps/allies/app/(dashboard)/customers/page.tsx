@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Search, X, ShoppingBag, Phone, Mail } from 'lucide-react'
+import { Avatar } from '@/components/Avatar'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
 import { useAlly } from '@/lib/ally-context'
@@ -175,9 +176,7 @@ export default function CustomersPage() {
             sorted.map((c) => (
               <button key={c.id} onClick={() => openCustomer(c)}
                 className="w-full flex items-center gap-4 px-4 py-5 border-b border-slate-100 dark:border-neutral-800 last:border-b-0 hover:bg-slate-50 dark:hover:bg-neutral-800 text-left transition-colors">
-                <div className="w-10 h-10 rounded-full bg-neutral-900 dark:bg-neutral-100 flex items-center justify-center shrink-0">
-                  <span className="text-xs font-semibold text-white dark:text-black">{initials(c.name)}</span>
-                </div>
+                <Avatar name={c.name} size={40} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate">{c.name}</p>
                   <p className="text-xs text-neutral-500 mt-1 truncate">{c.phone ?? c.email ?? '—'}</p>
@@ -218,9 +217,7 @@ export default function CustomersPage() {
                     className={`border-b border-slate-100 dark:border-neutral-800 hover:bg-slate-50 dark:hover:bg-neutral-800 cursor-pointer transition-colors ${i === sorted.length - 1 ? 'border-b-0' : ''}`}>
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-neutral-900 dark:bg-neutral-100 flex items-center justify-center shrink-0">
-                          <span className="text-xs font-semibold text-white dark:text-black">{initials(c.name)}</span>
-                        </div>
+                        <Avatar name={c.name} size={36} />
                         <span className="text-sm font-medium">{c.name}</span>
                       </div>
                     </td>
@@ -264,9 +261,7 @@ export default function CustomersPage() {
             onClick={(e) => e.stopPropagation()}>
             {/* Modal header */}
             <div className="px-5 py-4 border-b border-slate-200 dark:border-neutral-800 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-neutral-900 dark:bg-neutral-100 flex items-center justify-center shrink-0">
-                <span className="text-sm font-semibold text-white dark:text-black">{initials(selected.name)}</span>
-              </div>
+              <Avatar name={selected.name} size={40} />
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-semibold truncate">{selected.name}</h3>
                 <p className="text-xs text-neutral-500 mt-0.5">{selected.email ?? selected.phone ?? 'No contact info'}</p>

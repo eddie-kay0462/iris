@@ -1,27 +1,13 @@
 "use client";
 
-import { use, useMemo, useState } from "react";
+import { use, useMemo, useRef, useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Mail, Phone, Calendar, MapPin, Tag, ShoppingBag, Store } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Calendar, MapPin, Tag, ShoppingBag, Store, Camera } from "lucide-react";
 import { useAdminCustomer, type Order, type Address, type PopupOrderSummary } from "@/lib/api/orders";
 import { useResetUserPassword } from "@/lib/api/settings";
 import { StatusBadge } from "../../../components/StatusBadge";
-
-function Avatar({ name }: { name: string }) {
-  const initials = name
-    .split(" ")
-    .map((w) => w[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase() || "?";
-
-  return (
-    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-lg font-semibold text-slate-600">
-      {initials}
-    </div>
-  );
-}
+import { Avatar } from "../../../components/Avatar";
+import { uploadAvatar } from "@/lib/uploadAvatar";
 
 function MiniSparkline({ orders }: { orders: Order[] }) {
   const monthlySpend = useMemo(() => {
@@ -172,6 +158,29 @@ export default function AdminCustomerDetailPage({
   const { data: customer, isLoading, error } = useAdminCustomer(id);
   const resetPassword = useResetUserPassword();
   const [resetSent, setResetSent] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!customer?.email) return;
+    fetch(`/api/admin/avatar?email=${encodeURIComponent(customer.email)}`)
+      .then((r) => r.json())
+      .then((d) => setAvatarUrl(d.avatar_url ?? null))
+      .catch(() => {});
+  }, [customer?.email]);
+
+  async function handleCustomerAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !customer?.id) return;
+    try {
+      const url = await uploadAvatar(file, `customers/${customer.id}`, 'profiles', customer.id);
+      setAvatarUrl(url);
+    } catch {
+      // ignore silently
+    } finally {
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  }
 
   const handleResetPassword = () => {
     if (!customer) return;
@@ -214,7 +223,13 @@ export default function AdminCustomerDetailPage({
       {/* Header */}
       <header className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Avatar name={name} />
+          <label className="relative cursor-pointer group" title="Change profile photo">
+            <Avatar url={avatarUrl} name={name} size={48} />
+            <span className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <Camera className="h-4 w-4 text-white" />
+            </span>
+            <input ref={avatarInputRef} type="file" accept="image/*" className="sr-only" onChange={handleCustomerAvatarUpload} />
+          </label>
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-semibold">{name}</h1>
