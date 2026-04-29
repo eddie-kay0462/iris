@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { Search, Plus, Minus, ArrowLeft, X, UserPlus, AlertCircle } from 'lucide-react'
+import { Avatar } from '@/components/Avatar'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useAlly } from '@/lib/ally-context'
@@ -447,11 +448,7 @@ export default function SalesPage() {
             {/* Selected customer badge */}
             {selectedCustomer && !showNewCustomerForm && (
               <div className="mt-3 flex items-center gap-3 px-3 py-2.5 rounded-md bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700">
-                <div className="w-8 h-8 rounded-full bg-black dark:bg-white flex items-center justify-center shrink-0">
-                  <span className="text-xs font-semibold text-white dark:text-black">
-                    {(selectedCustomer.first_name?.[0] ?? selectedCustomer.email?.[0] ?? '?').toUpperCase()}
-                  </span>
-                </div>
+                <Avatar name={selectedCustomerLabel} size={32} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{selectedCustomerLabel}</p>
                   <p className="text-xs text-neutral-500">{selectedCustomer.phone_number ?? selectedCustomer.email ?? 'No contact info'}</p>

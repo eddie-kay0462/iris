@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAlly } from '@/lib/ally-context'
+import { Avatar } from '@/components/Avatar'
 
 const navLinks = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -79,9 +80,7 @@ function SidebarContent({
       {ally && (
         <div className="px-6 py-4 border-b border-neutral-800">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-black text-xs font-semibold shrink-0">
-              {initials(ally.full_name)}
-            </div>
+            <Avatar url={ally.avatar_url} name={ally.full_name} size={32} />
             <div className="min-w-0">
               <p className="text-sm font-medium truncate text-neutral-100">
                 {ally.full_name}

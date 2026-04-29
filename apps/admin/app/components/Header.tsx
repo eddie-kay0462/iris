@@ -1,15 +1,18 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
-import { Menu } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { Menu, Camera } from "lucide-react";
 import { apiClient, clearToken } from "@/lib/api/client";
+import { Avatar } from "./Avatar";
+import { uploadAvatar } from "@/lib/uploadAvatar";
 
 type HeaderProps = {
   onMenuToggle?: () => void;
 };
 
 interface UserProfile {
+  id?: string;
   first_name: string | null;
   last_name: string | null;
   email: string | null;
@@ -17,14 +20,41 @@ interface UserProfile {
 
 export function Header({ onMenuToggle }: HeaderProps) {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   useEffect(() => {
     apiClient<UserProfile>("/profile")
-      .then(setProfile)
+      .then((p) => {
+        setProfile(p);
+        if (p.email) {
+          fetch(`/api/admin/avatar?email=${encodeURIComponent(p.email)}`)
+            .then((r) => r.json())
+            .then((d) => setAvatarUrl(d.avatar_url ?? null))
+            .catch(() => {});
+        }
+      })
       .catch(() => {});
   }, []);
+
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !profile?.email) return;
+    setAvatarUploading(true);
+    try {
+      const userId = profile.id ?? profile.email;
+      const url = await uploadAvatar(file, `admins/${userId}`, 'profiles', userId);
+      setAvatarUrl(url);
+    } catch {
+      // silently ignore upload errors in the header
+    } finally {
+      setAvatarUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -72,9 +102,21 @@ export function Header({ onMenuToggle }: HeaderProps) {
             <p className="text-sm font-medium">{displayName}</p>
             <p className="text-xs text-slate-500">{profile?.email ?? ""}</p>
           </div>
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-sm font-semibold text-white">
-            {avatarLetter}
-          </div>
+          <label className="relative cursor-pointer group" title="Change profile photo">
+            <Avatar url={avatarUrl} name={displayName} size={36} />
+            {!avatarUploading && (
+              <span className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <Camera className="h-3.5 w-3.5 text-white" />
+              </span>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={handleAvatarUpload}
+            />
+          </label>
           <button
             onClick={handleLogout}
             disabled={loggingOut}

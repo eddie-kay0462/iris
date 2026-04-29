@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { markOnboarded } from './actions'
+import { StepPhoto } from './StepPhoto'
 
 type Ally = {
   id: string
@@ -36,6 +37,7 @@ export function OnboardingFlow({ ally }: { ally: Ally }) {
   const [step, setStep] = useState(0)
   const [direction, setDirection] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>()
   const router = useRouter()
 
   function next() {
@@ -52,11 +54,12 @@ export function OnboardingFlow({ ally }: { ally: Ally }) {
   const steps = [
     <StepWelcome key="welcome" ally={ally} onNext={next} />,
     <StepLocation key="location" ally={ally} onNext={next} />,
+    <StepPhoto key="photo" ally={ally} onNext={(url) => { setAvatarUrl(url); next() }} />,
     <StepReady key="ready" ally={ally} onFinish={finish} loading={loading} />,
   ]
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center px-6">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center px-6">
       {/* Logo */}
       <div className="mb-12">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -110,7 +113,7 @@ function StepWelcome({ ally, onNext }: { ally: Ally; onNext: () => void }) {
           the first step toward building something meaningful in your community.
         </p>
       </div>
-      <p className="text-slate-500 text-sm">
+      <p className="text-slate-400 text-sm">
         This short walkthrough will get you familiar with your role before
         you head to your dashboard.
       </p>
@@ -144,12 +147,12 @@ function StepLocation({ ally, onNext }: { ally: Ally; onNext: () => void }) {
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-5 space-y-4 text-left">
         <div className="flex items-center justify-between">
-          <span className="text-xs uppercase tracking-widest text-slate-500">Location</span>
+          <span className="text-xs uppercase tracking-widest text-slate-400">Location</span>
           <span className="text-sm font-medium text-white">{ally.location}</span>
         </div>
         <div className="border-t border-white/10" />
         <div className="flex items-center justify-between">
-          <span className="text-xs uppercase tracking-widest text-slate-500">Type</span>
+          <span className="text-xs uppercase tracking-widest text-slate-400">Type</span>
           <span className={`inline-block text-xs px-2.5 py-1 rounded-full font-medium ${
             ally.location_type === 'campus'
               ? 'bg-blue-500/20 text-blue-300'
@@ -160,12 +163,12 @@ function StepLocation({ ally, onNext }: { ally: Ally; onNext: () => void }) {
         </div>
         <div className="border-t border-white/10" />
         <div className="flex items-center justify-between">
-          <span className="text-xs uppercase tracking-widest text-slate-500">Your Commission</span>
+          <span className="text-xs uppercase tracking-widest text-slate-400">Your Commission</span>
           <span className="text-sm font-semibold text-emerald-400">{commissionPct}%</span>
         </div>
       </div>
 
-      <p className="text-slate-500 text-sm">
+      <p className="text-slate-400 text-sm">
         Every sale you make earns you {commissionPct}% commission. The more you
         sell, the more you earn.
       </p>
