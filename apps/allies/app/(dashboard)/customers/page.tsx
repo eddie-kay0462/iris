@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Search, X, ShoppingBag, Phone, Mail } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
 import { useAlly } from '@/lib/ally-context'
 
@@ -242,9 +243,25 @@ export default function CustomersPage() {
       </div>
 
       {/* Customer Detail Modal */}
+      <AnimatePresence>
       {selected && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-lg border border-slate-200 dark:border-neutral-800 shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col">
+        <motion.div
+          key="customer-backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setSelected(null)}
+        >
+          <motion.div
+            key="customer-panel"
+            initial={{ opacity: 0, scale: 0.95, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 8 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+            className="bg-white dark:bg-neutral-900 rounded-lg border border-slate-200 dark:border-neutral-800 shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}>
             {/* Modal header */}
             <div className="px-5 py-4 border-b border-slate-200 dark:border-neutral-800 flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-neutral-900 dark:bg-neutral-100 flex items-center justify-center shrink-0">
@@ -317,9 +334,10 @@ export default function CustomersPage() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   )
 }

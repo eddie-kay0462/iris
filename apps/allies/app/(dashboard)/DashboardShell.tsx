@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -145,6 +146,7 @@ function SidebarContent({
 }
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [isDark, setIsDark] = useState(false)
 
@@ -176,21 +178,35 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile Overlay */}
-      {mobileOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/50 md:hidden"
-            onClick={() => setMobileOpen(false)}
-          />
-          <aside className="fixed inset-y-0 left-0 z-50 w-72 bg-black flex flex-col md:hidden overflow-y-auto">
-            <SidebarContent
-              onClose={() => setMobileOpen(false)}
-              onThemeToggle={toggleTheme}
-              isDark={isDark}
+      <AnimatePresence>
+        {mobileOpen && (
+          <>
+            <motion.div
+              key="backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-40 bg-black/50 md:hidden"
+              onClick={() => setMobileOpen(false)}
             />
-          </aside>
-        </>
-      )}
+            <motion.aside
+              key="sidebar"
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              className="fixed inset-y-0 left-0 z-50 w-72 bg-black flex flex-col md:hidden overflow-y-auto"
+            >
+              <SidebarContent
+                onClose={() => setMobileOpen(false)}
+                onThemeToggle={toggleTheme}
+                isDark={isDark}
+              />
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Main Pane */}
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
@@ -208,7 +224,17 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto">
-          {children}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={pathname}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18, ease: 'easeInOut' }}
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
     </div>
