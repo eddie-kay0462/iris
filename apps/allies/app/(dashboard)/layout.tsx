@@ -19,6 +19,8 @@ export default async function DashboardLayout({
     .eq('user_id', user.id)
     .single()
 
+  if (ally && !ally.onboarded_at) redirect('/onboarding')
+
   return (
     <AllyProvider initialAlly={ally as Ally | null}>
       <DashboardShell>{children}</DashboardShell>

@@ -16,6 +16,7 @@ export type Ally = {
   is_active: boolean
   joined_at: string
   created_at: string
+  onboarded_at: string | null
 }
 
 type AllyContextValue = {

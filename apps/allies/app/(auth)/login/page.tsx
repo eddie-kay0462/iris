@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { recordAllyLogin } from './actions'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -17,12 +18,16 @@ export default function LoginPage() {
     setLoading(true)
 
     const supabase = createClient()
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
 
     if (authError) {
       setError(authError.message)
       setLoading(false)
       return
+    }
+
+    if (data.user) {
+      recordAllyLogin(data.user.id)
     }
 
     router.push('/')
