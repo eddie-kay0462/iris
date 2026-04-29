@@ -40,31 +40,38 @@ export default function SalesPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [showCustomerRequired, setShowCustomerRequired] = useState(false)
-  const [monthlyTotal, setMonthlyTotal] = useState(0)
-  const [monthlyQuota, setMonthlyQuota] = useState(0)
+  const [periodTotal, setPeriodTotal] = useState(0)
+  const [globalQuota, setGlobalQuota] = useState(0)
+  const [globalRate, setGlobalRate] = useState(0.15)
+  const [quotaPeriod, setQuotaPeriod] = useState<'monthly' | 'all_time'>('monthly')
 
-  // Load monthly quota progress and global commission settings
+  // Load quota progress and global commission settings
   useEffect(() => {
     if (!ally) return
     async function loadQuotaData() {
       const supabase = createClient()
+
+      const { data: settings } = await supabase
+        .from('commission_settings')
+        .select('default_quota, default_rate, period')
+        .single()
+
+      const period: 'monthly' | 'all_time' = settings?.period ?? 'monthly'
       const now = new Date()
-      const periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+      const periodStart = period === 'all_time'
+        ? new Date(0).toISOString()
+        : new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 
-      const [{ data: sales }, { data: settings }] = await Promise.all([
-        supabase
-          .from('ally_sales')
-          .select('total')
-          .eq('ally_id', ally!.id)
-          .gte('sale_date', periodStart),
-        supabase
-          .from('commission_settings')
-          .select('default_quota')
-          .single(),
-      ])
+      const { data: sales } = await supabase
+        .from('ally_sales')
+        .select('total')
+        .eq('ally_id', ally!.id)
+        .gte('sale_date', periodStart)
 
-      setMonthlyTotal((sales ?? []).reduce((s, r) => s + Number(r.total), 0))
-      setMonthlyQuota(Number(settings?.default_quota ?? 0))
+      setPeriodTotal((sales ?? []).reduce((s, r) => s + Number(r.total), 0))
+      setGlobalQuota(Number(settings?.default_quota ?? 0))
+      setGlobalRate(Number(settings?.default_rate ?? 0.15))
+      setQuotaPeriod(period)
     }
     loadQuotaData()
   }, [ally])
@@ -181,8 +188,8 @@ export default function SalesPage() {
   }
 
   const subtotal = lineItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
-  const commissionRate = ally?.commission_rate ?? 0.15
-  const commissionQuota = ally?.commission_quota ?? monthlyQuota
+  const commissionRate = ally?.commission_rate ?? globalRate
+  const commissionQuota = ally?.commission_quota ?? globalQuota
 
   // Quota-aware commission calculation
   function calcCommission(saleAmount: number, cumulativeBefore: number, quota: number, rate: number) {
@@ -193,9 +200,9 @@ export default function SalesPage() {
     return portionAbove * rate
   }
 
-  const commission = calcCommission(subtotal, monthlyTotal, commissionQuota, commissionRate)
-  const quotaProgress = commissionQuota > 0 ? Math.min(monthlyTotal / commissionQuota, 1) : 1
-  const quotaUnlocked = commissionQuota === 0 || monthlyTotal >= commissionQuota
+  const commission = calcCommission(subtotal, periodTotal, commissionQuota, commissionRate)
+  const quotaProgress = commissionQuota > 0 ? Math.min(periodTotal / commissionQuota, 1) : 1
+  const quotaUnlocked = commissionQuota === 0 || periodTotal >= commissionQuota
 
   async function handleSubmit() {
     if (!ally || lineItems.length === 0) return
@@ -210,14 +217,16 @@ export default function SalesPage() {
     setSubmitting(true)
     const supabase = createClient()
 
-    // Re-fetch latest monthly total server-side to avoid race conditions
+    // Re-fetch latest cumulative total to avoid race conditions
     const now = new Date()
-    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+    const submitPeriodStart = quotaPeriod === 'all_time'
+      ? new Date(0).toISOString()
+      : new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
     const { data: currentSales } = await supabase
       .from('ally_sales')
       .select('total')
       .eq('ally_id', ally.id)
-      .gte('sale_date', periodStart)
+      .gte('sale_date', submitPeriodStart)
     const latestCumulative = (currentSales ?? []).reduce((s, r) => s + Number(r.total), 0)
     const finalCommission = calcCommission(subtotal, latestCumulative, commissionQuota, commissionRate)
 
@@ -271,7 +280,7 @@ export default function SalesPage() {
           {commission > 0
             ? `${(commissionRate * 100).toFixed(0)}% on qualifying amount`
             : commissionQuota > 0
-              ? `Quota not yet reached — ${formatCurrency(commissionQuota - monthlyTotal - subtotal > 0 ? commissionQuota - monthlyTotal - subtotal : 0)} remaining`
+              ? `Quota not yet reached — ${formatCurrency(commissionQuota - periodTotal - subtotal > 0 ? commissionQuota - periodTotal - subtotal : 0)} remaining`
               : `${(commissionRate * 100).toFixed(0)}% of ${formatCurrency(subtotal)}`}
         </p>
         <div className="flex flex-col md:flex-row gap-3">
@@ -537,8 +546,8 @@ export default function SalesPage() {
             {commissionQuota > 0 && (
               <div className="mb-4 rounded-md border border-slate-200 dark:border-neutral-800 bg-slate-50 dark:bg-neutral-800/50 p-3">
                 <div className="flex justify-between text-[10px] tracking-[0.2em] uppercase text-neutral-400 mb-2">
-                  <span>Monthly Sales Quota</span>
-                  <span>{quotaUnlocked ? 'Unlocked' : `${formatCurrency(monthlyTotal)} / ${formatCurrency(commissionQuota)}`}</span>
+                  <span>{quotaPeriod === 'all_time' ? 'All-time Sales Quota' : 'Monthly Sales Quota'}</span>
+                  <span>{quotaUnlocked ? 'Unlocked' : `${formatCurrency(periodTotal)} / ${formatCurrency(commissionQuota)}`}</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-slate-200 dark:bg-neutral-700 overflow-hidden">
                   <div
@@ -548,7 +557,7 @@ export default function SalesPage() {
                 </div>
                 {!quotaUnlocked && (
                   <p className="text-[10px] text-neutral-400 mt-1.5">
-                    {formatCurrency(commissionQuota - monthlyTotal)} more to unlock {(commissionRate * 100).toFixed(0)}% commission
+                    {formatCurrency(commissionQuota - periodTotal)} more to unlock {(commissionRate * 100).toFixed(0)}% commission
                   </p>
                 )}
               </div>
