@@ -88,6 +88,14 @@ export interface ProductQueryParams {
   limit?: number;
 }
 
+// --- Cache config ---
+
+const CACHE_CONFIG = {
+  staleTime: 2 * 60 * 1000,
+  gcTime: 5 * 60 * 1000,
+  refetchInterval: 5 * 60 * 1000,
+}
+
 // --- Hooks ---
 
 function toSearchParams(params: ProductQueryParams): string {
@@ -106,6 +114,7 @@ export function useProducts(params: ProductQueryParams = {}) {
       apiClient<PaginatedResponse<Product>>(
         `/products${toSearchParams(params)}`,
       ),
+    ...CACHE_CONFIG,
   });
 }
 
@@ -123,6 +132,7 @@ export function useInfiniteProducts(params: ProductQueryParams = {}) {
       }
       return undefined;
     },
+    ...CACHE_CONFIG,
   });
 }
 
@@ -131,6 +141,7 @@ export function useProduct(idOrHandle: string) {
     queryKey: ["product", idOrHandle],
     queryFn: () => apiClient<Product>(`/products/${idOrHandle}`),
     enabled: !!idOrHandle,
+    ...CACHE_CONFIG,
   });
 }
 

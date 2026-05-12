@@ -1,22 +1,27 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Search, Plus, Minus, ArrowLeft, X, UserPlus, AlertCircle } from 'lucide-react'
+import { Search, Plus, Minus, ArrowLeft, X, UserPlus, AlertCircle, RotateCw } from 'lucide-react'
 import { Avatar } from '@/components/Avatar'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useAlly } from '@/lib/ally-context'
 import { searchCustomers, createCustomer } from './actions'
 
-type Customer = { id: string; first_name: string | null; last_name: string | null; email: string | null; phone_number: string | null }
-type Variant = { id: string; option1_value: string | null; option2_value: string | null; option3_value: string | null; price: number; sku: string | null; inventory_quantity: number }
-type Product = { id: string; title: string; base_price: number; variants: Variant[] }
+type Customer = { id: string; first_name: string | null; last_name: string | null; email: string | null; phone_number: string | null; is_activated: boolean; invited_at: string | null }
+type Variant = { id: string; option1_value: string | null; option2_value: string | null; option3_value: string | null; price: number | null; sku: string | null; inventory_quantity: number }
+type Product = { id: string; title: string; base_price: number | null; variants: Variant[] }
 type LineItem = { variantId: string; productId: string; productName: string; variantTitle: string; unitPrice: number; quantity: number }
 
 type PaymentMethod = 'cash' | 'momo' | 'bank_transfer'
 
 function formatCurrency(n: number) {
   return `GH₵ ${n.toFixed(2)}`
+}
+
+// Variants without a variant-specific price store NULL and inherit base_price
+function resolvePrice(variantPrice: number | null, basePrice: number | null): number {
+  return variantPrice ?? basePrice ?? 0
 }
 
 function customerDisplayName(c: Customer) {
@@ -45,6 +50,9 @@ export default function SalesPage() {
   const [globalQuota, setGlobalQuota] = useState(0)
   const [globalRate, setGlobalRate] = useState(0.15)
   const [quotaPeriod, setQuotaPeriod] = useState<'monthly' | 'all_time'>('monthly')
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
+  const [inviteSent, setInviteSent] = useState(false)
 
   // Load quota progress and global commission settings
   useEffect(() => {
@@ -77,27 +85,44 @@ export default function SalesPage() {
     loadQuotaData()
   }, [ally])
 
-  // Load products on mount
-  useEffect(() => {
-    async function loadProducts() {
-      const supabase = createClient()
-      const { data } = await supabase
-        .from('products')
-        .select(`id, title, base_price, product_variants(id, option1_value, option2_value, option3_value, price, sku, inventory_quantity)`)
-        .eq('published', true)
-        .is('deleted_at', null)
-        .order('title')
-      setProducts(
-        (data ?? []).map((p: any) => ({
-          id: p.id,
-          title: p.title,
-          base_price: p.base_price,
-          variants: p.product_variants ?? [],
-        }))
-      )
-    }
-    loadProducts()
+  // Fetch products and update line item prices with fresh data
+  const refreshProducts = useCallback(async () => {
+    setIsRefreshing(true)
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('products')
+      .select(`id, title, base_price, product_variants(id, option1_value, option2_value, option3_value, price, sku, inventory_quantity)`)
+      .eq('published', true)
+      .is('deleted_at', null)
+      .order('title')
+    const freshProducts = (data ?? []).map((p: any) => ({
+      id: p.id,
+      title: p.title,
+      base_price: p.base_price,
+      variants: p.product_variants ?? [],
+    }))
+    setProducts(freshProducts)
+    setLineItems((prev) =>
+      prev.map((item) => {
+        const product = freshProducts.find((p) => p.id === item.productId)
+        if (!product) return item
+        const variant = product.variants.find((v: Variant) => v.id === item.variantId)
+        if (!variant) return item
+        return { ...item, unitPrice: resolvePrice(variant.price, product.base_price) }
+      })
+    )
+    setLastRefreshedAt(new Date())
+    setIsRefreshing(false)
   }, [])
+
+  // Load on mount
+  useEffect(() => { refreshProducts() }, [refreshProducts])
+
+  // Auto-refresh every 5 minutes
+  useEffect(() => {
+    const interval = setInterval(refreshProducts, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [refreshProducts])
 
   // Search customers via server action (bypasses profiles RLS)
   const runSearch = useCallback(async (q: string) => {
@@ -122,17 +147,23 @@ export default function SalesPage() {
   function addProduct(product: Product) {
     const variant = product.variants[0]
     if (!variant) return
-    setLineItems((prev) => [
-      ...prev,
-      {
-        variantId: variant.id,
-        productId: product.id,
-        productName: product.title,
-        variantTitle: getVariantLabel(variant),
-        unitPrice: variant.price ?? product.base_price,
-        quantity: 1,
-      },
-    ])
+    setLineItems((prev) => {
+      const existingIndex = prev.findIndex((item) => item.variantId === variant.id)
+      if (existingIndex !== -1) {
+        return prev.map((item, i) => i === existingIndex ? { ...item, quantity: item.quantity + 1 } : item)
+      }
+      return [
+        ...prev,
+        {
+          variantId: variant.id,
+          productId: product.id,
+          productName: product.title,
+          variantTitle: getVariantLabel(variant),
+          unitPrice: resolvePrice(variant.price, product.base_price),
+          quantity: 1,
+        },
+      ]
+    })
   }
 
   function changeVariant(index: number, variantId: string, product: Product) {
@@ -141,7 +172,7 @@ export default function SalesPage() {
     setLineItems((prev) =>
       prev.map((item, i) =>
         i === index
-          ? { ...item, variantId: variant.id, variantTitle: getVariantLabel(variant), unitPrice: variant.price ?? product.base_price }
+          ? { ...item, variantId: variant.id, variantTitle: getVariantLabel(variant), unitPrice: resolvePrice(variant.price, product.base_price) }
           : item
       )
     )
@@ -175,6 +206,7 @@ export default function SalesPage() {
       return
     }
     setSelectedCustomer(result)
+    setInviteSent(!!result.email && !!result.invited_at)
     setShowNewCustomerForm(false)
     setShowCustomerDropdown(false)
     setShowCustomerRequired(false)
@@ -185,6 +217,7 @@ export default function SalesPage() {
     setCustomerSearch('')
     setShowNewCustomerForm(false)
     setCustomerError('')
+    setInviteSent(false)
     setNewCustomer({ first_name: '', last_name: '', email: '', phone_number: '' })
   }
 
@@ -285,7 +318,7 @@ export default function SalesPage() {
               : `${(commissionRate * 100).toFixed(0)}% of ${formatCurrency(subtotal)}`}
         </p>
         <div className="flex flex-col md:flex-row gap-3">
-          <button onClick={() => { setSubmitted(false); setLineItems([]); setSelectedCustomer(null); setCustomerSearch(''); setNotes(''); setNewCustomer({ first_name: '', last_name: '', email: '', phone_number: '' }); setShowCustomerRequired(false) }}
+          <button onClick={() => { setSubmitted(false); setLineItems([]); setSelectedCustomer(null); setCustomerSearch(''); setNotes(''); setInviteSent(false); setNewCustomer({ first_name: '', last_name: '', email: '', phone_number: '' }); setShowCustomerRequired(false) }}
             className="px-8 py-3 rounded-md bg-black dark:bg-white text-white dark:text-black text-xs tracking-[0.2em] uppercase hover:bg-neutral-800 transition-colors">
             Record Another
           </button>
@@ -447,22 +480,55 @@ export default function SalesPage() {
 
             {/* Selected customer badge */}
             {selectedCustomer && !showNewCustomerForm && (
-              <div className="mt-3 flex items-center gap-3 px-3 py-2.5 rounded-md bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700">
-                <Avatar name={selectedCustomerLabel} size={32} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{selectedCustomerLabel}</p>
-                  <p className="text-xs text-neutral-500">{selectedCustomer.phone_number ?? selectedCustomer.email ?? 'No contact info'}</p>
+              <div className="mt-3 space-y-1.5">
+                <div className="flex items-center gap-3 px-3 py-2.5 rounded-md bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700">
+                  <Avatar name={selectedCustomerLabel} size={32} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{selectedCustomerLabel}</p>
+                    <p className="text-xs text-neutral-500">{selectedCustomer.phone_number ?? selectedCustomer.email ?? 'No contact info'}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    {selectedCustomer.is_activated ? (
+                      <span className="text-[10px] tracking-[0.1em] uppercase text-green-600 dark:text-green-400 font-medium">Activated</span>
+                    ) : selectedCustomer.invited_at ? (
+                      <span className="text-[10px] tracking-[0.1em] uppercase text-amber-600 dark:text-amber-400">Invite sent</span>
+                    ) : selectedCustomer.email ? (
+                      <span className="text-[10px] tracking-[0.1em] uppercase text-neutral-400">Not invited</span>
+                    ) : null}
+                    <button onClick={clearCustomer} className="text-neutral-400 hover:text-neutral-600">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-                <button onClick={clearCustomer} className="shrink-0 text-neutral-400 hover:text-neutral-600">
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                {inviteSent && (
+                  <p className="text-[10px] text-green-600 dark:text-green-400 px-1">
+                    Invite email sent to {selectedCustomer.email}
+                  </p>
+                )}
               </div>
             )}
           </div>
 
           {/* Product Search & Add */}
           <div className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm p-4 md:p-6">
-            <label className="block text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-3">Add Items</label>
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-[10px] tracking-[0.3em] uppercase text-neutral-400">Add Items</label>
+              <div className="flex items-center gap-2">
+                {lastRefreshedAt && (
+                  <span className="text-[10px] text-neutral-400">
+                    {lastRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+                <button
+                  onClick={refreshProducts}
+                  disabled={isRefreshing}
+                  className="flex items-center gap-1 text-[10px] text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 disabled:opacity-50 transition-colors"
+                >
+                  <RotateCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  {isRefreshing ? 'Refreshing' : 'Refresh'}
+                </button>
+              </div>
+            </div>
             <div className="relative mb-3">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
               <input type="text" placeholder="Search products" value={productSearch} onChange={(e) => setProductSearch(e.target.value)}
@@ -473,7 +539,7 @@ export default function SalesPage() {
                 <button key={p.id} onClick={() => addProduct(p)}
                   className="w-full px-4 py-3 rounded-md border border-slate-200 dark:border-neutral-800 hover:bg-slate-50 dark:hover:bg-neutral-800 text-left transition-colors flex justify-between items-center">
                   <span className="text-sm font-medium">{p.title}</span>
-                  <span className="text-sm text-neutral-500 ml-2 shrink-0">GH₵ {p.base_price}</span>
+                  <span className="text-sm text-neutral-500 ml-2 shrink-0">{formatCurrency(p.base_price ?? 0)}</span>
                 </button>
               ))}
               {filteredProducts.length === 0 && (
