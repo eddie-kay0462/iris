@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, ChevronDown, Download } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Pagination } from "../../components/Pagination";
 import { SearchInput } from "../../components/SearchInput";
@@ -95,6 +96,18 @@ export default function AdminProductsPage() {
   const products: Product[] = (data?.data as unknown as Product[]) || [];
 
   const COL_COUNT = 7; // chevron | product | sku | status | price | stock | actions
+
+  const tableColGroup = (
+    <colgroup>
+      <col style={{ width: 40 }} />
+      <col />
+      <col style={{ width: 150 }} />
+      <col style={{ width: 110 }} />
+      <col style={{ width: 120 }} />
+      <col style={{ width: 90 }} />
+      <col style={{ width: 90 }} />
+    </colgroup>
+  );
 
   return (
     <section className="space-y-6">
@@ -229,7 +242,8 @@ export default function AdminProductsPage() {
 
       {/* Products accordion table */}
       <div className="overflow-hidden rounded-lg border border-slate-200">
-        <table className="w-full border-collapse text-sm">
+        <table className="w-full border-collapse text-sm" style={{ tableLayout: "fixed" }}>
+          {tableColGroup}
           <thead className="bg-slate-100 text-left text-slate-600">
             <tr>
               <th className="w-8 px-3 py-3" />
@@ -238,7 +252,7 @@ export default function AdminProductsPage() {
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Price</th>
               <th className="px-4 py-3 font-medium">Stock</th>
-              <th className="px-4 py-3" />
+              <th className="px-4 py-3 text-right font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -283,11 +297,13 @@ export default function AdminProductsPage() {
                           className="rounded p-0.5 text-slate-400 hover:text-slate-700"
                           aria-label={isExpanded ? "Collapse" : "Expand"}
                         >
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
+                          <motion.span
+                            animate={{ rotate: isExpanded ? 90 : 0 }}
+                            transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+                            style={{ display: "inline-flex" }}
+                          >
                             <ChevronRight className="h-4 w-4" />
-                          )}
+                          </motion.span>
                         </button>
                       </td>
                       <td
@@ -339,58 +355,79 @@ export default function AdminProductsPage() {
                           {totalStock}
                         </span>
                       </td>
-                      <td className="px-4 py-3" />
+                      <td className="px-4 py-3 text-right" />
                     </tr>
 
-                    {/* Variant sub-rows */}
-                    {isExpanded &&
-                      (product.product_variants?.length ? (
-                        product.product_variants.map((variant) => (
-                          <tr
-                            key={variant.id}
-                            className="border-t border-slate-100 bg-slate-50"
-                          >
-                            <td className="px-3 py-2" />
-                            <td className="px-4 py-2 pl-14 text-slate-600">
-                              {variantLabel(variant)}
-                            </td>
-                            <td className="px-4 py-2 text-slate-500">
-                              {variant.sku || "—"}
-                            </td>
-                            <td className="px-4 py-2" />
-                            <td className="px-4 py-2 text-slate-600">
-                              {variant.price != null
-                                ? `GH₵${variant.price.toLocaleString()}`
-                                : "—"}
-                            </td>
-                            <td className="px-4 py-2">
-                              <span className={stockClass(variant.inventory_quantity)}>
-                                {variant.inventory_quantity}
-                              </span>
-                            </td>
-                            <td className="px-4 py-2">
-                              <button
-                                onClick={() =>
-                                  setAdjustItem(toInventoryItem(variant, product))
-                                }
-                                className="text-xs text-blue-600 hover:text-blue-800"
-                              >
-                                Adjust
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr className="border-t border-slate-100 bg-slate-50">
-                          <td />
-                          <td
-                            colSpan={COL_COUNT - 1}
-                            className="px-4 py-2 text-xs text-slate-400"
-                          >
-                            No variants
-                          </td>
-                        </tr>
-                      ))}
+                    {/* Variant sub-rows — animated accordion */}
+                    <tr key={`${product.id}-variants`} className="border-0">
+                      <td colSpan={COL_COUNT} className="p-0">
+                        <AnimatePresence initial={false}>
+                          {isExpanded && (
+                            <motion.div
+                              key="variants"
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                              style={{ overflow: "hidden" }}
+                            >
+                              <table className="w-full border-collapse text-sm" style={{ tableLayout: "fixed" }}>
+                                {tableColGroup}
+                                <tbody>
+                                  {product.product_variants?.length ? (
+                                    product.product_variants.map((variant) => (
+                                      <tr
+                                        key={variant.id}
+                                        className="border-t border-slate-100 bg-slate-50"
+                                      >
+                                        <td className="px-3 py-2" />
+                                        <td className="py-2 pl-[68px] pr-4 text-slate-500">
+                                          {variantLabel(variant)}
+                                        </td>
+                                        <td className="px-4 py-2 text-slate-500">
+                                          {variant.sku || "—"}
+                                        </td>
+                                        <td className="px-4 py-2" />
+                                        <td className="px-4 py-2 text-slate-600">
+                                          {variant.price != null
+                                            ? `GH₵${variant.price.toLocaleString()}`
+                                            : "—"}
+                                        </td>
+                                        <td className="px-4 py-2">
+                                          <span className={stockClass(variant.inventory_quantity)}>
+                                            {variant.inventory_quantity}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-2 text-right">
+                                          <button
+                                            onClick={() =>
+                                              setAdjustItem(toInventoryItem(variant, product))
+                                            }
+                                            className="text-xs text-blue-600 hover:text-blue-800"
+                                          >
+                                            Adjust
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    ))
+                                  ) : (
+                                    <tr className="border-t border-slate-100 bg-slate-50">
+                                      <td />
+                                      <td
+                                        colSpan={COL_COUNT - 1}
+                                        className="px-4 py-2 text-xs text-slate-400"
+                                      >
+                                        No variants
+                                      </td>
+                                    </tr>
+                                  )}
+                                </tbody>
+                              </table>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </td>
+                    </tr>
                   </>
                 );
               })
