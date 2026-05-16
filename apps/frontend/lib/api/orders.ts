@@ -95,6 +95,27 @@ function toSearchParams(params: OrderQueryParams): string {
 
 // --- Customer Hooks ---
 
+export interface CreateOrderInput {
+  items: {
+    variantId: string;
+    productId: string;
+    productTitle: string;
+    variantTitle?: string;
+    price: number;
+    quantity: number;
+  }[];
+  shippingAddress: {
+    fullName: string;
+    address: string;
+    address2?: string;
+    city: string;
+    region: string;
+    postalCode?: string;
+    phone: string;
+  };
+  paymentReference: string;
+}
+
 export function useCreateOrder() {
   const qc = useQueryClient();
   return useMutation({

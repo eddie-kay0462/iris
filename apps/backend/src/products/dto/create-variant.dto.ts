@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, Min } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsBoolean, Min } from 'class-validator';
 
 export class CreateVariantDto {
   @IsOptional()
@@ -60,4 +60,13 @@ export class CreateVariantDto {
   @IsOptional()
   @IsString()
   weight_unit?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  preorder_enabled?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  preorder_limit?: number;
 }

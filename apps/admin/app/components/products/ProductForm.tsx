@@ -177,10 +177,19 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
   // ── Submit ──────────────────────────────────────────────────────────────────
   async function onSubmit(values: ProductFormValues) {
     setError("");
+    const payload = {
+      ...values,
+      early_access_start: values.early_access_start
+        ? new Date(values.early_access_start).toISOString()
+        : undefined,
+      public_release_date: values.public_release_date
+        ? new Date(values.public_release_date).toISOString()
+        : undefined,
+    };
     try {
       if (mode === "create") {
         const created = await createMutation.mutateAsync(
-          values as Record<string, unknown>,
+          payload as Record<string, unknown>,
         );
         // Add to collections
         for (const collId of selectedCollections) {
@@ -219,7 +228,7 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
         bypassNavGuard.current = true;
         router.push(`/products/${created.id}`);
       } else if (product) {
-        await updateMutation.mutateAsync(values as Record<string, unknown>);
+        await updateMutation.mutateAsync(payload as Record<string, unknown>);
         reset(values); // clear isDirty so the nav guard doesn't fire after save
         onRefresh?.();
       }

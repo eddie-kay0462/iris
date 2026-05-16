@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { usePaystackPayment } from "react-paystack";
 import { useCart } from "@/lib/cart";
-import { useCreateOrder } from "@/lib/api/orders";
+import { useCreatePendingOrder, useConfirmPayment } from "@/lib/api/orders";
 import { hasToken, getToken } from "@/lib/api/client";
 import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
 import { useShippingOptions, DEFAULT_SHIPPING_OPTIONS } from "@/lib/api/settings";
@@ -49,10 +49,9 @@ const EMPTY_FORM: ShippingForm = {
 };
 
 
-function validateForm(form: ShippingForm): Record<string, string> {
+function validateForm(form: ShippingForm, isPickup: boolean): Record<string, string> {
   const errors: Record<string, string> = {};
   if (!form.fullName.trim()) errors.fullName = "Full name is required";
-  if (!form.address.trim()) errors.address = "Address is required";
   if (!form.phone.trim()) errors.phone = "Phone number is required";
   if (!form.city.trim()) errors.city = "City is required";
   if (!form.region.trim()) errors.region = "Region is required";
@@ -73,7 +72,7 @@ function PayNowButton({
   reference: string;
   onSuccess: (ref: any) => void;
   onClose: () => void;
-  onBeforeOpen: () => boolean;
+  onBeforeOpen: () => Promise<boolean>;
   disabled: boolean;
 }) {
   const config = {
@@ -89,8 +88,9 @@ function PayNowButton({
   return (
     <button
       type="button"
-      onClick={() => {
-        if (!onBeforeOpen()) return;
+      onClick={async () => {
+        const ok = await onBeforeOpen();
+        if (!ok) return;
         initializePayment({ onSuccess, onClose });
       }}
       disabled={disabled}
@@ -104,12 +104,15 @@ function PayNowButton({
 export default function CheckoutClient() {
   const router = useRouter();
   const { items, subtotal, clearCart } = useCart();
-  const createOrder = useCreateOrder();
+  const createPendingOrder = useCreatePendingOrder();
+  const confirmPayment = useConfirmPayment();
   const [form, setForm] = useState<ShippingForm>(EMPTY_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [email, setEmail] = useState("");
   const [reference, setReference] = useState("");
+  const [pendingOrderNumber, setPendingOrderNumber] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [shippingOption, setShippingOption] = useState<"standard" | "express">("standard");
   const [cancelMessage, setCancelMessage] = useState("");
@@ -202,14 +205,20 @@ export default function CheckoutClient() {
     }
   }
 
-  function handleValidateAndPay() {
-    const validationErrors = validateForm(form);
+  /**
+   * Step 1 — runs on Pay Now click, BEFORE Paystack opens.
+   * Validates the form, then pre-creates the order in `pending` state on the
+   * backend so the customer can never pay without an order existing first.
+   * Returns true only if both validation and order creation succeed.
+   */
+  async function handleValidateAndPay(): Promise<boolean> {
+    setCreateError(null);
+
+    const validationErrors = validateForm(form, shippingOption === "pickup");
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       return false;
     }
-    return true;
-  }
 
   async function handleApplyPromo() {
     if (!promoInput.trim()) return;
@@ -242,7 +251,7 @@ export default function CheckoutClient() {
     setProcessing(true);
     setCancelMessage("");
     try {
-      const order = await createOrder.mutateAsync({
+      const order = await createPendingOrder.mutateAsync({
         items: items.map((i) => ({
           variantId: i.variantId,
           productId: i.productId,
@@ -266,12 +275,38 @@ export default function CheckoutClient() {
         promoCode: appliedPromo?.code,
       });
 
-      clearCart();
-      router.push(`/checkout/confirmation?order=${order.order_number}`);
+      setPendingOrderNumber(order.order_number);
+      return true;
     } catch (err: any) {
-      alert(err?.message || "Failed to create order. Please contact support.");
+      setCreateError(
+        err?.message || "Could not start your order. Please try again.",
+      );
       setProcessing(false);
+      return false;
     }
+  }
+
+  /**
+   * Step 2 — runs after Paystack reports a successful charge.
+   * Confirms the order on the backend (idempotent — the Paystack webhook also
+   * confirms the same reference as a safety net).
+   */
+  async function handlePaymentSuccess() {
+    try {
+      await confirmPayment.mutateAsync(reference);
+    } catch {
+      // Don't block the redirect: the webhook will still finalize the order.
+    } finally {
+      clearCart();
+      const orderNum = pendingOrderNumber ?? reference;
+      router.push(`/checkout/confirmation?order=${orderNum}`);
+    }
+  }
+
+  function handlePaymentClose() {
+    // Customer closed the Paystack modal without paying. The pending order
+    // still exists on the backend; allow them to retry without re-creating.
+    setProcessing(false);
   }
 
   const inputClass =
@@ -314,12 +349,12 @@ export default function CheckoutClient() {
             </div>
 
             <p className="mb-4 text-sm font-medium text-gray-700 dark:text-gray-300">
-              Shipping address
+              {shippingOption === "pickup" ? "Your details" : "Shipping address"}
             </p>
 
             <div className="space-y-4">
               {/* Row: Full name / Address */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className={`grid gap-4 ${shippingOption === "pickup" ? "grid-cols-1" : "grid-cols-2"}`}>
                 <div>
                   <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
                     Full name
@@ -337,52 +372,56 @@ export default function CheckoutClient() {
                     </p>
                   )}
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                    Address
-                  </label>
-                  <input
-                    type="text"
-                    value={form.address}
-                    onChange={(e) => handleChange("address", e.target.value)}
-                    placeholder="Address"
-                    className={inputClass}
-                  />
-                  {errors.address && (
-                    <p className="mt-1 text-xs text-red-500">
-                      {errors.address}
-                    </p>
-                  )}
-                </div>
+                {shippingOption !== "pickup" && (
+                  <div>
+                    <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                      Address
+                    </label>
+                    <input
+                      type="text"
+                      value={form.address}
+                      onChange={(e) => handleChange("address", e.target.value)}
+                      placeholder="Address"
+                      className={inputClass}
+                    />
+                    {errors.address && (
+                      <p className="mt-1 text-xs text-red-500">
+                        {errors.address}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Row: Email / Label */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => handleChange("email", e.target.value)}
-                    placeholder="Email"
-                    className={inputClass}
-                  />
+              {/* Row: Email / Label — hidden for pickup */}
+              {shippingOption !== "pickup" && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => handleChange("email", e.target.value)}
+                      placeholder="Email"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                      Label
+                    </label>
+                    <input
+                      type="text"
+                      value={form.label}
+                      onChange={(e) => handleChange("label", e.target.value)}
+                      placeholder="Label (e.g. Home, Office)"
+                      className={inputClass}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                    Label
-                  </label>
-                  <input
-                    type="text"
-                    value={form.label}
-                    onChange={(e) => handleChange("label", e.target.value)}
-                    placeholder="Label (e.g. Home, Office)"
-                    className={inputClass}
-                  />
-                </div>
-              </div>
+              )}
 
               {/* Row: Phone / City */}
               <div className="grid grid-cols-2 gap-4">
@@ -401,7 +440,28 @@ export default function CheckoutClient() {
                     <p className="mt-1 text-xs text-red-500">{errors.phone}</p>
                   )}
                 </div>
-                <div>
+                {shippingOption !== "pickup" && (
+                  <div>
+                    <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                      State
+                    </label>
+                    <input
+                      type="text"
+                      value={form.state}
+                      onChange={(e) => handleChange("state", e.target.value)}
+                      placeholder="State"
+                      className={inputClass}
+                    />
+                    {errors.state && (
+                      <p className="mt-1 text-xs text-red-500">{errors.state}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Row: Postal code — hidden for pickup */}
+              {shippingOption !== "pickup" && (
+                <div className="w-1/2 pr-2">
                   <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
                     City
                   </label>
@@ -435,21 +495,7 @@ export default function CheckoutClient() {
                     <p className="mt-1 text-xs text-red-500">{errors.region}</p>
                   )}
                 </div>
-              </div>
-
-              {/* Row: Postal code */}
-              <div className="w-1/2 pr-2">
-                <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                  Postal code
-                </label>
-                <input
-                  type="text"
-                  value={form.postalCode}
-                  onChange={(e) => handleChange("postalCode", e.target.value)}
-                  placeholder="Postal code"
-                  className={inputClass}
-                />
-              </div>
+              )}
             </div>
           </div>
 
@@ -475,10 +521,8 @@ export default function CheckoutClient() {
               </p>
             )}
 
-            {createOrder.isError && (
-              <p className="mb-4 text-sm text-red-500">
-                {(createOrder.error as any)?.message || "Order creation failed"}
-              </p>
+            {createError && (
+              <p className="mb-4 text-sm text-red-500">{createError}</p>
             )}
 
             {cancelMessage && (
@@ -618,8 +662,8 @@ export default function CheckoutClient() {
               <span className="text-gray-500 dark:text-gray-400">
                 Shipping/Delivery
               </span>
-              <span className="text-gray-900 dark:text-white">
-                GH₵ {shippingCost.toLocaleString()}
+              <span className={shippingOption === "pickup" ? "font-medium text-green-600 dark:text-green-400" : "text-gray-900 dark:text-white"}>
+                {shippingOption === "pickup" ? "Free" : `GH₵ ${shippingCost.toLocaleString()}`}
               </span>
             </div>
             {appliedPromo && (

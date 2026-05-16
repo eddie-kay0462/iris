@@ -102,6 +102,28 @@ export class OrdersController {
     return this.ordersService.create(dto, user.sub, user.email);
   }
 
+  /**
+   * Create an order in `pending` state BEFORE payment is initiated.
+   * The frontend should call this before opening the Paystack modal so that
+   * even if the success callback never fires (browser crash, network drop,
+   * customer closes tab), the order still exists and the webhook can finalize
+   * it. Idempotent on payment_reference.
+   */
+  @Post('create-pending')
+  createPending(@Body() dto: CreateOrderDto, @CurrentUser() user: any) {
+    return this.ordersService.createPending(dto, user.sub, user.email);
+  }
+
+  /**
+   * Confirm a payment by reference. Called from the Paystack success callback
+   * on the frontend. Idempotent — safe to call after the webhook has already
+   * confirmed the same reference.
+   */
+  @Post('confirm-payment')
+  confirmPayment(@Body() body: { reference: string }) {
+    return this.ordersService.confirmPayment(body.reference);
+  }
+
   @Get('my')
   findMyOrders(
     @CurrentUser() user: any,
