@@ -476,6 +476,7 @@ export default function CheckoutClient() {
                     <p className="mt-1 text-xs text-red-500">{errors.city}</p>
                   )}
                 </div>
+                )}
               </div>
 
               {/* Row: Region */}
