@@ -56,6 +56,7 @@ export interface Order {
   payment_provider: string | null;
   payment_reference: string | null;
   payment_status: string | null;
+  applied_promo_code_id: string | null;
   customer_notes: string | null;
   internal_notes: string | null;
   created_at: string;
@@ -116,6 +117,9 @@ export function useCreateOrder() {
         phone: string;
       };
       paymentReference: string;
+      shippingCost: number;
+      shippingMethod: "standard" | "express";
+      promoCode?: string;
     }) => apiClient<Order>("/orders", { method: "POST", body: data }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my-orders"] });
@@ -136,6 +140,19 @@ export function useMyOrder(id: string) {
     queryKey: ["my-order", id],
     queryFn: () => apiClient<Order>(`/orders/my/${id}`),
     enabled: !!id,
+  });
+}
+
+export function useMyOrderByNumber(orderNumber: string) {
+  return useQuery({
+    queryKey: ["my-order-by-number", orderNumber],
+    queryFn: () => apiClient<Order>(`/orders/my/by-number/${orderNumber}`),
+    enabled: !!orderNumber,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data?.payment_status === "paid") return false;
+      return 3000;
+    },
   });
 }
 

@@ -162,7 +162,41 @@ export class SettingsService {
       description: ROLE_DESCRIPTIONS[role],
     }));
   }
+
+  async getShippingOptions(): Promise<ShippingOption[]> {
+    const db = this.supabase.getAdminClient();
+    const { data } = await db
+      .from('store_settings')
+      .select('value')
+      .eq('key', 'shipping_options')
+      .single();
+
+    if (!data) return DEFAULT_SHIPPING_OPTIONS;
+    return data.value as ShippingOption[];
+  }
+
+  async updateShippingOptions(options: ShippingOption[]): Promise<ShippingOption[]> {
+    const db = this.supabase.getAdminClient();
+    const { error } = await db
+      .from('store_settings')
+      .upsert({ key: 'shipping_options', value: options, updated_at: new Date().toISOString() });
+
+    if (error) throw error;
+    return options;
+  }
 }
+
+export interface ShippingOption {
+  id: string;
+  label: string;
+  estimate: string;
+  price: number;
+}
+
+const DEFAULT_SHIPPING_OPTIONS: ShippingOption[] = [
+  { id: 'standard', label: 'No rush shipping', estimate: '5-7 business days', price: 1 },
+  { id: 'express', label: 'Express', estimate: '2-3 business days', price: 2 },
+];
 
 const ROLE_DESCRIPTIONS: Record<string, string> = {
   admin: 'Full access to all settings, users, and data.',

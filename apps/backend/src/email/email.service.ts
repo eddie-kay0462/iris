@@ -1,0 +1,225 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { SupabaseService } from '../common/supabase/supabase.service';
+
+@Injectable()
+export class EmailService {
+  private readonly logger = new Logger(EmailService.name);
+  private readonly apiKey: string;
+  private readonly from: string;
+
+  constructor(
+    private configService: ConfigService,
+    private supabase: SupabaseService,
+  ) {
+    this.apiKey = this.configService.get<string>('RESEND_API_KEY', '');
+    this.from = this.configService.get<string>(
+      'EMAIL_FROM',
+      'Iris <orders@getiris.co>',
+    );
+  }
+
+  isConfigured(): boolean {
+    return !!this.apiKey;
+  }
+
+  async sendOrderConfirmation(order: {
+    email: string;
+    order_number: string;
+    subtotal: number;
+    shipping_cost: number;
+    total: number;
+    currency: string;
+    order_items?: {
+      product_name: string;
+      variant_title?: string | null;
+      quantity: number;
+      total_price: number;
+    }[];
+  }): Promise<void> {
+    const subject = `Order Confirmed — ${order.order_number}`;
+    const html = this.buildOrderConfirmationHtml(order);
+    await this.send(order.email, subject, html, order.order_number);
+  }
+
+  async sendShippingNotification(order: {
+    email: string;
+    order_number: string;
+    tracking_number?: string | null;
+    carrier?: string | null;
+  }): Promise<void> {
+    const subject = `Your order ${order.order_number} has shipped`;
+    const html = this.buildShippingHtml(order);
+    await this.send(order.email, subject, html, order.order_number);
+  }
+
+  private async send(
+    to: string,
+    subject: string,
+    html: string,
+    orderId: string,
+  ): Promise<void> {
+    if (!this.isConfigured()) {
+      this.logger.warn(
+        `RESEND_API_KEY not set — skipping email for order ${orderId}`,
+      );
+      return;
+    }
+
+    let success = false;
+    let errorMessage: string | undefined;
+
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ from: this.from, to, subject, html }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      success = response.ok;
+      if (!success) {
+        errorMessage = (data as any).message || JSON.stringify(data);
+        this.logger.error(
+          `Resend rejected email for order ${orderId}: ${errorMessage}`,
+        );
+      }
+    } catch (err: any) {
+      errorMessage = err.message;
+      this.logger.error(`Email send failed for order ${orderId}: ${err.message}`);
+    }
+
+    await this.log(to, subject, success, errorMessage);
+  }
+
+  private async log(
+    recipient: string,
+    subject: string,
+    success: boolean,
+    errorMessage?: string,
+  ): Promise<void> {
+    try {
+      const db = this.supabase.getAdminClient();
+      await db.from('communication_logs').insert({
+        type: 'email',
+        recipient_email: recipient,
+        message: subject,
+        status: success ? 'sent' : 'failed',
+        provider: 'resend',
+        metadata: errorMessage ? { error: errorMessage } : null,
+      });
+    } catch (err: any) {
+      this.logger.error(`Failed to write email log: ${err.message}`);
+    }
+  }
+
+  private buildOrderConfirmationHtml(order: {
+    order_number: string;
+    subtotal: number;
+    shipping_cost: number;
+    total: number;
+    currency: string;
+    order_items?: {
+      product_name: string;
+      variant_title?: string | null;
+      quantity: number;
+      total_price: number;
+    }[];
+  }): string {
+    const symbol = order.currency === 'GHS' ? 'GH₵' : order.currency;
+
+    const itemRows = (order.order_items || [])
+      .map(
+        (item) => `
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;">
+            ${item.product_name}${item.variant_title ? ` — ${item.variant_title}` : ''}${item.quantity > 1 ? ` × ${item.quantity}` : ''}
+          </td>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;text-align:right;white-space:nowrap;">
+            ${symbol} ${item.total_price.toLocaleString()}
+          </td>
+        </tr>`,
+      )
+      .join('');
+
+    return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Order Confirmed</title></head>
+<body style="margin:0;padding:0;background:#f9f9f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f9f9;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;overflow:hidden;border:1px solid #e8e8e8;max-width:560px;">
+        <tr><td style="background:#000;padding:24px 32px;">
+          <p style="margin:0;font-size:22px;font-weight:700;color:#fff;letter-spacing:4px;">IRIS</p>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111;">Order Confirmed!</h1>
+          <p style="margin:0 0 24px;font-size:14px;color:#666;">Order <strong>${order.order_number}</strong> — Thank you for your purchase.</p>
+
+          <table width="100%" cellpadding="0" cellspacing="0">
+            ${itemRows}
+          </table>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;border-top:2px solid #111;padding-top:16px;">
+            <tr>
+              <td style="font-size:13px;color:#999;padding:3px 0;">Subtotal</td>
+              <td style="font-size:13px;color:#999;text-align:right;">${symbol} ${order.subtotal.toLocaleString()}</td>
+            </tr>
+            <tr>
+              <td style="font-size:13px;color:#999;padding:3px 0;">Shipping</td>
+              <td style="font-size:13px;color:#999;text-align:right;">${symbol} ${(order.shipping_cost || 0).toLocaleString()}</td>
+            </tr>
+            <tr>
+              <td style="font-size:15px;font-weight:700;color:#111;padding-top:10px;">Total</td>
+              <td style="font-size:15px;font-weight:700;color:#111;text-align:right;padding-top:10px;">${symbol} ${order.total.toLocaleString()}</td>
+            </tr>
+          </table>
+
+          <p style="margin:28px 0 0;font-size:13px;color:#999;">We'll send you another update when your order ships.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+  }
+
+  private buildShippingHtml(order: {
+    order_number: string;
+    tracking_number?: string | null;
+    carrier?: string | null;
+  }): string {
+    const trackingBlock =
+      order.tracking_number
+        ? `<div style="margin:16px 0;padding:16px;background:#f9f9f9;border-radius:6px;font-size:14px;color:#333;">
+             <strong>Carrier:</strong> ${order.carrier || 'N/A'}<br>
+             <strong>Tracking number:</strong> ${order.tracking_number}
+           </div>`
+        : '';
+
+    return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Your order has shipped</title></head>
+<body style="margin:0;padding:0;background:#f9f9f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f9f9;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;overflow:hidden;border:1px solid #e8e8e8;max-width:560px;">
+        <tr><td style="background:#000;padding:24px 32px;">
+          <p style="margin:0;font-size:22px;font-weight:700;color:#fff;letter-spacing:4px;">IRIS</p>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111;">Your order is on its way!</h1>
+          <p style="margin:0 0 16px;font-size:14px;color:#666;">Order <strong>${order.order_number}</strong> has shipped.</p>
+          ${trackingBlock}
+          <p style="margin:24px 0 0;font-size:13px;color:#999;">Thank you for shopping with Iris.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+  }
+}

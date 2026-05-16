@@ -7,6 +7,8 @@ import { useCart } from "@/lib/cart";
 import { useCreateOrder } from "@/lib/api/orders";
 import { hasToken, getToken } from "@/lib/api/client";
 import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
+import { useShippingOptions, DEFAULT_SHIPPING_OPTIONS } from "@/lib/api/settings";
+import { useValidatePromo, DiscountType } from "@/lib/api/promos";
 import { Check, Pencil } from "lucide-react";
 
 function generateReference() {
@@ -30,7 +32,8 @@ interface ShippingForm {
   email: string;
   label: string;
   phone: string;
-  state: string;
+  city: string;
+  region: string;
   postalCode: string;
 }
 
@@ -40,31 +43,19 @@ const EMPTY_FORM: ShippingForm = {
   email: "",
   label: "",
   phone: "",
-  state: "",
+  city: "",
+  region: "",
   postalCode: "",
 };
 
-const SHIPPING_OPTIONS = [
-  {
-    id: "standard",
-    label: "No rush shipping",
-    estimate: "5-7 business days",
-    price: 40,
-  },
-  {
-    id: "express",
-    label: "Express",
-    estimate: "2-3 business days",
-    price: 68,
-  },
-];
 
 function validateForm(form: ShippingForm): Record<string, string> {
   const errors: Record<string, string> = {};
   if (!form.fullName.trim()) errors.fullName = "Full name is required";
   if (!form.address.trim()) errors.address = "Address is required";
   if (!form.phone.trim()) errors.phone = "Phone number is required";
-  if (!form.state.trim()) errors.state = "State is required";
+  if (!form.city.trim()) errors.city = "City is required";
+  if (!form.region.trim()) errors.region = "Region is required";
   return errors;
 }
 
@@ -120,12 +111,23 @@ export default function CheckoutClient() {
   const [reference, setReference] = useState("");
   const [processing, setProcessing] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
-  const [shippingOption, setShippingOption] = useState("standard");
-  const [promoCode, setPromoCode] = useState("");
+  const [shippingOption, setShippingOption] = useState<"standard" | "express">("standard");
+  const [cancelMessage, setCancelMessage] = useState("");
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    promoCodeId: string;
+    discountAmount: number;
+    discountType: DiscountType;
+  } | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const validatePromo = useValidatePromo();
 
+  const { data: shippingOptions = DEFAULT_SHIPPING_OPTIONS } = useShippingOptions();
   const shippingCost =
-    SHIPPING_OPTIONS.find((o) => o.id === shippingOption)?.price ?? 40;
-  const total = subtotal + shippingCost;
+    shippingOptions.find((o) => o.id === shippingOption)?.price ?? shippingOptions[0]?.price ?? 40;
+  const discountAmount = appliedPromo?.discountAmount ?? 0;
+  const total = Math.max(0, subtotal + shippingCost - discountAmount);
 
   useEffect(() => {
     if (!hasToken()) {
@@ -143,6 +145,30 @@ export default function CheckoutClient() {
     setReference(generateReference());
     setAuthChecked(true);
   }, [router]);
+
+  // Re-validate free_shipping discount when the shipping tier changes
+  useEffect(() => {
+    if (appliedPromo?.discountType === "free_shipping") {
+      validatePromo
+        .mutateAsync({
+          code: appliedPromo.code,
+          subtotal,
+          shippingCost,
+          items: items.map((i) => ({
+            productId: i.productId,
+            price: i.price,
+            quantity: i.quantity,
+          })),
+        })
+        .then((result) => {
+          setAppliedPromo((prev) =>
+            prev ? { ...prev, discountAmount: result.discountAmount } : null
+          );
+        })
+        .catch(() => null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shippingOption]);
 
   if (!authChecked) {
     return (
@@ -185,8 +211,36 @@ export default function CheckoutClient() {
     return true;
   }
 
+  async function handleApplyPromo() {
+    if (!promoInput.trim()) return;
+    setPromoError(null);
+    try {
+      const result = await validatePromo.mutateAsync({
+        code: promoInput.trim(),
+        subtotal,
+        shippingCost,
+        items: items.map((i) => ({
+          productId: i.productId,
+          price: i.price,
+          quantity: i.quantity,
+        })),
+      });
+      setAppliedPromo({
+        code: promoInput.trim().toUpperCase(),
+        promoCodeId: result.promoCodeId,
+        discountAmount: result.discountAmount,
+        discountType: result.discountType,
+      });
+      setPromoInput("");
+    } catch (err: any) {
+      setPromoError(err?.message || "Invalid promo code");
+      setAppliedPromo(null);
+    }
+  }
+
   async function handlePaymentSuccess() {
     setProcessing(true);
+    setCancelMessage("");
     try {
       const order = await createOrder.mutateAsync({
         items: items.map((i) => ({
@@ -201,12 +255,15 @@ export default function CheckoutClient() {
           fullName: form.fullName,
           address: form.address,
           address2: form.label || undefined,
-          city: form.state,
-          region: form.state,
+          city: form.city,
+          region: form.region,
           postalCode: form.postalCode || undefined,
           phone: form.phone,
         },
         paymentReference: reference,
+        shippingCost: shippingCost,
+        shippingMethod: shippingOption,
+        promoCode: appliedPromo?.code,
       });
 
       clearCart();
@@ -327,7 +384,7 @@ export default function CheckoutClient() {
                 </div>
               </div>
 
-              {/* Row: Phone / State */}
+              {/* Row: Phone / City */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
@@ -346,17 +403,36 @@ export default function CheckoutClient() {
                 </div>
                 <div>
                   <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                    State
+                    City
                   </label>
                   <input
                     type="text"
-                    value={form.state}
-                    onChange={(e) => handleChange("state", e.target.value)}
-                    placeholder="State"
+                    value={form.city}
+                    onChange={(e) => handleChange("city", e.target.value)}
+                    placeholder="City"
                     className={inputClass}
                   />
-                  {errors.state && (
-                    <p className="mt-1 text-xs text-red-500">{errors.state}</p>
+                  {errors.city && (
+                    <p className="mt-1 text-xs text-red-500">{errors.city}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Row: Region */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                    Region
+                  </label>
+                  <input
+                    type="text"
+                    value={form.region}
+                    onChange={(e) => handleChange("region", e.target.value)}
+                    placeholder="Region"
+                    className={inputClass}
+                  />
+                  {errors.region && (
+                    <p className="mt-1 text-xs text-red-500">{errors.region}</p>
                   )}
                 </div>
               </div>
@@ -405,6 +481,62 @@ export default function CheckoutClient() {
               </p>
             )}
 
+            {cancelMessage && (
+              <p className="mb-4 text-sm text-amber-600 dark:text-amber-400">
+                {cancelMessage}
+              </p>
+            )}
+
+            {/* Promo Code */}
+            <div className="mb-4">
+              {appliedPromo ? (
+                <div className="flex items-center justify-between rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm dark:bg-green-950 dark:border-green-800">
+                  <span className="text-green-700 dark:text-green-400">
+                    <strong>{appliedPromo.code}</strong> applied — GH₵{" "}
+                    {appliedPromo.discountAmount.toLocaleString()} off
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppliedPromo(null);
+                      setPromoInput("");
+                      setPromoError(null);
+                    }}
+                    className="ml-4 text-xs text-green-700 underline hover:text-green-900 dark:text-green-400 dark:hover:text-green-200"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={promoInput}
+                      onChange={(e) => {
+                        setPromoInput(e.target.value.toUpperCase());
+                        setPromoError(null);
+                      }}
+                      onKeyDown={(e) => e.key === "Enter" && handleApplyPromo()}
+                      placeholder="Promo code"
+                      className={inputClass}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyPromo}
+                      disabled={validatePromo.isPending || !promoInput.trim()}
+                      className="shrink-0 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                    >
+                      {validatePromo.isPending ? "Checking…" : "Apply"}
+                    </button>
+                  </div>
+                  {promoError && (
+                    <p className="mt-1.5 text-xs text-red-500">{promoError}</p>
+                  )}
+                </>
+              )}
+            </div>
+
             <PayNowButton
               email={email}
               amount={total}
@@ -412,7 +544,10 @@ export default function CheckoutClient() {
               disabled={processing}
               onBeforeOpen={handleValidateAndPay}
               onSuccess={handlePaymentSuccess}
-              onClose={() => {}}
+              onClose={() => {
+                setReference(generateReference());
+                setCancelMessage("Payment was cancelled. You can try again.");
+              }}
             />
           </div>
         </div>
@@ -487,30 +622,21 @@ export default function CheckoutClient() {
                 GH₵ {shippingCost.toLocaleString()}
               </span>
             </div>
+            {appliedPromo && (
+              <div className="flex justify-between text-sm">
+                <span className="text-green-600 dark:text-green-400">
+                  Discount ({appliedPromo.code})
+                </span>
+                <span className="text-green-600 dark:text-green-400">
+                  - GH₵ {discountAmount.toLocaleString()}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between border-t border-gray-200 pt-3 text-sm font-semibold dark:border-gray-700">
               <span className="text-gray-900 dark:text-white">Total</span>
               <span className="text-gray-900 dark:text-white">
                 GH₵ {total.toLocaleString()}
               </span>
-            </div>
-          </div>
-
-          {/* Promo code */}
-          <div className="mt-6">
-            <p className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">
-              Add a promo code
-            </p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={promoCode}
-                onChange={(e) => setPromoCode(e.target.value)}
-                placeholder=""
-                className="flex-1 rounded-md border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-white"
-              />
-              <button className="rounded-md border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800">
-                Apply
-              </button>
             </div>
           </div>
 
@@ -520,7 +646,7 @@ export default function CheckoutClient() {
               Delivery is estimated for
             </p>
             <div className="space-y-3">
-              {SHIPPING_OPTIONS.map((option) => (
+              {shippingOptions.map((option) => (
                 <label
                   key={option.id}
                   className={`flex cursor-pointer items-center justify-between rounded-lg border p-4 transition ${

@@ -3,6 +3,7 @@ import {
   Get,
   Patch,
   Post,
+  Put,
   Param,
   Body,
   Query,
@@ -13,6 +14,7 @@ import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
+import { Public } from '../common/decorators/public.decorator';
 
 @Controller('settings')
 @UseGuards(PermissionsGuard)
@@ -50,5 +52,18 @@ export class SettingsController {
   @RequirePermission('settings:read')
   getRoles() {
     return this.settingsService.getRoles();
+  }
+
+  @Get('shipping-options')
+  @Public()
+  getShippingOptions() {
+    return this.settingsService.getShippingOptions();
+  }
+
+  @Put('shipping-options')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings:update')
+  updateShippingOptions(@Body() body: { options: any[] }) {
+    return this.settingsService.updateShippingOptions(body.options);
   }
 }

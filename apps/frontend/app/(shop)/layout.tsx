@@ -9,13 +9,17 @@ import { ThemeProvider, useTheme } from "@/lib/theme/theme-provider";
 import { CartProvider, useCart } from "@/lib/cart";
 import { hasToken, apiClient } from "@/lib/api/client";
 
-function ThemeToggle() {
+function ThemeToggle({ isTransparent = false }: { isTransparent?: boolean }) {
   const { theme, toggleTheme } = useTheme();
   return (
     <button
       onClick={toggleTheme}
       aria-label="Toggle dark mode"
-      className="p-1 text-gray-600 transition hover:text-black dark:text-gray-400 dark:hover:text-white"
+      className={`p-1 transition ${
+        isTransparent
+          ? "text-white/80 hover:text-white"
+          : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
+      }`}
     >
       {theme === "light" ? (
         <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -40,13 +44,24 @@ function ThemeToggle() {
   );
 }
 
-function CartLink() {
+function CartLink({ isTransparent = false }: { isTransparent?: boolean }) {
   const { itemCount } = useCart();
   return (
-    <Link href="/cart" className="relative p-1 text-gray-600 transition hover:text-black dark:text-gray-400 dark:hover:text-white">
+    <Link
+      href="/cart"
+      className={`relative p-1 transition ${
+        isTransparent
+          ? "text-white/80 hover:text-white"
+          : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
+      }`}
+    >
       <ShoppingBag className="h-[18px] w-[18px]" strokeWidth={1.5} />
       {itemCount > 0 && (
-        <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-black text-[9px] font-bold text-white dark:bg-white dark:text-black">
+        <span className={`absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${
+          isTransparent
+            ? "bg-white text-black"
+            : "bg-black text-white dark:bg-white dark:text-black"
+        }`}>
           {itemCount > 99 ? "99+" : itemCount}
         </span>
       )}
@@ -54,7 +69,7 @@ function CartLink() {
   );
 }
 
-function UserLink() {
+function UserLink({ isTransparent = false }: { isTransparent?: boolean }) {
   const router = useRouter();
   const [loggedIn, setLoggedIn] = useState(false);
   const [avatarLetter, setAvatarLetter] = useState<string | null>(null);
@@ -85,10 +100,18 @@ function UserLink() {
     <button
       onClick={handleClick}
       aria-label={loggedIn ? "My account" : "Log in"}
-      className="p-1 text-gray-600 transition hover:text-black dark:text-gray-400 dark:hover:text-white"
+      className={`p-1 transition ${
+        isTransparent
+          ? "text-white/80 hover:text-white"
+          : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
+      }`}
     >
       {loggedIn && avatarLetter ? (
-        <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-black text-[11px] font-semibold text-white dark:bg-white dark:text-black">
+        <span className={`flex h-[22px] w-[22px] items-center justify-center rounded-full text-[11px] font-semibold ${
+          isTransparent
+            ? "bg-white text-black"
+            : "bg-black text-white dark:bg-white dark:text-black"
+        }`}>
           {avatarLetter}
         </span>
       ) : (
@@ -172,7 +195,18 @@ const navLinks = [
 function ShopHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
+
+  const isHome = pathname === "/";
+  const isTransparent = isHome && !scrolled;
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 10);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   function isActive(href: string) {
     if (href.includes("?")) return false;
@@ -180,7 +214,13 @@ function ShopHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
+    <header
+      className={`fixed top-0 z-50 w-full transition-all duration-300 ${
+        isTransparent
+          ? "border-b border-transparent bg-transparent"
+          : "border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950"
+      }`}
+    >
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
         {/* Left nav (desktop) */}
         <nav className="hidden items-center gap-6 md:flex">
@@ -189,9 +229,13 @@ function ShopHeader() {
               key={link.href}
               href={link.href}
               className={`text-xs font-medium uppercase tracking-widest transition ${
-                isActive(link.href)
-                  ? "text-black dark:text-white"
-                  : "text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white"
+                isTransparent
+                  ? isActive(link.href)
+                    ? "text-white"
+                    : "text-white/70 hover:text-white"
+                  : isActive(link.href)
+                    ? "text-black dark:text-white"
+                    : "text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white"
               }`}
             >
               {link.label}
@@ -202,7 +246,9 @@ function ShopHeader() {
         {/* Mobile hamburger */}
         <button
           onClick={() => setMobileOpen((o) => !o)}
-          className="flex h-8 w-8 items-center justify-center md:hidden"
+          className={`flex h-8 w-8 items-center justify-center md:hidden transition ${
+            isTransparent ? "text-white" : ""
+          }`}
           aria-label="Toggle menu"
         >
           {mobileOpen ? (
@@ -222,7 +268,9 @@ function ShopHeader() {
             alt="1NRI"
             width={120}
             height={48}
-            className="h-8 w-auto min-w-[60px] dark:invert"
+            className={`h-8 w-auto min-w-[60px] transition-all duration-300 ${
+              isTransparent ? "invert" : "dark:invert"
+            }`}
             priority
             unoptimized
           />
@@ -233,19 +281,23 @@ function ShopHeader() {
           <button
             onClick={() => setSearchOpen(true)}
             aria-label="Search"
-            className="p-1 text-gray-600 transition hover:text-black dark:text-gray-400 dark:hover:text-white"
+            className={`p-1 transition ${
+              isTransparent
+                ? "text-white/80 hover:text-white"
+                : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
+            }`}
           >
             <Search className="h-[18px] w-[18px]" strokeWidth={1.5} />
           </button>
-          <ThemeToggle />
-          <UserLink />
-          <CartLink />
+          <ThemeToggle isTransparent={isTransparent} />
+          <UserLink isTransparent={isTransparent} />
+          <CartLink isTransparent={isTransparent} />
         </div>
       </div>
 
-      {/* Mobile dropdown */}
+      {/* Mobile dropdown — always solid so it's readable */}
       {mobileOpen && (
-        <nav className="border-t border-gray-200 px-4 py-4 dark:border-gray-800 md:hidden">
+        <nav className="border-t border-gray-200 bg-white px-4 py-4 dark:border-gray-800 dark:bg-gray-950 md:hidden">
           <div className="flex flex-col gap-4">
             {navLinks.map((link) => (
               <Link
@@ -389,15 +441,23 @@ function ShopFooter() {
   );
 }
 
+function ShopLayoutInner({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const isHome = pathname === "/";
+  return (
+    <div className="relative min-h-screen bg-white dark:bg-gray-950">
+      <ShopHeader />
+      <main className={isHome ? "" : "pt-[65px]"}>{children}</main>
+      <ShopFooter />
+    </div>
+  );
+}
+
 export default function ShopLayout({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
       <CartProvider>
-        <div className="relative min-h-screen bg-white dark:bg-gray-950">
-          <ShopHeader />
-          <main>{children}</main>
-          <ShopFooter />
-        </div>
+        <ShopLayoutInner>{children}</ShopLayoutInner>
       </CartProvider>
     </ThemeProvider>
   );

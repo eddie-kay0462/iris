@@ -22,6 +22,8 @@ import { PreordersModule } from './preorders/preorders.module';
 import { LetsfishModule } from './letsfish/letsfish.module';
 import { CommunicationsModule } from './communications/communications.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { EmailModule } from './email/email.module';
+import { PromosModule } from './promos/promos.module';
 
 @Module({
   imports: [
@@ -46,6 +48,8 @@ import { AnalyticsModule } from './analytics/analytics.module';
     PreordersModule,
     CommunicationsModule,
     AnalyticsModule,
+    EmailModule,
+    PromosModule,
   ],
   providers: [
     // Apply JwtAuthGuard globally — use @Public() to skip

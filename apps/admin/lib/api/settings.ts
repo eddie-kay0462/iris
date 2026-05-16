@@ -81,9 +81,30 @@ export function useRoles() {
   });
 }
 
-export function useResetUserPassword() {
+export interface ShippingOption {
+  id: string;
+  label: string;
+  estimate: string;
+  price: number;
+}
+
+export function useShippingOptions() {
+  return useQuery({
+    queryKey: ["shipping-options"],
+    queryFn: () => apiClient<ShippingOption[]>("/settings/shipping-options"),
+  });
+}
+
+export function useUpdateShippingOptions() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (userId: string) =>
-      apiClient(`/settings/users/${userId}/reset-password`, { method: "POST" }),
+    mutationFn: (options: ShippingOption[]) =>
+      apiClient<ShippingOption[]>("/settings/shipping-options", {
+        method: "PUT",
+        body: { options },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["shipping-options"] });
+    },
   });
 }
