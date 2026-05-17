@@ -480,6 +480,7 @@ export default function CheckoutClient() {
               </div>
 
               {/* Row: Region */}
+              {shippingOption !== "pickup" && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
@@ -496,6 +497,7 @@ export default function CheckoutClient() {
                     <p className="mt-1 text-xs text-red-500">{errors.region}</p>
                   )}
                 </div>
+              </div>
               )}
             </div>
           </div>
