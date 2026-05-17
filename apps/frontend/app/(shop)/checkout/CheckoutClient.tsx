@@ -4,13 +4,12 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { usePaystackPayment } from "react-paystack";
 import { useCart } from "@/lib/cart";
-import { useCreatePendingOrder, useConfirmPayment } from "@/lib/api/orders";
+import { useCreateOrder } from "@/lib/api/orders";
 import { hasToken, getToken } from "@/lib/api/client";
 import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
 import { useShippingOptions, DEFAULT_SHIPPING_OPTIONS } from "@/lib/api/settings";
 import { useValidatePromo, DiscountType } from "@/lib/api/promos";
 import { Check, Pencil } from "lucide-react";
-import { div } from "framer-motion/client";
 
 function generateReference() {
   const ts = Date.now();
@@ -105,8 +104,7 @@ function PayNowButton({
 export default function CheckoutClient() {
   const router = useRouter();
   const { items, subtotal, clearCart } = useCart();
-  const createPendingOrder = useCreatePendingOrder();
-  const confirmPayment = useConfirmPayment();
+  const createOrder = useCreateOrder();
   const [form, setForm] = useState<ShippingForm>(EMPTY_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [email, setEmail] = useState("");
@@ -245,7 +243,7 @@ export default function CheckoutClient() {
     setProcessing(true);
     setCancelMessage("");
     try {
-      const order = await createPendingOrder.mutateAsync({
+      const order = await createOrder.mutateAsync({
         items: items.map((i) => ({
           variantId: i.variantId,
           productId: i.productId,
@@ -265,7 +263,7 @@ export default function CheckoutClient() {
         },
         paymentReference: reference,
         shippingCost: shippingCost,
-        shippingMethod: shippingOption,
+        shippingMethod: (shippingOption === "pickup" ? "standard" : shippingOption),
         promoCode: appliedPromo?.code,
       });
 
@@ -281,15 +279,9 @@ export default function CheckoutClient() {
   }
 
   async function handlePaymentSuccess() {
-    try {
-      await confirmPayment.mutateAsync(reference);
-    } catch {
-      // Don't block the redirect: the webhook will still finalize the order.
-    } finally {
-      clearCart();
-      const orderNum = pendingOrderNumber ?? reference;
-      router.push(`/checkout/confirmation?order=${orderNum}`);
-    }
+    clearCart();
+    const orderNum = pendingOrderNumber ?? reference;
+    router.push(`/checkout/confirmation?order=${orderNum}`);
   }
 
   function handlePaymentClose() {
