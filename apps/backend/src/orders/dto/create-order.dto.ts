@@ -7,6 +7,7 @@ import {
   Min,
   IsUUID,
   IsObject,
+  IsEnum,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -71,4 +72,15 @@ export class CreateOrderDto {
 
   @IsString()
   paymentReference: string;
+
+  @IsNumber()
+  @Min(0)
+  shippingCost: number;
+
+  @IsEnum(['standard', 'express'])
+  shippingMethod: 'standard' | 'express';
+
+  @IsOptional()
+  @IsString()
+  promoCode?: string;
 }

@@ -62,3 +62,24 @@ export function useRoles() {
     queryFn: () => apiClient<RoleInfo[]>("/settings/roles"),
   });
 }
+
+export interface ShippingOption {
+  id: string;
+  label: string;
+  estimate: string;
+  price: number;
+}
+
+export const DEFAULT_SHIPPING_OPTIONS: ShippingOption[] = [
+  { id: "standard", label: "No rush shipping", estimate: "5-7 business days", price: 40 },
+  { id: "express", label: "Express", estimate: "2-3 business days", price: 68 },
+];
+
+export function useShippingOptions() {
+  return useQuery({
+    queryKey: ["shipping-options"],
+    queryFn: () => apiClient<ShippingOption[]>("/settings/shipping-options"),
+    placeholderData: DEFAULT_SHIPPING_OPTIONS,
+    staleTime: 5 * 60 * 1000,
+  });
+}

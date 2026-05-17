@@ -56,6 +56,7 @@ export interface Order {
   payment_provider: string | null;
   payment_reference: string | null;
   payment_status: string | null;
+  applied_promo_code_id: string | null;
   customer_notes: string | null;
   internal_notes: string | null;
   created_at: string;
@@ -118,42 +119,29 @@ export interface CreateOrderInput {
 export function useCreateOrder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: CreateOrderInput) =>
-      apiClient<Order>("/orders", { method: "POST", body: data }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["my-orders"] });
-    },
-  });
-}
-
-/**
- * Create a pending order BEFORE opening Paystack. This guarantees that even
- * if the success callback never fires the order still exists and the webhook
- * can finalize it. Idempotent on `paymentReference`.
- */
-export function useCreatePendingOrder() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: CreateOrderInput) =>
-      apiClient<Order>("/orders/create-pending", { method: "POST", body: data }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["my-orders"] });
-    },
-  });
-}
-
-/**
- * Confirm a Paystack payment by reference. Idempotent — the Paystack webhook
- * also calls the same backend method as a safety net.
- */
-export function useConfirmPayment() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (reference: string) =>
-      apiClient<Order>("/orders/confirm-payment", {
-        method: "POST",
-        body: { reference },
-      }),
+    mutationFn: (data: {
+      items: {
+        variantId: string;
+        productId: string;
+        productTitle: string;
+        variantTitle?: string;
+        price: number;
+        quantity: number;
+      }[];
+      shippingAddress: {
+        fullName: string;
+        address: string;
+        address2?: string;
+        city: string;
+        region: string;
+        postalCode?: string;
+        phone: string;
+      };
+      paymentReference: string;
+      shippingCost: number;
+      shippingMethod: "standard" | "express";
+      promoCode?: string;
+    }) => apiClient<Order>("/orders", { method: "POST", body: data }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my-orders"] });
     },
@@ -173,6 +161,19 @@ export function useMyOrder(id: string) {
     queryKey: ["my-order", id],
     queryFn: () => apiClient<Order>(`/orders/my/${id}`),
     enabled: !!id,
+  });
+}
+
+export function useMyOrderByNumber(orderNumber: string) {
+  return useQuery({
+    queryKey: ["my-order-by-number", orderNumber],
+    queryFn: () => apiClient<Order>(`/orders/my/by-number/${orderNumber}`),
+    enabled: !!orderNumber,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data?.payment_status === "paid") return false;
+      return 3000;
+    },
   });
 }
 

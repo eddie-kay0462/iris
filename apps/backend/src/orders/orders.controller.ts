@@ -132,6 +132,14 @@ export class OrdersController {
     return this.ordersService.findMyOrders(user.sub, query);
   }
 
+  @Get('my/by-number/:orderNumber')
+  findMyOrderByNumber(
+    @Param('orderNumber') orderNumber: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.findMyOrderByNumber(user.sub, orderNumber);
+  }
+
   @Get('my/:id')
   findMyOrder(@Param('id') id: string, @CurrentUser() user: any) {
     return this.ordersService.findMyOrder(user.sub, id);

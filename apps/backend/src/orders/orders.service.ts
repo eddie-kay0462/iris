@@ -5,13 +5,21 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { SupabaseService } from '../common/supabase/supabase.service';
+import { EmailService } from '../email/email.service';
+import { SmsService, SMS_TEMPLATES } from '../sms/sms.service';
+import { PromosService } from '../promos/promos.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { QueryOrdersDto } from './dto/query-orders.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
 @Injectable()
 export class OrdersService {
-  constructor(private supabase: SupabaseService) {}
+  constructor(
+    private supabase: SupabaseService,
+    private emailService: EmailService,
+    private smsService: SmsService,
+    private promosService: PromosService,
+  ) {}
 
   /**
    * Sanitize a phone number from the database to a consistent local format (0XXXXXXXXX).
@@ -75,7 +83,32 @@ export class OrdersService {
       (sum, i) => sum + i.price * i.quantity,
       0,
     );
-    const total = subtotal; // No shipping/tax for now
+    const shippingCost = dto.shippingCost ?? 0;
+
+    // 2b. Validate promo code if supplied
+    let discountAmount = 0;
+    let appliedPromoCodeId: string | null = null;
+
+    if (dto.promoCode) {
+      try {
+        const promoResult = await this.promosService.validate({
+          code: dto.promoCode,
+          subtotal,
+          shippingCost,
+          items: dto.items.map((i) => ({
+            productId: i.productId,
+            price: i.price,
+            quantity: i.quantity,
+          })),
+        });
+        discountAmount = promoResult.discountAmount;
+        appliedPromoCodeId = promoResult.promoCodeId;
+      } catch (err: any) {
+        throw new BadRequestException(err.message || 'Invalid promo code');
+      }
+    }
+
+    const total = Math.max(0, subtotal + shippingCost - discountAmount);
 
     // 3. Generate order number
     const orderNumber = await this.generateOrderNumber();
@@ -87,14 +120,17 @@ export class OrdersService {
         user_id: userId,
         email,
         order_number: orderNumber,
-        status: 'paid',
+        status: 'pending',
         subtotal,
+        discount: discountAmount,
+        shipping_cost: shippingCost,
         total,
         currency: 'GHS',
         shipping_address: dto.shippingAddress,
         payment_provider: 'paystack',
         payment_reference: dto.paymentReference,
-        payment_status: 'paid',
+        payment_status: 'pending',
+        applied_promo_code_id: appliedPromoCodeId,
       })
       .select()
       .single();
@@ -119,31 +155,47 @@ export class OrdersService {
 
     if (itemsError) throw itemsError;
 
-    // 6. Deduct inventory
-    for (const item of dto.items) {
-      const { data: variant } = await db
-        .from('product_variants')
-        .select('inventory_quantity')
-        .eq('id', item.variantId)
-        .single();
-
-      const previousQty = variant?.inventory_quantity ?? 0;
-      const newQty = Math.max(0, previousQty - item.quantity);
-
-      await db
-        .from('product_variants')
-        .update({ inventory_quantity: newQty })
-        .eq('id', item.variantId);
-
-      await db.from('inventory_movements').insert({
-        variant_id: item.variantId,
-        quantity_change: -item.quantity,
-        quantity_before: previousQty,
-        quantity_after: newQty,
-        movement_type: 'sale',
-        notes: `Order ${orderNumber}`,
-        created_by: userId,
+    // 5b. Increment promo used_count — fire and forget; order already created
+    if (appliedPromoCodeId) {
+      this.promosService.applyToOrder(appliedPromoCodeId).catch((err) => {
+        console.error(`Failed to increment promo used_count for ${appliedPromoCodeId}:`, err);
       });
+    }
+
+    // 6. Deduct inventory — failures are logged but do not throw so the order
+    // record is never left without matching inventory movements silently failing
+    // while still destroying the order reference.
+    try {
+      for (const item of dto.items) {
+        const { data: variant } = await db
+          .from('product_variants')
+          .select('inventory_quantity')
+          .eq('id', item.variantId)
+          .single();
+
+        const previousQty = variant?.inventory_quantity ?? 0;
+        const newQty = Math.max(0, previousQty - item.quantity);
+
+        await db
+          .from('product_variants')
+          .update({ inventory_quantity: newQty })
+          .eq('id', item.variantId);
+
+        await db.from('inventory_movements').insert({
+          variant_id: item.variantId,
+          quantity_change: -item.quantity,
+          quantity_before: previousQty,
+          quantity_after: newQty,
+          movement_type: 'sale',
+          notes: `Order ${orderNumber}`,
+          created_by: userId,
+        });
+      }
+    } catch (inventoryError) {
+      console.error(
+        `Inventory deduction failed for order ${orderNumber}:`,
+        inventoryError,
+      );
     }
 
     return this.findOne(order.id);
@@ -199,6 +251,20 @@ export class OrdersService {
       .select('*, order_items(*), order_status_history(*)')
       .eq('id', orderId)
       .eq('user_id', userId)
+      .single();
+
+    if (error || !data) throw new NotFoundException('Order not found');
+    return data;
+  }
+
+  async findMyOrderByNumber(userId: string, orderNumber: string) {
+    const db = this.supabase.getAdminClient();
+    const { data, error } = await db
+      .from('orders')
+      .select('*, order_items(*)')
+      .eq('order_number', orderNumber)
+      .eq('user_id', userId)
+      .is('deleted_at', null)
       .single();
 
     if (error || !data) throw new NotFoundException('Order not found');
@@ -286,7 +352,20 @@ export class OrdersService {
       changed_by: userId,
     });
 
-    return this.findOne(orderId);
+    const updatedOrder = await this.findOne(orderId);
+
+    if (dto.status === 'shipped') {
+      this.emailService
+        .sendShippingNotification({
+          email: updatedOrder.email,
+          order_number: updatedOrder.order_number,
+          tracking_number: updatedOrder.tracking_number,
+          carrier: updatedOrder.carrier,
+        })
+        .catch(() => null);
+    }
+
+    return updatedOrder;
   }
 
   async cancelOrder(orderId: string, userId: string) {
@@ -1101,23 +1180,8 @@ export class OrdersService {
       .select()
       .single();
 
-    if (orderError) throw orderError;
-
-    // 5. Insert order items
-    const orderItems = dto.items.map((item) => ({
-      order_id: order.id,
-      product_id: item.productId,
-      variant_id: item.variantId,
-      product_name: item.productTitle,
-      variant_title: item.variantTitle || null,
-      quantity: item.quantity,
-      unit_price: item.price,
-      total_price: item.price * item.quantity,
-    }));
-
-    const { error: itemsError } = await db
-      .from('order_items')
-      .insert(orderItems);
+    if (error || !data) return;
+    if (data.payment_status === 'paid') return;
 
     if (itemsError) throw itemsError;
 
@@ -1151,39 +1215,37 @@ export class OrdersService {
         status: 'paid',
         updated_at: new Date().toISOString(),
       })
-      .eq('id', order.id);
+      .eq('id', data.id);
 
-    if (updateError) throw updateError;
+    // Fetch full order to get items, email, and phone for notifications
+    try {
+      const order = await this.findOne(data.id);
 
-    // Deduct inventory now that payment is confirmed
-    for (const item of order.order_items || []) {
-      if (!item.variant_id) continue;
+      // Email receipt — fire and forget
+      this.emailService
+        .sendOrderConfirmation({
+          email: order.email,
+          order_number: order.order_number,
+          subtotal: order.subtotal,
+          shipping_cost: order.shipping_cost || 0,
+          total: order.total,
+          currency: order.currency || 'GHS',
+          order_items: order.order_items,
+        })
+        .catch(() => null);
 
-      const { data: variant } = await db
-        .from('product_variants')
-        .select('inventory_quantity')
-        .eq('id', item.variant_id)
-        .single();
-
-      const previousQty = variant?.inventory_quantity ?? 0;
-      const newQty = Math.max(0, previousQty - item.quantity);
-
-      await db
-        .from('product_variants')
-        .update({ inventory_quantity: newQty })
-        .eq('id', item.variant_id);
-
-      await db.from('inventory_movements').insert({
-        variant_id: item.variant_id,
-        quantity_change: -item.quantity,
-        quantity_before: previousQty,
-        quantity_after: newQty,
-        movement_type: 'sale',
-        notes: `Order ${order.order_number}`,
-        created_by: order.user_id,
-      });
+      // SMS confirmation — fire and forget
+      const phone = this.normalizePhone(
+        (order.shipping_address as any)?.phone,
+      );
+      if (phone) {
+        this.smsService
+          .sendSMS(phone, SMS_TEMPLATES.orderConfirmation(order.order_number))
+          .catch(() => null);
+      }
+    } catch (notifyErr: any) {
+      // Notification failures must never block payment confirmation
+      console.error('Notification error after payment confirm:', notifyErr?.message);
     }
-
-    return this.findOne(order.id);
   }
 }
