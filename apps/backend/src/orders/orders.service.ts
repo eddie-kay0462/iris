@@ -42,7 +42,7 @@ export class OrdersService {
     const { data } = await db
       .from('orders')
       .select('order_number')
-      .order('created_at', { ascending: false })
+      .order('order_number', { ascending: false })
       .limit(1);
 
     let next = 1;
@@ -1180,9 +1180,21 @@ export class OrdersService {
       .select()
       .single();
 
-    if (error || !data) return;
-    if (data.payment_status === 'paid') return;
+    if (orderError || !order) throw new Error(orderError?.message || 'Failed to create order');
 
+    // 5. Insert order items
+    const orderItems = dto.items.map((item) => ({
+      order_id: order.id,
+      product_id: item.productId,
+      variant_id: item.variantId,
+      product_name: item.productTitle,
+      variant_title: item.variantTitle || null,
+      quantity: item.quantity,
+      unit_price: item.price,
+      total_price: item.price * item.quantity,
+    }));
+
+    const { error: itemsError } = await db.from('order_items').insert(orderItems);
     if (itemsError) throw itemsError;
 
     return this.findOne(order.id);
@@ -1215,32 +1227,32 @@ export class OrdersService {
         status: 'paid',
         updated_at: new Date().toISOString(),
       })
-      .eq('id', data.id);
+      .eq('id', order.id);
 
     // Fetch full order to get items, email, and phone for notifications
     try {
-      const order = await this.findOne(data.id);
+      const fullOrder = await this.findOne(order.id);
 
       // Email receipt — fire and forget
       this.emailService
         .sendOrderConfirmation({
-          email: order.email,
-          order_number: order.order_number,
-          subtotal: order.subtotal,
-          shipping_cost: order.shipping_cost || 0,
-          total: order.total,
-          currency: order.currency || 'GHS',
-          order_items: order.order_items,
+          email: fullOrder.email,
+          order_number: fullOrder.order_number,
+          subtotal: fullOrder.subtotal,
+          shipping_cost: fullOrder.shipping_cost || 0,
+          total: fullOrder.total,
+          currency: fullOrder.currency || 'GHS',
+          order_items: fullOrder.order_items,
         })
         .catch(() => null);
 
       // SMS confirmation — fire and forget
       const phone = this.normalizePhone(
-        (order.shipping_address as any)?.phone,
+        (fullOrder.shipping_address as any)?.phone,
       );
       if (phone) {
         this.smsService
-          .sendSMS(phone, SMS_TEMPLATES.orderConfirmation(order.order_number))
+          .sendSMS(phone, SMS_TEMPLATES.orderConfirmation(fullOrder.order_number))
           .catch(() => null);
       }
     } catch (notifyErr: any) {

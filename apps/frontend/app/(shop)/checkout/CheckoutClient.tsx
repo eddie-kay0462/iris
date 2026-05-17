@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { usePaystackPayment } from "react-paystack";
 import { useCart } from "@/lib/cart";
 import { useCreateOrder } from "@/lib/api/orders";
+import { useProfile, parseDefaultAddress } from "@/lib/api/profile";
 import { hasToken, getToken } from "@/lib/api/client";
 import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
 import { useShippingOptions, DEFAULT_SHIPPING_OPTIONS } from "@/lib/api/settings";
@@ -27,10 +28,11 @@ function decodeTokenEmail(token: string): string | null {
 }
 
 interface ShippingForm {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   address: string;
   email: string;
-  label: string;
+  address2: string;
   phone: string;
   city: string;
   region: string;
@@ -38,20 +40,21 @@ interface ShippingForm {
 }
 
 const EMPTY_FORM: ShippingForm = {
-  fullName: "",
+  firstName: "",
+  lastName: "",
   address: "",
   email: "",
-  label: "",
+  address2: "",
   phone: "",
   city: "",
   region: "",
   postalCode: "",
 };
 
-
 function validateForm(form: ShippingForm, isPickup: boolean): Record<string, string> {
   const errors: Record<string, string> = {};
-  if (!form.fullName.trim()) errors.fullName = "Full name is required";
+  if (!form.firstName.trim()) errors.firstName = "First name is required";
+  if (!form.lastName.trim()) errors.lastName = "Last name is required";
   if (!form.phone.trim()) errors.phone = "Phone number is required";
   if (!form.city.trim()) errors.city = "City is required";
   if (!form.region.trim()) errors.region = "Region is required";
@@ -105,6 +108,7 @@ export default function CheckoutClient() {
   const router = useRouter();
   const { items, subtotal, clearCart } = useCart();
   const createOrder = useCreateOrder();
+  const { data: profile } = useProfile();
   const [form, setForm] = useState<ShippingForm>(EMPTY_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [email, setEmail] = useState("");
@@ -147,6 +151,24 @@ export default function CheckoutClient() {
     setReference(generateReference());
     setAuthChecked(true);
   }, [router]);
+
+  // Pre-fill address from the user's default address when profile loads
+  useEffect(() => {
+    if (!profile) return;
+    const addr = parseDefaultAddress(profile.default_address);
+    setForm((prev) => ({
+      ...prev,
+      firstName: prev.firstName || profile.first_name || "",
+      lastName: prev.lastName || profile.last_name || "",
+      address: prev.address || addr.address1 || "",
+      address2: prev.address2 || addr.address2 || "",
+      city: prev.city || addr.city || "",
+      region: prev.region || addr.province_code || "",
+      postalCode: prev.postalCode || addr.zip || "",
+      phone: prev.phone || addr.phone || "",
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile]);
 
   // Re-validate free_shipping discount when the shipping tier changes
   useEffect(() => {
@@ -253,9 +275,9 @@ export default function CheckoutClient() {
           quantity: i.quantity,
         })),
         shippingAddress: {
-          fullName: form.fullName,
+          fullName: `${form.firstName} ${form.lastName}`.trim(),
           address: form.address,
-          address2: form.label || undefined,
+          address2: form.address2 || undefined,
           city: form.city,
           region: form.region,
           postalCode: form.postalCode || undefined,
@@ -334,45 +356,58 @@ export default function CheckoutClient() {
             </p>
 
             <div className="space-y-4">
-              {/* Row: Full name / Address */}
-              <div className={`grid gap-4 ${shippingOption === "pickup" ? "grid-cols-1" : "grid-cols-2"}`}>
+              {/* Row: First name / Last name */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                    Full name
+                    First name
                   </label>
                   <input
                     type="text"
-                    value={form.fullName}
-                    onChange={(e) => handleChange("fullName", e.target.value)}
-                    placeholder="Full name"
+                    value={form.firstName}
+                    onChange={(e) => handleChange("firstName", e.target.value)}
+                    placeholder="First name"
                     className={inputClass}
                   />
-                  {errors.fullName && (
-                    <p className="mt-1 text-xs text-red-500">
-                      {errors.fullName}
-                    </p>
+                  {errors.firstName && (
+                    <p className="mt-1 text-xs text-red-500">{errors.firstName}</p>
                   )}
                 </div>
-                {shippingOption !== "pickup" && (
-                  <div>
-                    <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                      Address
-                    </label>
-                    <input
-                      type="text"
-                      value={form.address}
-                      onChange={(e) => handleChange("address", e.target.value)}
-                      placeholder="Address"
-                      className={inputClass}
-                    />
-                    {errors.address && (
-                      <p className="mt-1 text-xs text-red-500">
-                        {errors.address}
-                      </p>
-                    )}
-                  </div>
-                )}
+                <div>
+                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                    Last name
+                  </label>
+                  <input
+                    type="text"
+                    value={form.lastName}
+                    onChange={(e) => handleChange("lastName", e.target.value)}
+                    placeholder="Last name"
+                    className={inputClass}
+                  />
+                  {errors.lastName && (
+                    <p className="mt-1 text-xs text-red-500">{errors.lastName}</p>
+                  )}
+                </div>
               </div>
+
+              {/* Row: Address — hidden for pickup */}
+              {shippingOption !== "pickup" && (
+                <div>
+                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                    Address
+                  </label>
+                  <input
+                    type="text"
+                    value={form.address}
+                    onChange={(e) => handleChange("address", e.target.value)}
+                    placeholder="Address"
+                    className={inputClass}
+                  />
+                  {errors.address && (
+                    <p className="mt-1 text-xs text-red-500">{errors.address}</p>
+                  )}
+                </div>
+              )}
 
               {/* Row: Email / Label — hidden for pickup */}
               {shippingOption !== "pickup" && (
@@ -391,13 +426,13 @@ export default function CheckoutClient() {
                   </div>
                   <div>
                     <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                      Label
+                      Address line 2 <span className="text-gray-400">(optional)</span>
                     </label>
                     <input
                       type="text"
-                      value={form.label}
-                      onChange={(e) => handleChange("label", e.target.value)}
-                      placeholder="Label (e.g. Home, Office)"
+                      value={form.address2}
+                      onChange={(e) => handleChange("address2", e.target.value)}
+                      placeholder="Apt, suite, unit, etc."
                       className={inputClass}
                     />
                   </div>
@@ -440,22 +475,36 @@ export default function CheckoutClient() {
                 )}
               </div>
 
-              {/* Row: Postal code — hidden for pickup */}
+              {/* Row: City / Postal code — hidden for pickup */}
               {shippingOption !== "pickup" && (
-                <div className="w-1/2 pr-2">
-                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                    City
-                  </label>
-                  <input
-                    type="text"
-                    value={form.city}
-                    onChange={(e) => handleChange("city", e.target.value)}
-                    placeholder="City"
-                    className={inputClass}
-                  />
-                  {errors.city && (
-                    <p className="mt-1 text-xs text-red-500">{errors.city}</p>
-                  )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      value={form.city}
+                      onChange={(e) => handleChange("city", e.target.value)}
+                      placeholder="City"
+                      className={inputClass}
+                    />
+                    {errors.city && (
+                      <p className="mt-1 text-xs text-red-500">{errors.city}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                      Postal / ZIP code
+                    </label>
+                    <input
+                      type="text"
+                      value={form.postalCode}
+                      onChange={(e) => handleChange("postalCode", e.target.value)}
+                      placeholder="Postal code"
+                      className={inputClass}
+                    />
+                  </div>
                 </div>
                 )}
               </div>
