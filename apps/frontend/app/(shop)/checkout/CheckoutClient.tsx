@@ -10,6 +10,7 @@ import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
 import { useShippingOptions, DEFAULT_SHIPPING_OPTIONS } from "@/lib/api/settings";
 import { useValidatePromo, DiscountType } from "@/lib/api/promos";
 import { Check, Pencil } from "lucide-react";
+import { div } from "framer-motion/client";
 
 function generateReference() {
   const ts = Date.now();
@@ -114,7 +115,7 @@ export default function CheckoutClient() {
   const [processing, setProcessing] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const [shippingOption, setShippingOption] = useState<"standard" | "express">("standard");
+  const [shippingOption, setShippingOption] = useState<"standard" | "express" | "pickup">("standard");
   const [cancelMessage, setCancelMessage] = useState("");
   const [promoInput, setPromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<{
@@ -435,13 +436,13 @@ export default function CheckoutClient() {
                     </label>
                     <input
                       type="text"
-                      value={form.state}
-                      onChange={(e) => handleChange("state", e.target.value)}
+                      value={form.region}
+                      onChange={(e) => handleChange("region", e.target.value)}
                       placeholder="State"
                       className={inputClass}
                     />
-                    {errors.state && (
-                      <p className="mt-1 text-xs text-red-500">{errors.state}</p>
+                    {errors.region && (
+                      <p className="mt-1 text-xs text-red-500">{errors.region}</p>
                     )}
                   </div>
                 )}
@@ -466,27 +467,6 @@ export default function CheckoutClient() {
                 </div>
                 )}
               </div>
-
-              {/* Row: Region */}
-              {shippingOption !== "pickup" && (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                    Region
-                  </label>
-                  <input
-                    type="text"
-                    value={form.region}
-                    onChange={(e) => handleChange("region", e.target.value)}
-                    placeholder="Region"
-                    className={inputClass}
-                  />
-                  {errors.region && (
-                    <p className="mt-1 text-xs text-red-500">{errors.region}</p>
-                  )}
-                </div>
-              </div>
-              )}
             </div>
           </div>
 
@@ -696,7 +676,7 @@ export default function CheckoutClient() {
                       name="shipping"
                       value={option.id}
                       checked={shippingOption === option.id}
-                      onChange={() => setShippingOption(option.id)}
+                      onChange={() => setShippingOption(option.id as "standard" | "express" | "pickup")}
                       className="h-4 w-4 accent-gray-900 dark:accent-white"
                     />
                     <div>
