@@ -468,7 +468,6 @@ export default function CheckoutClient() {
                 )}
               </div>
             </div>
-          </div>
 
           {/* Step 3: Payment */}
           <div>
