@@ -205,21 +205,6 @@ export default function CheckoutClient() {
     }
   }
 
-  /**
-   * Step 1 — runs on Pay Now click, BEFORE Paystack opens.
-   * Validates the form, then pre-creates the order in `pending` state on the
-   * backend so the customer can never pay without an order existing first.
-   * Returns true only if both validation and order creation succeed.
-   */
-  async function handleValidateAndPay(): Promise<boolean> {
-    setCreateError(null);
-
-    const validationErrors = validateForm(form, shippingOption === "pickup");
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return false;
-    }
-
   async function handleApplyPromo() {
     if (!promoInput.trim()) return;
     setPromoError(null);
@@ -247,7 +232,15 @@ export default function CheckoutClient() {
     }
   }
 
-  async function handlePaymentSuccess() {
+  async function handleValidateAndPay(): Promise<boolean> {
+    setCreateError(null);
+
+    const validationErrors = validateForm(form, shippingOption === "pickup");
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return false;
+    }
+
     setProcessing(true);
     setCancelMessage("");
     try {
@@ -286,11 +279,6 @@ export default function CheckoutClient() {
     }
   }
 
-  /**
-   * Step 2 — runs after Paystack reports a successful charge.
-   * Confirms the order on the backend (idempotent — the Paystack webhook also
-   * confirms the same reference as a safety net).
-   */
   async function handlePaymentSuccess() {
     try {
       await confirmPayment.mutateAsync(reference);
