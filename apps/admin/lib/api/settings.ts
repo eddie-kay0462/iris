@@ -74,6 +74,13 @@ export function useCreateUser() {
   });
 }
 
+export function useResetUserPassword() {
+  return useMutation({
+    mutationFn: (userId: string) =>
+      apiClient(`/settings/users/${userId}/reset-password`, { method: "POST" }),
+  });
+}
+
 export function useRoles() {
   return useQuery({
     queryKey: ["roles"],
