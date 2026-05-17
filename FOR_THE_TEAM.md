@@ -2947,4 +2947,127 @@ LETSFISH_SENDER_ID=Iris                             # optional, defaults to "Iri
 
 Without `LETSFISH_APP_ID` and `LETSFISH_APP_SECRET` set, the provider shows as "not configured" and all send attempts will throw an error.
 
+---
+
+## Sonner Toast Notifications — All Three Apps (May 2026)
+
+### What Got Done
+
+Every app (frontend, admin, allies) now uses **Sonner** for in-app notifications. Before this, most errors either showed up as inline banners that required manual dismissal, used browser `alert()` calls, or gave no feedback at all. Now everything is consistent: green for success, red for errors, amber for warnings, and they all auto-dismiss from the bottom-right corner.
+
+### How it's set up per app
+
+**Frontend** (`apps/frontend`) — The frontend has a dark mode toggle, so a custom `ClientToaster` component was created at `apps/frontend/components/ClientToaster.tsx`. It uses a `MutationObserver` to watch for the `dark` class on `<html>` and syncs the toast theme accordingly. It's mounted in the root layout via `<ClientToaster />`.
+
+**Admin** (`apps/admin`) — The admin panel is always light-mode (hardcoded `colorScheme: "light"` on `<html>`), so a static `<Toaster theme="light" />` lives in its root layout. No wrapper needed.
+
+**Allies** (`apps/allies`) — The allies dashboard has no theme toggle and follows the OS. A static `<Toaster theme="system" />` is in its root layout.
+
+All three use `position="bottom-right"`, `richColors`, and a default duration of 4500ms (errors get 6000ms).
+
+### What now shows a toast
+
+**Frontend**
+
+| Where | What triggers it | Toast |
+|-------|-----------------|-------|
+| Login page | Successful sign-in | ✅ "Signed in. Welcome back!" |
+| Login page | Auth failure | ❌ Error message from API |
+| Login page | `?message=password-updated` in URL | ✅ "Your password has been updated." |
+| Login page | `?error=auth-callback-failed` in URL | ❌ "Authentication failed. Please try again." |
+| Signup page | Submit failure | ❌ Error message from API |
+| Update password page | Validation / submit failure | ❌ Error message |
+| Verify page | Code submit failure / resend failure | ❌ Error message |
+| Reset password page | Submit failure | ❌ Error message |
+| Profile page | Successful save | ✅ "Profile updated." |
+| Profile page | Save failure | ❌ Error message |
+| Product page (pre-order) | Paystack unavailable | ❌ "Payment unavailable..." |
+| Product page (pre-order) | Payment recorded but order save failed | ❌ Long-duration error with reference |
+| Checkout | Order creation failure | ❌ Error message |
+| Checkout | Paystack modal closed without paying | ⚠️ "Payment was cancelled. You can try again." |
+| Cart | Trash icon (remove item) | ✅ "{Product name} removed from cart." |
+
+**Admin**
+
+| Where | What triggers it | Toast |
+|-------|-----------------|-------|
+| Login page | Successful sign-in | ✅ "Signed in." |
+| Login page | Auth failure | ❌ Error message |
+| Login page | `?error=unauthorized` in URL | ⚠️ "You don't have permission..." (8 second duration) |
+| Accept invite page | Password validation / submit failure | ❌ Error message |
+| Header (avatar upload) | Upload failure | ❌ "Failed to upload photo. Please try again." |
+| Product form | Product created | ✅ "Product created." |
+| Product form | Product saved | ✅ "Product saved." |
+| Product form | Submit failure | ❌ Error message |
+| Product form | Variant mutation failure | ❌ Error message |
+| Invite ally modal | Successful invite | ✅ "Ally invited successfully." |
+| Invite ally modal | Invite failure | ❌ Error from API |
+| Edit ally drawer | Successful update | ✅ "Ally updated." |
+| Edit ally drawer | Update failure | ❌ Error from API |
+| Commission settings card | Successful save | ✅ "Commission settings saved." |
+| Commission settings card | Save failure | ❌ Error from API |
+| General settings (shipping) | Saved | ✅ "Shipping options updated." |
+| General settings (revenue target) | Saved | ✅ "Revenue target updated." |
+| Orders page (status dropdown) | Status updated | ✅ "Order status updated to {status}." |
+| Orders page (status dropdown) | Update failure | ❌ "Failed to update order status." |
+| Pre-orders page (cancel) | Successful cancel | ✅ "Pre-order cancelled." |
+| Pre-orders page (cancel) | Cancel failure | ❌ "Failed to cancel pre-order." |
+| Pre-orders page (restock) | Restock API failure | ❌ "Restock failed. Please try again." |
+
+**Allies**
+
+| Where | What triggers it | Toast |
+|-------|-----------------|-------|
+| Login page | Auth failure | ❌ Error message from API |
+| Sales page | Sale recording failure | ❌ "Error recording sale" with description |
+| Onboarding (photo step) | Upload failure | ❌ Error message |
+
+### What was intentionally left as-is
+
+Some flows already have sufficient visual feedback and don't need a toast on top:
+
+- **ProductCard "Add to cart"** — the card already shows a checkmark animation
+- **Cart quantity +/− buttons** — tapping rapidly would fire a toast per click
+- **Pre-order success** — full-screen success modal with confetti
+- **Restock/Refund modal success** — inline green confirmation panel inside the modal
+- **Ally sale success** — full-screen success state showing commission earned
+- **Logout (all apps)** — redirect to login is clear enough
+- **Signup** — redirects to the verify page which explains next steps
+
+### Files Created
+
+| File | What it is |
+|------|-----------|
+| `apps/frontend/components/ClientToaster.tsx` | Theme-aware Toaster wrapper for the frontend |
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `apps/frontend/app/layout.tsx` | Mounted `<ClientToaster />` |
+| `apps/admin/app/layout.tsx` | Mounted `<Toaster theme="light" />` |
+| `apps/allies/app/layout.tsx` | Mounted `<Toaster theme="system" />` |
+| `apps/frontend/app/(auth)/login/page.tsx` | URL-param toasts, error toast, sign-in success toast |
+| `apps/frontend/app/(auth)/signup/page.tsx` | Error toast on failure |
+| `apps/frontend/app/(auth)/update-password/page.tsx` | Error toast |
+| `apps/frontend/app/(auth)/verify/page.tsx` | Error toasts for submit and resend |
+| `apps/frontend/app/(auth)/reset-password/page.tsx` | Error toast (kept full-screen submitted state) |
+| `apps/frontend/app/(dashboard)/profile/page.tsx` | Success + error toasts |
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | Pre-order error toasts |
+| `apps/frontend/app/(shop)/checkout/CheckoutClient.tsx` | Error + warning toasts |
+| `apps/frontend/app/(shop)/cart/page.tsx` | Remove-item success toast |
+| `apps/admin/app/(auth)/login/page.tsx` | Sign-in success, error, and unauthorized toasts |
+| `apps/admin/app/(auth)/accept-invite/page.tsx` | Error toasts |
+| `apps/admin/app/components/Header.tsx` | Photo upload error toast |
+| `apps/admin/app/components/products/ProductForm.tsx` | Success + error toasts |
+| `apps/admin/app/(dashboard)/markets/components/InviteAllyModal.tsx` | Success + error toasts |
+| `apps/admin/app/(dashboard)/markets/components/EditAllyDrawer.tsx` | Success + error toasts |
+| `apps/admin/app/(dashboard)/markets/components/CommissionSettingsCard.tsx` | Success + error toasts; removed old `saved` state and timeout |
+| `apps/admin/app/(dashboard)/settings/general/page.tsx` | Success toasts; removed old success states and timeouts |
+| `apps/admin/app/(dashboard)/orders/page.tsx` | Status update success + error toasts |
+| `apps/admin/app/(dashboard)/preorders/page.tsx` | Cancel + restock error handling with toasts |
+| `apps/allies/app/(auth)/login/page.tsx` | Error toast |
+| `apps/allies/app/(dashboard)/sales/page.tsx` | Replaced `alert()` with error toast |
+| `apps/allies/app/onboarding/StepPhoto.tsx` | Error toasts |
+
 *Last updated: 2026-04-22*

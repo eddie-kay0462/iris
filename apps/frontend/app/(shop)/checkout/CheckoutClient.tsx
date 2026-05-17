@@ -280,7 +280,7 @@ export default function CheckoutClient() {
           address: form.address,
           address2: form.address2 || undefined,
           city: form.city,
-          country: form.country,
+          region: form.country,
           postalCode: form.postalCode || undefined,
           phone: form.phone,
         },
