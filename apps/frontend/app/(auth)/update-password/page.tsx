@@ -4,13 +4,13 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
 
 export default function UpdatePasswordPage() {
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [sessionReady, setSessionReady] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -22,14 +22,13 @@ export default function UpdatePasswordPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match");
+      toast.error("Passwords do not match", { duration: 6000 });
       return;
     }
     if (password.length < 8) {
-      setError("Password must be at least 8 characters");
+      toast.error("Password must be at least 8 characters", { duration: 6000 });
       return;
     }
 
@@ -44,7 +43,7 @@ export default function UpdatePasswordPage() {
 
       router.push("/login?message=password-updated");
     } catch (err: any) {
-      setError(err?.message || "Failed to update password. Please try again.");
+      toast.error(err?.message || "Failed to update password. Please try again.", { duration: 6000 });
     } finally {
       setLoading(false);
     }
@@ -101,10 +100,6 @@ export default function UpdatePasswordPage() {
           required
           className="w-full border border-gray-300 p-2 rounded bg-transparent text-white focus:outline-none focus:ring-1 focus:ring-white"
         />
-
-        {error && (
-          <p className="text-sm text-red-400 text-center">{error}</p>
-        )}
 
         <button
           type="submit"

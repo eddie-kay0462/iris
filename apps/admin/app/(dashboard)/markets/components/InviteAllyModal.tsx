@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { inviteAlly } from '../actions'
+import { toast } from 'sonner'
 
 type Props = { onClose: () => void; onSuccess: () => void }
 
@@ -13,7 +14,6 @@ export function InviteAllyModal({ onClose, onSuccess }: Props) {
     commission_rate: 15,
   })
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
 
   function update(k: keyof typeof form, v: string | number) {
     setForm((f) => ({ ...f, [k]: v }))
@@ -22,10 +22,10 @@ export function InviteAllyModal({ onClose, onSuccess }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    setError('')
     const result = await inviteAlly({ ...form, commission_rate: Number(form.commission_rate) })
-    if (result.error) { setError(result.error); setLoading(false); return }
+    if (result.error) { toast.error(result.error, { duration: 6000 }); setLoading(false); return }
     setLoading(false)
+    toast.success('Ally invited successfully.')
     onSuccess()
     onClose()
   }
@@ -79,7 +79,6 @@ export function InviteAllyModal({ onClose, onSuccess }: Props) {
               </div>
             </div>
           </div>
-          {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose}
               className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50">

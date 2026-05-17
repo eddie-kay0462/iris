@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { usePaystackPayment } from "react-paystack";
 import { useCart } from "@/lib/cart";
 import { useCreateOrder } from "@/lib/api/orders";
@@ -10,7 +11,7 @@ import { hasToken, getToken } from "@/lib/api/client";
 import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
 import { useShippingOptions, DEFAULT_SHIPPING_OPTIONS } from "@/lib/api/settings";
 import { useValidatePromo, DiscountType } from "@/lib/api/promos";
-import { Check, Pencil } from "lucide-react";
+import { Check, Pencil, ChevronDown } from "lucide-react";
 
 function generateReference() {
   const ts = Date.now();
@@ -27,27 +28,33 @@ function decodeTokenEmail(token: string): string | null {
   }
 }
 
+const COUNTRY_OPTIONS = [
+  { code: "GH", label: "Ghana", enabled: true },
+  { code: "US", label: "United States", enabled: false },
+  { code: "CA", label: "Canada", enabled: false },
+  { code: "GB", label: "United Kingdom", enabled: false },
+  { code: "NL", label: "Netherlands", enabled: false },
+] as const;
+
 interface ShippingForm {
+  country: string;
   firstName: string;
   lastName: string;
   address: string;
-  email: string;
   address2: string;
   phone: string;
   city: string;
-  region: string;
   postalCode: string;
 }
 
 const EMPTY_FORM: ShippingForm = {
+  country: "GH",
   firstName: "",
   lastName: "",
   address: "",
-  email: "",
   address2: "",
   phone: "",
   city: "",
-  region: "",
   postalCode: "",
 };
 
@@ -57,7 +64,6 @@ function validateForm(form: ShippingForm, isPickup: boolean): Record<string, str
   if (!form.lastName.trim()) errors.lastName = "Last name is required";
   if (!form.phone.trim()) errors.phone = "Phone number is required";
   if (!form.city.trim()) errors.city = "City is required";
-  if (!form.region.trim()) errors.region = "Region is required";
   return errors;
 }
 
@@ -115,10 +121,8 @@ export default function CheckoutClient() {
   const [reference, setReference] = useState("");
   const [pendingOrderNumber, setPendingOrderNumber] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [shippingOption, setShippingOption] = useState<"standard" | "express" | "pickup">("standard");
-  const [cancelMessage, setCancelMessage] = useState("");
   const [promoInput, setPromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<{
     code: string;
@@ -145,7 +149,7 @@ export default function CheckoutClient() {
       const decoded = decodeTokenEmail(token);
       if (decoded) {
         setEmail(decoded);
-        setForm((prev) => ({ ...prev, email: decoded }));
+        setEmail(decoded);
       }
     }
     setReference(generateReference());
@@ -160,10 +164,10 @@ export default function CheckoutClient() {
       ...prev,
       firstName: prev.firstName || profile.first_name || "",
       lastName: prev.lastName || profile.last_name || "",
+      country: addr.country_code && COUNTRY_OPTIONS.find((o) => o.code === addr.country_code)?.enabled ? addr.country_code : prev.country,
       address: prev.address || addr.address1 || "",
       address2: prev.address2 || addr.address2 || "",
       city: prev.city || addr.city || "",
-      region: prev.region || addr.province_code || "",
       postalCode: prev.postalCode || addr.zip || "",
       phone: prev.phone || addr.phone || "",
     }));
@@ -254,8 +258,6 @@ export default function CheckoutClient() {
   }
 
   async function handleValidateAndPay(): Promise<boolean> {
-    setCreateError(null);
-
     const validationErrors = validateForm(form, shippingOption === "pickup");
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
@@ -263,7 +265,6 @@ export default function CheckoutClient() {
     }
 
     setProcessing(true);
-    setCancelMessage("");
     try {
       const order = await createOrder.mutateAsync({
         items: items.map((i) => ({
@@ -279,7 +280,7 @@ export default function CheckoutClient() {
           address: form.address,
           address2: form.address2 || undefined,
           city: form.city,
-          region: form.region,
+          country: form.country,
           postalCode: form.postalCode || undefined,
           phone: form.phone,
         },
@@ -292,9 +293,7 @@ export default function CheckoutClient() {
       setPendingOrderNumber(order.order_number);
       return true;
     } catch (err: any) {
-      setCreateError(
-        err?.message || "Could not start your order. Please try again.",
-      );
+      toast.error(err?.message || "Could not start your order. Please try again.", { duration: 6000 });
       setProcessing(false);
       return false;
     }
@@ -356,6 +355,27 @@ export default function CheckoutClient() {
             </p>
 
             <div className="space-y-4">
+              {/* Row: Country / Region */}
+              <div>
+                <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                  Country / Region
+                </label>
+                <div className="relative">
+                  <select
+                    value={form.country}
+                    onChange={(e) => handleChange("country", e.target.value)}
+                    className={`${inputClass} appearance-none pr-10`}
+                  >
+                    {COUNTRY_OPTIONS.map((opt) => (
+                      <option key={opt.code} value={opt.code} disabled={!opt.enabled}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
+                </div>
+              </div>
+
               {/* Row: First name / Last name */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -394,7 +414,7 @@ export default function CheckoutClient() {
               {shippingOption !== "pickup" && (
                 <div>
                   <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                    Address
+                    Address Line 1
                   </label>
                   <input
                     type="text"
@@ -409,71 +429,21 @@ export default function CheckoutClient() {
                 </div>
               )}
 
-              {/* Row: Email / Label — hidden for pickup */}
+              {/* Row: Address line 2 — hidden for pickup */}
               {shippingOption !== "pickup" && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      value={form.email}
-                      onChange={(e) => handleChange("email", e.target.value)}
-                      placeholder="Email"
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                      Address line 2 <span className="text-gray-400">(optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={form.address2}
-                      onChange={(e) => handleChange("address2", e.target.value)}
-                      placeholder="Apt, suite, unit, etc."
-                      className={inputClass}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Row: Phone / City */}
-              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                    Phone number
+                    Address Line 2 <span className="text-gray-400">(optional)</span>
                   </label>
                   <input
                     type="text"
-                    value={form.phone}
-                    onChange={(e) => handleChange("phone", e.target.value)}
-                    placeholder="Phone number"
+                    value={form.address2}
+                    onChange={(e) => handleChange("address2", e.target.value)}
+                    placeholder="Apt, suite, unit, etc."
                     className={inputClass}
                   />
-                  {errors.phone && (
-                    <p className="mt-1 text-xs text-red-500">{errors.phone}</p>
-                  )}
                 </div>
-                {shippingOption !== "pickup" && (
-                  <div>
-                    <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                      State
-                    </label>
-                    <input
-                      type="text"
-                      value={form.region}
-                      onChange={(e) => handleChange("region", e.target.value)}
-                      placeholder="State"
-                      className={inputClass}
-                    />
-                    {errors.region && (
-                      <p className="mt-1 text-xs text-red-500">{errors.region}</p>
-                    )}
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Row: City / Postal code — hidden for pickup */}
               {shippingOption !== "pickup" && (
@@ -506,7 +476,24 @@ export default function CheckoutClient() {
                     />
                   </div>
                 </div>
+              )}
+
+              {/* Row: Phone */}
+              <div>
+                <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                  Phone number
+                </label>
+                <input
+                  type="text"
+                  value={form.phone}
+                  onChange={(e) => handleChange("phone", e.target.value)}
+                  placeholder="Phone number"
+                  className={inputClass}
+                />
+                {errors.phone && (
+                  <p className="mt-1 text-xs text-red-500">{errors.phone}</p>
                 )}
+              </div>
               </div>
             </div>
 
@@ -532,66 +519,6 @@ export default function CheckoutClient() {
               </p>
             )}
 
-            {createError && (
-              <p className="mb-4 text-sm text-red-500">{createError}</p>
-            )}
-
-            {cancelMessage && (
-              <p className="mb-4 text-sm text-amber-600 dark:text-amber-400">
-                {cancelMessage}
-              </p>
-            )}
-
-            {/* Promo Code */}
-            <div className="mb-4">
-              {appliedPromo ? (
-                <div className="flex items-center justify-between rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm dark:bg-green-950 dark:border-green-800">
-                  <span className="text-green-700 dark:text-green-400">
-                    <strong>{appliedPromo.code}</strong> applied — GH₵{" "}
-                    {appliedPromo.discountAmount.toLocaleString()} off
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAppliedPromo(null);
-                      setPromoInput("");
-                      setPromoError(null);
-                    }}
-                    className="ml-4 text-xs text-green-700 underline hover:text-green-900 dark:text-green-400 dark:hover:text-green-200"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={promoInput}
-                      onChange={(e) => {
-                        setPromoInput(e.target.value.toUpperCase());
-                        setPromoError(null);
-                      }}
-                      onKeyDown={(e) => e.key === "Enter" && handleApplyPromo()}
-                      placeholder="Promo code"
-                      className={inputClass}
-                    />
-                    <button
-                      type="button"
-                      onClick={handleApplyPromo}
-                      disabled={validatePromo.isPending || !promoInput.trim()}
-                      className="shrink-0 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-                    >
-                      {validatePromo.isPending ? "Checking…" : "Apply"}
-                    </button>
-                  </div>
-                  {promoError && (
-                    <p className="mt-1.5 text-xs text-red-500">{promoError}</p>
-                  )}
-                </>
-              )}
-            </div>
-
             <PayNowButton
               email={email}
               amount={total}
@@ -601,7 +528,7 @@ export default function CheckoutClient() {
               onSuccess={handlePaymentSuccess}
               onClose={() => {
                 setReference(generateReference());
-                setCancelMessage("Payment was cancelled. You can try again.");
+                toast.warning("Payment was cancelled. You can try again.", { duration: 5000 });
               }}
             />
           </div>
@@ -650,6 +577,56 @@ export default function CheckoutClient() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Promo Code */}
+          <div className="mt-6">
+            {appliedPromo ? (
+              <div className="flex items-center justify-between rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm dark:bg-green-950 dark:border-green-800">
+                <span className="text-green-700 dark:text-green-400">
+                  <strong>{appliedPromo.code}</strong> applied — GH₵{" "}
+                  {appliedPromo.discountAmount.toLocaleString()} off
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAppliedPromo(null);
+                    setPromoInput("");
+                    setPromoError(null);
+                  }}
+                  className="ml-4 text-xs text-green-700 underline hover:text-green-900 dark:text-green-400 dark:hover:text-green-200"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={promoInput}
+                    onChange={(e) => {
+                      setPromoInput(e.target.value.toUpperCase());
+                      setPromoError(null);
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && handleApplyPromo()}
+                    placeholder="Promo code"
+                    className="w-full rounded-md border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-gray-900 focus:ring-1 focus:ring-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-white dark:focus:ring-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyPromo}
+                    disabled={validatePromo.isPending || !promoInput.trim()}
+                    className="shrink-0 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                  >
+                    {validatePromo.isPending ? "Checking…" : "Apply"}
+                  </button>
+                </div>
+                {promoError && (
+                  <p className="mt-1.5 text-xs text-red-500">{promoError}</p>
+                )}
+              </>
+            )}
           </div>
 
           {/* Summary breakdown */}

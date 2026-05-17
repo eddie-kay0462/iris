@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { MoreHorizontal, Package, RefreshCw, X } from "lucide-react";
+import { toast } from "sonner";
 import {
   usePreorderStats,
   usePreorders,
@@ -75,8 +76,12 @@ function RestockModal({
   const restock = useRestockPreorder();
 
   async function handleRestock() {
-    const res = await restock.mutateAsync({ variantId: preorder.variant_id, quantity: qty });
-    setResult(res);
+    try {
+      const res = await restock.mutateAsync({ variantId: preorder.variant_id, quantity: qty });
+      setResult(res);
+    } catch {
+      toast.error("Restock failed. Please try again.", { duration: 6000 });
+    }
   }
 
   return (
@@ -253,7 +258,12 @@ function ActionsMenu({
                 onClick={async () => {
                   setOpen(false);
                   if (confirm(`Cancel preorder ${preorder.order_number}?`)) {
-                    await cancel.mutateAsync(preorder.id);
+                    try {
+                      await cancel.mutateAsync(preorder.id);
+                      toast.success("Pre-order cancelled.");
+                    } catch {
+                      toast.error("Failed to cancel pre-order.", { duration: 6000 });
+                    }
                   }
                 }}
                 className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"

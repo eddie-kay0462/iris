@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
 
 type Step = "loading" | "set-password" | "success" | "error";
 
@@ -11,7 +12,6 @@ export default function AcceptInvitePage() {
   const [step, setStep] = useState<Step>("loading");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -29,14 +29,13 @@ export default function AcceptInvitePage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
 
     if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+      toast.error("Password must be at least 8 characters.", { duration: 6000 });
       return;
     }
     if (password !== confirm) {
-      setError("Passwords do not match.");
+      toast.error("Passwords do not match.", { duration: 6000 });
       return;
     }
 
@@ -45,7 +44,7 @@ export default function AcceptInvitePage() {
     const { error: updateError } = await supabase.auth.updateUser({ password });
 
     if (updateError) {
-      setError(updateError.message);
+      toast.error(updateError.message, { duration: 6000 });
       setIsSubmitting(false);
       return;
     }
@@ -128,12 +127,6 @@ export default function AcceptInvitePage() {
                     className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm placeholder-slate-400 transition focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-50"
                   />
                 </div>
-
-                {error && (
-                  <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-                    {error}
-                  </p>
-                )}
 
                 <button
                   type="submit"

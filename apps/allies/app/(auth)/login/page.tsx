@@ -4,24 +4,23 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { recordAllyLogin } from './actions'
+import { toast } from 'sonner'
 
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setError('')
     setLoading(true)
 
     const supabase = createClient()
     const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
 
     if (authError) {
-      setError(authError.message)
+      toast.error(authError.message, { duration: 6000 })
       setLoading(false)
       return
     }
@@ -79,13 +78,6 @@ export default function LoginPage() {
           <p className="mt-2 text-sm text-slate-500">
             Sign in to your Allies account to continue.
           </p>
-
-          {error && (
-            <div className="mt-6 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-              <span className="mt-0.5 text-red-400">&#10005;</span>
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          )}
 
           <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
             <div className="space-y-1.5">

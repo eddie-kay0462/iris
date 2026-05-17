@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Search, Plus, Minus, ArrowLeft, X, UserPlus, AlertCircle, RotateCw } from 'lucide-react'
 import { Avatar } from '@/components/Avatar'
+import { toast } from 'sonner'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useAlly } from '@/lib/ally-context'
@@ -281,7 +282,7 @@ export default function SalesPage() {
       .select('id')
       .single()
 
-    if (error || !sale) { setSubmitting(false); alert('Error recording sale: ' + error?.message); return }
+    if (error || !sale) { setSubmitting(false); toast.error('Error recording sale', { description: error?.message, duration: 6000 }); return }
 
     await supabase.from('ally_sale_items').insert(
       lineItems.map((item) => ({

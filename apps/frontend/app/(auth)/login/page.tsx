@@ -1,21 +1,29 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiClient, setToken } from "@/lib/api/client";
+import { toast } from "sonner";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const message = searchParams.get("message");
+
+  useEffect(() => {
+    if (message === "password-updated") {
+      toast.success("Password updated successfully. Please log in with your new password.");
+    } else if (searchParams.get("error") === "auth-callback-failed") {
+      toast.error("The authentication link was invalid or has expired. Please try again.", { duration: 6000 });
+    }
+  }, [message, searchParams]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
 
     try {
@@ -25,13 +33,13 @@ function LoginForm() {
       });
 
       setToken(data.access_token);
+      toast.success("Signed in. Welcome back!");
       router.push("/");
     } catch (err: any) {
       const msg = err?.data?.message ?? err?.message;
-      setError(
-        typeof msg === "string"
-          ? msg
-          : "Invalid email or password"
+      toast.error(
+        typeof msg === "string" ? msg : "Invalid email or password",
+        { duration: 6000 }
       );
     } finally {
       setLoading(false);
@@ -40,18 +48,6 @@ function LoginForm() {
 
   return (
     <div className="w-full space-y-6">
-      {message === "password-updated" && (
-        <div className="rounded border border-green-600 bg-green-950 p-3 text-sm text-green-300 text-center">
-          Password updated successfully. Please log in with your new password.
-        </div>
-      )}
-
-      {searchParams.get("error") === "auth-callback-failed" && (
-        <div className="rounded border border-red-600 bg-red-950 p-3 text-sm text-red-300 text-center">
-          The authentication link was invalid or has expired. Please try again.
-        </div>
-      )}
-
       <div className="space-y-2 text-center">
         <h2 className="text-2xl font-semibold">Log in</h2>
         <p className="text-sm text-gray-500">
@@ -84,10 +80,6 @@ function LoginForm() {
           {loading ? "Signing in..." : "Sign in"}
         </button>
       </form>
-
-      {error ? (
-        <p className="text-sm text-red-600 text-center">{error}</p>
-      ) : null}
 
       <div className="space-y-2 text-center text-sm text-gray-500">
         <p>

@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@/lib/validation";
 import { apiClient } from "@/lib/api/client";
+import { toast } from "sonner";
 
 const signupSchema = z
   .object({
@@ -26,7 +27,6 @@ type SignupValues = z.infer<typeof signupSchema>;
 
 export default function SignupPage() {
   const router = useRouter();
-  const [serverError, setServerError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const {
@@ -38,7 +38,6 @@ export default function SignupPage() {
   });
 
   const onSubmit = async (data: SignupValues) => {
-    setServerError(null);
     setLoading(true);
 
     try {
@@ -55,9 +54,7 @@ export default function SignupPage() {
 
       router.push(`/verify?email=${encodeURIComponent(data.email)}`);
     } catch (err: any) {
-      setServerError(
-        err?.data?.message || err?.data?.error || "Something went wrong"
-      );
+      toast.error(err?.data?.message || err?.data?.error || "Something went wrong", { duration: 6000 });
     } finally {
       setLoading(false);
     }
@@ -74,12 +71,6 @@ export default function SignupPage() {
           Fill in your details to get started.
         </p>
       </div>
-
-      {serverError && (
-        <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800 text-center">
-          {serverError}
-        </div>
-      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">

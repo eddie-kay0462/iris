@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { X, Save } from 'lucide-react'
 import { updateAlly } from '../actions'
+import { toast } from 'sonner'
 
 type Ally = {
   id: string
@@ -32,7 +33,6 @@ export function EditAllyDrawer({ ally, onClose, onSuccess }: Props) {
     commission_quota: ally.commission_quota ?? 0,
   })
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
 
   function update<K extends keyof typeof form>(k: K, v: typeof form[K]) {
     setForm((f) => ({ ...f, [k]: v }))
@@ -40,7 +40,6 @@ export function EditAllyDrawer({ ally, onClose, onSuccess }: Props) {
 
   async function handleSave() {
     setLoading(true)
-    setError('')
     const result = await updateAlly({
       id: ally.id,
       location: form.location,
@@ -49,8 +48,9 @@ export function EditAllyDrawer({ ally, onClose, onSuccess }: Props) {
       commission_quota: form.quota_override ? form.commission_quota : null,
       is_active: form.is_active,
     })
-    if (result.error) { setError(result.error); setLoading(false); return }
+    if (result.error) { toast.error(result.error, { duration: 6000 }); setLoading(false); return }
     setLoading(false)
+    toast.success('Ally updated.')
     onSuccess()
     onClose()
   }
@@ -166,7 +166,6 @@ export function EditAllyDrawer({ ally, onClose, onSuccess }: Props) {
             </div>
           </div>
 
-          {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
 
         {/* Footer */}

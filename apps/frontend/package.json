@@ -31,6 +31,7 @@
     "react-intersection-observer": "^9.16.0",
     "react-paystack": "^6.0.0",
     "sharp": "^0.34.5",
+    "sonner": "^2.0.7",
     "zod": "^4.3.6",
     "zustand": "^5.0.10"
   },

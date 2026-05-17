@@ -3,16 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
 
     try {
@@ -29,7 +28,7 @@ export default function ResetPasswordPage() {
 
       setSubmitted(true);
     } catch (err: any) {
-      setError(err?.message || "Something went wrong. Please try again.");
+      toast.error(err?.message || "Something went wrong. Please try again.", { duration: 6000 });
     } finally {
       setLoading(false);
     }
@@ -61,10 +60,6 @@ export default function ResetPasswordPage() {
             required
             className="w-full border border-gray-300 p-2 rounded focus:outline-none focus:ring-1 focus:ring-black"
           />
-
-          {error && (
-            <p className="text-sm text-red-600 text-center">{error}</p>
-          )}
 
           <button
             type="submit"
