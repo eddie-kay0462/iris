@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Save, AlertCircle } from "lucide-react";
 import { useRevenueTarget, useUpdateRevenueTarget } from "@/lib/api/orders";
 import { useShippingOptions, useUpdateShippingOptions, ShippingOption } from "@/lib/api/settings";
+import { toast } from "sonner";
 
 export default function GeneralSettingsPage() {
   const currentYear = new Date().getFullYear();
@@ -13,7 +14,6 @@ export default function GeneralSettingsPage() {
   const { data: shippingOptions, isLoading: loadingShipping } = useShippingOptions();
   const { mutate: saveShipping, isPending: savingShipping } = useUpdateShippingOptions();
   const [draftShipping, setDraftShipping] = useState<ShippingOption[]>([]);
-  const [shippingSuccess, setShippingSuccess] = useState(false);
 
   useEffect(() => {
     if (shippingOptions) setDraftShipping(shippingOptions);
@@ -40,14 +40,12 @@ export default function GeneralSettingsPage() {
   function handleSaveShipping() {
     saveShipping(draftShipping, {
       onSuccess: () => {
-        setShippingSuccess(true);
-        setTimeout(() => setShippingSuccess(false), 3000);
+        toast.success("Shipping options updated.");
       },
     });
   }
 
   const { data: targetData, isLoading } = useRevenueTarget(selectedYear);
-  const [success, setSuccess] = useState(false);
   const { mutate: updateTarget, isPending } = useUpdateRevenueTarget();
 
   useEffect(() => {
@@ -65,8 +63,7 @@ export default function GeneralSettingsPage() {
         { year: selectedYear, target: numericTarget },
         {
           onSuccess: () => {
-            setSuccess(true);
-            setTimeout(() => setSuccess(false), 3000);
+            toast.success("Revenue target updated.");
           },
         }
       );
@@ -143,12 +140,6 @@ export default function GeneralSettingsPage() {
               <Save className="h-4 w-4" />
               {savingShipping ? "Saving…" : "Save shipping options"}
             </button>
-            {shippingSuccess && (
-              <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 animate-in fade-in slide-in-from-top-1">
-                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                Shipping options updated!
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -212,12 +203,6 @@ export default function GeneralSettingsPage() {
               </div>
             </div>
 
-            {success && (
-              <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 animate-in fade-in slide-in-from-top-1">
-                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                Revenue target updated successfully!
-              </div>
-            )}
           </div>
         </div>
       </div>

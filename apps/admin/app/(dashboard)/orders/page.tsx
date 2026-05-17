@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { useAdminOrders, useUpdateOrderStatus, type Order } from "@/lib/api/orders";
 import { usePaymentStats } from "@/lib/api/payments";
 import { DataTable, type Column } from "../../components/DataTable";
@@ -42,6 +43,9 @@ function StatusDropdown({
     setPending(true);
     try {
       await onUpdate(order.id, newStatus);
+      toast.success(`Order status updated to ${newStatus}.`);
+    } catch {
+      toast.error("Failed to update order status.", { duration: 6000 });
     } finally {
       setPending(false);
     }

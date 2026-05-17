@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { uploadAllyAvatar } from './actions'
+import { toast } from 'sonner'
 
 const CIRCLE_PX = 120 // preview circle diameter in CSS pixels
 const OUTPUT_PX = 256  // final JPEG size
@@ -57,12 +58,10 @@ export function StepPhoto({ ally, onNext }: Props) {
   const [imageSrc, setImageSrc] = useState<string | null>(null)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [uploading, setUploading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setError(null)
     if (imageSrc) URL.revokeObjectURL(imageSrc)
     setImageSrc(URL.createObjectURL(file))
     setOffset({ x: 0, y: 0 })
@@ -88,16 +87,15 @@ export function StepPhoto({ ally, onNext }: Props) {
   async function handleUpload() {
     if (!imageSrc || !imgRef.current) return
     setUploading(true)
-    setError(null)
     try {
       const blob = await cropToJpeg(imgRef.current, offset.x, offset.y)
       const fd = new FormData()
       fd.append('file', new File([blob], 'avatar.jpg', { type: 'image/jpeg' }))
       const result = await uploadAllyAvatar(ally.id, fd)
-      if ('error' in result) { setError(result.error); return }
+      if ('error' in result) { toast.error(result.error, { duration: 6000 }); return }
       onNext(result.url)
     } catch {
-      setError('Upload failed. Please try again.')
+      toast.error('Upload failed. Please try again.', { duration: 6000 })
     } finally {
       setUploading(false)
     }
@@ -172,8 +170,6 @@ export function StepPhoto({ ally, onNext }: Props) {
       >
         {imageSrc ? 'Choose a different photo' : 'Choose photo'}
       </button>
-
-      {error && <p className="text-red-400 text-xs">{error}</p>}
 
       {imageSrc && (
         <button

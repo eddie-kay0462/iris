@@ -15,6 +15,7 @@ import { createPreorder } from "@/lib/api/preorders";
 import { getToken } from "@/lib/api/client";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
+import { toast } from "sonner";
 
 // ─── Paystack inline type ────────────────────────────────────────────────────
 declare global {
@@ -53,8 +54,7 @@ function PreorderModal({
 }: PreorderModalProps) {
   const router = useRouter();
   const [quantity, setQuantity] = useState(1);
-  const [status, setStatus] = useState<"idle" | "paying" | "saving" | "success" | "error">("idle");
-  const [errorMsg, setErrorMsg] = useState("");
+  const [status, setStatus] = useState<"idle" | "paying" | "saving" | "success">("idle");
 
   // Load Paystack script once
   useEffect(() => {
@@ -77,8 +77,7 @@ function PreorderModal({
 
     const pk = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
     if (!pk || !window.PaystackPop) {
-      setErrorMsg("Payment unavailable. Please try again.");
-      setStatus("error");
+      toast.error("Payment unavailable. Please try again.", { duration: 6000 });
       return;
     }
 
@@ -109,8 +108,8 @@ function PreorderModal({
           });
           setStatus("success");
         } catch {
-          setErrorMsg("Payment received but we couldn't record your pre-order. Please contact support with your reference: " + response.reference);
-          setStatus("error");
+          toast.error("Payment received but we couldn't record your pre-order. Please contact support with your reference: " + response.reference, { duration: 10000 });
+          setStatus("idle");
         }
       },
       onClose: () => {
@@ -184,12 +183,6 @@ function PreorderModal({
                 GH₵{total.toLocaleString()}
               </span>
             </div>
-
-            {status === "error" && (
-              <p className="mb-3 rounded-lg bg-red-50 p-3 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-400">
-                {errorMsg}
-              </p>
-            )}
 
             <button
               onClick={handlePay}

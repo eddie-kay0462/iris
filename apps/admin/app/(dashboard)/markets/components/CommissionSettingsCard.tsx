@@ -3,13 +3,12 @@
 import { useEffect, useState } from 'react'
 import { Settings2, Save } from 'lucide-react'
 import { getCommissionSettings, updateCommissionSettings, type CommissionSettings } from '../actions'
+import { toast } from 'sonner'
 
 export function CommissionSettingsCard() {
   const [settings, setSettings] = useState<CommissionSettings | null>(null)
   const [form, setForm] = useState({ default_quota: 0, default_rate: 15, period: 'monthly' as 'monthly' | 'all_time' })
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState('')
 
   useEffect(() => {
     getCommissionSettings().then((s) => {
@@ -24,16 +23,14 @@ export function CommissionSettingsCard() {
 
   async function handleSave() {
     setSaving(true)
-    setError('')
     const result = await updateCommissionSettings({
       default_quota: form.default_quota,
       default_rate: form.default_rate,
       period: form.period,
     })
     setSaving(false)
-    if (result.error) { setError(result.error); return }
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    if (result.error) { toast.error(result.error, { duration: 6000 }); return }
+    toast.success('Commission settings saved.')
   }
 
   if (!settings) return null
@@ -94,15 +91,14 @@ export function CommissionSettingsCard() {
       </div>
 
       <div className="border-t border-slate-100 px-6 py-4 flex items-center justify-between">
-        {error && <p className="text-xs text-red-500">{error}</p>}
-        {!error && <p className="text-xs text-slate-400">Changes apply to all allies without a custom quota override</p>}
+        <p className="text-xs text-slate-400">Changes apply to all allies without a custom quota override</p>
         <button
           onClick={handleSave}
           disabled={saving}
           className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50"
         >
           <Save className="h-3.5 w-3.5" />
-          {saving ? 'Saving...' : saved ? 'Saved' : 'Save Settings'}
+          {saving ? 'Saving...' : 'Save Settings'}
         </button>
       </div>
     </div>

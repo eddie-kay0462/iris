@@ -6,6 +6,7 @@ import { Menu, Camera } from "lucide-react";
 import { apiClient, clearToken } from "@/lib/api/client";
 import { Avatar } from "./Avatar";
 import { uploadAvatar } from "@/lib/uploadAvatar";
+import { toast } from "sonner";
 
 type HeaderProps = {
   onMenuToggle?: () => void;
@@ -49,7 +50,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
       const url = await uploadAvatar(file, `admins/${userId}`, 'profiles', userId);
       setAvatarUrl(url);
     } catch {
-      // silently ignore upload errors in the header
+      toast.error("Failed to upload photo. Please try again.", { duration: 6000 });
     } finally {
       setAvatarUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';

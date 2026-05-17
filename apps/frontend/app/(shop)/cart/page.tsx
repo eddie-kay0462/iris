@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCart } from "@/lib/cart";
 import { Minus, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function CartPage() {
   const { items, subtotal, removeItem, updateQuantity } = useCart();
@@ -90,7 +91,10 @@ export default function CartPage() {
                     <Plus className="h-3 w-3" />
                   </button>
                   <button
-                    onClick={() => removeItem(item.variantId)}
+                    onClick={() => {
+                      removeItem(item.variantId);
+                      toast.success(`${item.productTitle} removed from cart.`);
+                    }}
                     className="ml-2 flex h-8 w-8 items-center justify-center rounded text-gray-400 hover:text-red-500"
                   >
                     <Trash2 className="h-4 w-4" />

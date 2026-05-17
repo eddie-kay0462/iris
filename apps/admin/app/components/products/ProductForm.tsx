@@ -19,6 +19,7 @@ import {
 } from "@/lib/api/products";
 import { apiClient } from "@/lib/api/client";
 import { uploadProductImage } from "@/lib/uploadProductImage";
+import { toast } from "sonner";
 import { VariantsEditor, type LocalVariantDraft } from "./VariantsEditor";
 import { ImagesEditor } from "./ImagesEditor";
 import { CollectionsPicker } from "./CollectionsPicker";
@@ -63,7 +64,6 @@ interface ProductFormProps {
 
 export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
   const router = useRouter();
-  const [error, setError] = useState("");
   const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
 
   // ── Create-mode: staged files collected before the product is created ──────
@@ -176,7 +176,6 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
 
   // ── Submit ──────────────────────────────────────────────────────────────────
   async function onSubmit(values: ProductFormValues) {
-    setError("");
     const payload = {
       ...values,
       early_access_start: values.early_access_start
@@ -225,15 +224,17 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
             });
           } catch { /* best effort */ }
         }
+        toast.success("Product created.");
         bypassNavGuard.current = true;
         router.push(`/products/${created.id}`);
       } else if (product) {
         await updateMutation.mutateAsync(payload as Record<string, unknown>);
         reset(values); // clear isDirty so the nav guard doesn't fire after save
+        toast.success("Product saved.");
         onRefresh?.();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      toast.error(err instanceof Error ? err.message : "Something went wrong", { duration: 6000 });
     }
   }
 
@@ -241,12 +242,6 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* ── Left column — main content ──────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-6">
@@ -290,13 +285,13 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
                 basePrice={watch("base_price")}
                 variants={product.product_variants || []}
                 productImages={product.product_images || []}
-                onAdd={(data) => addVariant.mutate(data, { onSuccess: onRefresh, onError: (err) => setError(err instanceof Error ? err.message : "Failed to add variant") })}
-                onUpdate={(variantId, data) => updateVariant.mutate({ variantId, data }, { onSuccess: onRefresh, onError: (err) => setError(err instanceof Error ? err.message : "Failed to update variant") })}
+                onAdd={(data) => addVariant.mutate(data, { onSuccess: onRefresh, onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to add variant", { duration: 6000 }) })}
+                onUpdate={(variantId, data) => updateVariant.mutate({ variantId, data }, { onSuccess: onRefresh, onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update variant", { duration: 6000 }) })}
                 onDelete={(variantId) => {
                   if (!confirm("Delete this variant?")) return;
                   deleteVariant.mutate(variantId, {
                     onSuccess: onRefresh,
-                    onError: (err) => setError(err instanceof Error ? err.message : "Failed to delete variant"),
+                    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to delete variant", { duration: 6000 }),
                   });
                 }}
               />

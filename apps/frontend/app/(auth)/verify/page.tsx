@@ -4,6 +4,7 @@ import { Suspense, useState, useRef, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiClient, setToken } from "@/lib/api/client";
+import { toast } from "sonner";
 
 const CODE_LENGTH = 8;
 const EMPTY_CODE = Array(CODE_LENGTH).fill("");
@@ -14,7 +15,6 @@ function VerifyForm() {
   const email = searchParams.get("email") || "";
 
   const [code, setCode] = useState<string[]>(EMPTY_CODE);
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -30,7 +30,6 @@ function VerifyForm() {
       const token = digits.join("");
       if (token.length !== CODE_LENGTH) return;
 
-      setError(null);
       setLoading(true);
 
       try {
@@ -46,7 +45,7 @@ function VerifyForm() {
         router.push("/products");
       } catch (err: any) {
         const msg = err?.data?.message ?? err?.message;
-        setError(typeof msg === "string" ? msg : "Invalid verification code");
+        toast.error(typeof msg === "string" ? msg : "Invalid verification code", { duration: 6000 });
         setCode([...EMPTY_CODE]);
         inputRefs.current[0]?.focus();
       } finally {
@@ -105,7 +104,7 @@ function VerifyForm() {
       });
       setResendCooldown(60);
     } catch {
-      setError("Failed to resend code. Please try again.");
+      toast.error("Failed to resend code. Please try again.", { duration: 6000 });
     }
   };
 
@@ -136,12 +135,6 @@ function VerifyForm() {
           <span className="text-white font-medium">{email}</span>
         </p>
       </div>
-
-      {error && (
-        <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800 text-center">
-          {error}
-        </div>
-      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="flex justify-center gap-2" onPaste={handlePaste}>

@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiClient, setToken } from "@/lib/api/client";
+import { toast } from "sonner";
 
 /**
  * Admin Login Page
@@ -16,15 +17,19 @@ function AdminLoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const unauthorizedError = searchParams.get("error") === "unauthorized";
   const redirectTo = searchParams.get("redirectTo") ?? "/";
 
+  useEffect(() => {
+    if (unauthorizedError) {
+      toast.warning("Your account does not have admin access. Please sign in with an admin account.", { duration: 8000 });
+    }
+  }, [unauthorizedError]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
     setIsLoading(true);
 
     try {
@@ -37,12 +42,11 @@ function AdminLoginForm() {
       );
 
       setToken(data.access_token);
+      toast.success("Signed in.");
       router.push(redirectTo);
       router.refresh();
     } catch (err: any) {
-      setError(
-        err?.data?.message || err?.data?.error || "Login failed"
-      );
+      toast.error(err?.data?.message || err?.data?.error || "Login failed", { duration: 6000 });
     } finally {
       setIsLoading(false);
     }
@@ -93,22 +97,6 @@ function AdminLoginForm() {
           <p className="mt-2 text-sm text-slate-500">
             Sign in to your admin account to continue.
           </p>
-
-          {unauthorizedError && (
-            <div className="mt-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-              <span className="mt-0.5 text-amber-500">&#9888;</span>
-              <p className="text-sm text-amber-800">
-                Your account does not have admin access. Please sign in with an admin account.
-              </p>
-            </div>
-          )}
-
-          {error && (
-            <div className="mt-6 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-              <span className="mt-0.5 text-red-400">&#10005;</span>
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          )}
 
           <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
             <div className="space-y-1.5">

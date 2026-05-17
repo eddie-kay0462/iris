@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@/lib/validation";
 import { apiClient } from "@/lib/api/client";
+import { toast } from "sonner";
 
 const profileSchema = z.object({
   first_name: z.string().optional(),
@@ -19,10 +20,6 @@ type ProfileValues = z.infer<typeof profileSchema>;
 export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
 
   const {
     register,
@@ -45,7 +42,7 @@ export default function ProfilePage() {
           sms_notifications: data.sms_notifications ?? false,
         });
       } catch {
-        setMessage({ type: "error", text: "Failed to load profile." });
+        toast.error("Failed to load profile.", { duration: 6000 });
       } finally {
         setLoading(false);
       }
@@ -54,7 +51,6 @@ export default function ProfilePage() {
   }, [reset]);
 
   const onSubmit = async (data: ProfileValues) => {
-    setMessage(null);
     setSaving(true);
 
     try {
@@ -63,12 +59,9 @@ export default function ProfilePage() {
         body: data,
       });
 
-      setMessage({ type: "success", text: "Profile updated." });
+      toast.success("Profile updated.");
     } catch (err: any) {
-      setMessage({
-        type: "error",
-        text: err?.data?.message || err?.data?.error || "Save failed.",
-      });
+      toast.error(err?.data?.message || err?.data?.error || "Save failed.", { duration: 6000 });
     } finally {
       setSaving(false);
     }
@@ -95,18 +88,6 @@ export default function ProfilePage() {
           Update your personal information and notification preferences.
         </p>
       </div>
-
-      {message && (
-        <div
-          className={`rounded border p-3 text-sm text-center ${
-            message.type === "success"
-              ? "border-green-300 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-300"
-              : "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-300"
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
