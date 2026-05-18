@@ -383,12 +383,40 @@ export class ProductsService {
   async updateImage(
     productId: string,
     imageId: string,
-    body: { alt_text?: string; image_type?: string; variant_id?: string | null },
+    body: { alt_text?: string; image_type?: string; variant_id?: string | null; color_tags?: string[] },
   ) {
     const db = this.supabase.getAdminClient();
+
+    const patch: Record<string, unknown> = { ...body };
+
+    // When a variant is linked and the caller hasn't supplied explicit color_tags,
+    // auto-seed color_tags from the variant's option1_value so the gallery can
+    // filter by colour without needing a fully resolved variant.
+    if (body.variant_id && body.color_tags === undefined) {
+      const { data: variant } = await db
+        .from('product_variants')
+        .select('option1_value, option2_value')
+        .eq('id', body.variant_id)
+        .single();
+      if (variant?.option1_value) {
+        // Merge with existing color_tags so we don't overwrite manual tags.
+        const { data: existing } = await db
+          .from('product_images')
+          .select('color_tags')
+          .eq('id', imageId)
+          .single();
+        const current: string[] = existing?.color_tags ?? [];
+        if (!current.includes(variant.option1_value)) {
+          patch.color_tags = [...current, variant.option1_value];
+        }
+        patch.option1_value = variant.option1_value;
+        patch.option2_value = variant.option2_value ?? null;
+      }
+    }
+
     const { data, error } = await db
       .from('product_images')
-      .update(body)
+      .update(patch)
       .eq('id', imageId)
       .eq('product_id', productId)
       .select()

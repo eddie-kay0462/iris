@@ -330,8 +330,15 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
                 productHandle={product.handle}
                 productVariants={product.product_variants || []}
                 onAdd={(src, altText) => addImage.mutate({ src, alt_text: altText })}
-                onUpdateImageType={(imageId, imageType, variantId) =>
-                  updateImage.mutate({ imageId, data: { image_type: imageType, variant_id: variantId } })
+                onUpdateImage={(imageId, update) =>
+                  updateImage.mutate({
+                    imageId,
+                    data: {
+                      ...(update.imageType !== undefined && { image_type: update.imageType }),
+                      ...(update.variantId !== undefined && { variant_id: update.variantId }),
+                      ...(update.colorTags !== undefined && { color_tags: update.colorTags }),
+                    },
+                  })
                 }
                 onDelete={(imageId) => deleteImage.mutate(imageId)}
                 onReorder={(imageIds) => reorderImages.mutate(imageIds)}

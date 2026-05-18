@@ -143,7 +143,7 @@ export class ProductsController {
     @Param('id') id: string,
     @Param('imageId') imageId: string,
     @Body()
-    body: { alt_text?: string; image_type?: string; variant_id?: string | null },
+    body: { alt_text?: string; image_type?: string; variant_id?: string | null; color_tags?: string[] },
   ) {
     return this.productsService.updateImage(id, imageId, body);
   }
