@@ -13,6 +13,7 @@ export interface ProductImage {
   variant_id: string | null;
   option1_value: string | null;
   option2_value: string | null;
+  color_tags: string[];
 }
 
 export interface ProductVariant {
@@ -262,7 +263,7 @@ export function useUpdateImage(productId: string) {
       data,
     }: {
       imageId: string;
-      data: { alt_text?: string; image_type?: string; variant_id?: string | null };
+      data: { alt_text?: string; image_type?: string; variant_id?: string | null; color_tags?: string[] };
     }) =>
       apiClient(`/products/${productId}/images/${imageId}`, {
         method: "PATCH",

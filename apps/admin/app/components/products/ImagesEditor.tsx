@@ -22,33 +22,163 @@ interface PendingImage {
   error?: string;
 }
 
+interface ImageUpdate {
+  imageType?: string;
+  variantId?: string | null;
+  colorTags?: string[];
+}
+
 interface ImagesEditorProps {
   /** Already-saved images from the database */
   images: ProductImage[];
-  /**
-   * Product handle used to build the storage path.
-   * - When provided (edit mode): images are uploaded immediately on drop.
-   * - When absent (create mode): images are staged locally; the parent is
-   *   responsible for uploading them after the product is created.
-   */
   productHandle?: string;
-  /** Variants for associating an image to a specific variant */
+  /** Variants — used to derive the available colour options */
   productVariants?: ProductVariant[];
-  /** Called once an image's storage path is ready (edit mode only) */
   onAdd: (storagePath: string, altText?: string) => void;
-  /** Called when admin changes image_type or variant association on a saved image */
+  /** Called when the admin changes mapping on a saved image */
+  onUpdateImage?: (imageId: string, update: ImageUpdate) => void;
+  /** @deprecated use onUpdateImage */
   onUpdateImageType?: (imageId: string, imageType: string, variantId: string | null) => void;
   onDelete: (imageId: string) => void;
   onReorder: (imageIds: string[]) => void;
-  /** @deprecated kept for backward compatibility; not used internally */
   productId?: string;
-  /**
-   * Create-mode callbacks.
-   * onStagedFile  → called when a file is queued locally (no upload yet).
-   * onRemoveStagedFile → called when the user removes a staged file.
-   */
   onStagedFile?: (file: File, localId: string) => void;
   onRemoveStagedFile?: (localId: string) => void;
+}
+
+// ─── ImageCard ────────────────────────────────────────────────────────────────
+
+function ImageCard({
+  img,
+  availableColors,
+  canEdit,
+  onUpdate,
+  onDelete,
+}: {
+  img: ProductImage;
+  availableColors: string[];
+  canEdit: boolean;
+  onUpdate: (update: ImageUpdate) => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const colorTags: string[] = img.color_tags ?? [];
+
+  function toggleColor(color: string) {
+    const next = colorTags.includes(color)
+      ? colorTags.filter((c) => c !== color)
+      : [...colorTags, color];
+    onUpdate({ colorTags: next });
+  }
+
+  function clearAllColors() {
+    onUpdate({ colorTags: [] });
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 overflow-hidden">
+      <div className="relative group">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={img.src}
+          alt={img.alt_text || "Product image"}
+          className="aspect-square w-full object-cover"
+        />
+        {/* Delete button */}
+        <button
+          type="button"
+          onClick={onDelete}
+          className="absolute right-1 top-1 hidden group-hover:flex rounded-full bg-red-500 p-1 text-white items-center justify-center"
+        >
+          <XIcon />
+        </button>
+        {/* Edit toggle */}
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="absolute left-1 bottom-1 hidden group-hover:flex rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white items-center gap-1"
+          >
+            {open ? "▲ close" : "▼ colours"}
+          </button>
+        )}
+        {/* Color tag badges */}
+        {colorTags.length > 0 && (
+          <div className="absolute top-1 left-1 flex flex-wrap gap-0.5 max-w-[90%]">
+            {colorTags.map((c) => (
+              <span
+                key={c}
+                className="rounded bg-black/70 px-1 py-px text-[9px] font-medium text-white leading-tight"
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+        )}
+        {colorTags.length === 0 && availableColors.length > 0 && (
+          <div className="absolute top-1 left-1">
+            <span className="rounded bg-amber-500/80 px-1 py-px text-[9px] font-medium text-white leading-tight">
+              all colours
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Expanded color mapping panel */}
+      {open && canEdit && (
+        <div className="bg-slate-50 border-t border-slate-200 p-2 space-y-2">
+          {availableColors.length > 0 ? (
+            <>
+              <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
+                Show for colours
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {availableColors.map((color) => {
+                  const checked = colorTags.includes(color);
+                  return (
+                    <label
+                      key={color}
+                      className={`flex items-center gap-1 cursor-pointer rounded px-1.5 py-0.5 text-[10px] border select-none ${
+                        checked
+                          ? "bg-slate-800 text-white border-slate-800"
+                          : "bg-white text-slate-700 border-slate-300 hover:border-slate-500"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={checked}
+                        onChange={() => toggleColor(color)}
+                      />
+                      {color}
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-[9px] text-slate-400">
+                {colorTags.length === 0
+                  ? "No colours selected — image shows for all colours."
+                  : `Shows only for: ${colorTags.join(", ")}`}
+              </p>
+              {colorTags.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearAllColors}
+                  className="text-[10px] text-slate-500 underline hover:text-slate-800"
+                >
+                  Clear — show for all colours
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="text-[10px] text-slate-400">
+              Add colour variants to the product to enable colour mapping.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -58,11 +188,25 @@ export function ImagesEditor({
   productHandle,
   productVariants = [],
   onAdd,
+  onUpdateImage,
   onUpdateImageType,
   onDelete,
   onStagedFile,
   onRemoveStagedFile,
 }: ImagesEditorProps) {
+  // Shim: if only the legacy callback is provided, wrap it.
+  const handleUpdate = (imageId: string, update: ImageUpdate) => {
+    if (onUpdateImage) {
+      onUpdateImage(imageId, update);
+    } else if (onUpdateImageType && update.imageType !== undefined) {
+      onUpdateImageType(imageId, update.imageType, update.variantId ?? null);
+    }
+  };
+
+  // Unique colour values across all variants (option1 = primary colour slot).
+  const availableColors: string[] = Array.from(
+    new Set(productVariants.map((v) => v.option1_value).filter(Boolean) as string[]),
+  );
   const [pending, setPending] = useState<PendingImage[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -183,61 +327,17 @@ export function ImagesEditor({
 
       {/* Image grid — saved + pending */}
       {hasImages && (
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-4 gap-3 items-start">
           {/* Already-saved images */}
           {sorted.map((img) => (
-            <div
+            <ImageCard
               key={img.id}
-              className="group relative overflow-hidden rounded-lg border border-slate-200"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={img.src}
-                alt={img.alt_text || "Product image"}
-                className="aspect-square w-full object-cover"
-              />
-              <button
-                type="button"
-                onClick={() => onDelete(img.id)}
-                className="absolute right-1 top-1 hidden rounded-full bg-red-500 p-1 text-white group-hover:flex items-center justify-center"
-              >
-                <XIcon />
-              </button>
-              {/* Image type badge + variant picker (edit mode only) */}
-              {onUpdateImageType && (
-                <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-1 hidden group-hover:block">
-                  <select
-                    value={img.image_type || "product"}
-                    onChange={(e) =>
-                      onUpdateImageType(img.id, e.target.value, img.variant_id)
-                    }
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-full rounded border border-slate-600 bg-black/80 px-1 py-0.5 text-[10px] text-white outline-none"
-                  >
-                    <option value="product">Product</option>
-                    <option value="variant">Variant</option>
-                    <option value="lifestyle">Lifestyle</option>
-                  </select>
-                  {productVariants.length > 0 && (
-                    <select
-                      value={img.variant_id || ""}
-                      onChange={(e) =>
-                        onUpdateImageType(img.id, img.image_type || "product", e.target.value || null)
-                      }
-                      onClick={(e) => e.stopPropagation()}
-                      className="mt-0.5 w-full rounded border border-slate-600 bg-black/80 px-1 py-0.5 text-[10px] text-white outline-none"
-                    >
-                      <option value="">No variant</option>
-                      {productVariants.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {[v.option1_value, v.option2_value].filter(Boolean).join(" / ") || v.sku || v.id.slice(0, 8)}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              )}
-            </div>
+              img={img}
+              availableColors={availableColors}
+              canEdit={!!(onUpdateImage || onUpdateImageType)}
+              onUpdate={(update) => handleUpdate(img.id, update)}
+              onDelete={() => onDelete(img.id)}
+            />
           ))}
 
           {/* Pending / uploading / staged images */}

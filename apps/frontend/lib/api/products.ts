@@ -18,6 +18,7 @@ export interface ProductImage {
   variant_id: string | null;
   option1_value: string | null;
   option2_value: string | null;
+  color_tags: string[];
 }
 
 export interface ProductVariant {
