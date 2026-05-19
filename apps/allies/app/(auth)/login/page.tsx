@@ -60,7 +60,7 @@ export default function LoginPage() {
             Allies Portal
           </p>
           <p className="text-white/40 text-xs tracking-wide">
-            Partner sales dashboard &mdash; Faith-inspired streetwear.
+            Partner sales dashboard &mdash; Quality streetwear.
           </p>
         </div>
       </div>

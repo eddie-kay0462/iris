@@ -338,7 +338,7 @@ function ShopFooter() {
               unoptimized
             />
             <p className="mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-              Faith-inspired streetwear for the bold and the believing.
+              Quality streetwear for the tasteful and stylish.
             </p>
           </div>
 

@@ -1,8 +1,25 @@
 "use client";
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import type { ProductImage, ProductVariant } from "@/lib/api/products";
 import { uploadProductImage } from "@/lib/uploadProductImage";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  arrayMove,
+  rectSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,6 +81,22 @@ function ImageCard({
   const [open, setOpen] = useState(false);
   const colorTags: string[] = img.color_tags ?? [];
 
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: img.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
   function toggleColor(color: string) {
     const next = colorTags.includes(color)
       ? colorTags.filter((c) => c !== color)
@@ -76,7 +109,7 @@ function ImageCard({
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 overflow-hidden">
+    <div ref={setNodeRef} style={style} className="rounded-lg border border-slate-200 overflow-hidden">
       <div className="relative group">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -84,6 +117,16 @@ function ImageCard({
           alt={img.alt_text || "Product image"}
           className="aspect-square w-full object-cover"
         />
+        {/* Drag handle — always grabbable, shown on hover */}
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="absolute left-1 top-1 hidden group-hover:flex rounded bg-black/70 p-1 text-white items-center justify-center cursor-grab active:cursor-grabbing touch-none"
+          aria-label="Drag to reorder"
+        >
+          <DragHandleIcon />
+        </button>
         {/* Delete button */}
         <button
           type="button"
@@ -98,13 +141,14 @@ function ImageCard({
             type="button"
             onClick={() => setOpen((o) => !o)}
             className="absolute left-1 bottom-1 hidden group-hover:flex rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white items-center gap-1"
+            style={{ marginBottom: colorTags.length > 0 || availableColors.length > 0 ? "1.25rem" : undefined }}
           >
             {open ? "▲ close" : "▼ colours"}
           </button>
         )}
         {/* Color tag badges */}
         {colorTags.length > 0 && (
-          <div className="absolute top-1 left-1 flex flex-wrap gap-0.5 max-w-[90%]">
+          <div className="absolute bottom-1 right-1 flex flex-wrap justify-end gap-0.5 max-w-[90%]">
             {colorTags.map((c) => (
               <span
                 key={c}
@@ -116,7 +160,7 @@ function ImageCard({
           </div>
         )}
         {colorTags.length === 0 && availableColors.length > 0 && (
-          <div className="absolute top-1 left-1">
+          <div className="absolute bottom-1 right-1">
             <span className="rounded bg-amber-500/80 px-1 py-px text-[9px] font-medium text-white leading-tight">
               all colours
             </span>
@@ -191,6 +235,7 @@ export function ImagesEditor({
   onUpdateImage,
   onUpdateImageType,
   onDelete,
+  onReorder,
   onStagedFile,
   onRemoveStagedFile,
 }: ImagesEditorProps) {
@@ -208,10 +253,43 @@ export function ImagesEditor({
     new Set(productVariants.map((v) => v.option1_value).filter(Boolean) as string[]),
   );
   const [pending, setPending] = useState<PendingImage[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
+  const [isDropping, setIsDropping] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const sorted = [...images].sort((a, b) => a.position - b.position);
+  const baseSorted = [...images].sort((a, b) => a.position - b.position);
+
+  // Local order state for instant visual feedback while the server catches up.
+  const [orderedIds, setOrderedIds] = useState<string[]>(() =>
+    baseSorted.map((img) => img.id),
+  );
+
+  // Sync when images prop changes (e.g. after server refetch).
+  useEffect(() => {
+    setOrderedIds(baseSorted.map((img) => img.id));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [images]);
+
+  // Sorted list driven by local order state.
+  const sorted = orderedIds
+    .map((id) => baseSorted.find((img) => img.id === id))
+    .filter(Boolean) as ProductImage[];
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setOrderedIds((ids) => {
+      const oldIndex = ids.indexOf(active.id as string);
+      const newIndex = ids.indexOf(over.id as string);
+      const next = arrayMove(ids, oldIndex, newIndex);
+      onReorder(next);
+      return next;
+    });
+  }
 
   // ── Handle a single file ─────────────────────────────────────────────────
   const handleFile = useCallback(
@@ -284,12 +362,12 @@ export function ImagesEditor({
   // ── Drag handlers ─────────────────────────────────────────────────────────
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(true);
+    setIsDropping(true);
   };
-  const onDragLeave = () => setIsDragging(false);
+  const onDragLeave = () => setIsDropping(false);
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(false);
+    setIsDropping(false);
     handleFiles(e.dataTransfer.files);
   };
 
@@ -327,18 +405,24 @@ export function ImagesEditor({
 
       {/* Image grid — saved + pending */}
       {hasImages && (
-        <div className="grid grid-cols-4 gap-3 items-start">
-          {/* Already-saved images */}
-          {sorted.map((img) => (
-            <ImageCard
-              key={img.id}
-              img={img}
-              availableColors={availableColors}
-              canEdit={!!(onUpdateImage || onUpdateImageType)}
-              onUpdate={(update) => handleUpdate(img.id, update)}
-              onDelete={() => onDelete(img.id)}
-            />
-          ))}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext items={orderedIds} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-4 gap-3 items-start">
+              {/* Already-saved images */}
+              {sorted.map((img) => (
+                <ImageCard
+                  key={img.id}
+                  img={img}
+                  availableColors={availableColors}
+                  canEdit={!!(onUpdateImage || onUpdateImageType)}
+                  onUpdate={(update) => handleUpdate(img.id, update)}
+                  onDelete={() => onDelete(img.id)}
+                />
+              ))}
 
           {/* Pending / uploading / staged images */}
           {pending.map((p) => (
@@ -404,7 +488,9 @@ export function ImagesEditor({
               )}
             </div>
           ))}
-        </div>
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       {/* Drop zone */}
@@ -416,14 +502,14 @@ export function ImagesEditor({
         onDrop={onDrop}
         className={[
           "flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-8 text-sm transition-colors",
-          isDragging
+          isDropping
             ? "border-slate-400 bg-slate-50"
             : "border-slate-200 hover:border-slate-300 hover:bg-slate-50",
         ].join(" ")}
       >
         <UploadIcon />
         <span className="font-medium text-slate-600">
-          {isDragging ? "Drop to upload" : "Drag & drop or click to upload"}
+          {isDropping ? "Drop to upload" : "Drag & drop or click to upload"}
         </span>
         <span className="text-xs text-slate-400">
           {productHandle
@@ -436,6 +522,16 @@ export function ImagesEditor({
 }
 
 // ─── Inline SVG icons ─────────────────────────────────────────────────────────
+
+function DragHandleIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+      <circle cx="4" cy="2.5" r="1" /><circle cx="8" cy="2.5" r="1" />
+      <circle cx="4" cy="6" r="1" /><circle cx="8" cy="6" r="1" />
+      <circle cx="4" cy="9.5" r="1" /><circle cx="8" cy="9.5" r="1" />
+    </svg>
+  );
+}
 
 function XIcon() {
   return (
