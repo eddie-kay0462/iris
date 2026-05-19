@@ -732,7 +732,8 @@ export default function ProductDetailPage({ params }: PageProps) {
               onToggle={() => setOpenAccordion(openAccordion === "shipping" ? null : "shipping")}
             >
               <p>
-                Free standard shipping on orders over GH₵500. Accra &amp; Tema delivery in 1–2
+                {/* Free standard shipping on orders over GH₵500.  */}
+                Accra &amp; Tema delivery in 1–2
                 working days; rest of Ghana 3–5 days; international 7–14 days via DHL. 30-day
                 returns on unworn, tagged items.
               </p>

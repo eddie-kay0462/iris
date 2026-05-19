@@ -596,10 +596,10 @@ export default function HomePage() {
               FW &rsquo;24
             </p>
             <p className="mt-2 font-serif text-2xl italic text-neutral-800 dark:text-neutral-200 sm:text-3xl">
-              Faith-inspired streetwear
+              Quality streetwear
             </p>
             <p className="mt-1 font-serif text-lg italic text-neutral-500 dark:text-neutral-400 sm:text-xl">
-              for the bold &amp; the believing
+              for the tasteful &amp; stylish
             </p>
           </div>
         </div>
