@@ -1,16 +1,29 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useMyOrderByNumber } from "@/lib/api/orders";
+import { useMyOrderByNumber, useGuestOrderByNumber } from "@/lib/api/orders";
+import { hasToken } from "@/lib/api/client";
 import { Loader2 } from "lucide-react";
 
 function ConfirmationContent() {
   const searchParams = useSearchParams();
   const orderNumber = searchParams.get("order") || "";
+  const isSignedIn = hasToken();
 
-  const { data: order, isLoading, isError } = useMyOrderByNumber(orderNumber);
+  const [guestToken, setGuestToken] = useState<string | null>(null);
+  useEffect(() => {
+    setGuestToken(sessionStorage.getItem("iris_guest_token"));
+  }, []);
+
+  const signedInQuery = useMyOrderByNumber(isSignedIn ? orderNumber : "");
+  const guestQuery = useGuestOrderByNumber(
+    !isSignedIn ? orderNumber : "",
+    !isSignedIn ? guestToken : null,
+  );
+
+  const { data: order, isLoading, isError } = isSignedIn ? signedInQuery : guestQuery;
 
   const isPaid = order?.payment_status === "paid";
 
@@ -34,11 +47,18 @@ function ConfirmationContent() {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
         <p className="text-gray-500 dark:text-gray-400">
-          Could not load your order. Please check{" "}
-          <Link href="/orders" className="underline">
-            your orders
-          </Link>{" "}
-          for status.
+          Could not load your order details.{" "}
+          {isSignedIn ? (
+            <>
+              Please check{" "}
+              <Link href="/orders" className="underline">
+                your orders
+              </Link>{" "}
+              for status.
+            </>
+          ) : (
+            "Please check your email for your order confirmation."
+          )}
         </p>
       </div>
     );
@@ -147,12 +167,14 @@ function ConfirmationContent() {
       )}
 
       <div className="mt-8 flex flex-col gap-3">
-        <Link
-          href="/orders"
-          className="inline-block rounded-lg bg-black px-6 py-3 text-sm font-semibold text-white dark:bg-white dark:text-black"
-        >
-          View my orders
-        </Link>
+        {isSignedIn && (
+          <Link
+            href="/orders"
+            className="inline-block rounded-lg bg-black px-6 py-3 text-sm font-semibold text-white dark:bg-white dark:text-black"
+          >
+            View my orders
+          </Link>
+        )}
         <Link
           href="/products"
           className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"

@@ -18,6 +18,7 @@ type SizeStock = { id: string; size: string; stock: number; sku: string | null }
 type Product = {
   id: string
   title: string
+  category: string | null
   product_type: string | null
   base_price: number
   description: string | null
@@ -25,7 +26,14 @@ type Product = {
   images: ProductImage[]
 }
 
-const CATEGORIES = ['All', 'T-Shirts', 'Hoodies', 'Sweatshirts', 'Bottoms', 'Accessories']
+const BROAD_CATEGORIES = ['All', 'Tops', 'Bottoms', 'Accessories', 'Footwear'] as const
+
+const SUBCATEGORY_MAP: Record<string, string[]> = {
+  Tops: ['T-Shirts', 'Shirts', 'Sweatshirts & Tracksuits'],
+  Bottoms: ['Shorts', 'Pants'],
+  Accessories: ['Bags', 'Caps', 'Socks'],
+  Footwear: ['Mules'],
+}
 
 function stockColor(n: number) {
   if (n >= 10) return 'bg-green-500'
@@ -76,6 +84,7 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
+  const [productType, setProductType] = useState('')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [selectedMobile, setSelectedMobile] = useState<Product | null>(null)
   const [activeImageIdx, setActiveImageIdx] = useState(0)
@@ -85,7 +94,7 @@ export default function InventoryPage() {
       const supabase = createClient()
       const { data } = await supabase
         .from('products')
-        .select(`id, title, status, vendor, tags, base_price, description, product_type,
+        .select(`id, title, status, vendor, tags, base_price, description, category, product_type,
           product_variants(id, option1_value, option2_value, option3_value, price, inventory_quantity, sku),
           product_images(id, src, alt_text, position, variant_id, image_type)`)
         .eq('published', true)
@@ -96,6 +105,7 @@ export default function InventoryPage() {
         (data ?? []).map((p: any) => ({
           id: p.id,
           title: p.title,
+          category: p.category ?? null,
           product_type: p.product_type ?? null,
           base_price: p.base_price,
           description: p.description ?? null,
@@ -118,8 +128,9 @@ export default function InventoryPage() {
   const filtered = products.filter((p) => {
     const allSkus = p.sizes.map(s => s.sku ?? '').join(' ')
     const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) || allSkus.toLowerCase().includes(search.toLowerCase())
-    const matchCat = category === 'All' || (p.product_type ?? '').toLowerCase().includes(category.toLowerCase())
-    return matchSearch && matchCat
+    const matchCat = category === 'All' || p.category === category
+    const matchType = !productType || p.product_type === productType
+    return matchSearch && matchCat && matchType
   })
 
   function toggleExpanded(id: string) {
@@ -153,14 +164,27 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-5">
-        {CATEGORIES.map((cat) => (
-          <button key={cat} onClick={() => setCategory(cat)}
+      {/* Broad category tabs */}
+      <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
+        {BROAD_CATEGORIES.map((cat) => (
+          <button key={cat} onClick={() => { setCategory(cat); setProductType('') }}
             className={`shrink-0 px-4 py-2 rounded-md text-xs tracking-[0.1em] uppercase border transition-colors ${category === cat ? 'bg-black dark:bg-white text-white dark:text-black border-black dark:border-white' : 'border-slate-200 dark:border-neutral-800 hover:bg-slate-50 dark:hover:bg-neutral-800'}`}>
             {cat}
           </button>
         ))}
       </div>
+
+      {/* Subcategory pills — visible when a broad category is selected */}
+      {category !== 'All' && SUBCATEGORY_MAP[category] && (
+        <div className="flex gap-2 flex-wrap pb-2 mb-3">
+          {SUBCATEGORY_MAP[category].map((sub) => (
+            <button key={sub} onClick={() => setProductType(productType === sub ? '' : sub)}
+              className={`shrink-0 px-3 py-1 rounded-full text-xs border transition-colors ${productType === sub ? 'bg-black dark:bg-white text-white dark:text-black border-black dark:border-white' : 'border-slate-200 dark:border-neutral-700 text-neutral-500 hover:border-neutral-400 dark:hover:border-neutral-500'}`}>
+              {sub}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm overflow-hidden">
         {/* Mobile: tap to open detail modal */}
@@ -183,7 +207,7 @@ export default function InventoryPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{p.title}</p>
-                  <p className="text-xs text-neutral-400 mt-0.5">{p.product_type ?? '—'} · {p.sizes.length} variant{p.sizes.length !== 1 ? 's' : ''}</p>
+                  <p className="text-xs text-neutral-400 mt-0.5">{[p.category, p.product_type].filter(Boolean).join(' · ') || '—'} · {p.sizes.length} variant{p.sizes.length !== 1 ? 's' : ''}</p>
                 </div>
                 <div className="flex items-center gap-2 ml-3 shrink-0">
                   <div className={`w-2 h-2 rounded-full ${stockColor(minStock)}`} />
@@ -236,7 +260,12 @@ export default function InventoryPage() {
                           <span className="text-sm font-medium">{p.title}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-neutral-500">{p.product_type ?? '—'}</td>
+                      <td className="px-6 py-4 text-sm text-neutral-500">
+                        <span>{p.category ?? '—'}</span>
+                        {p.product_type && (
+                          <span className="ml-1.5 text-[10px] text-neutral-400">· {p.product_type}</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-sm">GH₵ {p.base_price}</td>
                       <td className="px-6 py-4 text-sm text-neutral-500">{p.sizes.length} variant{p.sizes.length !== 1 ? 's' : ''}</td>
                       <td className="px-6 py-4">
@@ -354,7 +383,11 @@ export default function InventoryPage() {
 
               <div className="p-5">
                 <div className="grid grid-cols-2 gap-4 mb-5">
-                  <div><p className="text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-1">Type</p><p className="text-sm">{selectedMobile.product_type ?? '—'}</p></div>
+                  <div>
+                    <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-1">Category</p>
+                    <p className="text-sm">{selectedMobile.category ?? '—'}</p>
+                    {selectedMobile.product_type && <p className="text-xs text-neutral-400 mt-0.5">{selectedMobile.product_type}</p>}
+                  </div>
                   <div><p className="text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-1">Price</p><p className="text-sm font-medium">GH₵ {selectedMobile.base_price}</p></div>
                 </div>
 

@@ -19,11 +19,12 @@ export interface UserProfile {
   default_address: DefaultAddress | string | null;
 }
 
-export function useProfile() {
+export function useProfile(enabled = true) {
   return useQuery({
     queryKey: ["profile"],
     queryFn: () => apiClient<UserProfile>("/profile"),
     staleTime: 5 * 60 * 1000,
+    enabled,
   });
 }
 

@@ -87,6 +87,12 @@ export class ProductsService {
     if (query.gender) {
       q = q.eq('gender', query.gender);
     }
+    if (query.category) {
+      q = q.eq('category', query.category);
+    }
+    if (query.product_type) {
+      q = q.eq('product_type', query.product_type);
+    }
 
     const sortBy = query.sort_by || 'created_at';
     const sortOrder = query.sort_order === 'asc';
@@ -159,6 +165,12 @@ export class ProductsService {
     }
     if (query.vendor) {
       q = q.eq('vendor', query.vendor);
+    }
+    if (query.category) {
+      q = q.eq('category', query.category);
+    }
+    if (query.product_type) {
+      q = q.eq('product_type', query.product_type);
     }
 
     const sortBy = query.sort_by || 'created_at';
