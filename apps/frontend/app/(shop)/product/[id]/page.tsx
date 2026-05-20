@@ -8,6 +8,7 @@ import {
   type OptionSlot,
 } from "../../components/VariantSelector";
 import { useSimilarProducts } from "@/lib/api/recommendations";
+import { addRecentlyViewed, useRecentlyViewed } from "@/lib/recently-viewed";
 import { ProductCard } from "../../components/ProductCard";
 import { createPreorder } from "@/lib/api/preorders";
 import { getToken } from "@/lib/api/client";
@@ -461,6 +462,11 @@ export default function ProductDetailPage({ params }: PageProps) {
 
   const { data: similarProducts } = useSimilarProducts(product?.handle ?? "", 6);
   const { data: allProducts } = useProducts({ published: "true", limit: 8, sort_by: "created_at", sort_order: "desc" });
+  const { items: recentlyViewed } = useRecentlyViewed(product?.id);
+
+  useEffect(() => {
+    if (product) addRecentlyViewed(product);
+  }, [product?.id]);
 
   if (isLoading) {
     return (
@@ -777,6 +783,22 @@ export default function ProductDetailPage({ params }: PageProps) {
           </section>
         );
       })()}
+
+      {/* Recently Viewed */}
+      {recentlyViewed.length > 0 && (
+        <section className="max-w-[1400px] mx-auto px-8 py-14 border-t border-black">
+          <div className="flex justify-between items-baseline mb-7">
+            <h2 className="text-[14px] tracking-[0.22em] uppercase font-medium">
+              Recently Viewed
+            </h2>
+          </div>
+          <div className="grid grid-cols-5 gap-6">
+            {recentlyViewed.slice(0, 5).map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Pre-order modal */}
       {showPreorderModal && active && displayPrice != null && (

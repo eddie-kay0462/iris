@@ -1262,8 +1262,9 @@ export class OrdersService {
       .eq('id', order.id);
 
     // Fetch full order to get items, email, and phone for notifications
+    let fullOrder: any;
     try {
-      const fullOrder = await this.findOne(order.id);
+      fullOrder = await this.findOne(order.id);
 
       // Email receipt — fire and forget
       this.emailService
@@ -1274,6 +1275,20 @@ export class OrdersService {
           shipping_cost: fullOrder.shipping_cost || 0,
           total: fullOrder.total,
           currency: fullOrder.currency || 'GHS',
+          order_items: fullOrder.order_items,
+        })
+        .catch(() => null);
+
+      // Staff fulfillment notification — fire and forget
+      this.emailService
+        .sendStaffOrderNotification({
+          email: fullOrder.email,
+          order_number: fullOrder.order_number,
+          subtotal: fullOrder.subtotal,
+          shipping_cost: fullOrder.shipping_cost || 0,
+          total: fullOrder.total,
+          currency: fullOrder.currency || 'GHS',
+          shipping_address: fullOrder.shipping_address as any,
           order_items: fullOrder.order_items,
         })
         .catch(() => null);
@@ -1291,5 +1306,7 @@ export class OrdersService {
       // Notification failures must never block payment confirmation
       console.error('Notification error after payment confirm:', notifyErr?.message);
     }
+
+    return fullOrder ?? null;
   }
 }

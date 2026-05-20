@@ -10,10 +10,10 @@ import { Loader2 } from "lucide-react";
 function ConfirmationContent() {
   const searchParams = useSearchParams();
   const orderNumber = searchParams.get("order") || "";
-  const isSignedIn = hasToken();
-
+  const [isSignedIn, setIsSignedIn] = useState(false);
   const [guestToken, setGuestToken] = useState<string | null>(null);
   useEffect(() => {
+    setIsSignedIn(hasToken());
     setGuestToken(sessionStorage.getItem("iris_guest_token"));
   }, []);
 

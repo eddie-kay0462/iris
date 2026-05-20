@@ -85,6 +85,17 @@ export interface OrderQueryParams {
 
 // --- Helpers ---
 
+export async function confirmPaymentByReference(reference: string): Promise<Order | null> {
+  try {
+    return await apiClient<Order>("/orders/confirm-payment", {
+      method: "POST",
+      body: { reference },
+    });
+  } catch {
+    return null;
+  }
+}
+
 function toSearchParams(params: OrderQueryParams): string {
   const sp = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {

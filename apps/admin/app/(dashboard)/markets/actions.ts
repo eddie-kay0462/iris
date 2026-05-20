@@ -142,6 +142,34 @@ export type AllyActivityData = {
   sales: { total: number; commission_amount: number; sale_date: string }[]
 }
 
+export async function forceLogoutAlly(allyId: string): Promise<{ success: boolean; error?: string }> {
+  const supabase = getAdminClient()
+
+  const { data: ally, error: fetchError } = await supabase
+    .from('allies')
+    .select('user_id')
+    .eq('id', allyId)
+    .single()
+
+  if (fetchError || !ally) {
+    return { success: false, error: 'Ally not found' }
+  }
+
+  const { error: signOutError } = await supabase.auth.admin.signOut(ally.user_id)
+  if (signOutError) {
+    return { success: false, error: signOutError.message }
+  }
+
+  await logActivity({
+    action: 'force_logout',
+    entity_type: 'ally',
+    entity_id: allyId,
+    changes: { reason: 'admin_initiated' },
+  })
+
+  return { success: true }
+}
+
 export async function fetchAllyActivity(allyId: string): Promise<AllyActivityData> {
   const supabase = getAdminClient()
 
