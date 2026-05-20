@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { usePaystackPayment } from "react-paystack";
 import { useCart } from "@/lib/cart";
@@ -11,7 +12,7 @@ import { hasToken, getToken } from "@/lib/api/client";
 import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
 import { useShippingOptions, DEFAULT_SHIPPING_OPTIONS } from "@/lib/api/settings";
 import { useValidatePromo, DiscountType } from "@/lib/api/promos";
-import { Check, Pencil, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 function generateReference() {
   const ts = Date.now();
@@ -19,14 +20,6 @@ function generateReference() {
   return `IRD-${ts}-${rand}`;
 }
 
-function decodeTokenEmail(token: string): string | null {
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    return payload.email || null;
-  } catch {
-    return null;
-  }
-}
 
 const COUNTRY_OPTIONS = [
   { code: "GH", label: "Ghana", enabled: true },
@@ -114,14 +107,27 @@ export default function CheckoutClient() {
   const router = useRouter();
   const { items, subtotal, clearCart } = useCart();
   const createOrder = useCreateOrder();
-  const { data: profile } = useProfile();
+  const isSignedIn = hasToken();
+  const { data: profile } = useProfile(isSignedIn);
   const [form, setForm] = useState<ShippingForm>(EMPTY_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [email, setEmail] = useState("");
-  const [reference, setReference] = useState("");
+  const [email, setEmail] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const token = getToken();
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        return payload.email || "";
+      } catch {
+        return "";
+      }
+    }
+    return "";
+  });
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [reference, setReference] = useState(() => generateReference());
   const [pendingOrderNumber, setPendingOrderNumber] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
-  const [authChecked, setAuthChecked] = useState(false);
   const [shippingOption, setShippingOption] = useState<"standard" | "express" | "pickup">("standard");
   const [promoInput, setPromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<{
@@ -138,23 +144,6 @@ export default function CheckoutClient() {
     shippingOptions.find((o) => o.id === shippingOption)?.price ?? shippingOptions[0]?.price ?? 40;
   const discountAmount = appliedPromo?.discountAmount ?? 0;
   const total = Math.max(0, subtotal + shippingCost - discountAmount);
-
-  useEffect(() => {
-    if (!hasToken()) {
-      router.push(`/login?redirect=/checkout`);
-      return;
-    }
-    const token = getToken();
-    if (token) {
-      const decoded = decodeTokenEmail(token);
-      if (decoded) {
-        setEmail(decoded);
-        setEmail(decoded);
-      }
-    }
-    setReference(generateReference());
-    setAuthChecked(true);
-  }, [router]);
 
   // Pre-fill address from the user's default address when profile loads
   useEffect(() => {
@@ -197,14 +186,6 @@ export default function CheckoutClient() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shippingOption]);
-
-  if (!authChecked) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center text-gray-500 dark:text-gray-400">
-        Checking authentication...
-      </div>
-    );
-  }
 
   if (items.length === 0) {
     return (
@@ -259,6 +240,18 @@ export default function CheckoutClient() {
 
   async function handleValidateAndPay(): Promise<boolean> {
     const validationErrors = validateForm(form, shippingOption === "pickup");
+
+    if (!isSignedIn) {
+      if (!email.trim()) {
+        setEmailError("Email address is required");
+        return false;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        setEmailError("Please enter a valid email address");
+        return false;
+      }
+    }
+
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       return false;
@@ -288,7 +281,12 @@ export default function CheckoutClient() {
         shippingCost: shippingCost,
         shippingMethod: (shippingOption === "pickup" ? "standard" : shippingOption),
         promoCode: appliedPromo?.code,
+        guestEmail: !isSignedIn ? email.trim() : undefined,
       });
+
+      if (order.guest_token) {
+        sessionStorage.setItem("iris_guest_token", order.guest_token);
+      }
 
       setPendingOrderNumber(order.order_number);
       return true;
@@ -321,22 +319,50 @@ export default function CheckoutClient() {
         <div className="px-6 py-8 lg:px-12 lg:py-10">
           {/* Step 1: Customer */}
           <div className="mb-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-green-500 text-white">
-                  <Check className="h-4 w-4" />
-                </span>
-                <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                  Customer
-                </h2>
-              </div>
-              <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                <Pencil className="h-4 w-4" />
-              </button>
+            <div className="mb-4 flex items-center gap-3">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-900 text-xs font-semibold text-white dark:bg-white dark:text-black">
+                1
+              </span>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                Customer
+              </h2>
             </div>
-            <p className="ml-10 mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {email}
-            </p>
+
+            {isSignedIn ? (
+              <div className="ml-10">
+                <p className="text-sm text-gray-500 dark:text-gray-400">{email}</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Already have an account?{" "}
+                  <Link
+                    href="/login?redirect=/checkout"
+                    className="underline hover:text-gray-700 dark:hover:text-gray-300"
+                  >
+                    Sign in for faster checkout
+                  </Link>
+                </p>
+                <div>
+                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                    Email address
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setEmailError(null);
+                    }}
+                    placeholder="you@example.com"
+                    className={inputClass}
+                  />
+                  {emailError && (
+                    <p className="mt-1 text-xs text-red-500">{emailError}</p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Step 2: Delivery */}

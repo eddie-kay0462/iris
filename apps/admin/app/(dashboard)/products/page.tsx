@@ -58,6 +58,8 @@ export default function AdminProductsPage() {
   const [statusTab, setStatusTab] = useState<"all" | "active" | "draft" | "unpublished">("all");
   const [gender, setGender] = useState("");
   const [brand, setBrand] = useState<"" | "Unlikely Alliances" | "1NRI">("");
+  const [category, setCategory] = useState("");
+  const [productType, setProductType] = useState("");
   const [page, setPage] = useState(1);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [adjustItem, setAdjustItem] = useState<InventoryItem | null>(null);
@@ -68,12 +70,21 @@ export default function AdminProductsPage() {
     : undefined;
   const publishedParam = statusTab === "unpublished" ? "false" : undefined;
 
+  const SUBCATEGORY_MAP: Record<string, string[]> = {
+    Tops: ["T-Shirts", "Shirts", "Sweatshirts & Tracksuits"],
+    Bottoms: ["Shorts", "Pants"],
+    Accessories: ["Bags", "Caps", "Socks"],
+    Footwear: ["Mules"],
+  };
+
   const { data, isLoading } = useAdminProducts({
     search,
     status: statusParam,
     published: publishedParam,
     gender: gender || undefined,
     vendor: brand || undefined,
+    category: category || undefined,
+    product_type: productType || undefined,
     page,
     limit: 20,
   });
@@ -215,6 +226,39 @@ export default function AdminProductsPage() {
           <option value="women">Women</option>
           <option value="all">All</option>
         </select>
+
+        <select
+          value={category}
+          onChange={(e) => {
+            setCategory(e.target.value);
+            setProductType("");
+            setPage(1);
+          }}
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        >
+          <option value="">All categories</option>
+          <option value="Tops">Tops</option>
+          <option value="Bottoms">Bottoms</option>
+          <option value="Accessories">Accessories</option>
+          <option value="Footwear">Footwear</option>
+        </select>
+
+        {category && (
+          <select
+            value={productType}
+            onChange={(e) => {
+              setProductType(e.target.value);
+              setPage(1);
+            }}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          >
+            <option value="">All types</option>
+            {(SUBCATEGORY_MAP[category] ?? []).map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        )}
+
         <button
           onClick={() => setShowMovements(!showMovements)}
           className="ml-auto text-sm text-slate-600 hover:text-slate-900"
@@ -322,7 +366,14 @@ export default function AdminProductsPage() {
                               No img
                             </div>
                           )}
-                          <span className="font-medium">{product.title}</span>
+                          <div>
+                            <span className="font-medium">{product.title}</span>
+                            {product.product_type && (
+                              <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                                {product.product_type}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td

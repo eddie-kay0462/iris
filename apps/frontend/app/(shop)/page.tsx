@@ -386,6 +386,45 @@ export default function HomePage() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════
+          CATEGORY CARDS — Shop by broad category
+          ══════════════════════════════════════════════════════════════ */}
+      <section className="py-16 px-4 sm:py-20 bg-neutral-50 dark:bg-neutral-950">
+        <div className="mx-auto max-w-7xl">
+          <p className="mb-8 text-center text-[10px] font-semibold uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500">
+            Shop by Category
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+            {[
+              { label: "Tops", href: "/products?category=Tops", image: "/homepage/2.jpeg", pos: "object-top" },
+              { label: "Bottoms", href: "/products?category=Bottoms", image: "/homepage/3.png", pos: "object-center" },
+              { label: "Accessories", href: "/products?category=Accessories", image: "/homepage/4.jpeg", pos: "object-top" },
+              { label: "Footwear", href: "/products?category=Footwear", image: "/homepage/1.jpeg", pos: "object-top" },
+            ].map((cat) => (
+              <Link
+                key={cat.label}
+                href={cat.href}
+                className="group relative aspect-[3/4] overflow-hidden"
+              >
+                <Image
+                  src={cat.image}
+                  alt={cat.label}
+                  fill
+                  className={`object-cover ${cat.pos} transition-transform duration-500 group-hover:scale-105`}
+                  sizes="(max-width: 640px) 50vw, 25vw"
+                />
+                <div className="absolute inset-0 bg-black/40 transition-colors duration-300 group-hover:bg-black/50" />
+                <div className="absolute inset-0 flex items-end p-4 sm:p-5">
+                  <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white">
+                    {cat.label}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════
           SCENE 3 — CIRCLE REVEAL
           Image hidden behind an expanding clip-path circle; text
           fades in once the circle is large enough to read against.

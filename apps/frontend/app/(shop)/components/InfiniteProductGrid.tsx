@@ -11,12 +11,15 @@ interface InfiniteProductGridProps {
     sort?: string;
     search?: string;
     category?: string;
+    productType?: string;
 }
 
 export function InfiniteProductGrid({
     gender,
     sort,
     search,
+    category,
+    productType,
 }: InfiniteProductGridProps) {
     const [sortBy, sortOrder] = (sort || "created_at:desc").split(":");
 
@@ -30,6 +33,8 @@ export function InfiniteProductGrid({
     } = useInfiniteProducts({
         gender: gender || undefined,
         search: search || undefined,
+        category: category || undefined,
+        product_type: productType || undefined,
         sort_by: sortBy,
         sort_order: sortOrder,
         limit: 16,

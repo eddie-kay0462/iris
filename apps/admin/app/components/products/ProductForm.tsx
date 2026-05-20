@@ -27,16 +27,14 @@ import { useAddCollectionProducts } from "@/lib/api/collections";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PRODUCT_TYPES = [
-  "T-Shirt",
-  "Hoodie",
-  "Quarter Zip",
-  "Sweatshirt",
-  "Long Sleeve",
-  "Cap",
-  "Tote Bag",
-  "Collab",
-];
+const CATEGORY_OPTIONS = ["Tops", "Bottoms", "Accessories", "Footwear"] as const;
+
+const SUBCATEGORY_MAP: Record<string, string[]> = {
+  Tops: ["T-Shirts", "Shirts", "Sweatshirts & Tracksuits"],
+  Bottoms: ["Shorts", "Pants"],
+  Accessories: ["Bags", "Caps", "Socks"],
+  Footwear: ["Mules"],
+};
 
 const VENDORS = ["1NRI", "Unlikely Alliances"] as const;
 
@@ -103,6 +101,7 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
       base_price: (product?.base_price ?? "") as unknown as number,
       status: product?.status || "draft",
       gender: product?.gender ?? "all",
+      category: product?.category || "",
       product_type: product?.product_type || "",
       vendor: product?.vendor || "",
       tags: product?.tags || [],
@@ -162,6 +161,7 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
 
   // Watch tags so the chip state stays in sync
   const currentTags = watch("tags") as string[] | undefined;
+  const watchedCategory = watch("category") as string | undefined;
 
   // ── Tags helpers ────────────────────────────────────────────────────────────
   function tagList(): string[] {
@@ -397,20 +397,37 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
               </select>
             </div>
 
-            {/* Product type — combobox with datalist */}
+            {/* Category */}
             <div>
-              <label className="mb-1 block text-xs text-slate-500">Product type</label>
-              <input
-                {...register("product_type")}
-                list="product-type-options"
-                placeholder="Select or type a new type…"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-              />
-              <datalist id="product-type-options">
-                {PRODUCT_TYPES.map((t) => (
-                  <option key={t} value={t} />
+              <label className="mb-1 block text-xs text-slate-500">Category</label>
+              <select
+                {...register("category")}
+                onChange={(e) => {
+                  setValue("category", e.target.value);
+                  setValue("product_type", "");
+                }}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              >
+                <option value="">— Select category —</option>
+                {CATEGORY_OPTIONS.map((c) => (
+                  <option key={c} value={c}>{c}</option>
                 ))}
-              </datalist>
+              </select>
+            </div>
+
+            {/* Product type — filtered by category */}
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">Type</label>
+              <select
+                {...register("product_type")}
+                disabled={!watchedCategory}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-50"
+              >
+                <option value="">— Select type —</option>
+                {(watchedCategory ? SUBCATEGORY_MAP[watchedCategory] ?? [] : []).map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
             </div>
 
             {/* Vendor — constrained dropdown */}

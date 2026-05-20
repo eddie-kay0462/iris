@@ -29,8 +29,9 @@ export interface OrderStatusHistory {
 
 export interface Order {
   id: string;
-  user_id: string;
+  user_id: string | null;
   email: string;
+  guest_token?: string | null;
   order_number: string;
   status: string;
   subtotal: number;
@@ -141,6 +142,7 @@ export function useCreateOrder() {
       shippingCost: number;
       shippingMethod: "standard" | "express";
       promoCode?: string;
+      guestEmail?: string;
     }) => apiClient<Order>("/orders", { method: "POST", body: data }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my-orders"] });
@@ -169,6 +171,20 @@ export function useMyOrderByNumber(orderNumber: string) {
     queryKey: ["my-order-by-number", orderNumber],
     queryFn: () => apiClient<Order>(`/orders/my/by-number/${orderNumber}`),
     enabled: !!orderNumber,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data?.payment_status === "paid") return false;
+      return 3000;
+    },
+  });
+}
+
+export function useGuestOrderByNumber(orderNumber: string, guestToken: string | null) {
+  return useQuery({
+    queryKey: ["guest-order-by-number", orderNumber, guestToken],
+    queryFn: () =>
+      apiClient<Order>(`/orders/guest/${orderNumber}?token=${guestToken}`),
+    enabled: !!orderNumber && !!guestToken,
     refetchInterval: (query) => {
       const data = query.state.data;
       if (data?.payment_status === "paid") return false;

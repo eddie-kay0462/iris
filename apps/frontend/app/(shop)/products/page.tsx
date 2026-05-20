@@ -10,12 +10,14 @@ import { useState } from 'react';
 function ProductCatalogContent() {
   const searchParams = useSearchParams();
   const initialSearch = searchParams.get("search") || "";
+  const initialCategory = searchParams.get("category") || "";
+  const initialProductType = searchParams.get("product_type") || "";
 
   const [gender, setGender] = useState("");
   const [sort, setSort] = useState("created_at:desc");
   const [search, setSearch] = useState(initialSearch);
-  const [category, setCategory] = useState("");
-  /* Removed page state as it's handled by infinite scroll */
+  const [category, setCategory] = useState(initialCategory);
+  const [productType, setProductType] = useState(initialProductType);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
@@ -33,18 +35,15 @@ function ProductCatalogContent() {
           sort={sort}
           search={search}
           category={category}
-          onGenderChange={(v) => {
-            setGender(v);
-          }}
-          onSortChange={(v) => {
-            setSort(v);
-          }}
-          onSearchChange={(v) => {
-            setSearch(v);
-          }}
+          productType={productType}
+          onGenderChange={setGender}
+          onSortChange={setSort}
+          onSearchChange={setSearch}
           onCategoryChange={(v) => {
             setCategory(v);
+            setProductType("");
           }}
+          onProductTypeChange={setProductType}
         />
       </div>
 
@@ -54,6 +53,7 @@ function ProductCatalogContent() {
           sort={sort}
           search={search}
           category={category}
+          productType={productType}
         />
       </div>
     </div>

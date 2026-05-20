@@ -46,6 +46,7 @@ export interface Product {
   status: "draft" | "active" | "archived";
   gender: "men" | "women" | "all" | "unisex" | null;
   product_type: string | null;
+  category: string | null;
   vendor: string | null;
   tags: string[] | null;
   published: boolean;
@@ -78,6 +79,8 @@ export interface ProductQueryParams {
   gender?: string;
   published?: string;
   vendor?: string;
+  category?: string;
+  product_type?: string;
   sort_by?: string;
   sort_order?: string;
   page?: number;

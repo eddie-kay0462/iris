@@ -23,6 +23,14 @@ export class QueryProductsDto {
 
   @IsOptional()
   @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsString()
+  product_type?: string;
+
+  @IsOptional()
+  @IsString()
   sort_by?: string;
 
   @IsOptional()

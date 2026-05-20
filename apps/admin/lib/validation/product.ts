@@ -33,6 +33,7 @@ export const productSchema = z.object({
     (val) => (val === "" ? "all" : val),
     z.enum(["men", "women", "all", "unisex"]).optional()
   ),
+  category: z.string().optional(),
   product_type: z.string().optional(),
   vendor: z.string().optional(),
   tags: z.array(z.string()).optional(),

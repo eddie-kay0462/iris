@@ -54,7 +54,11 @@ export class OrdersService {
     return `IRD-${String(next).padStart(6, '0')}`;
   }
 
-  async create(dto: CreateOrderDto, userId: string, email: string) {
+  async create(dto: CreateOrderDto, userId: string | null, email: string | null) {
+    const resolvedEmail = email ?? dto.guestEmail ?? '';
+    if (!resolvedEmail) {
+      throw new BadRequestException('Email is required for guest checkout');
+    }
     const db = this.supabase.getAdminClient();
 
     // 1. Validate stock for all items
@@ -113,12 +117,14 @@ export class OrdersService {
     // 3. Generate order number
     const orderNumber = await this.generateOrderNumber();
 
+    const guestToken = !userId ? crypto.randomUUID() : null;
+
     // 4. Insert order
     const { data: order, error: orderError } = await db
       .from('orders')
       .insert({
         user_id: userId,
-        email,
+        email: resolvedEmail,
         order_number: orderNumber,
         status: 'pending',
         subtotal,
@@ -131,6 +137,7 @@ export class OrdersService {
         payment_reference: dto.paymentReference,
         payment_status: 'pending',
         applied_promo_code_id: appliedPromoCodeId,
+        guest_token: guestToken,
       })
       .select()
       .single();
@@ -198,7 +205,8 @@ export class OrdersService {
       );
     }
 
-    return this.findOne(order.id);
+    const result = await this.findOne(order.id);
+    return { ...result, guest_token: guestToken };
   }
 
   async findOne(id: string) {
@@ -1121,7 +1129,12 @@ export class OrdersService {
    * Idempotent: returns the existing order if one already exists for the same
    * payment_reference (so retries / double-clicks are safe).
    */
-  async createPending(dto: CreateOrderDto, userId: string, email: string) {
+  async createPending(dto: CreateOrderDto, userId: string | null, email: string | null) {
+    const resolvedEmail = email ?? dto.guestEmail ?? '';
+    if (!resolvedEmail) {
+      throw new BadRequestException('Email is required for guest checkout');
+    }
+
     const db = this.supabase.getAdminClient();
 
     // Idempotency: if an order with this reference already exists, return it.
@@ -1161,12 +1174,14 @@ export class OrdersService {
     // 3. Generate order number
     const orderNumber = await this.generateOrderNumber();
 
+    const guestToken = !userId ? crypto.randomUUID() : null;
+
     // 4. Insert order as pending
     const { data: order, error: orderError } = await db
       .from('orders')
       .insert({
         user_id: userId,
-        email,
+        email: resolvedEmail,
         order_number: orderNumber,
         status: 'pending',
         subtotal,
@@ -1176,6 +1191,7 @@ export class OrdersService {
         payment_provider: 'paystack',
         payment_reference: dto.paymentReference,
         payment_status: 'pending',
+        guest_token: guestToken,
       })
       .select()
       .single();
@@ -1197,7 +1213,23 @@ export class OrdersService {
     const { error: itemsError } = await db.from('order_items').insert(orderItems);
     if (itemsError) throw itemsError;
 
-    return this.findOne(order.id);
+    const result = await this.findOne(order.id);
+    return { ...result, guest_token: guestToken };
+  }
+
+  async findGuestOrder(orderNumber: string, token: string) {
+    if (!token) throw new NotFoundException('Order not found');
+    const db = this.supabase.getAdminClient();
+    const { data, error } = await db
+      .from('orders')
+      .select('*, order_items(*)')
+      .eq('order_number', orderNumber)
+      .eq('guest_token', token)
+      .is('deleted_at', null)
+      .single();
+
+    if (error || !data) throw new NotFoundException('Order not found');
+    return data;
   }
 
   /**
