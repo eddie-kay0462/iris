@@ -90,6 +90,7 @@ export function ProductFilters({
             placeholder="Match..."
             className="w-40 border-b border-gray-300 bg-transparent py-1.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-black dark:border-gray-600 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-white"
           /> */}
+          
         </div>
 
         {/* Broad category tabs */}
