@@ -6,7 +6,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { usePaystackPayment } from "react-paystack";
 import { useCart } from "@/lib/cart";
-import { useCreateOrder } from "@/lib/api/orders";
+import { useCreateOrder, confirmPaymentByReference } from "@/lib/api/orders";
 import { useProfile, parseDefaultAddress } from "@/lib/api/profile";
 import { hasToken, getToken } from "@/lib/api/client";
 import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
@@ -107,7 +107,8 @@ export default function CheckoutClient() {
   const router = useRouter();
   const { items, subtotal, clearCart } = useCart();
   const createOrder = useCreateOrder();
-  const isSignedIn = hasToken();
+  const [isSignedIn, setIsSignedIn] = useState(false);
+  useEffect(() => { setIsSignedIn(hasToken()); }, []);
   const { data: profile } = useProfile(isSignedIn);
   const [form, setForm] = useState<ShippingForm>(EMPTY_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -299,7 +300,10 @@ export default function CheckoutClient() {
 
   async function handlePaymentSuccess() {
     clearCart();
-    const orderNum = pendingOrderNumber ?? reference;
+    // Confirm payment server-side and get the real order number back.
+    // This is idempotent — safe if the webhook already ran.
+    const confirmed = await confirmPaymentByReference(reference);
+    const orderNum = confirmed?.order_number ?? pendingOrderNumber ?? reference;
     router.push(`/checkout/confirmation?order=${orderNum}`);
   }
 

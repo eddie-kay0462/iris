@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X, LogIn, ShoppingBag, TrendingUp, Clock } from 'lucide-react'
-import { fetchAllyActivity, type AllyActivityData } from '../actions'
+import { X, LogIn, ShoppingBag, TrendingUp, Clock, LogOut } from 'lucide-react'
+import { toast } from 'sonner'
+import { fetchAllyActivity, forceLogoutAlly, type AllyActivityData } from '../actions'
 
 type Props = {
   allyId: string
@@ -89,6 +90,8 @@ function WeeklyBars({ weeks }: { weeks: { label: string; count: number }[] }) {
 export function AllyActivityDrawer({ allyId, allyName, onClose }: Props) {
   const [data, setData] = useState<AllyActivityData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [confirmLogout, setConfirmLogout] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
 
   useEffect(() => {
     fetchAllyActivity(allyId).then((d) => {
@@ -96,6 +99,19 @@ export function AllyActivityDrawer({ allyId, allyName, onClose }: Props) {
       setLoading(false)
     })
   }, [allyId])
+
+  async function handleForceLogout() {
+    setLoggingOut(true)
+    const result = await forceLogoutAlly(allyId)
+    setLoggingOut(false)
+    if (result.success) {
+      toast.success(`${allyName} has been logged out`)
+      onClose()
+    } else {
+      toast.error(result.error ?? 'Failed to log out ally')
+      setConfirmLogout(false)
+    }
+  }
 
   const lastLogin = data?.logins[0]?.logged_in_at ?? null
   const totalLogins = data?.logins.length ?? 0
@@ -120,9 +136,37 @@ export function AllyActivityDrawer({ allyId, allyName, onClose }: Props) {
             <h3 className="text-base font-semibold text-slate-900">{allyName}</h3>
             <p className="text-xs text-slate-500 mt-0.5">Activity Monitor</p>
           </div>
-          <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100">
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {!confirmLogout ? (
+              <button
+                onClick={() => setConfirmLogout(true)}
+                className="flex items-center gap-1.5 rounded-md border border-red-200 px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Force Logout
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-slate-500">End their session?</span>
+                <button
+                  onClick={handleForceLogout}
+                  disabled={loggingOut}
+                  className="rounded-md bg-red-600 px-2.5 py-1.5 text-xs text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                >
+                  {loggingOut ? 'Logging out…' : 'Yes, logout'}
+                </button>
+                <button
+                  onClick={() => setConfirmLogout(false)}
+                  className="rounded-md px-2.5 py-1.5 text-xs text-slate-500 hover:bg-slate-100 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+            <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">

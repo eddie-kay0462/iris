@@ -42,6 +42,36 @@ export class EmailService {
     await this.send(order.email, subject, html, order.order_number);
   }
 
+  async sendStaffOrderNotification(order: {
+    order_number: string;
+    email: string;
+    subtotal: number;
+    shipping_cost: number;
+    total: number;
+    currency: string;
+    shipping_address?: {
+      fullName?: string;
+      address?: string;
+      address2?: string;
+      city?: string;
+      region?: string;
+      phone?: string;
+    } | null;
+    order_items?: {
+      product_name: string;
+      variant_title?: string | null;
+      quantity: number;
+      unit_price: number;
+      total_price: number;
+    }[];
+  }): Promise<void> {
+    const staffEmail = this.configService.get<string>('STAFF_FULFILLMENT_EMAIL', '');
+    if (!staffEmail) return;
+    const subject = `New Order — ${order.order_number}`;
+    const html = this.buildStaffOrderHtml(order);
+    await this.send(staffEmail, subject, html, order.order_number);
+  }
+
   async sendShippingNotification(order: {
     email: string;
     order_number: string;
@@ -179,6 +209,125 @@ export class EmailService {
           </table>
 
           <p style="margin:28px 0 0;font-size:13px;color:#999;">We'll send you another update when your order ships.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+  }
+
+  private buildStaffOrderHtml(order: {
+    order_number: string;
+    email: string;
+    subtotal: number;
+    shipping_cost: number;
+    total: number;
+    currency: string;
+    shipping_address?: {
+      fullName?: string;
+      address?: string;
+      address2?: string;
+      city?: string;
+      region?: string;
+      phone?: string;
+    } | null;
+    order_items?: {
+      product_name: string;
+      variant_title?: string | null;
+      quantity: number;
+      unit_price: number;
+      total_price: number;
+    }[];
+  }): string {
+    const symbol = order.currency === 'GHS' ? 'GH₵' : order.currency;
+    const addr = order.shipping_address || {};
+
+    const addressLines = [
+      addr.fullName,
+      addr.address,
+      addr.address2,
+      addr.city,
+      addr.region,
+    ]
+      .filter(Boolean)
+      .join('<br>');
+
+    const itemRows = (order.order_items || [])
+      .map(
+        (item) => `
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#111;">
+            ${item.product_name}${item.variant_title ? ` — ${item.variant_title}` : ''}
+          </td>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#111;text-align:center;">
+            ${item.quantity}
+          </td>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#111;text-align:right;white-space:nowrap;">
+            ${symbol} ${item.total_price.toLocaleString()}
+          </td>
+        </tr>`,
+      )
+      .join('');
+
+    return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>New Order</title></head>
+<body style="margin:0;padding:0;background:#f9f9f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f9f9;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;overflow:hidden;border:1px solid #e8e8e8;max-width:560px;">
+        <tr><td style="background:#000;padding:24px 32px;display:flex;align-items:center;justify-content:space-between;">
+          <p style="margin:0;font-size:22px;font-weight:700;color:#fff;letter-spacing:4px;display:inline;">1NRI</p>
+          <span style="display:inline-block;margin-left:16px;background:#f59e0b;color:#000;font-size:11px;font-weight:700;letter-spacing:0.1em;padding:4px 10px;text-transform:uppercase;">New Order</span>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <h1 style="margin:0 0 4px;font-size:20px;font-weight:700;color:#111;">New order to fulfil</h1>
+          <p style="margin:0 0 28px;font-size:14px;color:#666;">Order <strong>${order.order_number}</strong></p>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <tr>
+              <td width="50%" style="vertical-align:top;padding-right:16px;">
+                <p style="margin:0 0 6px;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#999;">Customer</p>
+                <p style="margin:0;font-size:14px;color:#111;">${addr.fullName || '—'}</p>
+                <p style="margin:2px 0 0;font-size:14px;color:#555;">${order.email}</p>
+                ${addr.phone ? `<p style="margin:2px 0 0;font-size:14px;color:#555;">${addr.phone}</p>` : ''}
+              </td>
+              <td width="50%" style="vertical-align:top;">
+                <p style="margin:0 0 6px;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#999;">Ship to</p>
+                <p style="margin:0;font-size:14px;color:#111;line-height:1.5;">${addressLines || '—'}</p>
+              </td>
+            </tr>
+          </table>
+
+          <p style="margin:0 0 10px;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#999;">Items to pick</p>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <th style="text-align:left;font-size:11px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:8px;border-bottom:2px solid #111;">Product</th>
+              <th style="text-align:center;font-size:11px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:8px;border-bottom:2px solid #111;">Qty</th>
+              <th style="text-align:right;font-size:11px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:8px;border-bottom:2px solid #111;">Price</th>
+            </tr>
+            ${itemRows}
+          </table>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;border-top:2px solid #111;padding-top:16px;">
+            <tr>
+              <td style="font-size:13px;color:#999;padding:3px 0;">Subtotal</td>
+              <td style="font-size:13px;color:#999;text-align:right;">${symbol} ${order.subtotal.toLocaleString()}</td>
+            </tr>
+            <tr>
+              <td style="font-size:13px;color:#999;padding:3px 0;">Shipping</td>
+              <td style="font-size:13px;color:#999;text-align:right;">${symbol} ${(order.shipping_cost || 0).toLocaleString()}</td>
+            </tr>
+            <tr>
+              <td style="font-size:15px;font-weight:700;color:#111;padding-top:10px;">Total paid</td>
+              <td style="font-size:15px;font-weight:700;color:#111;text-align:right;padding-top:10px;">${symbol} ${order.total.toLocaleString()}</td>
+            </tr>
+          </table>
+
+          <p style="margin:28px 0 0;font-size:12px;color:#aaa;border-top:1px solid #f0f0f0;padding-top:20px;">
+            Log in to the admin dashboard to update this order's status once it's packed and dispatched.
+          </p>
         </td></tr>
       </table>
     </td></tr>

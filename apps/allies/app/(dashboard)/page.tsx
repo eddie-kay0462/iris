@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, TrendingUp, Wallet, ShoppingBag, Trophy } from 'lucide-react'
+import { ArrowRight, TrendingUp, Wallet, ShoppingBag, Trophy, Percent } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAlly } from '@/lib/ally-context'
 
@@ -24,6 +24,15 @@ type Stats = {
   rank: number | null
 }
 
+type CommissionPolicy = {
+  effectiveRate: number
+  effectiveQuota: number
+  period: 'monthly' | 'all_time'
+  isCustomRate: boolean
+  isCustomQuota: boolean
+  periodSalesTotal: number
+}
+
 function formatCurrency(n: number) {
   return `GH₵ ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
@@ -33,6 +42,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<Stats>({ todaySales: 0, monthEarnings: 0, ordersCount: 0, rank: null })
   const [recentSales, setRecentSales] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
+  const [policy, setPolicy] = useState<CommissionPolicy | null>(null)
 
   useEffect(() => {
     if (!ally) return
@@ -43,35 +53,29 @@ export default function DashboardPage() {
       today.setHours(0, 0, 0, 0)
       const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
 
-      // Today's sales total
-      const { data: todayData } = await supabase
-        .from('ally_sales')
-        .select('total')
-        .eq('ally_id', ally!.id)
-        .gte('sale_date', today.toISOString())
+      // Fetch all data in parallel
+      const [
+        { data: todayData },
+        { data: monthData },
+        { count: ordersCount },
+        { data: leaderData },
+        { data: recent },
+        { data: allTimeSalesData },
+        { data: settingsData },
+      ] = await Promise.all([
+        supabase.from('ally_sales').select('total').eq('ally_id', ally!.id).gte('sale_date', today.toISOString()),
+        supabase.from('ally_sales').select('commission_amount, total').eq('ally_id', ally!.id).gte('sale_date', monthStart.toISOString()),
+        supabase.from('ally_sales').select('*', { count: 'exact', head: true }).eq('ally_id', ally!.id),
+        supabase.from('ally_sales').select('ally_id, total').gte('sale_date', monthStart.toISOString()),
+        supabase.from('ally_sales').select('id, order_number, customer_name, total, commission_amount, payment_method, status, sale_date').eq('ally_id', ally!.id).order('sale_date', { ascending: false }).limit(5),
+        supabase.from('ally_sales').select('total').eq('ally_id', ally!.id),
+        supabase.from('commission_settings').select('default_quota, default_rate, period').single(),
+      ])
 
       const todaySales = (todayData ?? []).reduce((s, r) => s + Number(r.total), 0)
-
-      // This month's earnings
-      const { data: monthData } = await supabase
-        .from('ally_sales')
-        .select('commission_amount')
-        .eq('ally_id', ally!.id)
-        .gte('sale_date', monthStart.toISOString())
-
       const monthEarnings = (monthData ?? []).reduce((s, r) => s + Number(r.commission_amount), 0)
-
-      // All-time order count
-      const { count: ordersCount } = await supabase
-        .from('ally_sales')
-        .select('*', { count: 'exact', head: true })
-        .eq('ally_id', ally!.id)
-
-      // Rank — sum totals for all allies this month, sort descending
-      const { data: leaderData } = await supabase
-        .from('ally_sales')
-        .select('ally_id, total')
-        .gte('sale_date', monthStart.toISOString())
+      const monthSalesTotal = (monthData ?? []).reduce((s, r) => s + Number(r.total), 0)
+      const allTimeSalesTotal = (allTimeSalesData ?? []).reduce((s, r) => s + Number(r.total), 0)
 
       const totalsMap: Record<string, number> = {}
       for (const row of leaderData ?? []) {
@@ -80,14 +84,22 @@ export default function DashboardPage() {
       const sorted = Object.entries(totalsMap).sort((a, b) => b[1] - a[1])
       const rank = sorted.findIndex(([id]) => id === ally!.id) + 1
 
-      // Recent 5 sales
-      const { data: recent } = await supabase
-        .from('ally_sales')
-        .select('id, order_number, customer_name, total, commission_amount, payment_method, status, sale_date')
-        .eq('ally_id', ally!.id)
-        .order('sale_date', { ascending: false })
-        .limit(5)
+      const globalRate = settingsData?.default_rate ?? 0.15
+      const globalQuota = settingsData?.default_quota ?? 0
+      const period: 'monthly' | 'all_time' = settingsData?.period ?? 'monthly'
 
+      const effectiveRate = ally!.commission_rate ?? globalRate
+      const effectiveQuota = ally!.commission_quota ?? globalQuota
+      const periodSalesTotal = period === 'monthly' ? monthSalesTotal : allTimeSalesTotal
+
+      setPolicy({
+        effectiveRate,
+        effectiveQuota,
+        period,
+        isCustomRate: ally!.commission_rate != null,
+        isCustomQuota: ally!.commission_quota != null,
+        periodSalesTotal,
+      })
       setStats({ todaySales, monthEarnings, ordersCount: ordersCount ?? 0, rank: rank || null })
       setRecentSales(recent ?? [])
       setLoading(false)
@@ -123,6 +135,86 @@ export default function DashboardPage() {
             </p>
           </div>
         ))}
+      </div>
+
+      {/* Commission Policy */}
+      <div className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm p-4 md:p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Percent className="w-4 h-4 text-neutral-400" />
+          <h3 className="text-xs tracking-[0.15em] uppercase text-neutral-400">My Commission Policy</h3>
+        </div>
+
+        {loading || !policy ? (
+          <div className="text-sm text-neutral-400">Loading...</div>
+        ) : (
+          <div className="space-y-4">
+            {/* Rate + Period row */}
+            <div className="flex flex-wrap items-center gap-4">
+              <div>
+                <p className="text-[10px] text-neutral-400 uppercase tracking-widest mb-0.5">Commission Rate</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
+                    {(policy.effectiveRate * 100).toFixed(0)}%
+                  </p>
+                  {policy.isCustomRate && (
+                    <span className="text-[9px] tracking-wide uppercase bg-neutral-100 dark:bg-neutral-800 text-neutral-500 px-1.5 py-0.5 rounded">
+                      custom
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="h-8 w-px bg-slate-200 dark:bg-neutral-700 hidden sm:block" />
+              <div>
+                <p className="text-[10px] text-neutral-400 uppercase tracking-widest mb-0.5">Period</p>
+                <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300 capitalize">
+                  {policy.period === 'all_time' ? 'All time' : 'Monthly'}
+                </p>
+              </div>
+            </div>
+
+            {/* Quota section */}
+            {policy.effectiveQuota === 0 ? (
+              <div className="rounded-md bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900 px-3 py-2">
+                <p className="text-xs text-green-700 dark:text-green-400">
+                  No quota — you earn commission from your first sale
+                </p>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[10px] text-neutral-400 uppercase tracking-widest">
+                      {policy.period === 'monthly' ? 'Monthly' : 'All-time'} Sales Quota
+                    </p>
+                    {policy.isCustomQuota && (
+                      <span className="text-[9px] tracking-wide uppercase bg-neutral-100 dark:bg-neutral-800 text-neutral-500 px-1.5 py-0.5 rounded">
+                        custom
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    {formatCurrency(Math.min(policy.periodSalesTotal, policy.effectiveQuota))} / {formatCurrency(policy.effectiveQuota)}
+                  </p>
+                </div>
+                <div className="h-2 rounded-full bg-slate-100 dark:bg-neutral-800 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      policy.periodSalesTotal >= policy.effectiveQuota
+                        ? 'bg-green-500'
+                        : 'bg-neutral-400 dark:bg-neutral-500'
+                    }`}
+                    style={{ width: `${Math.min((policy.periodSalesTotal / policy.effectiveQuota) * 100, 100)}%` }}
+                  />
+                </div>
+                <p className="text-[10px] text-neutral-400 mt-1.5">
+                  {policy.periodSalesTotal >= policy.effectiveQuota
+                    ? `Quota met — earning ${(policy.effectiveRate * 100).toFixed(0)}% on all sales`
+                    : `${formatCurrency(policy.effectiveQuota - policy.periodSalesTotal)} more in sales to start earning commission`}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Recent Sales */}
