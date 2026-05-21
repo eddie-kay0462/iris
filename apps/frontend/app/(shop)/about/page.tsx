@@ -1,168 +1,222 @@
 "use client";
 
-import { useEffect } from "react";
+import { useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { motion, useScroll, useTransform } from "framer-motion";
+
+/* ── Shared animation variants ── */
+const ease = [0.25, 0.46, 0.45, 0.94] as const;
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.65, ease } },
+};
+
+const stagger = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.1 } },
+};
+
+const staggerFast = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.07 } },
+};
+
+const viewport = { once: true, margin: "-60px" } as const;
 
 export default function AboutPage() {
-  useEffect(() => {
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            e.target.classList.add("is-visible");
-            io.unobserve(e.target);
-          }
-        });
-      },
-      { threshold: 0.15 }
-    );
-    document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
-    return () => io.disconnect();
-  }, []);
+  const imgRef = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: imgRef,
+    offset: ["start end", "end start"],
+  });
+  const imgY = useTransform(scrollYProgress, [0, 1], ["-8%", "8%"]);
 
   return (
     <>
-      <style>{`
-        .reveal { opacity: 0; transform: translateY(16px); transition: opacity .7s ease, transform .7s cubic-bezier(0.2,0.7,0.2,1); }
-        .reveal.is-visible { opacity: 1; transform: none; }
-        .display { letter-spacing: -0.015em; }
-      `}</style>
+      <style>{`.display { letter-spacing: -0.015em; }`}</style>
 
       {/* ─── 1. TITLE ─────────────────────────────────────────── */}
       <section className="border-b border-neutral-200 dark:border-neutral-800 px-6 pt-24 pb-16">
         <div className="mx-auto max-w-5xl">
-          <div className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500 font-mono">
-            <span>About</span>
-            <span className="h-px w-8 bg-neutral-300 dark:bg-neutral-700"></span>
-            <span>1NRI Worldwide Ltd.</span>
-          </div>
+          <motion.div
+            initial="hidden"
+            animate="visible"
+            variants={stagger}
+          >
+            <motion.div variants={fadeUp} className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500 font-mono">
+              <span>About</span>
+              <span className="h-px w-8 bg-neutral-300 dark:bg-neutral-700"></span>
+              <span>1NRI Worldwide Ltd.</span>
+            </motion.div>
 
-          <h1 className="display mt-8 text-5xl sm:text-7xl lg:text-[5.5rem] font-bold uppercase tracking-tight leading-[0.95]">
-            Built in Accra.<br />
-            <span className="text-neutral-400 dark:text-neutral-500">Worn everywhere.</span>
-          </h1>
+            <motion.h1 variants={fadeUp} className="display mt-8 text-5xl sm:text-7xl lg:text-[5.5rem] font-bold uppercase tracking-tight leading-[0.95]">
+              Built in Accra.<br />
+              <span className="text-neutral-400 dark:text-neutral-500">Worn everywhere.</span>
+            </motion.h1>
 
-          <p className="mt-10 max-w-2xl text-lg sm:text-xl text-neutral-600 dark:text-neutral-400 leading-relaxed">
-            1NRI Worldwide is a Ghana-based fashion and manufacturing brand &mdash; built to close the gap between trend-responsive design and structured, locally-made production.
-          </p>
+            <motion.p variants={fadeUp} className="mt-10 max-w-2xl text-lg sm:text-xl text-neutral-600 dark:text-neutral-400 leading-relaxed">
+              1NRI Worldwide is a Ghana-based fashion and manufacturing brand &mdash; built to close the gap between trend-responsive design and structured, locally-made production.
+            </motion.p>
 
-          {/* Meta strip */}
-          <div className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-y-6 gap-x-8 border-t border-neutral-200 dark:border-neutral-800 pt-8">
-            <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">Headquartered</div>
-              <div className="mt-2 text-sm font-medium">Accra, Ghana</div>
-            </div>
-            <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">Production</div>
-              <div className="mt-2 text-sm font-medium">Ghana</div>
-            </div>
-            <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">Markets</div>
-              <div className="mt-2 text-sm font-medium">GH · NG · UK · CA · US</div>
-            </div>
-            <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">Sector</div>
-              <div className="mt-2 text-sm font-medium">Apparel · Manufacturing</div>
-            </div>
-          </div>
+            {/* Meta strip */}
+            <motion.div variants={fadeUp} className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-y-6 gap-x-8 border-t border-neutral-200 dark:border-neutral-800 pt-8">
+              <div>
+                <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">Headquartered</div>
+                <div className="mt-2 text-sm font-medium">Accra, Ghana</div>
+              </div>
+              <div>
+                <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">Production</div>
+                <div className="mt-2 text-sm font-medium">Ghana</div>
+              </div>
+              <div>
+                <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">Markets</div>
+                <div className="mt-2 text-sm font-medium">GH · NG · UK · CA · US</div>
+              </div>
+              <div>
+                <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">Sector</div>
+                <div className="mt-2 text-sm font-medium">Apparel · Manufacturing</div>
+              </div>
+            </motion.div>
+          </motion.div>
         </div>
       </section>
 
       {/* ─── 2. EDITORIAL IMAGE ─────────────────────────────── */}
-      <section className="relative h-[70vh] min-h-[480px] overflow-hidden">
-        <Image
-          src="/homepage/1.jpeg"
-          alt="1NRI editorial image"
-          fill
-          className="object-cover object-[center_5%]"
-          priority
-          unoptimized
-        />
+      <section ref={imgRef} className="relative h-[70vh] min-h-[480px] overflow-hidden">
+        <motion.div className="absolute inset-0 scale-110" style={{ y: imgY }}>
+          <Image
+            src="/homepage/1.jpeg"
+            alt="1NRI editorial image"
+            fill
+            className="object-cover object-[center_0%]"
+            priority
+            unoptimized
+          />
+        </motion.div>
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40"></div>
-        <div className="absolute bottom-6 left-6 sm:bottom-10 sm:left-10 text-white">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4, duration: 0.6, ease }}
+          className="absolute bottom-6 left-6 sm:bottom-10 sm:left-10 text-white"
+        >
           <div className="font-mono text-[10px] uppercase tracking-[0.4em] text-white/70">FW &rsquo;25</div>
           <div className="mt-1 text-xs uppercase tracking-widest">Shot in Accra · 2025</div>
-        </div>
+        </motion.div>
       </section>
 
       {/* ─── 3. THE STORY ──────────────────────────────────── */}
       <section className="px-6 py-24 sm:py-32">
         <div className="mx-auto max-w-5xl grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-10 lg:gap-16">
-          <div>
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewport}
+            variants={fadeUp}
+          >
             <div className="font-mono text-[10px] uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500">Ch. 01</div>
             <div className="mt-2 text-xs uppercase tracking-widest text-neutral-500 dark:text-neutral-400">The Story</div>
-          </div>
+          </motion.div>
 
-          <div className="space-y-6 text-base sm:text-lg leading-relaxed text-neutral-700 dark:text-neutral-300 reveal">
-            <p className="text-xl sm:text-2xl text-neutral-900 dark:text-neutral-100">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewport}
+            variants={stagger}
+            className="space-y-6 text-base sm:text-lg leading-relaxed text-neutral-700 dark:text-neutral-300"
+          >
+            <motion.p variants={fadeUp} className="text-xl sm:text-2xl text-neutral-900 dark:text-neutral-100">
               1NRI was founded to address the gap between trend-responsive fashion and structured local production.
-            </p>
-            <p>
+            </motion.p>
+            <motion.p variants={fadeUp}>
               We combine contemporary design with disciplined, quality-controlled garment construction. Headquartered in Accra and operating production networks in Ghana, the brand serves style-conscious consumers locally and within the diaspora &mdash; people who seek fashion that reflects current trends while offering superior construction and longer wear compared to disposable alternatives.
-            </p>
-            <p>
+            </motion.p>
+            <motion.p variants={fadeUp}>
               Since inception, 1NRI has built a growing customer base across Ghana, Nigeria, the United Kingdom, Canada, and the United States.
-            </p>
-          </div>
+            </motion.p>
+          </motion.div>
         </div>
       </section>
 
       {/* ─── 4. PILLAR GRID ─── */}
       <section className="border-t border-b border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 px-6 py-24 sm:py-32">
         <div className="mx-auto max-w-5xl">
-          <div className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500 font-mono">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewport}
+            variants={fadeUp}
+            className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500 font-mono"
+          >
             <span>Ch. 02</span>
             <span className="h-px w-8 bg-neutral-300 dark:bg-neutral-700"></span>
             <span>How we work</span>
-          </div>
+          </motion.div>
 
-          <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-px bg-neutral-200 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-800">
-            <article className="bg-neutral-50 dark:bg-neutral-950 p-8 reveal">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewport}
+            variants={staggerFast}
+            className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-px bg-neutral-200 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-800"
+          >
+            <motion.article variants={fadeUp} className="bg-neutral-50 dark:bg-neutral-950 p-8">
               <div className="font-mono text-2xl font-semibold tabular-nums">01</div>
               <h3 className="mt-6 text-xl font-semibold uppercase tracking-tight">Direct-to-consumer fashion</h3>
               <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
                 Contemporary streetwear, designed in Accra, built around durability, fit precision, and efficient material use.
               </p>
-            </article>
+            </motion.article>
 
-            <article className="bg-neutral-50 dark:bg-neutral-950 p-8 reveal">
+            <motion.article variants={fadeUp} className="bg-neutral-50 dark:bg-neutral-950 p-8">
               <div className="font-mono text-2xl font-semibold tabular-nums">02</div>
               <h3 className="mt-6 text-xl font-semibold uppercase tracking-tight">Structured manufacturing</h3>
               <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
                 We provide apparel manufacturing services to corporate institutions and African fashion brands seeking reliable, locally based alternatives to overseas production.
               </p>
-            </article>
+            </motion.article>
 
-            <article className="bg-neutral-50 dark:bg-neutral-950 p-8 reveal">
+            <motion.article variants={fadeUp} className="bg-neutral-50 dark:bg-neutral-950 p-8">
               <div className="font-mono text-2xl font-semibold tabular-nums">03</div>
               <h3 className="mt-6 text-xl font-semibold uppercase tracking-tight">Inclusive production</h3>
               <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
                 Through a distributed manufacturing network, we engage women and youth &mdash; particularly in Ghana &mdash; with technical garment construction skills and structured income.
               </p>
-            </article>
-          </div>
+            </motion.article>
+          </motion.div>
         </div>
       </section>
 
       {/* ─── 5. CIRCULAR STRATEGY ─── */}
       <section className="px-6 py-24 sm:py-32">
         <div className="mx-auto max-w-5xl grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-10 lg:gap-16">
-          <div>
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewport}
+            variants={fadeUp}
+          >
             <div className="font-mono text-[10px] uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500">Ch. 03</div>
             <div className="mt-2 text-xs uppercase tracking-widest text-neutral-500 dark:text-neutral-400">What&rsquo;s next</div>
-          </div>
+          </motion.div>
 
-          <div className="reveal">
-            <p className="display text-3xl sm:text-4xl lg:text-5xl font-semibold uppercase tracking-tight leading-tight text-neutral-900 dark:text-neutral-100">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewport}
+            variants={stagger}
+          >
+            <motion.p variants={fadeUp} className="display text-3xl sm:text-4xl lg:text-5xl font-semibold uppercase tracking-tight leading-tight text-neutral-900 dark:text-neutral-100">
               We&rsquo;re building a circular production strategy &mdash;{" "}
               <span className="text-neutral-400 dark:text-neutral-500">textile recovery, upcycling, waste reduction</span>{" "}
               &mdash; into the way we make clothes.
-            </p>
-            <p className="mt-8 max-w-2xl text-base sm:text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed">
+            </motion.p>
+            <motion.p variants={fadeUp} className="mt-8 max-w-2xl text-base sm:text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed">
               By combining environmental responsibility, local capacity building, and commercially viable design, the goal is to strengthen Ghana&rsquo;s textile ecosystem &mdash; and to show that durable fashion and climate-conscious manufacturing can scale together.
-            </p>
-          </div>
+            </motion.p>
+          </motion.div>
         </div>
       </section>
 
@@ -178,39 +232,61 @@ export default function AboutPage() {
           />
           <div className="absolute inset-0 bg-black/60"></div>
         </div>
-        <div className="relative z-10 mx-auto max-w-5xl px-6 py-24 sm:py-32 text-white">
-          <div className="font-mono text-[10px] uppercase tracking-[0.4em] text-white/60">Currently underway</div>
-          <h2 className="display mt-4 text-3xl sm:text-5xl lg:text-6xl font-bold uppercase tracking-tight">
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={viewport}
+          variants={stagger}
+          className="relative z-10 mx-auto max-w-5xl px-6 py-24 sm:py-32 text-white"
+        >
+          <motion.div variants={fadeUp} className="font-mono text-[10px] uppercase tracking-[0.4em] text-white/60">Currently underway</motion.div>
+          <motion.h2 variants={fadeUp} className="display mt-4 text-3xl sm:text-5xl lg:text-6xl font-bold uppercase tracking-tight">
             Road to HQ &mdash; Accra, by 26.12.2026.
-          </h2>
-          <p className="mt-6 max-w-xl text-base text-white/70 leading-relaxed">
+          </motion.h2>
+          <motion.p variants={fadeUp} className="mt-6 max-w-xl text-base text-white/70 leading-relaxed">
             Six thousand units. One headquarters. Six milestones along the way. Every piece sold gets us a little closer.
-          </p>
-          <Link
-            href="/products"
-            className="mt-10 inline-block border border-white/80 bg-white/5 px-12 py-4 text-xs font-semibold uppercase tracking-[0.25em] text-white backdrop-blur-sm transition hover:bg-white hover:text-black"
-          >
-            Shop the brand
-          </Link>
-        </div>
+          </motion.p>
+          <motion.div variants={fadeUp}>
+            <Link
+              href="/products"
+              className="mt-10 inline-block border border-white/80 bg-white/5 px-12 py-4 text-xs font-semibold uppercase tracking-[0.25em] text-white backdrop-blur-sm transition hover:bg-white hover:text-black"
+            >
+              Shop the brand
+            </Link>
+          </motion.div>
+        </motion.div>
       </section>
 
       {/* ─── 7. CONNECT ─── */}
       <section className="px-6 py-24 sm:py-32">
         <div className="mx-auto max-w-5xl">
-          <div className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500 font-mono">
-            <span>Ch. 04</span>
-            <span className="h-px w-8 bg-neutral-300 dark:bg-neutral-700"></span>
-            <span>Find us</span>
-          </div>
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewport}
+            variants={stagger}
+          >
+            <motion.div variants={fadeUp} className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500 font-mono">
+              <span>Ch. 04</span>
+              <span className="h-px w-8 bg-neutral-300 dark:bg-neutral-700"></span>
+              <span>Find us</span>
+            </motion.div>
 
-          <h2 className="display mt-6 text-3xl sm:text-5xl font-bold uppercase tracking-tight">Stay close to the work.</h2>
-          <p className="mt-4 max-w-xl text-base sm:text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed">
-            Drops, sit-downs from the studio, behind-the-machines footage from Ghana &mdash; choose your platform.
-          </p>
+            <motion.h2 variants={fadeUp} className="display mt-6 text-3xl sm:text-5xl font-bold uppercase tracking-tight">Stay close to the work.</motion.h2>
+            <motion.p variants={fadeUp} className="mt-4 max-w-xl text-base sm:text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed">
+              Drops, sit-downs from the studio, behind-the-machines footage from Ghana &mdash; choose your platform.
+            </motion.p>
+          </motion.div>
 
-          <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-px bg-neutral-200 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-800">
-            <a
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewport}
+            variants={staggerFast}
+            className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-px bg-neutral-200 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-800"
+          >
+            <motion.a
+              variants={fadeUp}
               href="https://instagram.com/_1nriworldwide"
               target="_blank"
               rel="noopener noreferrer"
@@ -229,9 +305,10 @@ export default function AboutPage() {
                   <path d="M7 17L17 7M9 7h8v8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-            </a>
+            </motion.a>
 
-            <a
+            <motion.a
+              variants={fadeUp}
               href="https://www.tiktok.com/@1nriworldwide"
               target="_blank"
               rel="noopener noreferrer"
@@ -250,9 +327,10 @@ export default function AboutPage() {
                   <path d="M7 17L17 7M9 7h8v8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-            </a>
+            </motion.a>
 
-            <a
+            <motion.a
+              variants={fadeUp}
               href="https://youtube.com/@1nriworldwide"
               target="_blank"
               rel="noopener noreferrer"
@@ -271,9 +349,10 @@ export default function AboutPage() {
                   <path d="M7 17L17 7M9 7h8v8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-            </a>
+            </motion.a>
 
-            <a
+            <motion.a
+              variants={fadeUp}
               href="https://www.linkedin.com/in/1nriworldwide/"
               target="_blank"
               rel="noopener noreferrer"
@@ -292,12 +371,18 @@ export default function AboutPage() {
                   <path d="M7 17L17 7M9 7h8v8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-            </a>
-          </div>
+            </motion.a>
+          </motion.div>
 
           {/* Direct contact */}
-          <div className="mt-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-neutral-200 dark:border-neutral-800 pt-8">
-            <div>
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewport}
+            variants={stagger}
+            className="mt-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-neutral-200 dark:border-neutral-800 pt-8"
+          >
+            <motion.div variants={fadeUp}>
               <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">
                 For partnerships &amp; manufacturing
               </div>
@@ -307,14 +392,16 @@ export default function AboutPage() {
               >
                 1nriiworldwide@gmail.com
               </a>
-            </div>
-            <Link
-              href="/products"
-              className="inline-block bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-8 py-3 text-xs font-semibold uppercase tracking-[0.25em] hover:opacity-90 transition"
-            >
-              Shop the brand
-            </Link>
-          </div>
+            </motion.div>
+            <motion.div variants={fadeUp}>
+              <Link
+                href="/products"
+                className="inline-block bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-8 py-3 text-xs font-semibold uppercase tracking-[0.25em] hover:opacity-90 transition"
+              >
+                Shop the brand
+              </Link>
+            </motion.div>
+          </motion.div>
         </div>
       </section>
     </>

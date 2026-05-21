@@ -199,7 +199,8 @@ function ShopHeader() {
   const pathname = usePathname();
 
   const isHome = pathname === "/";
-  const isTransparent = isHome && !scrolled;
+  const isTransparent = !scrolled;
+  const isTransparentWhite = isHome && !scrolled;
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 10);
@@ -229,7 +230,7 @@ function ShopHeader() {
               key={link.href}
               href={link.href}
               className={`text-xs font-medium uppercase tracking-widest transition ${
-                isTransparent
+                isTransparentWhite
                   ? isActive(link.href)
                     ? "text-white"
                     : "text-white/70 hover:text-white"
@@ -247,7 +248,7 @@ function ShopHeader() {
         <button
           onClick={() => setMobileOpen((o) => !o)}
           className={`flex h-8 w-8 items-center justify-center md:hidden transition ${
-            isTransparent ? "text-white" : ""
+            isTransparentWhite ? "text-white" : ""
           }`}
           aria-label="Toggle menu"
         >
@@ -269,7 +270,7 @@ function ShopHeader() {
             width={120}
             height={48}
             className={`h-8 w-auto min-w-[60px] transition-all duration-300 ${
-              isTransparent ? "invert" : "dark:invert"
+              isTransparentWhite ? "invert" : "dark:invert"
             }`}
             priority
             unoptimized
@@ -282,16 +283,16 @@ function ShopHeader() {
             onClick={() => setSearchOpen(true)}
             aria-label="Search"
             className={`p-1 transition ${
-              isTransparent
+              isTransparentWhite
                 ? "text-white/80 hover:text-white"
                 : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
             }`}
           >
             <Search className="h-[18px] w-[18px]" strokeWidth={1.5} />
           </button>
-          <ThemeToggle isTransparent={isTransparent} />
-          <UserLink isTransparent={isTransparent} />
-          <CartLink isTransparent={isTransparent} />
+          <ThemeToggle isTransparent={isTransparentWhite} />
+          <UserLink isTransparent={isTransparentWhite} />
+          <CartLink isTransparent={isTransparentWhite} />
         </div>
       </div>
 

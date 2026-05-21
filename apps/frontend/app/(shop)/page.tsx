@@ -235,7 +235,7 @@ export default function RoadToHQPage() {
         >
           <div className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-white/60">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-white/80" />
-            <span>Live · Deadline</span>
+            <span><span className="text-green-400">Live</span> · Deadline</span>
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-white/80" />
           </div>
           <div className={`${caveat.className} text-5xl sm:text-6xl lg:text-7xl text-white leading-none`} style={{ fontWeight: 500 }}>
@@ -245,7 +245,7 @@ export default function RoadToHQPage() {
 
         {/* Center copy — staggered */}
         <motion.div
-          className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center"
+          className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center translate-y-8"
           variants={stagger}
           initial="hidden"
           animate="visible"

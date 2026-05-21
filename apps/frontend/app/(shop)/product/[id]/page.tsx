@@ -689,10 +689,10 @@ export default function ProductDetailPage({ params }: PageProps) {
                 {!inStock
                   ? "Sold Out"
                   : added
-                    ? "Added to Bag"
+                    ? "Added to Cart"
                     : displayPrice != null
-                      ? `Add to Bag — ${fmt(displayPrice)}`
-                      : "Add to Bag"}
+                      ? `Add to Cart — ${fmt(displayPrice)}`
+                      : "Add to Cart"}
               </button>
             )}
 
