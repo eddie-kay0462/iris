@@ -19,6 +19,15 @@ try {
 }
 
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "krnnifoypyilajatsmva.supabase.co",
+        pathname: "/storage/v1/object/public/**",
+      },
+    ],
+  },
   async rewrites() {
     return [
       {
