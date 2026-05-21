@@ -97,6 +97,10 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsString()
   product_type?: string;
 
   @IsOptional()
