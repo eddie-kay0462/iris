@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { usePaystackPayment } from "react-paystack";
 import { useCart } from "@/lib/cart";
 import { useCreateOrder, confirmPaymentByReference } from "@/lib/api/orders";
+import PhoneInput from "@/components/PhoneInput";
 import { useProfile, parseDefaultAddress } from "@/lib/api/profile";
-import { hasToken, getToken } from "@/lib/api/client";
+import { apiClient, hasToken, getToken } from "@/lib/api/client";
 import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
 import { useShippingOptions, DEFAULT_SHIPPING_OPTIONS } from "@/lib/api/settings";
 import { useValidatePromo, DiscountType } from "@/lib/api/promos";
@@ -55,15 +56,25 @@ function validateForm(form: ShippingForm, isPickup: boolean): Record<string, str
   const errors: Record<string, string> = {};
   if (!form.firstName.trim()) errors.firstName = "First name is required";
   if (!form.lastName.trim()) errors.lastName = "Last name is required";
-  if (!form.phone.trim()) errors.phone = "Phone number is required";
+  if (!form.phone) errors.phone = "Phone number is required";
+  else if (!/^\+\d{7,15}$/.test(form.phone)) errors.phone = "Enter a valid phone number";
   if (!form.city.trim()) errors.city = "City is required";
   return errors;
+}
+
+function toPaystackPhone(e164: string): string {
+  // Ghana E.164 (+233XXXXXXXXX) → local MoMo format (0XXXXXXXXX)
+  // Strip any accidental trunk prefix before re-adding it, so both
+  // correctly stored (+233241234567) and legacy (+2330241234567) values work.
+  if (e164.startsWith("+233")) return "0" + e164.slice(4).replace(/^0+/, "");
+  return e164;
 }
 
 function PayNowButton({
   email,
   amount,
   reference,
+  phone,
   onSuccess,
   onClose,
   onBeforeOpen,
@@ -72,11 +83,15 @@ function PayNowButton({
   email: string;
   amount: number;
   reference: string;
+  phone?: string;
   onSuccess: (ref: any) => void;
   onClose: () => void;
   onBeforeOpen: () => Promise<boolean>;
   disabled: boolean;
 }) {
+  const phoneRef = React.useRef(phone);
+  phoneRef.current = phone;
+
   const config = {
     email,
     amount: Math.round(amount * 100),
@@ -93,7 +108,12 @@ function PayNowButton({
       onClick={async () => {
         const ok = await onBeforeOpen();
         if (!ok) return;
-        initializePayment({ onSuccess, onClose });
+        const currentPhone = phoneRef.current;
+        initializePayment({
+          onSuccess,
+          onClose,
+          config: currentPhone ? { phone: toPaystackPhone(currentPhone) } : undefined,
+        });
       }}
       disabled={disabled}
       className="w-full rounded-md bg-gray-900 py-3.5 text-sm font-semibold uppercase tracking-wider text-white transition hover:bg-black disabled:bg-gray-300 disabled:cursor-not-allowed dark:bg-white dark:text-black dark:hover:bg-gray-100 dark:disabled:bg-gray-700"
@@ -129,6 +149,7 @@ export default function CheckoutClient() {
   const [reference, setReference] = useState(() => generateReference());
   const [pendingOrderNumber, setPendingOrderNumber] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [saveAsDefault, setSaveAsDefault] = useState(false);
   const [shippingOption, setShippingOption] = useState<"standard" | "express" | "pickup">("standard");
   const [promoInput, setPromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<{
@@ -290,6 +311,27 @@ export default function CheckoutClient() {
       }
 
       setPendingOrderNumber(order.order_number);
+
+      if (saveAsDefault && isSignedIn) {
+        try {
+          await apiClient("/profile", {
+            method: "PUT",
+            body: {
+              default_address: {
+                address1: form.address,
+                address2: form.address2 || null,
+                city: form.city,
+                zip: form.postalCode || null,
+                country_code: form.country,
+                phone: form.phone,
+              },
+            },
+          });
+        } catch {
+          // Non-critical — don't block payment if this fails
+        }
+      }
+
       return true;
     } catch (err: any) {
       toast.error(err?.message || "Could not start your order. Please try again.", { duration: 6000 });
@@ -513,15 +555,23 @@ export default function CheckoutClient() {
                 <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
                   Phone number
                 </label>
-                <input
-                  type="text"
+                <PhoneInput
                   value={form.phone}
-                  onChange={(e) => handleChange("phone", e.target.value)}
-                  placeholder="Phone number"
-                  className={inputClass}
+                  onChange={(e164) => handleChange("phone", e164)}
+                  defaultCountry={form.country}
+                  required
+                  error={errors.phone}
                 />
-                {errors.phone && (
-                  <p className="mt-1 text-xs text-red-500">{errors.phone}</p>
+                {isSignedIn && (
+                  <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                    <input
+                      type="checkbox"
+                      checked={saveAsDefault}
+                      onChange={(e) => setSaveAsDefault(e.target.checked)}
+                      className="h-3.5 w-3.5 accent-gray-900 dark:accent-white"
+                    />
+                    Save as default address
+                  </label>
                 )}
               </div>
               </div>
@@ -553,6 +603,7 @@ export default function CheckoutClient() {
               email={email}
               amount={total}
               reference={reference}
+              phone={form.phone || undefined}
               disabled={processing}
               onBeforeOpen={handleValidateAndPay}
               onSuccess={handlePaymentSuccess}

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../common/supabase/supabase.service';
+import { toLetsFishFormat } from '../common/utils/phone';
 
 @Injectable()
 export class LetsfishService {
@@ -40,20 +41,6 @@ export class LetsfishService {
     return !!(this.appId && this.appSecret);
   }
 
-  // LetsFish expects international format without +: 233241234567
-  private normalizePhone(phone: string): string {
-    // Remove spaces and strip leading +
-    let p = phone.trim().replace(/\s+/g, '').replace(/^\+/, '');
-
-    // Ghanaian local format: starts with 0, exactly 10 digits (0 + 9-digit subscriber)
-    // e.g. 0241234567 → 233241234567
-    if (/^0\d{9}$/.test(p)) {
-      p = '233' + p.slice(1);
-    }
-
-    return p;
-  }
-
   async sendSms(phone: string, message: string): Promise<{ success: boolean; messageId?: string }> {
     if (!this.isConfigured()) {
       throw new Error('LetsFish credentials (LETSFISH_APP_ID, LETSFISH_APP_SECRET) are not configured');
@@ -70,7 +57,7 @@ export class LetsfishService {
         body: JSON.stringify({
           sender_id: this.senderId,
           message,
-          recipients: [this.normalizePhone(phone)],
+          recipients: [toLetsFishFormat(phone)],
         }),
       });
 
@@ -111,7 +98,7 @@ export class LetsfishService {
       const response = await fetch(`${this.baseUrl}/voice-otp`, {
         method: 'POST',
         headers: this.baseHeaders,
-        body: JSON.stringify({ otp, phone: this.normalizePhone(phone) }),
+        body: JSON.stringify({ otp, phone: toLetsFishFormat(phone) }),
       });
 
       const text = await response.text();

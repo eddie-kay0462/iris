@@ -1,4 +1,5 @@
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsPhoneNumber } from '../../common/utils/phone';
 
 export class UpdateProfileDto {
   @IsOptional()
@@ -10,7 +11,7 @@ export class UpdateProfileDto {
   last_name?: string;
 
   @IsOptional()
-  @IsString()
+  @IsPhoneNumber()
   phone_number?: string;
 
   @IsOptional()
@@ -20,4 +21,8 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsBoolean()
   sms_notifications?: boolean;
+
+  @IsOptional()
+  @IsObject()
+  default_address?: Record<string, any>;
 }
