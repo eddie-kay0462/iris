@@ -445,8 +445,12 @@ export default function SalesPage() {
 
     if (paymentMethod === 'bank_transfer') {
       setPaymentFlowState('creating_va')
-      const customerName = customerDisplayName(selectedCustomer)
-      const result = await createAllyVirtualAccount(sale.id, customerName, selectedCustomer.email ?? undefined)
+      const result = await createAllyVirtualAccount(
+        sale.id,
+        selectedCustomer.first_name ?? customerDisplayName(selectedCustomer).split(' ')[0],
+        selectedCustomer.last_name ?? customerDisplayName(selectedCustomer).split(' ').slice(1).join(' ') || selectedCustomer.first_name ?? '',
+        selectedCustomer.email ?? undefined,
+      )
       if (!result.success) {
         setPaymentFlowState('failed')
         setPaymentError(result.error ?? 'Could not create virtual account.')
