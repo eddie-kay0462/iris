@@ -79,13 +79,13 @@ export default function LeaderboardPage() {
   const myRank = myRow ? rows.indexOf(myRow) + 1 : null
 
   return (
-    <div className="p-4 md:p-8">
+    <div className="p-4 sm:p-6 md:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h2 className="text-sm tracking-[0.15em] uppercase">Leaderboard</h2>
         <div className="flex border-b border-slate-200 dark:border-neutral-800">
           {(['month', 'week', 'all'] as Period[]).map((p) => (
             <button key={p} onClick={() => setPeriod(p)}
-              className={`px-4 md:px-6 py-2.5 text-xs tracking-[0.15em] uppercase transition-colors relative ${period === p ? 'text-neutral-900 dark:text-neutral-100' : 'text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'}`}>
+              className={`px-3 sm:px-4 md:px-6 py-2.5 text-xs tracking-[0.15em] uppercase transition-colors relative ${period === p ? 'text-neutral-900 dark:text-neutral-100' : 'text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'}`}>
               {p === 'month' ? 'This Month' : p === 'week' ? 'This Week' : 'All Time'}
               {period === p && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-black dark:bg-white" />}
             </button>
@@ -95,13 +95,13 @@ export default function LeaderboardPage() {
 
       {/* My rank summary cards */}
       {myRow && (
-        <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
           {[
             { label: 'Your Rank', value: myRank ? `#${myRank}` : '—' },
             { label: 'Your Sales', value: `GH₵ ${myRow.totalSales.toLocaleString(undefined, { minimumFractionDigits: 0 })}` },
             { label: 'Your Earnings', value: `GH₵ ${myRow.earnings.toFixed(0)}` },
           ].map((s) => (
-            <div key={s.label} className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm p-3 md:p-5">
+            <div key={s.label} className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm p-3 sm:p-4 md:p-5">
               <p className="text-[9px] md:text-[10px] tracking-[0.25em] uppercase text-neutral-400 mb-2">{s.label}</p>
               <p className="text-base md:text-2xl font-semibold">{s.value}</p>
             </div>

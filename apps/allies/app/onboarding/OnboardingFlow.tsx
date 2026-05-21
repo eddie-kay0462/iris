@@ -59,7 +59,7 @@ export function OnboardingFlow({ ally }: { ally: Ally }) {
   ]
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center px-6">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center px-4 sm:px-6">
       {/* Logo */}
       <div className="mb-12">
         {/* eslint-disable-next-line @next/next/no-img-element */}

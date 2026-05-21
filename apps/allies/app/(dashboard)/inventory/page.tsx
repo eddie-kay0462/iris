@@ -147,7 +147,7 @@ export default function InventoryPage() {
   }
 
   return (
-    <div className="p-4 md:p-8">
+    <div className="p-4 sm:p-6 md:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <h2 className="text-sm tracking-[0.15em] uppercase">Inventory</h2>
         <div className="flex flex-wrap items-center gap-3">
@@ -159,7 +159,7 @@ export default function InventoryPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
             <input type="text" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 pr-4 py-2 rounded-md border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white w-44" />
+              className="pl-9 pr-4 py-2 rounded-md border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white w-full sm:w-44" />
           </div>
         </div>
       </div>
@@ -399,7 +399,7 @@ export default function InventoryPage() {
                 )}
 
                 <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-3">Stock by Variant</p>
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {selectedMobile.sizes.map((s) => {
                     const vImg = variantImage(selectedMobile, s.id)
                     return (

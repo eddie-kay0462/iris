@@ -17,11 +17,11 @@ export class EmailService {
     this.apiKey = this.configService.get<string>('RESEND_API_KEY', '');
     this.from = this.configService.get<string>(
       'EMAIL_FROM',
-      'Iris <orders@getiris.co>',
+      'Orders <orders@1nri.store>',
     );
     this.frontendUrl = this.configService.get<string>(
       'FRONTEND_URL',
-      'https://getiris.co',
+      'https://storefront.1nri.store',
     );
   }
 
@@ -178,7 +178,7 @@ export class EmailService {
     if (brand === 'Unlikely Alliances') {
       return `<p style="margin:0;font-size:20px;font-weight:700;color:#fff;font-family:Helvetica,Arial,sans-serif;letter-spacing:0.5px;">Unlikely Alliances</p>`;
     }
-    return `<img src="${this.frontendUrl}/homepage_img/no-bg-1NRI.png" alt="1NRI" height="36" style="display:block;border:0;height:36px;width:auto;">`;
+    return `<img src="${this.frontendUrl}/homepage_img/no-bg-1NRI.png" alt="1NRI" height="36" style="display:block;border:0;height:36px;width:auto;filter:brightness(0) invert(1);">`;
   }
 
   private buildOrderConfirmationHtml(order: {

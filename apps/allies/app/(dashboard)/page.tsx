@@ -116,13 +116,13 @@ export default function DashboardPage() {
   ]
 
   return (
-    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
-      {/* Stats Grid — 2 cols on mobile, 4 on desktop */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+    <div className="p-4 sm:p-6 md:p-8 space-y-6 md:space-y-8">
+      {/* Stats Grid — 2 cols on mobile, 3 on tablet, 4 on desktop */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
         {statCards.map((stat) => (
           <div
             key={stat.label}
-            className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm p-4 md:p-6"
+            className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm p-4 sm:p-5 md:p-6"
           >
             <div className="flex items-center justify-between mb-3">
               <p className="text-[9px] md:text-[10px] tracking-[0.25em] uppercase text-neutral-400">

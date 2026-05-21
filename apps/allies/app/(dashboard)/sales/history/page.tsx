@@ -169,7 +169,7 @@ export default function SalesHistoryPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 md:p-8 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6 md:mb-8">
         <Link href="/sales" className="w-9 h-9 rounded-md border border-slate-200 dark:border-neutral-800 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-neutral-800 transition-colors">
@@ -268,7 +268,7 @@ export default function SalesHistoryPage() {
                       <td className="px-4 py-3 font-mono text-xs text-neutral-500">{sale.order_number}</td>
                       <td className="px-4 py-3 text-xs text-neutral-500 whitespace-nowrap">{formatDate(sale.sale_date)}</td>
                       <td className="px-4 py-3">
-                        <p className="font-medium truncate max-w-[140px]">{sale.customer_name ?? 'Guest'}</p>
+                        <p className="font-medium truncate max-w-[120px] md:max-w-[160px] lg:max-w-[200px]">{sale.customer_name ?? 'Guest'}</p>
                         {sale.customer_phone && <p className="text-xs text-neutral-400 truncate">{sale.customer_phone}</p>}
                       </td>
                       <td className="px-4 py-3 text-neutral-500">{sale.ally_sale_items.length}</td>
