@@ -119,3 +119,325 @@ export async function createCustomer(input: {
   }
   return { ...data, is_activated: data.is_activated ?? false, invited_at: data.invited_at ?? null }
 }
+
+// ── Paystack helpers ──────────────────────────────────────────────────────────
+
+function getPaystackKey() {
+  const key = process.env.PAYSTACK_SECRET_KEY
+  if (!key) throw new Error('PAYSTACK_SECRET_KEY not configured')
+  return key
+}
+
+// "+233241234567" → "0241234567"
+function toPaystackMomoFormat(e164: string): string {
+  if (e164.startsWith('+233')) return '0' + e164.slice(4)
+  return e164
+}
+
+async function getCurrentAllyId(): Promise<string | null> {
+  const { createClient: createServerClient } = await import('@/lib/supabase/server')
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const admin = getServiceClient()
+  const { data } = await admin.from('allies').select('id').eq('user_id', user.id).single()
+  return data?.id ?? null
+}
+
+// ── MoMo charge ──────────────────────────────────────────────────────────────
+
+export async function chargeAllyMomo(
+  saleId: string,
+  phone: string,
+  provider: 'mtn' | 'vod' | 'tgo',
+): Promise<{ success: boolean; reference?: string; paystackStatus?: string; error?: string }> {
+  const supabase = getServiceClient()
+
+  const { data: sale } = await supabase
+    .from('ally_sales')
+    .select('id, total, order_number, customer_email')
+    .eq('id', saleId)
+    .single()
+
+  if (!sale) return { success: false, error: 'Sale not found' }
+
+  const key = getPaystackKey()
+  const email = sale.customer_email ?? `ally-${sale.order_number}@iris-store.com`
+  const momoPhone = toPaystackMomoFormat(phone)
+  const amount = Math.round(Number(sale.total) * 100)
+
+  let resp: Response
+  try {
+    resp = await fetch('https://api.paystack.co/charge', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount,
+        email,
+        currency: 'GHS',
+        mobile_money: { phone: momoPhone, provider },
+      }),
+      cache: 'no-store',
+    })
+  } catch (err: any) {
+    return { success: false, error: err.message ?? 'Network error' }
+  }
+
+  const json = await resp.json()
+  if (!json.status) return { success: false, error: json.message ?? 'Charge failed' }
+
+  const reference = json.data?.reference as string | undefined
+  if (!reference) return { success: false, error: 'No reference returned' }
+
+  await supabase
+    .from('ally_sales')
+    .update({ payment_reference: reference, status: 'awaiting_payment' })
+    .eq('id', saleId)
+
+  // paystackStatus values: 'send_otp' | 'pay_offline' | 'success'
+  return { success: true, reference, paystackStatus: json.data?.status as string }
+}
+
+// ── OTP submission (fallback when USSD prompt doesn't appear) ─────────────────
+
+export async function submitAllyOtp(
+  saleId: string,
+  otp: string,
+): Promise<{ success: boolean; paystackStatus?: string; error?: string }> {
+  const supabase = getServiceClient()
+
+  const { data: sale } = await supabase
+    .from('ally_sales')
+    .select('id, payment_reference, status')
+    .eq('id', saleId)
+    .single()
+
+  if (!sale) return { success: false, error: 'Sale not found' }
+  if (!sale.payment_reference) return { success: false, error: 'No pending charge for this sale' }
+
+  const key = getPaystackKey()
+  let resp: Response
+  try {
+    resp = await fetch('https://api.paystack.co/charge/submit_otp', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ otp, reference: sale.payment_reference }),
+      cache: 'no-store',
+    })
+  } catch (err: any) {
+    return { success: false, error: err.message ?? 'Network error' }
+  }
+
+  const json = await resp.json()
+  if (!json.status) return { success: false, error: json.message ?? 'OTP submission failed' }
+
+  const paystackStatus = json.data?.status as string
+  if (paystackStatus === 'success') {
+    await supabase.from('ally_sales').update({ status: 'completed' }).eq('id', saleId)
+  }
+
+  return { success: true, paystackStatus }
+}
+
+// ── Payment verification (polls until confirmed) ──────────────────────────────
+
+export async function verifyAllyPayment(saleId: string): Promise<{ confirmed: boolean }> {
+  const supabase = getServiceClient()
+
+  const { data: sale } = await supabase
+    .from('ally_sales')
+    .select('status, payment_reference, payment_method')
+    .eq('id', saleId)
+    .single()
+
+  if (!sale) return { confirmed: false }
+  if (sale.status === 'completed') return { confirmed: true }
+
+  // For MoMo: check charge status with the correct endpoint for mobile money
+  if (sale.payment_method === 'momo' && sale.payment_reference) {
+    const key = getPaystackKey()
+    let resp: Response
+    try {
+      resp = await fetch(
+        `https://api.paystack.co/charge/${sale.payment_reference}`,
+        {
+          headers: { Authorization: `Bearer ${key}` },
+          cache: 'no-store',
+        },
+      )
+    } catch {
+      return { confirmed: false }
+    }
+    const json = await resp.json()
+    if (json.data?.status === 'success') {
+      await supabase.from('ally_sales').update({ status: 'completed' }).eq('id', saleId)
+      return { confirmed: true }
+    }
+  }
+
+  // For bank transfer: rely on webhook (just check DB status)
+  return { confirmed: false }
+}
+
+// ── Dedicated virtual account (bank transfer) ─────────────────────────────────
+
+export async function createAllyVirtualAccount(
+  saleId: string,
+  customerName: string,
+  customerEmail?: string,
+): Promise<{ success: boolean; account?: { accountNumber: string; bankName: string; accountName: string }; error?: string }> {
+  const supabase = getServiceClient()
+
+  const { data: sale } = await supabase
+    .from('ally_sales')
+    .select('id, order_number')
+    .eq('id', saleId)
+    .single()
+
+  if (!sale) return { success: false, error: 'Sale not found' }
+
+  const key = getPaystackKey()
+  const email = customerEmail ?? `ally-${sale.order_number}@iris-store.com`
+
+  // 1. Create Paystack customer
+  let customerCode: string
+  try {
+    const custResp = await fetch('https://api.paystack.co/customer', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, first_name: customerName }),
+      cache: 'no-store',
+    })
+    const custJson = await custResp.json()
+    if (!custJson.status || !custJson.data?.customer_code) {
+      return { success: false, error: custJson.message ?? 'Could not create Paystack customer' }
+    }
+    customerCode = custJson.data.customer_code
+  } catch (err: any) {
+    return { success: false, error: err.message ?? 'Network error' }
+  }
+
+  // 2. Create dedicated virtual account
+  try {
+    const vaResp = await fetch('https://api.paystack.co/dedicated_account', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customer: customerCode }),
+      cache: 'no-store',
+    })
+    const vaJson = await vaResp.json()
+    if (!vaJson.status || !vaJson.data?.account_number) {
+      return { success: false, error: vaJson.message ?? 'Could not create virtual account' }
+    }
+    const account = {
+      accountNumber: vaJson.data.account_number as string,
+      bankName: vaJson.data.bank?.name ?? 'Paystack',
+      accountName: vaJson.data.account_name ?? customerName,
+    }
+
+    await supabase.from('ally_sales').update({
+      paystack_customer_code: customerCode,
+      virtual_account_number: account.accountNumber,
+      virtual_account_bank: account.bankName,
+      status: 'awaiting_payment',
+    }).eq('id', saleId)
+
+    return { success: true, account }
+  } catch (err: any) {
+    return { success: false, error: err.message ?? 'Network error' }
+  }
+}
+
+// ── Mark cash received ────────────────────────────────────────────────────────
+
+export async function markCashReceived(saleId: string): Promise<{ success: boolean; error?: string }> {
+  const allyId = await getCurrentAllyId()
+  if (!allyId) return { success: false, error: 'Not authenticated' }
+
+  const supabase = getServiceClient()
+  const { data: sale } = await supabase
+    .from('ally_sales')
+    .select('ally_id, status, payment_method')
+    .eq('id', saleId)
+    .single()
+
+  if (!sale) return { success: false, error: 'Sale not found' }
+  if (sale.ally_id !== allyId) return { success: false, error: 'Not authorized' }
+  if (sale.payment_method !== 'cash') return { success: false, error: 'Not a cash sale' }
+  if (sale.status !== 'pending') return { success: false, error: 'Sale is not pending' }
+
+  const { error } = await supabase
+    .from('ally_sales')
+    .update({ status: 'completed' })
+    .eq('id', saleId)
+
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
+// ── Refund ────────────────────────────────────────────────────────────────────
+
+export async function refundAllySale(
+  saleId: string,
+  amount?: number,
+  reason?: string,
+): Promise<{ success: boolean; error?: string }> {
+  const allyId = await getCurrentAllyId()
+  if (!allyId) return { success: false, error: 'Not authenticated' }
+
+  const supabase = getServiceClient()
+
+  const { data: sale } = await supabase
+    .from('ally_sales')
+    .select('id, total, status, payment_reference, payment_method, ally_id')
+    .eq('id', saleId)
+    .single()
+
+  if (!sale) return { success: false, error: 'Sale not found' }
+  if (sale.ally_id !== allyId) return { success: false, error: 'Not authorized' }
+  if (sale.status !== 'completed') return { success: false, error: 'Only completed sales can be refunded' }
+  if (!sale.payment_reference) return { success: false, error: 'No payment reference — cannot process Paystack refund' }
+
+  const refundAmount = amount ?? Number(sale.total)
+  const key = getPaystackKey()
+
+  let paystackRefundId: string | null = null
+  let paystackResponse: unknown = null
+
+  try {
+    const refResp = await fetch('https://api.paystack.co/refund', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transaction: sale.payment_reference,
+        amount: Math.round(refundAmount * 100),
+      }),
+      cache: 'no-store',
+    })
+    const refJson = await refResp.json()
+    paystackResponse = refJson
+    paystackRefundId = refJson.data?.id ?? null
+  } catch (err: any) {
+    return { success: false, error: err.message ?? 'Refund request failed' }
+  }
+
+  await supabase.from('ally_sale_refunds').insert({
+    sale_id: saleId,
+    amount: refundAmount,
+    reason: reason ?? null,
+    status: 'processed',
+    paystack_refund_id: paystackRefundId,
+    paystack_response: paystackResponse,
+    initiated_by: allyId,
+  })
+
+  await supabase.from('ally_sales').update({ status: 'refunded' }).eq('id', saleId)
+
+  return { success: true }
+}

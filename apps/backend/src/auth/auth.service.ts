@@ -8,6 +8,7 @@ import { SupabaseService } from '../common/supabase/supabase.service';
 import { ADMIN_ROLES, UserRole } from '../common/rbac/permissions';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
+import { toE164 } from '../common/utils/phone';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyOtpDto, ResendOtpDto } from './dto/verify-otp.dto';
 
@@ -77,7 +78,7 @@ export class AuthService {
           data: {
             first_name: dto.first_name || null,
             last_name: dto.last_name || null,
-            phone_number: dto.phone_number || null,
+            phone_number: dto.phone_number ? toE164(dto.phone_number) : null,
           },
         },
       });
@@ -125,7 +126,9 @@ export class AuthService {
       email: data.user.email,
       first_name: data.user.user_metadata?.first_name || null,
       last_name: data.user.user_metadata?.last_name || null,
-      phone_number: data.user.user_metadata?.phone_number || null,
+      phone_number: data.user.user_metadata?.phone_number
+        ? toE164(data.user.user_metadata.phone_number) ?? data.user.user_metadata.phone_number
+        : null,
       role: 'public',
     });
 

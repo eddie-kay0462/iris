@@ -1,7 +1,8 @@
-import { IsEnum, IsString } from 'class-validator';
+import { IsEnum } from 'class-validator';
+import { IsPhoneNumber } from '../../common/utils/phone';
 
 export class ChargePopupOrderDto {
-  @IsString()
+  @IsPhoneNumber()
   phone: string;
 
   @IsEnum(['mtn', 'vod', 'tgo'])

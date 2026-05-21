@@ -8,6 +8,7 @@ import { z } from "zod";
 import { zodResolver } from "@/lib/validation";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "sonner";
+import PhoneInput from "@/components/PhoneInput";
 
 const signupSchema = z
   .object({
@@ -16,7 +17,12 @@ const signupSchema = z
     confirmPassword: z.string().min(1, "Please confirm your password"),
     first_name: z.string().optional(),
     last_name: z.string().optional(),
-    phone_number: z.string().optional(),
+    phone_number: z
+      .string()
+      .optional()
+      .refine((v) => !v || /^\+\d{7,15}$/.test(v), {
+        message: "Enter a valid phone number",
+      }),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
@@ -32,6 +38,8 @@ export default function SignupPage() {
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
@@ -103,11 +111,10 @@ export default function SignupPage() {
         </div>
 
         <div>
-          <input
-            {...register("phone_number")}
-            type="tel"
-            placeholder="Phone number (optional)"
-            className={inputClass}
+          <PhoneInput
+            value={watch("phone_number") ?? ""}
+            onChange={(e164) => setValue("phone_number", e164, { shouldValidate: true })}
+            error={errors.phone_number?.message}
           />
         </div>
 

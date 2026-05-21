@@ -1,4 +1,5 @@
 import { IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsPhoneNumber } from '../../common/utils/phone';
 
 export class UpdatePopupOrderDto {
   @IsOptional()
@@ -18,7 +19,7 @@ export class UpdatePopupOrderDto {
   customer_name?: string;
 
   @IsOptional()
-  @IsString()
+  @IsPhoneNumber()
   customer_phone?: string;
 
   @IsOptional()

@@ -1,4 +1,5 @@
 import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsPhoneNumber } from '../../common/utils/phone';
 
 export class SignupDto {
   @IsEmail()
@@ -17,6 +18,6 @@ export class SignupDto {
   last_name?: string;
 
   @IsOptional()
-  @IsString()
+  @IsPhoneNumber()
   phone_number?: string;
 }

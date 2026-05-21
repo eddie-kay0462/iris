@@ -8,6 +8,8 @@ export class EmailService {
   private readonly apiKey: string;
   private readonly from: string;
 
+  private readonly frontendUrl: string;
+
   constructor(
     private configService: ConfigService,
     private supabase: SupabaseService,
@@ -16,6 +18,10 @@ export class EmailService {
     this.from = this.configService.get<string>(
       'EMAIL_FROM',
       'Iris <orders@getiris.co>',
+    );
+    this.frontendUrl = this.configService.get<string>(
+      'FRONTEND_URL',
+      'https://getiris.co',
     );
   }
 
@@ -30,6 +36,7 @@ export class EmailService {
     shipping_cost: number;
     total: number;
     currency: string;
+    brand?: string;
     order_items?: {
       product_name: string;
       variant_title?: string | null;
@@ -77,6 +84,7 @@ export class EmailService {
     order_number: string;
     tracking_number?: string | null;
     carrier?: string | null;
+    brand?: string;
   }): Promise<void> {
     const subject = `Your order ${order.order_number} has shipped`;
     const html = this.buildShippingHtml(order);
@@ -146,12 +154,20 @@ export class EmailService {
     }
   }
 
+  private brandHeader(brand: string): string {
+    if (brand === 'Unlikely Alliances') {
+      return `<p style="margin:0;font-size:20px;font-weight:700;color:#fff;font-family:Helvetica,Arial,sans-serif;letter-spacing:0.5px;">Unlikely Alliances</p>`;
+    }
+    return `<img src="${this.frontendUrl}/homepage_img/no-bg-1NRI.png" alt="1NRI" height="36" style="display:block;border:0;height:36px;width:auto;">`;
+  }
+
   private buildOrderConfirmationHtml(order: {
     order_number: string;
     subtotal: number;
     shipping_cost: number;
     total: number;
     currency: string;
+    brand?: string;
     order_items?: {
       product_name: string;
       variant_title?: string | null;
@@ -159,6 +175,7 @@ export class EmailService {
       total_price: number;
     }[];
   }): string {
+    const brandName = order.brand || '1NRI';
     const symbol = order.currency === 'GHS' ? 'GH₵' : order.currency;
 
     const itemRows = (order.order_items || [])
@@ -183,7 +200,7 @@ export class EmailService {
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;overflow:hidden;border:1px solid #e8e8e8;max-width:560px;">
         <tr><td style="background:#000;padding:24px 32px;">
-          <p style="margin:0;font-size:22px;font-weight:700;color:#fff;letter-spacing:4px;">IRIS</p>
+          ${this.brandHeader(brandName)}
         </td></tr>
         <tr><td style="padding:32px;">
           <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111;">Order Confirmed!</h1>
@@ -278,7 +295,7 @@ export class EmailService {
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;overflow:hidden;border:1px solid #e8e8e8;max-width:560px;">
         <tr><td style="background:#000;padding:24px 32px;display:flex;align-items:center;justify-content:space-between;">
-          <p style="margin:0;font-size:22px;font-weight:700;color:#fff;letter-spacing:4px;display:inline;">1NRI</p>
+          <p style="margin:0;font-size:22px;font-weight:700;color:#fff;letter-spacing:4px;display:inline;">IRIS</p>
           <span style="display:inline-block;margin-left:16px;background:#f59e0b;color:#000;font-size:11px;font-weight:700;letter-spacing:0.1em;padding:4px 10px;text-transform:uppercase;">New Order</span>
         </td></tr>
         <tr><td style="padding:32px;">
@@ -340,7 +357,9 @@ export class EmailService {
     order_number: string;
     tracking_number?: string | null;
     carrier?: string | null;
+    brand?: string;
   }): string {
+    const brandName = order.brand || '1NRI';
     const trackingBlock =
       order.tracking_number
         ? `<div style="margin:16px 0;padding:16px;background:#f9f9f9;border-radius:6px;font-size:14px;color:#333;">
@@ -357,13 +376,13 @@ export class EmailService {
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;overflow:hidden;border:1px solid #e8e8e8;max-width:560px;">
         <tr><td style="background:#000;padding:24px 32px;">
-          <p style="margin:0;font-size:22px;font-weight:700;color:#fff;letter-spacing:4px;">IRIS</p>
+          ${this.brandHeader(brandName)}
         </td></tr>
         <tr><td style="padding:32px;">
           <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111;">Your order is on its way!</h1>
           <p style="margin:0 0 16px;font-size:14px;color:#666;">Order <strong>${order.order_number}</strong> has shipped.</p>
           ${trackingBlock}
-          <p style="margin:24px 0 0;font-size:13px;color:#999;">Thank you for shopping with Iris.</p>
+          <p style="margin:24px 0 0;font-size:13px;color:#999;">Thank you for shopping with ${brandName}.</p>
         </td></tr>
       </table>
     </td></tr>

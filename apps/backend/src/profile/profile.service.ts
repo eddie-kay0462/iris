@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../common/supabase/supabase.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { toE164 } from '../common/utils/phone';
 
 @Injectable()
 export class ProfileService {
@@ -33,11 +34,14 @@ export class ProfileService {
       'phone_number',
       'email_notifications',
       'sms_notifications',
+      'default_address',
     ] as const;
 
     for (const field of allowedFields) {
       if (dto[field] !== undefined) {
-        updates[field] = dto[field];
+        updates[field] = field === 'phone_number' && dto[field]
+          ? toE164(dto[field] as string) ?? dto[field]
+          : dto[field];
       }
     }
 

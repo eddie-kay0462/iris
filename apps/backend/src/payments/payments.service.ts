@@ -38,15 +38,55 @@ export class PaymentsService {
     if (eventType === 'charge.success') {
       const reference = event?.data?.reference;
       if (reference) {
-        // Try popup order first; if not a popup order, fall through to online orders
+        // Try popup order first
         const confirmedPopup = await this.popupSalesService.confirmByReference(reference);
         if (!confirmedPopup) {
-          await this.ordersService.confirmPayment(reference);
+          // Try ally sale by payment_reference (MoMo) or customer_code (virtual account)
+          const confirmedAlly = await this.confirmAllySaleByReference(
+            reference,
+            event?.data?.customer?.customer_code,
+          );
+          if (!confirmedAlly) {
+            await this.ordersService.confirmPayment(reference);
+          }
         }
       }
     }
 
     return { ok: true };
+  }
+
+  private async confirmAllySaleByReference(
+    reference: string,
+    customerCode?: string,
+  ): Promise<boolean> {
+    const db = this.supabase.getAdminClient();
+
+    // Match by MoMo payment_reference
+    const { data: byRef } = await db
+      .from('ally_sales')
+      .update({ status: 'completed', payment_reference: reference })
+      .eq('payment_reference', reference)
+      .eq('status', 'awaiting_payment')
+      .select('id')
+      .maybeSingle();
+
+    if (byRef) return true;
+
+    // Match by virtual account customer_code
+    if (customerCode) {
+      const { data: byCustomer } = await db
+        .from('ally_sales')
+        .update({ status: 'completed', payment_reference: reference })
+        .eq('paystack_customer_code', customerCode)
+        .eq('status', 'awaiting_payment')
+        .select('id')
+        .maybeSingle();
+
+      if (byCustomer) return true;
+    }
+
+    return false;
   }
 
   async findAdminPayments(query: {

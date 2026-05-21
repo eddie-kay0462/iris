@@ -10,6 +10,7 @@ import {
   IsEnum,
   IsEmail,
 } from 'class-validator';
+import { IsPhoneNumber } from '../../common/utils/phone';
 import { Type } from 'class-transformer';
 
 export class OrderItemDto {
@@ -56,7 +57,7 @@ export class ShippingAddressDto {
   @IsString()
   postalCode?: string;
 
-  @IsString()
+  @IsPhoneNumber()
   phone: string;
 }
 

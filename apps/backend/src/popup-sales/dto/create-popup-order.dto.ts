@@ -10,6 +10,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IsPhoneNumber } from '../../common/utils/phone';
 
 export class CreateOrderItemDto {
   @IsOptional()
@@ -53,7 +54,7 @@ export class CreateSplitPaymentDto {
   network?: string;
 
   @IsOptional()
-  @IsString()
+  @IsPhoneNumber()
   phone?: string;
 
   @IsOptional()
@@ -75,7 +76,7 @@ export class CreatePopupOrderDto {
   customer_name?: string;
 
   @IsOptional()
-  @IsString()
+  @IsPhoneNumber()
   customer_phone?: string;
 
   @IsOptional()

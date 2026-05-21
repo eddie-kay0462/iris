@@ -1,4 +1,5 @@
 import { IsOptional, IsString } from 'class-validator';
+import { IsPhoneNumber } from '../../common/utils/phone';
 
 export class CreatePopupCustomerDto {
   @IsOptional()
@@ -6,7 +7,7 @@ export class CreatePopupCustomerDto {
   name?: string;
 
   @IsOptional()
-  @IsString()
+  @IsPhoneNumber()
   phone?: string;
 
   @IsOptional()

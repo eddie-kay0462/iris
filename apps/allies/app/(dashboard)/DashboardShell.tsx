@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   LayoutDashboard,
   ShoppingBag,
+  History,
   Users,
   Package,
   Trophy,
@@ -24,6 +25,7 @@ import { Avatar } from '@/components/Avatar'
 const navLinks = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/sales', label: 'Sales', icon: ShoppingBag },
+  { path: '/sales/history', label: 'History', icon: History },
   { path: '/customers', label: 'Customers', icon: Users },
   { path: '/inventory', label: 'Inventory', icon: Package },
   { path: '/leaderboard', label: 'Leaderboard', icon: Trophy },
@@ -52,7 +54,7 @@ function SidebarContent({
   const { ally } = useAlly()
 
   const isActive = (path: string) =>
-    path === '/' ? pathname === '/' : pathname.startsWith(path)
+    path === '/sales' ? pathname === '/sales' : path === '/' ? pathname === '/' : pathname.startsWith(path)
 
   async function handleLogout() {
     const supabase = createClient()

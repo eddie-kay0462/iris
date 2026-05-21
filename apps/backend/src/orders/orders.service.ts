@@ -9,6 +9,7 @@ import { EmailService } from '../email/email.service';
 import { SmsService, SMS_TEMPLATES } from '../sms/sms.service';
 import { PromosService } from '../promos/promos.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { toE164 } from '../common/utils/phone';
 import { QueryOrdersDto } from './dto/query-orders.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
@@ -20,22 +21,6 @@ export class OrdersService {
     private smsService: SmsService,
     private promosService: PromosService,
   ) {}
-
-  /**
-   * Sanitize a phone number from the database to a consistent local format (0XXXXXXXXX).
-   * Strips whitespace, escape characters, and non-digit/+ characters, then converts
-   * +233/233 prefixes to the local 0 prefix.
-   */
-  private normalizePhone(raw: string | null | undefined): string | null {
-    if (!raw) return null;
-    // Remove whitespace, control characters, and anything that isn't a digit or +
-    let phone = raw.replace(/[^\d+]/g, '');
-    if (!phone) return null;
-    if (phone.startsWith('+233')) phone = '0' + phone.slice(4);
-    else if (phone.startsWith('233') && phone.length >= 12) phone = '0' + phone.slice(3);
-    if (!phone.startsWith('0')) phone = '0' + phone;
-    return phone;
-  }
 
   private async generateOrderNumber(): Promise<string> {
     const db = this.supabase.getAdminClient();
@@ -58,6 +43,9 @@ export class OrdersService {
     const resolvedEmail = email ?? dto.guestEmail ?? '';
     if (!resolvedEmail) {
       throw new BadRequestException('Email is required for guest checkout');
+    }
+    if (dto.shippingAddress?.phone) {
+      dto.shippingAddress.phone = toE164(dto.shippingAddress.phone) ?? dto.shippingAddress.phone;
     }
     const db = this.supabase.getAdminClient();
 
@@ -213,7 +201,7 @@ export class OrdersService {
     const db = this.supabase.getAdminClient();
     const { data, error } = await db
       .from('orders')
-      .select('*, order_items(*), order_status_history(*)')
+      .select('*, order_items(*, product:products(vendor)), order_status_history(*)')
       .eq('id', id)
       .single();
 
@@ -363,12 +351,18 @@ export class OrdersService {
     const updatedOrder = await this.findOne(orderId);
 
     if (dto.status === 'shipped') {
+      const shippingVendors: string[] = (updatedOrder.order_items || [])
+        .map((i: any) => (i.product?.vendor as string) || '1NRI');
+      const shippingBrand = shippingVendors.length > 0 && shippingVendors.every((v) => v === 'Unlikely Alliances')
+        ? 'Unlikely Alliances'
+        : '1NRI';
       this.emailService
         .sendShippingNotification({
           email: updatedOrder.email,
           order_number: updatedOrder.order_number,
           tracking_number: updatedOrder.tracking_number,
           carrier: updatedOrder.carrier,
+          brand: shippingBrand,
         })
         .catch(() => null);
     }
@@ -573,7 +567,7 @@ export class OrdersService {
       .map((p) => p.email?.toLowerCase())
       .filter((e): e is string => !!e);
     const phones = profiles
-      .map((p) => this.normalizePhone(p.phone_number))
+      .map((p) => toE164(p.phone_number))
       .filter((p): p is string => p !== null);
 
     const [{ data: allOnlineOrders }, { data: popupByEmailData }, { data: popupByPhoneData }] =
@@ -640,7 +634,7 @@ export class OrdersService {
 
     const zero = { total: 0, count: 0, lastDate: '' };
     const enriched = profiles.map((profile) => {
-      const normalizedPhone = this.normalizePhone(profile.phone_number);
+      const normalizedPhone = toE164(profile.phone_number);
       const email = profile.email?.toLowerCase();
 
       const online = onlineByUser.get(profile.id) ?? zero;
@@ -704,7 +698,7 @@ export class OrdersService {
       throw new NotFoundException('Customer not found');
     }
 
-    const normalizedPhone = this.normalizePhone(profile.phone_number);
+    const normalizedPhone = toE164(profile.phone_number);
 
     // Iris online orders (with items for the timeline)
     const { data: orders } = await db
@@ -1134,6 +1128,9 @@ export class OrdersService {
     if (!resolvedEmail) {
       throw new BadRequestException('Email is required for guest checkout');
     }
+    if (dto.shippingAddress?.phone) {
+      dto.shippingAddress.phone = toE164(dto.shippingAddress.phone) ?? dto.shippingAddress.phone;
+    }
 
     const db = this.supabase.getAdminClient();
 
@@ -1266,6 +1263,13 @@ export class OrdersService {
     try {
       fullOrder = await this.findOne(order.id);
 
+      // Derive brand from item vendors: Unlikely Alliances if all items are UA, else 1NRI
+      const vendors: string[] = (fullOrder.order_items || [])
+        .map((i: any) => (i.product?.vendor as string) || '1NRI');
+      const brand = vendors.length > 0 && vendors.every((v) => v === 'Unlikely Alliances')
+        ? 'Unlikely Alliances'
+        : '1NRI';
+
       // Email receipt — fire and forget
       this.emailService
         .sendOrderConfirmation({
@@ -1275,6 +1279,7 @@ export class OrdersService {
           shipping_cost: fullOrder.shipping_cost || 0,
           total: fullOrder.total,
           currency: fullOrder.currency || 'GHS',
+          brand,
           order_items: fullOrder.order_items,
         })
         .catch(() => null);
@@ -1294,7 +1299,7 @@ export class OrdersService {
         .catch(() => null);
 
       // SMS confirmation — fire and forget
-      const phone = this.normalizePhone(
+      const phone = toE164(
         (fullOrder.shipping_address as any)?.phone,
       );
       if (phone) {

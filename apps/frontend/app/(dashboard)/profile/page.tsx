@@ -6,11 +6,17 @@ import { z } from "zod";
 import { zodResolver } from "@/lib/validation";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "sonner";
+import PhoneInput from "@/components/PhoneInput";
 
 const profileSchema = z.object({
   first_name: z.string().optional(),
   last_name: z.string().optional(),
-  phone_number: z.string().optional(),
+  phone_number: z
+    .string()
+    .optional()
+    .refine((v) => !v || /^\+\d{7,15}$/.test(v), {
+      message: "Enter a valid phone number",
+    }),
   email_notifications: z.boolean().optional(),
   sms_notifications: z.boolean().optional(),
 });
@@ -25,6 +31,8 @@ export default function ProfilePage() {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<ProfileValues>({
     resolver: zodResolver(profileSchema),
@@ -113,10 +121,10 @@ export default function ProfilePage() {
 
         <div>
           <label className={labelClass}>Phone number</label>
-          <input
-            {...register("phone_number")}
-            type="tel"
-            className={inputClass}
+          <PhoneInput
+            value={watch("phone_number") ?? ""}
+            onChange={(e164) => setValue("phone_number", e164, { shouldValidate: true })}
+            error={errors.phone_number?.message}
           />
         </div>
 

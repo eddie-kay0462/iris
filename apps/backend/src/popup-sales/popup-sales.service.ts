@@ -15,6 +15,7 @@ import { QueryPopupOrdersDto } from './dto/query-popup-orders.dto';
 import { ChargePopupOrderDto } from './dto/charge-popup-order.dto';
 import { CreatePopupCustomerDto } from './dto/create-popup-customer.dto';
 import { RefundPopupOrderDto } from './dto/refund-popup-order.dto';
+import { toE164, toPaystackMomoFormat } from '../common/utils/phone';
 
 @Injectable()
 export class PopupSalesService {
@@ -429,12 +430,7 @@ export class PopupSalesService {
     // Insert split payments if provided
     if (dto.split_payments && dto.split_payments.length > 0) {
       const splits = dto.split_payments.map((sp) => {
-        let phone = sp.phone?.trim().replace(/\s+/g, '') || null;
-        if (phone) {
-          if (phone.startsWith('+233')) phone = '0' + phone.slice(4);
-          else if (phone.startsWith('233')) phone = '0' + phone.slice(3);
-          else if (!phone.startsWith('0')) phone = '0' + phone;
-        }
+        const phone = sp.phone ? toE164(sp.phone) : null;
         return {
           order_id: order.id,
           method: sp.method,
@@ -559,11 +555,10 @@ export class PopupSalesService {
     const amountInPesewas = Math.round(Number(order.total) * 100);
     const email = `popup-${order.order_number.toLowerCase()}@iris-store.com`;
 
-    // Normalize phone to local format (0XXXXXXXXX) expected by Paystack Ghana
-    let phone = dto.phone.trim().replace(/\s+/g, '');
-    if (phone.startsWith('+233')) phone = '0' + phone.slice(4);
-    else if (phone.startsWith('233')) phone = '0' + phone.slice(3);
-    else if (!phone.startsWith('0')) phone = '0' + phone;
+    // Convert to E.164 then to Paystack Ghana MoMo format (0XXXXXXXXX)
+    const e164Phone = toE164(dto.phone);
+    if (!e164Phone) throw new BadRequestException('Invalid phone number format');
+    const phone = toPaystackMomoFormat(e164Phone);
 
     const response = await fetch('https://api.paystack.co/charge', {
       method: 'POST',
@@ -600,7 +595,7 @@ export class PopupSalesService {
         payment_method: 'momo',
         payment_reference: reference,
         status: 'awaiting_payment',
-        customer_phone: dto.phone,
+        customer_phone: e164Phone,
       })
       .eq('id', id);
 
@@ -865,13 +860,8 @@ export class PopupSalesService {
 
     const db = this.supabase.getAdminClient();
 
-    // Normalize phone to 0XXXXXXXXX before saving
-    let phone = dto.phone?.trim().replace(/\s+/g, '') || null;
-    if (phone) {
-      if (phone.startsWith('+233')) phone = '0' + phone.slice(4);
-      else if (phone.startsWith('233')) phone = '0' + phone.slice(3);
-      else if (!phone.startsWith('0')) phone = '0' + phone;
-    }
+    // Normalize to E.164 before saving and querying
+    const phone = dto.phone ? toE164(dto.phone) : null;
 
     // Check if a profile already exists with this email or phone
     let existingQuery = db.from('profiles').select('id').eq('role', 'public');
