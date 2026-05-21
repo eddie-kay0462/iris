@@ -15,6 +15,7 @@ import {
   submitAllyOtp,
   verifyAllyPayment,
   createAllyVirtualAccount,
+  notifyAllySaleConfirmed,
 } from './actions'
 
 type Customer = { id: string; first_name: string | null; last_name: string | null; email: string | null; phone_number: string | null; is_activated: boolean; invited_at: string | null }
@@ -388,6 +389,7 @@ export default function SalesPage() {
         commission_amount: finalCommission,
         notes: notes.trim() || null,
         status,
+        brand: ally.brand ?? '1NRI',
       })
       .select('id')
       .single()
@@ -413,6 +415,9 @@ export default function SalesPage() {
     )
 
     if (paymentMethod === 'cash') {
+      if (cashReceived && selectedCustomer?.email) {
+        void notifyAllySaleConfirmed(sale.id)
+      }
       setPaymentFlowState('confirmed')
       return
     }

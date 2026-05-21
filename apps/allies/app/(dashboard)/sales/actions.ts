@@ -120,6 +120,98 @@ export async function createCustomer(input: {
   return { ...data, is_activated: data.is_activated ?? false, invited_at: data.invited_at ?? null }
 }
 
+// ── Email confirmation ────────────────────────────────────────────────────────
+
+async function sendAllySaleConfirmation(saleId: string): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY
+  const from = process.env.EMAIL_FROM ?? 'Iris <orders@getiris.co>'
+  if (!apiKey) return
+
+  const supabase = getServiceClient()
+  const { data: sale } = await supabase
+    .from('ally_sales')
+    .select('customer_email, customer_name, order_number, subtotal, total, brand')
+    .eq('id', saleId)
+    .single()
+
+  if (!sale?.customer_email) return
+
+  const { data: items } = await supabase
+    .from('ally_sale_items')
+    .select('product_name, variant_title, quantity, total_price')
+    .eq('sale_id', saleId)
+
+  const symbol = 'GH₵'
+  const brandName = sale.brand || '1NRI'
+  const greeting = sale.customer_name ? `Hi ${sale.customer_name.split(' ')[0]},` : 'Hi,'
+
+  const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL ?? 'https://1nri.store'
+  const brandHeader =
+    brandName === 'Unlikely Alliances'
+      ? `<p style="margin:0;font-size:20px;font-weight:700;color:#fff;font-family:Helvetica,Arial,sans-serif;letter-spacing:0.5px;">Unlikely Alliances</p>`
+      : `<img src="${frontendUrl}/homepage_img/no-bg-1NRI.png" alt="1NRI" height="36" style="display:block;border:0;height:36px;width:auto;">`
+
+  const itemRows = (items ?? [])
+    .map(
+      (item: any) => `
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;">
+          ${item.product_name}${item.variant_title ? ` — ${item.variant_title}` : ''}${item.quantity > 1 ? ` × ${item.quantity}` : ''}
+        </td>
+        <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;text-align:right;white-space:nowrap;">
+          ${symbol} ${Number(item.total_price).toLocaleString()}
+        </td>
+      </tr>`,
+    )
+    .join('')
+
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Purchase Confirmed</title></head>
+<body style="margin:0;padding:0;background:#f9f9f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f9f9;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;overflow:hidden;border:1px solid #e8e8e8;max-width:560px;">
+        <tr><td style="background:#000;padding:24px 32px;">${brandHeader}</td></tr>
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 4px;font-size:14px;color:#666;">${greeting}</p>
+          <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111;">Thank you for your purchase!</h1>
+          <p style="margin:0 0 24px;font-size:14px;color:#666;">Order <strong>${sale.order_number}</strong> — your payment has been received.</p>
+          <table width="100%" cellpadding="0" cellspacing="0">${itemRows}</table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;border-top:2px solid #111;padding-top:16px;">
+            <tr>
+              <td style="font-size:15px;font-weight:700;color:#111;padding-top:4px;">Total Paid</td>
+              <td style="font-size:15px;font-weight:700;color:#111;text-align:right;padding-top:4px;">${symbol} ${Number(sale.total).toLocaleString()}</td>
+            </tr>
+          </table>
+          <p style="margin:28px 0 0;font-size:13px;color:#999;">Thank you for shopping with ${brandName}.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: sale.customer_email,
+        subject: `Purchase Confirmed — ${sale.order_number}`,
+        html,
+      }),
+      cache: 'no-store',
+    })
+  } catch (err) {
+    console.error('Failed to send ally sale confirmation email:', err)
+  }
+}
+
 // ── Paystack helpers ──────────────────────────────────────────────────────────
 
 function getPaystackKey() {
@@ -240,6 +332,7 @@ export async function submitAllyOtp(
   const paystackStatus = json.data?.status as string
   if (paystackStatus === 'success') {
     await supabase.from('ally_sales').update({ status: 'completed' }).eq('id', saleId)
+    void sendAllySaleConfirmation(saleId)
   }
 
   return { success: true, paystackStatus }
@@ -277,6 +370,7 @@ export async function verifyAllyPayment(saleId: string): Promise<{ confirmed: bo
     const json = await resp.json()
     if (json.data?.status === 'success') {
       await supabase.from('ally_sales').update({ status: 'completed' }).eq('id', saleId)
+      void sendAllySaleConfirmation(saleId)
       return { confirmed: true }
     }
   }
@@ -354,6 +448,10 @@ export async function createAllyVirtualAccount(
   }
 }
 
+export async function notifyAllySaleConfirmed(saleId: string): Promise<void> {
+  await sendAllySaleConfirmation(saleId)
+}
+
 // ── Mark cash received ────────────────────────────────────────────────────────
 
 export async function markCashReceived(saleId: string): Promise<{ success: boolean; error?: string }> {
@@ -378,6 +476,7 @@ export async function markCashReceived(saleId: string): Promise<{ success: boole
     .eq('id', saleId)
 
   if (error) return { success: false, error: error.message }
+  void sendAllySaleConfirmation(saleId)
   return { success: true }
 }
 
