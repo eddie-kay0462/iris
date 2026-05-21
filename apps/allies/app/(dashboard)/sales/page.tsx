@@ -448,7 +448,7 @@ export default function SalesPage() {
       const result = await createAllyVirtualAccount(
         sale.id,
         selectedCustomer.first_name ?? customerDisplayName(selectedCustomer).split(' ')[0],
-        (selectedCustomer.last_name ?? customerDisplayName(selectedCustomer).split(' ').slice(1).join(' ')) || selectedCustomer.first_name ?? '',
+        (selectedCustomer.last_name ?? customerDisplayName(selectedCustomer).split(' ').slice(1).join(' ')) || (selectedCustomer.first_name ?? ''),
         selectedCustomer.email ?? undefined,
       )
       if (!result.success) {
