@@ -383,7 +383,8 @@ export async function verifyAllyPayment(saleId: string): Promise<{ confirmed: bo
 
 export async function createAllyVirtualAccount(
   saleId: string,
-  customerName: string,
+  customerFirstName: string,
+  customerLastName: string,
   customerEmail?: string,
 ): Promise<{ success: boolean; account?: { accountNumber: string; bankName: string; accountName: string }; error?: string }> {
   const supabase = getServiceClient()
@@ -398,21 +399,35 @@ export async function createAllyVirtualAccount(
 
   const key = getPaystackKey()
   const email = customerEmail ?? `ally-${sale.order_number}@iris-store.com`
+  const firstName = customerFirstName.trim() || 'Customer'
+  const lastName = customerLastName.trim() || firstName
 
-  // 1. Create Paystack customer
+  // 1. Create or fetch existing Paystack customer
   let customerCode: string
   try {
     const custResp = await fetch('https://api.paystack.co/customer', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, first_name: customerName }),
+      body: JSON.stringify({ email, first_name: firstName, last_name: lastName }),
       cache: 'no-store',
     })
     const custJson = await custResp.json()
+
     if (!custJson.status || !custJson.data?.customer_code) {
-      return { success: false, error: custJson.message ?? 'Could not create Paystack customer' }
+      // Customer might already exist — try fetching by email
+      const fetchResp = await fetch(`https://api.paystack.co/customer/${encodeURIComponent(email)}`, {
+        headers: { Authorization: `Bearer ${key}` },
+        cache: 'no-store',
+      })
+      const fetchJson = await fetchResp.json()
+      if (fetchJson.status && fetchJson.data?.customer_code) {
+        customerCode = fetchJson.data.customer_code
+      } else {
+        return { success: false, error: custJson.message ?? 'Could not create Paystack customer' }
+      }
+    } else {
+      customerCode = custJson.data.customer_code
     }
-    customerCode = custJson.data.customer_code
   } catch (err: any) {
     return { success: false, error: err.message ?? 'Network error' }
   }
@@ -432,7 +447,7 @@ export async function createAllyVirtualAccount(
     const account = {
       accountNumber: vaJson.data.account_number as string,
       bankName: vaJson.data.bank?.name ?? 'Paystack',
-      accountName: vaJson.data.account_name ?? customerName,
+      accountName: vaJson.data.account_name ?? `${firstName} ${lastName}`.trim(),
     }
 
     await supabase.from('ally_sales').update({
