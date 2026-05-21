@@ -187,6 +187,7 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
 }
 
 const navLinks = [
+  { href: "/", label: "Road to HQ" },
   { href: "/products", label: "Shop" },
   { href: "/about", label: "About" },
 ];
