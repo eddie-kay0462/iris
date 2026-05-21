@@ -395,7 +395,7 @@ export default function HomePage() {
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
             {[
-              { label: "Tops", href: "/products?category=Tops", image: "/homepage/2.jpeg", pos: "object-top" },
+              { label: "Tops", href: "/products?category=Tops", image: "/homepage/2.jpeg", pos: "object-center" },
               { label: "Bottoms", href: "/products?category=Bottoms", image: "/homepage/3.png", pos: "object-center" },
               { label: "Accessories", href: "/products?category=Accessories", image: "/homepage/4.jpeg", pos: "object-top" },
               { label: "Footwear", href: "/products?category=Footwear", image: "/homepage/1.jpeg", pos: "object-top" },

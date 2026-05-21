@@ -188,8 +188,7 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
 
 const navLinks = [
   { href: "/products", label: "Shop" },
-  { href: "/products?tag=new", label: "New Arrivals" },
-  { href: "/lookbook", label: "Lookbook" },
+  { href: "/about", label: "About" },
 ];
 
 function ShopHeader() {
@@ -362,6 +361,25 @@ function ShopFooter() {
                 <Link href="/products?tag=collections" className="text-xs text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white">
                   Collections
                 </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Brand */}
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-widest text-gray-900 dark:text-gray-100">
+              Brand
+            </h4>
+            <ul className="mt-3 space-y-2">
+              <li>
+                <Link href="/about" className="text-xs text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white">
+                  About
+                </Link>
+              </li>
+              <li>
+                <span className="text-xs text-gray-300 dark:text-gray-700 cursor-not-allowed select-none">
+                  Lookbook
+                </span>
               </li>
             </ul>
           </div>
