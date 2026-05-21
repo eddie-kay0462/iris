@@ -112,7 +112,7 @@ function PayNowButton({
         initializePayment({
           onSuccess,
           onClose,
-          config: currentPhone ? { phone: toPaystackPhone(currentPhone) } : undefined,
+          config: currentPhone ? { email, amount: Math.round(amount * 100), currency: "GHS", reference, phone: toPaystackPhone(currentPhone) } : undefined,
         });
       }}
       disabled={disabled}
