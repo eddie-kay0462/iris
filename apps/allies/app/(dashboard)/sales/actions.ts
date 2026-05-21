@@ -447,7 +447,7 @@ export async function createAllyVirtualAccount(
     const account = {
       accountNumber: vaJson.data.account_number as string,
       bankName: vaJson.data.bank?.name ?? 'Paystack',
-      accountName: vaJson.data.account_name ?? customerName,
+      accountName: vaJson.data.account_name ?? `${firstName} ${lastName}`.trim(),
     }
 
     await supabase.from('ally_sales').update({
