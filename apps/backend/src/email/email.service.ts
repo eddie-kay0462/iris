@@ -79,6 +79,26 @@ export class EmailService {
     await this.send(staffEmail, subject, html, order.order_number);
   }
 
+  async sendAllySaleConfirmation(sale: {
+    email: string;
+    customer_name?: string | null;
+    order_number: string;
+    subtotal: number;
+    total: number;
+    currency: string;
+    brand?: string;
+    items?: {
+      product_name: string;
+      variant_title?: string | null;
+      quantity: number;
+      total_price: number;
+    }[];
+  }): Promise<void> {
+    const subject = `Purchase Confirmed — ${sale.order_number}`;
+    const html = this.buildAllySaleConfirmationHtml(sale);
+    await this.send(sale.email, subject, html, sale.order_number);
+  }
+
   async sendShippingNotification(order: {
     email: string;
     order_number: string;
@@ -345,6 +365,73 @@ export class EmailService {
           <p style="margin:28px 0 0;font-size:12px;color:#aaa;border-top:1px solid #f0f0f0;padding-top:20px;">
             Log in to the admin dashboard to update this order's status once it's packed and dispatched.
           </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+  }
+
+  private buildAllySaleConfirmationHtml(sale: {
+    order_number: string;
+    customer_name?: string | null;
+    subtotal: number;
+    total: number;
+    currency: string;
+    brand?: string;
+    items?: {
+      product_name: string;
+      variant_title?: string | null;
+      quantity: number;
+      total_price: number;
+    }[];
+  }): string {
+    const brandName = sale.brand || '1NRI';
+    const symbol = sale.currency === 'GHS' ? 'GH₵' : sale.currency;
+    const greeting = sale.customer_name ? `Hi ${sale.customer_name.split(' ')[0]},` : 'Hi,';
+
+    const itemRows = (sale.items || [])
+      .map(
+        (item) => `
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;">
+            ${item.product_name}${item.variant_title ? ` — ${item.variant_title}` : ''}${item.quantity > 1 ? ` × ${item.quantity}` : ''}
+          </td>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;text-align:right;white-space:nowrap;">
+            ${symbol} ${item.total_price.toLocaleString()}
+          </td>
+        </tr>`,
+      )
+      .join('');
+
+    return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Purchase Confirmed</title></head>
+<body style="margin:0;padding:0;background:#f9f9f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f9f9;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;overflow:hidden;border:1px solid #e8e8e8;max-width:560px;">
+        <tr><td style="background:#000;padding:24px 32px;">
+          ${this.brandHeader(brandName)}
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 4px;font-size:14px;color:#666;">${greeting}</p>
+          <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111;">Thank you for your purchase!</h1>
+          <p style="margin:0 0 24px;font-size:14px;color:#666;">Order <strong>${sale.order_number}</strong> — your payment has been received.</p>
+
+          <table width="100%" cellpadding="0" cellspacing="0">
+            ${itemRows}
+          </table>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;border-top:2px solid #111;padding-top:16px;">
+            <tr>
+              <td style="font-size:15px;font-weight:700;color:#111;padding-top:4px;">Total Paid</td>
+              <td style="font-size:15px;font-weight:700;color:#111;text-align:right;padding-top:4px;">${symbol} ${sale.total.toLocaleString()}</td>
+            </tr>
+          </table>
+
+          <p style="margin:28px 0 0;font-size:13px;color:#999;">Thank you for shopping with ${brandName}.</p>
         </td></tr>
       </table>
     </td></tr>

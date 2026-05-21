@@ -176,6 +176,17 @@ create index if not exists idx_ally_sale_refunds_sale_id on public.ally_sale_ref
 
 
 -- ================================================
+-- 6. Brand columns
+-- ================================================
+alter table public.allies
+  add column if not exists brand text not null default '1NRI'
+  check (brand in ('1NRI', 'Unlikely Alliances'));
+
+alter table public.ally_sales
+  add column if not exists brand text not null default '1NRI';
+
+
+-- ================================================
 -- NOTE: Customer search (profiles table)
 -- ================================================
 -- The allies app searches the profiles table to find existing customers

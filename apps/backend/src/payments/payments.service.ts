@@ -4,6 +4,7 @@ import { createHmac } from 'crypto';
 import { OrdersService } from '../orders/orders.service';
 import { SupabaseService } from '../common/supabase/supabase.service';
 import { PopupSalesService } from '../popup-sales/popup-sales.service';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class PaymentsService {
@@ -14,6 +15,7 @@ export class PaymentsService {
     private ordersService: OrdersService,
     private supabase: SupabaseService,
     private popupSalesService: PopupSalesService,
+    private emailService: EmailService,
   ) {
     this.secretKey = this.configService.get<string>(
       'PAYSTACK_SECRET_KEY',
@@ -68,10 +70,13 @@ export class PaymentsService {
       .update({ status: 'completed', payment_reference: reference })
       .eq('payment_reference', reference)
       .eq('status', 'awaiting_payment')
-      .select('id')
+      .select('id, customer_email, customer_name, order_number, subtotal, total, brand')
       .maybeSingle();
 
-    if (byRef) return true;
+    if (byRef) {
+      void this.sendAllySaleEmail(byRef);
+      return true;
+    }
 
     // Match by virtual account customer_code
     if (customerCode) {
@@ -80,13 +85,49 @@ export class PaymentsService {
         .update({ status: 'completed', payment_reference: reference })
         .eq('paystack_customer_code', customerCode)
         .eq('status', 'awaiting_payment')
-        .select('id')
+        .select('id, customer_email, customer_name, order_number, subtotal, total, brand')
         .maybeSingle();
 
-      if (byCustomer) return true;
+      if (byCustomer) {
+        void this.sendAllySaleEmail(byCustomer);
+        return true;
+      }
     }
 
     return false;
+  }
+
+  private async sendAllySaleEmail(sale: {
+    id: string;
+    customer_email: string | null;
+    customer_name: string | null;
+    order_number: string;
+    subtotal: number;
+    total: number;
+    brand: string;
+  }): Promise<void> {
+    if (!sale.customer_email) return;
+    const db = this.supabase.getAdminClient();
+    const { data: items } = await db
+      .from('ally_sale_items')
+      .select('product_name, variant_title, quantity, total_price')
+      .eq('sale_id', sale.id);
+
+    await this.emailService.sendAllySaleConfirmation({
+      email: sale.customer_email,
+      customer_name: sale.customer_name,
+      order_number: sale.order_number,
+      subtotal: Number(sale.subtotal),
+      total: Number(sale.total),
+      currency: 'GHS',
+      brand: sale.brand,
+      items: (items || []).map((i) => ({
+        product_name: i.product_name,
+        variant_title: i.variant_title ?? null,
+        quantity: i.quantity,
+        total_price: Number(i.total_price),
+      })),
+    });
   }
 
   async findAdminPayments(query: {
