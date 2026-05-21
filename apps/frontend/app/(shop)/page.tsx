@@ -250,13 +250,13 @@ export default function RoadToHQPage() {
           initial="hidden"
           animate="visible"
         >
-          <motion.p variants={fadeUp} className="text-[10px] font-medium uppercase tracking-[0.4em] text-white/50 font-mono whitespace-nowrap">
-            A 1NRI initiative &middot; Accra, Ghana
+          <motion.p variants={fadeUp} className="text-[16px] font-medium uppercase tracking-[0.4em] text-white/50 font-mono whitespace-nowrap">
+            AN 1NRI initiative &middot; Accra, Ghana
           </motion.p>
           <motion.h1 variants={fadeUp} className="display mt-4 text-5xl font-bold uppercase tracking-tight text-white sm:text-7xl lg:text-[7.5rem]">
             Road to HQ
           </motion.h1>
-          <motion.p variants={fadeUp} className="mt-4 max-w-xl text-sm text-white/70 sm:text-base">
+          <motion.p variants={fadeUp} className="mt-4 max-w-xl text-sm text-white/100 sm:text-base">
             Six thousand units stand between us and a permanent home in Accra. Every piece moves the needle.
           </motion.p>
 
