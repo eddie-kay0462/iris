@@ -278,15 +278,8 @@ export default function AboutPage() {
             </motion.p>
           </motion.div>
 
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={viewport}
-            variants={staggerFast}
-            className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-px bg-neutral-200 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-800"
-          >
-            <motion.a
-              variants={fadeUp}
+          <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-px bg-neutral-200 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-800">
+            <a
               href="https://instagram.com/_1nriworldwide"
               target="_blank"
               rel="noopener noreferrer"
@@ -305,10 +298,9 @@ export default function AboutPage() {
                   <path d="M7 17L17 7M9 7h8v8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-            </motion.a>
+            </a>
 
-            <motion.a
-              variants={fadeUp}
+            <a
               href="https://www.tiktok.com/@1nriworldwide"
               target="_blank"
               rel="noopener noreferrer"
@@ -327,10 +319,9 @@ export default function AboutPage() {
                   <path d="M7 17L17 7M9 7h8v8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-            </motion.a>
+            </a>
 
-            <motion.a
-              variants={fadeUp}
+            <a
               href="https://youtube.com/@1nriworldwide"
               target="_blank"
               rel="noopener noreferrer"
@@ -349,10 +340,9 @@ export default function AboutPage() {
                   <path d="M7 17L17 7M9 7h8v8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-            </motion.a>
+            </a>
 
-            <motion.a
-              variants={fadeUp}
+            <a
               href="https://www.linkedin.com/in/1nriworldwide/"
               target="_blank"
               rel="noopener noreferrer"
@@ -371,8 +361,8 @@ export default function AboutPage() {
                   <path d="M7 17L17 7M9 7h8v8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-            </motion.a>
-          </motion.div>
+            </a>
+          </div>
 
           {/* Direct contact */}
           <motion.div

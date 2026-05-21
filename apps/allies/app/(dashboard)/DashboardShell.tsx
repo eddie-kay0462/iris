@@ -197,7 +197,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="fixed inset-y-0 left-0 z-50 w-72 bg-black flex flex-col md:hidden overflow-y-auto"
+              className="fixed inset-y-0 left-0 z-50 w-64 sm:w-72 bg-black flex flex-col md:hidden overflow-y-auto"
             >
               <SidebarContent
                 onClose={() => setMobileOpen(false)}

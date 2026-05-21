@@ -127,7 +127,7 @@ export default function CustomersPage() {
   const sorted = [...filtered].sort((a, b) => b.totalSpend - a.totalSpend)
 
   return (
-    <div className="p-4 md:p-8">
+    <div className="p-4 sm:p-6 md:p-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
@@ -145,7 +145,7 @@ export default function CustomersPage() {
 
       {/* Summary stat strip */}
       {!loading && customers.length > 0 && (
-        <div className="grid grid-cols-3 gap-3 md:gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4 mb-6">
           <div className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm p-4 md:p-5">
             <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-2">Customers</p>
             <p className="text-xl md:text-2xl font-semibold">{customers.length}</p>
@@ -154,7 +154,7 @@ export default function CustomersPage() {
             <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-2">Total Orders</p>
             <p className="text-xl md:text-2xl font-semibold">{customers.reduce((s, c) => s + c.totalOrders, 0)}</p>
           </div>
-          <div className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm p-4 md:p-5">
+          <div className="col-span-2 sm:col-span-1 rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm p-4 md:p-5">
             <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-2">Revenue</p>
             <p className="text-base md:text-xl font-semibold truncate">{formatCurrency(customers.reduce((s, c) => s + c.totalSpend, 0))}</p>
           </div>
@@ -257,7 +257,7 @@ export default function CustomersPage() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 8 }}
             transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-            className="bg-white dark:bg-neutral-900 rounded-lg border border-slate-200 dark:border-neutral-800 shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col"
+            className="bg-white dark:bg-neutral-900 rounded-lg border border-slate-200 dark:border-neutral-800 shadow-xl w-full max-w-full sm:max-w-md md:max-w-lg max-h-[90vh] sm:max-h-[85vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}>
             {/* Modal header */}
             <div className="px-5 py-4 border-b border-slate-200 dark:border-neutral-800 flex items-center gap-3">

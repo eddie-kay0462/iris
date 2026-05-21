@@ -506,7 +506,7 @@ export default function SalesPage() {
               ? `Quota not yet reached — ${formatCurrency(Math.max(commissionQuota - periodTotal - subtotal, 0))} remaining`
               : `${(commissionRate * 100).toFixed(0)}% of ${formatCurrency(subtotal)}`}
         </p>
-        <div className="flex flex-col md:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <button onClick={resetForm}
             className="px-8 py-3 rounded-md bg-black dark:bg-white text-white dark:text-black text-xs tracking-[0.2em] uppercase hover:bg-neutral-800 transition-colors">
             Record Another
@@ -520,7 +520,7 @@ export default function SalesPage() {
   }
 
   return (
-    <div className="p-4 md:p-8">
+    <div className="p-4 sm:p-6 md:p-8">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6 md:mb-8">
         <Link href="/" className="w-9 h-9 rounded-md border border-slate-200 dark:border-neutral-800 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-neutral-800 transition-colors">
@@ -738,7 +738,7 @@ export default function SalesPage() {
 
         {/* Right — Order Summary */}
         <div>
-          <div className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm p-4 md:p-6 md:sticky md:top-6">
+          <div className="rounded-lg border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm p-4 sm:p-5 md:p-6 md:sticky md:top-6">
             <h3 className="text-[10px] tracking-[0.3em] uppercase text-neutral-400 mb-4">Order Summary</h3>
 
             {lineItems.length === 0 ? (

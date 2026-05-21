@@ -37,7 +37,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen">
       {/* Left panel — editorial image */}
       <div
-        className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative"
+        className="hidden md:flex md:w-2/5 lg:w-1/2 flex-col justify-between p-8 lg:p-12 relative"
         style={{
           backgroundImage: "url('/login-bg.jpeg')",
           backgroundSize: "cover",
@@ -66,10 +66,10 @@ export default function LoginPage() {
       </div>
 
       {/* Right panel — form */}
-      <div className="flex w-full lg:w-1/2 flex-col items-center justify-center bg-white px-8 py-12">
+      <div className="flex w-full md:w-3/5 lg:w-1/2 flex-col items-center justify-center bg-white px-8 py-12">
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
-          <div className="mb-10 lg:hidden">
+          <div className="mb-10 md:hidden">
             <span className="text-slate-900 text-2xl font-bold tracking-tight">1NRI</span>
             <span className="ml-2 text-slate-400 text-sm font-medium uppercase tracking-widest">Allies</span>
           </div>
