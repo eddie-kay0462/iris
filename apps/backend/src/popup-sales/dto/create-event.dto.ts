@@ -17,6 +17,10 @@ export class CreateEventDto {
   event_date?: string;
 
   @IsOptional()
+  @IsDateString()
+  end_date?: string;
+
+  @IsOptional()
   @IsEnum(['draft', 'active'])
   status?: 'draft' | 'active';
 }

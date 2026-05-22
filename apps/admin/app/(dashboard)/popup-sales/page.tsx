@@ -22,6 +22,11 @@ import {
   RotateCcw,
   Eye,
   EyeOff,
+  ArrowLeft,
+  Calendar,
+  MapPin,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { useCreatePopupPreorder } from "@/lib/api/preorders";
 import {
@@ -30,6 +35,7 @@ import {
   usePopupOrders,
   useCreatePopupOrder,
   useUpdatePopupOrder,
+  useUpdatePopupEvent,
   useCreatePopupEvent,
   useChargePopupOrder,
   useSubmitPopupOtp,
@@ -37,6 +43,7 @@ import {
   useCreatePopupCustomer,
   useRefundPopupOrder,
   type PopupEvent,
+  type PopupEventStatus,
   type PopupOrder,
   type PopupOrderStatus,
   type PopupPaymentMethod,
@@ -2461,7 +2468,9 @@ function NewEventModal({ onClose }: { onClose: () => void }) {
   const createEvent = useCreatePopupEvent();
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
-  const [eventDate, setEventDate] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [isMultiDay, setIsMultiDay] = useState(false);
   const [status, setStatus] = useState<"draft" | "active">("active");
 
   async function handleSubmit(e: React.FormEvent) {
@@ -2470,7 +2479,8 @@ function NewEventModal({ onClose }: { onClose: () => void }) {
     await createEvent.mutateAsync({
       name,
       location: location || undefined,
-      event_date: eventDate || undefined,
+      event_date: startDate || undefined,
+      end_date: isMultiDay && endDate ? endDate : undefined,
       status,
     });
     onClose();
@@ -2514,17 +2524,57 @@ function NewEventModal({ onClose }: { onClose: () => void }) {
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
             />
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              Event Date
-            </label>
+          <div className="flex items-center gap-2">
             <input
-              type="date"
-              value={eventDate}
-              onChange={(e) => setEventDate(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+              type="checkbox"
+              id="multi-day"
+              checked={isMultiDay}
+              onChange={(e) => setIsMultiDay(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
             />
+            <label htmlFor="multi-day" className="text-sm text-slate-600 cursor-pointer">
+              Multi-day event
+            </label>
           </div>
+          {isMultiDay ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  min={startDate || undefined}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                />
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                Event Date
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+              />
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">
               Status
@@ -2557,6 +2607,283 @@ function NewEventModal({ onClose }: { onClose: () => void }) {
         </form>
       </div>
     </div>
+  );
+}
+
+// ─── Edit Event Modal ─────────────────────────────────────────────────────────
+
+function EditEventModal({ event, onClose }: { event: PopupEvent; onClose: () => void }) {
+  const updateEvent = useUpdatePopupEvent();
+  const [name, setName] = useState(event.name);
+  const [location, setLocation] = useState(event.location ?? "");
+  const [startDate, setStartDate] = useState(event.event_date ?? "");
+  const [endDate, setEndDate] = useState(event.end_date ?? "");
+  const isMultiDay = !!(event.end_date);
+  const [multiDay, setMultiDay] = useState(isMultiDay);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    await updateEvent.mutateAsync({
+      id: event.id,
+      dto: {
+        name,
+        location: location || undefined,
+        event_date: startDate || undefined,
+        end_date: multiDay && endDate ? endDate : null as any,
+      },
+    });
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <h2 className="text-base font-semibold text-slate-900">Edit Event</h2>
+          <button
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4 p-6">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Event Name *</label>
+            <input
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Location</label>
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="edit-multi-day"
+              checked={multiDay}
+              onChange={(e) => setMultiDay(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+            />
+            <label htmlFor="edit-multi-day" className="text-sm text-slate-600 cursor-pointer">
+              Multi-day event
+            </label>
+          </div>
+          {multiDay ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Start Date</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">End Date</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  min={startDate || undefined}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                />
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Event Date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+              />
+            </div>
+          )}
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!name.trim() || updateEvent.isPending}
+              className="flex-1 rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            >
+              {updateEvent.isPending ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Event Hub ────────────────────────────────────────────────────────────────
+
+function formatEventDates(event: PopupEvent): string {
+  if (!event.event_date) return "No date set";
+  const start = new Date(event.event_date + "T00:00:00").toLocaleDateString("en-GB", {
+    day: "numeric", month: "short", year: "numeric",
+  });
+  if (event.end_date && event.end_date !== event.event_date) {
+    const end = new Date(event.end_date + "T00:00:00").toLocaleDateString("en-GB", {
+      day: "numeric", month: "short", year: "numeric",
+    });
+    return `${start} – ${end}`;
+  }
+  return start;
+}
+
+const EVENT_STATUS_STYLES: Record<PopupEventStatus, string> = {
+  active: "bg-green-50 text-green-700 border-green-200",
+  closed: "bg-slate-100 text-slate-500 border-slate-200",
+  draft: "bg-amber-50 text-amber-700 border-amber-200",
+};
+
+const EVENT_STATUS_LABELS: Record<PopupEventStatus, string> = {
+  active: "Active",
+  closed: "Closed",
+  draft: "Draft",
+};
+
+function EventHubView({
+  events,
+  onSelectEvent,
+  onCreateEvent,
+}: {
+  events: PopupEvent[];
+  onSelectEvent: (id: string) => void;
+  onCreateEvent: () => void;
+}) {
+  const [editingEvent, setEditingEvent] = useState<PopupEvent | null>(null);
+  const [closingEvent, setClosingEvent] = useState<PopupEvent | null>(null);
+  const updateEvent = useUpdatePopupEvent();
+
+  const active = events.filter((e) => e.status === "active");
+  const drafts = events.filter((e) => e.status === "draft");
+  const closed = events.filter((e) => e.status === "closed");
+  const sorted = [...active, ...drafts, ...closed];
+
+  return (
+    <>
+      <section className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold text-slate-900">Pop-up Sales</h1>
+          <button
+            onClick={onCreateEvent}
+            className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+          >
+            <Plus className="h-4 w-4" />
+            New Pop-up
+          </button>
+        </div>
+
+        {events.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 py-24 text-center">
+            <ShoppingCart className="mx-auto mb-3 h-10 w-10 text-slate-300" />
+            <p className="text-slate-500">No pop-up events yet.</p>
+            <button
+              onClick={onCreateEvent}
+              className="mt-4 flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+            >
+              <Plus className="h-4 w-4" />
+              Create First Event
+            </button>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {sorted.map((event) => (
+              <div
+                key={event.id}
+                className={`group rounded-xl border bg-white p-5 shadow-sm transition-shadow hover:shadow-md ${event.status === "active" ? "border-green-300 ring-1 ring-green-200" : "border-slate-200"}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-slate-900 leading-snug">{event.name}</h3>
+                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${EVENT_STATUS_STYLES[event.status]}`}>
+                    {EVENT_STATUS_LABELS[event.status]}
+                  </span>
+                </div>
+                <div className="mt-3 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                    <Calendar className="h-3.5 w-3.5 shrink-0" />
+                    <span>{formatEventDates(event)}</span>
+                  </div>
+                  {event.location && (
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <MapPin className="h-3.5 w-3.5 shrink-0" />
+                      <span>{event.location}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => onSelectEvent(event.id)}
+                    className="flex-1 rounded-lg bg-slate-900 py-2 text-xs font-medium text-white hover:bg-slate-800"
+                  >
+                    {event.status === "closed" ? "View Orders" : "Open Event"}
+                  </button>
+                  <button
+                    onClick={() => setEditingEvent(event)}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                  >
+                    Edit
+                  </button>
+                  {event.status !== "closed" && (
+                    <button
+                      onClick={() => setClosingEvent(event)}
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
+                    >
+                      Close
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {editingEvent && (
+        <EditEventModal event={editingEvent} onClose={() => setEditingEvent(null)} />
+      )}
+      {closingEvent && (
+        <ConfirmDialog
+          title={`Close "${closingEvent.name}"?`}
+          message="This will set the end date to today and mark the event as closed. No new orders will be allowed. You can reopen it at any time."
+          confirmLabel="Close Event"
+          danger
+          onConfirm={() => {
+            const today = new Date().toISOString().split("T")[0];
+            updateEvent.mutate({
+              id: closingEvent.id,
+              dto: {
+                status: "closed",
+                end_date: closingEvent.end_date ?? today,
+              },
+            });
+            setClosingEvent(null);
+          }}
+          onCancel={() => setClosingEvent(null)}
+        />
+      )}
+    </>
   );
 }
 
@@ -2780,13 +3107,11 @@ export default function PopupSalesPage() {
   const [editOrder, setEditOrder] = useState<PopupOrder | null>(null);
   const [refundOrder, setRefundOrder] = useState<PopupOrder | null>(null);
   const [showRevenue, setShowRevenue] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
-  // Auto-select first active event, then first event
-  useEffect(() => {
-    if (selectedEventId || events.length === 0) return;
-    const active = events.find((e) => e.status === "active");
-    setSelectedEventId(active?.id ?? events[0].id);
-  }, [events, selectedEventId]);
+  const selectedEvent = events.find((e) => e.id === selectedEventId) ?? null;
+  const isClosed = selectedEvent?.status === "closed";
+  const updateEvent = useUpdatePopupEvent();
 
   const { data: stats } = usePopupStats(selectedEventId);
   const { data: ordersData, isLoading: ordersLoading } = usePopupOrders(
@@ -2820,20 +3145,76 @@ export default function PopupSalesPage() {
     );
   }
 
+  // Show hub when no event is selected
+  if (!selectedEventId) {
+    return (
+      <>
+        <EventHubView
+          events={events}
+          onSelectEvent={setSelectedEventId}
+          onCreateEvent={() => setShowNewEvent(true)}
+        />
+        {showNewEvent && (
+          <NewEventModal onClose={() => setShowNewEvent(false)} />
+        )}
+      </>
+    );
+  }
+
+  function handleToggleEventStatus() {
+    if (!selectedEvent) return;
+    if (selectedEvent.status === "active") {
+      setShowCloseConfirm(true);
+    } else {
+      updateEvent.mutate({ id: selectedEvent.id, dto: { status: "active" } });
+    }
+  }
+
   return (
     <>
       <section className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold text-slate-900">Pop-up Sales</h1>
           <div className="flex items-center gap-3">
-            <EventSelector
-              events={events}
-              selectedId={selectedEventId}
-              onSelect={setSelectedEventId}
-              onNewEvent={() => setShowNewEvent(true)}
-            />
-            {selectedEventId && (
+            <button
+              onClick={() => setSelectedEventId(null)}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Events
+            </button>
+            <h1 className="text-xl font-semibold text-slate-900">
+              {selectedEvent?.name ?? "Pop-up Sales"}
+            </h1>
+            {selectedEvent && (
+              <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${EVENT_STATUS_STYLES[selectedEvent.status]}`}>
+                {EVENT_STATUS_LABELS[selectedEvent.status]}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {selectedEvent && (
+              <button
+                onClick={handleToggleEventStatus}
+                disabled={updateEvent.isPending}
+                className={`flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                  isClosed
+                    ? "border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
+                    : selectedEvent.status === "draft"
+                    ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {isClosed ? (
+                  <><Unlock className="h-4 w-4" />Reopen Event</>
+                ) : selectedEvent.status === "draft" ? (
+                  <><Unlock className="h-4 w-4" />Activate Event</>
+                ) : (
+                  <><Lock className="h-4 w-4" />Close Event</>
+                )}
+              </button>
+            )}
+            {!isClosed && (
               <button
                 onClick={() => setShowNewOrder(true)}
                 className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
@@ -2845,105 +3226,111 @@ export default function PopupSalesPage() {
           </div>
         </div>
 
-        {events.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 py-24 text-center">
-            <p className="text-slate-500">No pop-up events yet.</p>
-            <button
-              onClick={() => setShowNewEvent(true)}
-              className="mt-4 flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            >
-              <Plus className="h-4 w-4" />
-              Create First Event
-            </button>
+        {/* Closed event banner */}
+        {isClosed && (
+          <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <Lock className="h-4 w-4 shrink-0" />
+            <span>This pop-up is closed. New orders cannot be added. Click <strong>Reopen Event</strong> to allow orders again.</span>
           </div>
-        ) : (
-          <>
-            {/* Stats */}
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <div className="rounded-lg border border-slate-200 bg-white p-5">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-slate-500">Session Revenue</p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setShowRevenue((v) => !v)}
-                      className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-                      title={showRevenue ? "Hide revenue" : "Show revenue"}
-                    >
-                      {showRevenue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                    <span className="text-emerald-500"><TrendingUp className="h-4 w-4" /></span>
-                  </div>
-                </div>
-                <p className={`mt-3 text-2xl font-semibold transition-all select-none ${showRevenue ? "text-slate-900" : "text-slate-300 blur-sm"}`}>
-                  {stats ? formatCurrency(stats.session_revenue) : "—"}
-                </p>
-              </div>
-              <StatsCard
-                label="Orders Completed"
-                value={stats?.orders_completed ?? "—"}
-                icon={<CheckCircle className="h-4 w-4" />}
-                iconColor="text-green-500"
-              />
-              <StatsCard
-                label="On Hold"
-                value={stats?.on_hold ?? "—"}
-                icon={<Clock className="h-4 w-4" />}
-                iconColor="text-amber-500"
-              />
-              <StatsCard
-                label="Awaiting Payment"
-                value={stats?.awaiting_payment ?? "—"}
-                icon={<AlertCircle className="h-4 w-4" />}
-                iconColor="text-amber-500"
-              />
-            </div>
-
-            {/* Tabs + Table */}
-            <div className="rounded-xl border border-slate-200 bg-white">
-              {/* Tab bar */}
-              <div className="flex items-center gap-1 border-b border-slate-100 px-4 pt-3">
-                {TABS.map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${activeTab === tab.id
-                      ? "border-b-2 border-slate-900 text-slate-900"
-                      : "text-slate-500 hover:text-slate-700"
-                      }`}
-                  >
-                    {tab.label}
-                    {tab.id === "awaiting_payment" && awaitingCount > 0 && (
-                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1 text-xs font-semibold text-white">
-                        {awaitingCount}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              {/* Confirmation banner */}
-              {activeTab === "active" && awaitingCount > 0 && (
-                <div className="border-b border-amber-100 bg-amber-50 px-5 py-2.5 text-sm text-amber-700">
-                  {awaitingCount} order{awaitingCount !== 1 ? "s" : ""} awaiting
-                  payment confirmation. Serve next customer while you wait.
-                </div>
-              )}
-
-              <OrderTable
-                orders={orders}
-                isLoading={ordersLoading}
-                onUpdate={handleUpdateOrder}
-                onChargeMomo={setMomoChargeOrder}
-                onViewDetails={setDetailOrder}
-                onEditOrder={setEditOrder}
-                onRefundOrder={setRefundOrder}
-              />
-            </div>
-          </>
         )}
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="rounded-lg border border-slate-200 bg-white p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-500">Session Revenue</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowRevenue((v) => !v)}
+                  className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                  title={showRevenue ? "Hide revenue" : "Show revenue"}
+                >
+                  {showRevenue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+                <span className="text-emerald-500"><TrendingUp className="h-4 w-4" /></span>
+              </div>
+            </div>
+            <p className={`mt-3 text-2xl font-semibold transition-all select-none ${showRevenue ? "text-slate-900" : "text-slate-300 blur-sm"}`}>
+              {stats ? formatCurrency(stats.session_revenue) : "—"}
+            </p>
+          </div>
+          <StatsCard
+            label="Orders Completed"
+            value={stats?.orders_completed ?? "—"}
+            icon={<CheckCircle className="h-4 w-4" />}
+            iconColor="text-green-500"
+          />
+          <StatsCard
+            label="On Hold"
+            value={stats?.on_hold ?? "—"}
+            icon={<Clock className="h-4 w-4" />}
+            iconColor="text-amber-500"
+          />
+          <StatsCard
+            label="Awaiting Payment"
+            value={stats?.awaiting_payment ?? "—"}
+            icon={<AlertCircle className="h-4 w-4" />}
+            iconColor="text-amber-500"
+          />
+        </div>
+
+        {/* Tabs + Table */}
+        <div className="rounded-xl border border-slate-200 bg-white">
+          {/* Tab bar */}
+          <div className="flex items-center gap-1 border-b border-slate-100 px-4 pt-3">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${activeTab === tab.id
+                  ? "border-b-2 border-slate-900 text-slate-900"
+                  : "text-slate-500 hover:text-slate-700"
+                  }`}
+              >
+                {tab.label}
+                {tab.id === "awaiting_payment" && awaitingCount > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1 text-xs font-semibold text-white">
+                    {awaitingCount}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Confirmation banner */}
+          {activeTab === "active" && awaitingCount > 0 && (
+            <div className="border-b border-amber-100 bg-amber-50 px-5 py-2.5 text-sm text-amber-700">
+              {awaitingCount} order{awaitingCount !== 1 ? "s" : ""} awaiting
+              payment confirmation. Serve next customer while you wait.
+            </div>
+          )}
+
+          <OrderTable
+            orders={orders}
+            isLoading={ordersLoading}
+            onUpdate={handleUpdateOrder}
+            onChargeMomo={setMomoChargeOrder}
+            onViewDetails={setDetailOrder}
+            onEditOrder={setEditOrder}
+            onRefundOrder={setRefundOrder}
+          />
+        </div>
       </section>
 
-      {showNewOrder && selectedEventId && (
+      {showCloseConfirm && selectedEvent && (
+        <ConfirmDialog
+          title="Close this pop-up?"
+          message="Closing will prevent any new orders from being added. Existing orders can still be edited. You can reopen it at any time."
+          confirmLabel="Close Event"
+          danger
+          onConfirm={() => {
+            updateEvent.mutate({ id: selectedEvent.id, dto: { status: "closed" } });
+            setShowCloseConfirm(false);
+          }}
+          onCancel={() => setShowCloseConfirm(false)}
+        />
+      )}
+      {showNewOrder && selectedEventId && !isClosed && (
         <NewOrderModal
           eventId={selectedEventId}
           onClose={() => setShowNewOrder(false)}
