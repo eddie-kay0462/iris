@@ -12,6 +12,7 @@ import { addRecentlyViewed, useRecentlyViewed } from "@/lib/recently-viewed";
 import { ProductCard } from "../../components/ProductCard";
 import { createPreorder } from "@/lib/api/preorders";
 import { getToken } from "@/lib/api/client";
+import { useToggleFavourite } from "@/lib/favourites";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -433,10 +434,10 @@ export default function ProductDetailPage({ params }: PageProps) {
   const { id } = use(params);
   const { data: product, isLoading, error } = useProduct(id);
   const { addItem } = useCart();
+  const { isFavourited, toggle: toggleFavourite } = useToggleFavourite(product?.id ?? "");
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [initialized, setInitialized] = useState(false);
   const [added, setAdded] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [showPreorderModal, setShowPreorderModal] = useState(false);
   const [openAccordion, setOpenAccordion] = useState<string | null>("details");
 
@@ -705,16 +706,16 @@ export default function ProductDetailPage({ params }: PageProps) {
             )}
 
             <button
-              onClick={() => setSaved(!saved)}
+              onClick={toggleFavourite}
               className="w-full h-[46px] bg-white text-black border border-black flex items-center justify-center gap-2.5 text-[12px] tracking-[0.16em] uppercase hover:bg-black hover:text-white transition-colors duration-[140ms]"
               style={{ fontFamily: "Inter, sans-serif", fontWeight: 700 }}
             >
               <Heart
                 className="w-[18px] h-[18px]"
                 strokeWidth={1.5}
-                fill={saved ? "currentColor" : "none"}
+                fill={isFavourited ? "currentColor" : "none"}
               />
-              {saved ? "Saved" : "Save to Favourites"}
+              {isFavourited ? "Saved" : "Save to Favourites"}
             </button>
           </div>
 

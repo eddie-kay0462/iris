@@ -158,7 +158,7 @@ export class PreordersService {
     const db = this.supabase.getAdminClient();
     const { data, error } = await db
       .from('preorders')
-      .select('*, product_variants(option1_value, option2_value, option3_value, product_images(src))')
+      .select('*, product_variants(option1_value, option2_value, option3_value, product_images!product_images_variant_id_fkey(src))')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
     if (error) throw error;

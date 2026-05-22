@@ -34,6 +34,10 @@ const nextConfig: NextConfig = {
         source: "/auth/v1/:path*",
         destination: supabaseAuthDestination,
       },
+      {
+        source: "/storage/v1/:path*",
+        destination: new URL("/storage/v1/:path*", supabaseUrl).toString(),
+      },
     ];
   },
 };
