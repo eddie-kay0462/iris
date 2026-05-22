@@ -110,11 +110,12 @@ export class PreordersService {
 
     const orderNumber = await this.generateOrderNumber();
     const results = [];
+    const preorderVendors: string[] = [];
 
     for (const item of dto.items) {
       const { data: variant, error: varErr } = await db
         .from('product_variants')
-        .select('id, preorder_enabled, preorder_limit, products(title)')
+        .select('id, preorder_enabled, preorder_limit, products(title, vendor)')
         .eq('id', item.variantId)
         .single();
 
