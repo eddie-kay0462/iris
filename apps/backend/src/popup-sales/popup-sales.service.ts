@@ -512,7 +512,7 @@ export class PopupSalesService {
     if (isBeingCompleted) {
       const { data: orderItems } = await db
         .from('popup_order_items')
-        .select('variant_id, quantity')
+        .select('variant_id, quantity, product_name, variant_title, unit_price, total_price, product:products(vendor)')
         .eq('order_id', id);
 
       if (orderItems && orderItems.length > 0) {
@@ -554,6 +554,8 @@ export class PopupSalesService {
           .select('name, location, event_date')
           .eq('id', data.event_id)
           .single();
+        const itemVendors = (orderItems ?? []).map((i: any) => (i.product as any)?.vendor || '1NRI');
+        const brand = itemVendors.length > 0 && itemVendors.every((v: string) => v === 'Unlikely Alliances') ? 'Unlikely Alliances' : '1NRI';
         this.emailService.sendPopupOrderSummary({
           email: data.customer_email,
           customer_name: data.customer_name ?? null,
@@ -572,6 +574,7 @@ export class PopupSalesService {
           discount_amount: Number(data.discount_amount) > 0 ? Number(data.discount_amount) : null,
           total: Number(data.total),
           payment_method: data.payment_method,
+          brand,
         }).catch(() => {});
       }
     }
@@ -757,13 +760,15 @@ export class PopupSalesService {
         try {
           const { data: items } = await db
             .from('popup_order_items')
-            .select('*')
+            .select('*, product:products(vendor)')
             .eq('order_id', data.id);
           const { data: evt } = await db
             .from('popup_events')
             .select('name, location, event_date')
             .eq('id', data.event_id)
             .single();
+          const itemVendors = (items ?? []).map((i: any) => (i.product as any)?.vendor || '1NRI');
+          const brand = itemVendors.length > 0 && itemVendors.every((v: string) => v === 'Unlikely Alliances') ? 'Unlikely Alliances' : '1NRI';
           await this.emailService.sendPopupOrderSummary({
             email: data.customer_email,
             customer_name: data.customer_name ?? null,
@@ -782,6 +787,7 @@ export class PopupSalesService {
             discount_amount: Number(data.discount_amount) > 0 ? Number(data.discount_amount) : null,
             total: Number(data.total),
             payment_method: data.payment_method,
+            brand,
           });
         } catch { /* silent */ }
       })();
