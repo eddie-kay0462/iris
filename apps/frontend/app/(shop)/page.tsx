@@ -228,7 +228,7 @@ export default function RoadToHQPage() {
 
         {/* Deadline kicker */}
         <motion.div
-          className="absolute left-0 right-0 top-[76px] flex flex-col items-center gap-1 px-6 text-center"
+          className="absolute left-0 right-0 top-[150px] flex flex-col items-center gap-1 px-6 text-center"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.15, ease }}
@@ -238,7 +238,7 @@ export default function RoadToHQPage() {
             <span><span className="text-green-400">Live</span> · Deadline</span>
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-white/80" />
           </div>
-          <div className={`${caveat.className} text-5xl sm:text-6xl lg:text-7xl text-white leading-none`} style={{ fontWeight: 500 }}>
+          <div className={`${caveat.className} text-7xl sm:text-6xl lg:text-7xl text-white leading-none`} style={{ fontWeight: 500 }}>
             26.12.2026
           </div>
         </motion.div>
@@ -250,9 +250,6 @@ export default function RoadToHQPage() {
           initial="hidden"
           animate="visible"
         >
-          <motion.p variants={fadeUp} className="text-[16px] font-medium uppercase tracking-[0.4em] text-white/50 font-mono whitespace-nowrap">
-            AN 1NRI initiative &middot; Accra, Ghana
-          </motion.p>
           <motion.h1 variants={fadeUp} className="display mt-4 text-5xl font-bold uppercase tracking-tight text-white sm:text-7xl lg:text-[7.5rem]">
             Road to HQ
           </motion.h1>
@@ -260,22 +257,22 @@ export default function RoadToHQPage() {
             Six thousand units stand between us and a permanent home in Accra. Every piece moves the needle.
           </motion.p>
 
-          <motion.div variants={fadeUp} className="mt-10 grid grid-cols-3 items-end gap-6 text-white">
+          <motion.div variants={fadeUp} className="mt-10 grid grid-cols-3 items-end gap-3 sm:gap-6 text-white">
             <div className="text-left">
-              <div className="text-[10px] font-medium uppercase tracking-[0.3em] text-white/50">Sold</div>
-              <div className="mt-1 font-mono text-3xl font-semibold tabular-nums sm:text-4xl">{displayUnits.toLocaleString()}</div>
+              <div className="text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.3em] text-white/50">Sold</div>
+              <div className="mt-1 font-mono text-2xl sm:text-3xl font-semibold tabular-nums md:text-4xl">{displayUnits.toLocaleString()}</div>
             </div>
             <div className="flex flex-col items-center">
-              <div className="h-px w-40 sm:w-56 bg-white/20 overflow-hidden">
+              <div className="h-px w-24 sm:w-40 md:w-56 bg-white/20 overflow-hidden">
                 <div className="h-full bg-white" style={{ width: `${ratio * 100}%` }} />
               </div>
-              <div className="mt-2 text-[15px] font-medium uppercase tracking-[0.3em] text-white/80 font-mono">
-                {(ratio * 100).toFixed(1)}% of the journey
+              <div className="mt-2 text-[10px] sm:text-[13px] font-medium uppercase tracking-[0.2em] sm:tracking-[0.3em] text-white/80 font-mono">
+                {(ratio * 100).toFixed(1)}%
               </div>
             </div>
             <div className="text-right">
-              <div className="text-[10px] font-medium uppercase tracking-[0.3em] text-white/50">Target</div>
-              <div className="mt-1 font-mono text-3xl font-semibold tabular-nums sm:text-4xl">6,000</div>
+              <div className="text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.3em] text-white/50">Target</div>
+              <div className="mt-1 font-mono text-2xl sm:text-3xl font-semibold tabular-nums md:text-4xl">6,000</div>
             </div>
           </motion.div>
 
@@ -336,7 +333,7 @@ export default function RoadToHQPage() {
               { value: "06", label: "Milestones" },
             ].map((stat) => (
               <motion.div key={stat.label} variants={fadeUp} className={stat.border ? "border-x border-neutral-200 dark:border-neutral-800" : ""}>
-                <div className="font-mono text-3xl sm:text-4xl font-semibold tabular-nums">{stat.value}</div>
+                <div className="font-mono text-2xl sm:text-3xl md:text-4xl font-semibold tabular-nums">{stat.value}</div>
                 <div className="mt-2 text-[10px] font-medium uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500 font-mono">{stat.label}</div>
               </motion.div>
             ))}
@@ -585,19 +582,22 @@ export default function RoadToHQPage() {
                 <motion.li
                   key={i}
                   variants={fadeUp}
-                  className="grid grid-cols-[60px_120px_1fr_140px] sm:grid-cols-[60px_140px_1fr_180px] items-center gap-4 py-6 px-2 cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition"
+                  className="grid grid-cols-[40px_1fr] sm:grid-cols-[60px_140px_1fr_180px] items-start sm:items-center gap-3 sm:gap-4 py-5 sm:py-6 px-2 cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition"
                   onClick={() => {
                     goTo(i);
                     document.getElementById("road-section")?.scrollIntoView({ behavior: "smooth", block: "center" });
                   }}
                 >
-                  <div className="font-mono text-2xl sm:text-3xl font-semibold text-neutral-300 dark:text-neutral-700 tabular-nums">{String(i + 1).padStart(2, "0")}</div>
-                  <div className="font-mono text-sm tabular-nums text-neutral-900 dark:text-neutral-100">{ms.units.toLocaleString()} units</div>
+                  <div className="font-mono text-xl sm:text-2xl md:text-3xl font-semibold text-neutral-300 dark:text-neutral-700 tabular-nums">{String(i + 1).padStart(2, "0")}</div>
+                  <div className="hidden sm:block font-mono text-sm tabular-nums text-neutral-900 dark:text-neutral-100">{ms.units.toLocaleString()} units</div>
                   <div>
-                    <div className="text-base sm:text-lg font-semibold uppercase tracking-tight">{ms.title}</div>
+                    <div className="text-sm sm:text-base md:text-lg font-semibold uppercase tracking-tight">{ms.title}</div>
+                    <div className="sm:hidden mt-0.5 text-[11px] font-mono text-neutral-400 dark:text-neutral-500 uppercase tracking-[0.2em]">
+                      {ms.units.toLocaleString()} units · {done ? "Reached" : ms.window}
+                    </div>
                     <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 leading-snug max-w-xl">{ms.body}</div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right hidden sm:block">
                     <span className={`inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.3em] ${done ? "text-emerald-600" : "text-neutral-500 dark:text-neutral-400"}`}>
                       <span className={`h-1.5 w-1.5 rounded-full ${done ? "bg-emerald-500" : "bg-neutral-300 dark:bg-neutral-700"}`} />
                       {done ? "Reached" : ms.window}

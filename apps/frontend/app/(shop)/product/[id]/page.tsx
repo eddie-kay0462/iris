@@ -285,17 +285,14 @@ function PDPGallery({
 
   if (sorted.length === 0) {
     return (
-      <div className="grid gap-4" style={{ gridTemplateColumns: "64px 1fr" }}>
-        <div />
-        <div className="aspect-[4/5] bg-[#f4f3f1]" />
-      </div>
+      <div className="aspect-[4/5] bg-[#f4f3f1]" />
     );
   }
 
   return (
-    <div className="grid gap-4" style={{ gridTemplateColumns: "64px 1fr" }}>
-      {/* Thumbnail strip */}
-      <div className="flex flex-col gap-2.5 sticky top-[90px] self-start">
+    <div className="grid gap-4 grid-cols-1 lg:grid-cols-[64px_1fr]">
+      {/* Thumbnail strip — desktop only */}
+      <div className="hidden lg:flex flex-col gap-2.5 sticky top-[90px] self-start">
         {sorted.map((img, i) => (
           <button
             key={img.id}
@@ -314,33 +311,48 @@ function PDPGallery({
       </div>
 
       {/* Main stage */}
-      <div className="relative aspect-[4/5] bg-[#f4f3f1] overflow-hidden">
-        <img
-          src={sorted[idx].src}
-          alt={sorted[idx].alt_text || "Product image"}
-          className="w-full h-full object-cover"
-        />
+      <div>
+        <div className="relative aspect-[4/5] bg-[#f4f3f1] overflow-hidden">
+          <img
+            src={sorted[idx].src}
+            alt={sorted[idx].alt_text || "Product image"}
+            className="w-full h-full object-cover"
+          />
 
-        {/* Counter */}
-        <div className="absolute left-4 bottom-4 bg-white/85 backdrop-blur-[4px] px-2.5 py-1 text-[13px] font-bold text-black">
-          {String(idx + 1).padStart(2, "0")} / {String(sorted.length).padStart(2, "0")}
+          {/* Counter */}
+          <div className="absolute left-4 bottom-4 bg-white/85 backdrop-blur-[4px] px-2.5 py-1 text-[13px] font-bold text-black">
+            {String(idx + 1).padStart(2, "0")} / {String(sorted.length).padStart(2, "0")}
+          </div>
+
+          {/* Navigation arrows */}
+          {sorted.length > 1 && (
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-2">
+              <button
+                onClick={() => setIdx((idx - 1 + sorted.length) % sorted.length)}
+                className="w-9 h-9 bg-white/85 backdrop-blur-[4px] flex items-center justify-center text-black hover:bg-black hover:text-white transition-colors duration-200"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setIdx((idx + 1) % sorted.length)}
+                className="w-9 h-9 bg-white/85 backdrop-blur-[4px] flex items-center justify-center text-black hover:bg-black hover:text-white transition-colors duration-200"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Navigation arrows */}
+        {/* Mobile dot indicators */}
         {sorted.length > 1 && (
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-2">
-            <button
-              onClick={() => setIdx((idx - 1 + sorted.length) % sorted.length)}
-              className="w-9 h-9 bg-white/85 backdrop-blur-[4px] flex items-center justify-center text-black hover:bg-black hover:text-white transition-colors duration-200"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setIdx((idx + 1) % sorted.length)}
-              className="w-9 h-9 bg-white/85 backdrop-blur-[4px] flex items-center justify-center text-black hover:bg-black hover:text-white transition-colors duration-200"
-            >
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+          <div className="flex lg:hidden justify-center gap-2 mt-3">
+            {sorted.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setIdx(i)}
+                className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? "bg-black" : "bg-black/25"}`}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -471,8 +483,8 @@ export default function ProductDetailPage({ params }: PageProps) {
   if (isLoading) {
     return (
       <div className="bg-white min-h-screen">
-        <div className="max-w-[1400px] mx-auto px-8 py-8">
-          <div className="grid gap-20" style={{ gridTemplateColumns: "minmax(0, 1fr) 460px" }}>
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8">
+          <div className="grid gap-8 lg:gap-20 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
             <div className="aspect-[4/5] animate-pulse bg-[#f4f3f1]" />
             <div className="space-y-4 pt-6">
               <div className="h-3 w-1/3 animate-pulse bg-[#f4f3f1]" />
@@ -530,7 +542,7 @@ export default function ProductDetailPage({ params }: PageProps) {
   return (
     <div className="bg-white text-black min-h-screen">
       {/* Breadcrumbs */}
-      <nav className="max-w-[1400px] mx-auto px-8 pt-5 text-[11px] tracking-[0.14em] uppercase text-[#6b7280]">
+      <nav className="max-w-[1400px] mx-auto px-4 sm:px-8 pt-5 text-[11px] tracking-[0.14em] uppercase text-[#6b7280]">
         <Link href="/" className="hover:text-black transition-colors">Home</Link>
         <span className="mx-2.5 text-[#d1d5db]">›</span>
         <Link href="/products" className="hover:text-black transition-colors">Products</Link>
@@ -539,10 +551,7 @@ export default function ProductDetailPage({ params }: PageProps) {
       </nav>
 
       {/* Main PDP grid */}
-      <div
-        className="max-w-[1400px] mx-auto px-8 pt-6 pb-20 grid gap-20"
-        style={{ gridTemplateColumns: "minmax(0, 1fr) 460px" }}
-      >
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-8 pt-6 pb-16 grid gap-8 lg:gap-20 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
         {/* Gallery */}
         <PDPGallery
           images={images}
@@ -553,7 +562,7 @@ export default function ProductDetailPage({ params }: PageProps) {
         />
 
         {/* Info column */}
-        <aside className="sticky top-[90px] self-start flex flex-col gap-[18px]">
+        <aside className="lg:sticky lg:top-[90px] lg:self-start flex flex-col gap-[18px]">
           {/* Eyebrow */}
           {product.vendor && (
             <div className="text-[10px] tracking-[0.22em] uppercase text-[#59626E]">
@@ -622,8 +631,7 @@ export default function ProductDetailPage({ params }: PageProps) {
                   )}
                 </div>
                 <div
-                  className={isSize ? "grid gap-1.5" : "flex flex-wrap gap-2"}
-                  style={isSize ? { gridTemplateColumns: "repeat(7, 1fr)" } : undefined}
+                  className={isSize ? "grid gap-1.5 grid-cols-5 sm:grid-cols-7" : "flex flex-wrap gap-2"}
                 >
                   {group.values.map((val) => {
                     const isSelected = selectedOptions[group.name] === val;
@@ -769,13 +777,13 @@ export default function ProductDetailPage({ params }: PageProps) {
         if (recs.length === 0) return null;
         const shown = recs.slice(0, 5);
         return (
-          <section className="max-w-[1400px] mx-auto px-8 py-14 border-t border-black">
+          <section className="max-w-[1400px] mx-auto px-4 sm:px-8 py-14 border-t border-black">
             <div className="flex justify-between items-baseline mb-7">
               <h2 className="text-[14px] tracking-[0.22em] uppercase font-medium">
                 You May Also Like
               </h2>
             </div>
-            <div className="grid grid-cols-5 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
               {shown.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}
@@ -786,13 +794,13 @@ export default function ProductDetailPage({ params }: PageProps) {
 
       {/* Recently Viewed */}
       {recentlyViewed.length > 0 && (
-        <section className="max-w-[1400px] mx-auto px-8 py-14 border-t border-black">
+        <section className="max-w-[1400px] mx-auto px-4 sm:px-8 py-14 border-t border-black">
           <div className="flex justify-between items-baseline mb-7">
             <h2 className="text-[14px] tracking-[0.22em] uppercase font-medium">
               Recently Viewed
             </h2>
           </div>
-          <div className="grid grid-cols-5 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
             {recentlyViewed.slice(0, 5).map((p) => (
               <ProductCard key={p.id} product={p} />
             ))}
