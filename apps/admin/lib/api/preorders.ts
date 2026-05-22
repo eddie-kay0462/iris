@@ -76,6 +76,7 @@ export interface CreatePopupPreorderInput {
   payment_method?: "cash" | "momo" | "bank_transfer" | "pending";
   payment_reference?: string;
   notes?: string;
+  event_id?: string;
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────

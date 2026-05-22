@@ -20,6 +20,7 @@ export interface PopupEvent {
   description: string | null;
   location: string | null;
   event_date: string | null;
+  end_date: string | null;
   status: PopupEventStatus;
   created_by: string | null;
   created_at: string;
@@ -137,6 +138,7 @@ export interface CreateEventInput {
   description?: string;
   location?: string;
   event_date?: string;
+  end_date?: string;
   status?: "draft" | "active";
 }
 
@@ -145,6 +147,7 @@ export interface UpdateEventInput {
   description?: string;
   location?: string;
   event_date?: string;
+  end_date?: string;
   status?: PopupEventStatus;
 }
 

@@ -4,10 +4,11 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, X, ShoppingBag, Search, User } from "lucide-react";
+import { Menu, X, ShoppingBag, Search, User, Heart } from "lucide-react";
 import { ThemeProvider, useTheme } from "@/lib/theme/theme-provider";
 import { CartProvider, useCart } from "@/lib/cart";
 import { hasToken, apiClient } from "@/lib/api/client";
+import { useFavourites } from "@/lib/favourites";
 
 function ThemeToggle({ isTransparent = false }: { isTransparent?: boolean }) {
   const { theme, toggleTheme } = useTheme();
@@ -41,6 +42,33 @@ function ThemeToggle({ isTransparent = false }: { isTransparent?: boolean }) {
         </svg>
       )}
     </button>
+  );
+}
+
+function FavouritesLink({ isTransparent = false }: { isTransparent?: boolean }) {
+  const { data: favourites } = useFavourites();
+  const count = favourites?.length ?? 0;
+  return (
+    <Link
+      href="/favourites"
+      aria-label="Saved items"
+      className={`relative p-1 transition ${
+        isTransparent
+          ? "text-white/80 hover:text-white"
+          : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
+      }`}
+    >
+      <Heart className="h-[18px] w-[18px]" strokeWidth={1.5} />
+      {count > 0 && (
+        <span className={`absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${
+          isTransparent
+            ? "bg-white text-black"
+            : "bg-black text-white dark:bg-white dark:text-black"
+        }`}>
+          {count > 99 ? "99+" : count}
+        </span>
+      )}
+    </Link>
   );
 }
 
@@ -279,18 +307,8 @@ function ShopHeader() {
 
         {/* Right icons */}
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => setSearchOpen(true)}
-            aria-label="Search"
-            className={`p-1 transition ${
-              isTransparentWhite
-                ? "text-white/80 hover:text-white"
-                : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
-            }`}
-          >
-            <Search className="h-[18px] w-[18px]" strokeWidth={1.5} />
-          </button>
           <ThemeToggle isTransparent={isTransparentWhite} />
+          <FavouritesLink isTransparent={isTransparentWhite} />
           <UserLink isTransparent={isTransparentWhite} />
           <CartLink isTransparent={isTransparentWhite} />
         </div>

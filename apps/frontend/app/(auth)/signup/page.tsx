@@ -9,6 +9,7 @@ import { zodResolver } from "@/lib/validation";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "sonner";
 import PhoneInput from "@/components/PhoneInput";
+import PasswordInput from "../components/PasswordInput";
 
 const signupSchema = z
   .object({
@@ -119,9 +120,8 @@ export default function SignupPage() {
         </div>
 
         <div>
-          <input
+          <PasswordInput
             {...register("password")}
-            type="password"
             placeholder="Password"
             className={inputClass}
           />
@@ -133,9 +133,8 @@ export default function SignupPage() {
         </div>
 
         <div>
-          <input
+          <PasswordInput
             {...register("confirmPassword")}
-            type="password"
             placeholder="Confirm password"
             className={inputClass}
           />

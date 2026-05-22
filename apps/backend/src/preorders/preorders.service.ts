@@ -95,6 +95,17 @@ export class PreordersService {
 
   async createPopup(dto: CreatePopupPreorderDto, adminId: string) {
     const db = this.supabase.getAdminClient();
+
+    if (dto.event_id) {
+      const { data: event, error: eventError } = await db
+        .from('popup_events')
+        .select('id, status')
+        .eq('id', dto.event_id)
+        .single();
+      if (eventError || !event) throw new BadRequestException('Event not found');
+      if (event.status === 'closed') throw new BadRequestException('This event is closed and cannot accept new orders');
+    }
+
     const orderNumber = await this.generateOrderNumber();
     const results = [];
 
@@ -143,6 +154,7 @@ export class PreordersService {
           payment_status: dto.payment_method && dto.payment_method !== 'pending' ? 'paid' : 'awaiting',
           status: 'pending',
           notes: dto.notes ?? null,
+          popup_event_id: dto.event_id ?? null,
         })
         .select()
         .single();
@@ -158,7 +170,7 @@ export class PreordersService {
     const db = this.supabase.getAdminClient();
     const { data, error } = await db
       .from('preorders')
-      .select('*, product_variants(option1_value, option2_value, option3_value, product_images(src))')
+      .select('*, product_variants(option1_value, option2_value, option3_value, product_images!product_images_variant_id_fkey(src))')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
     if (error) throw error;

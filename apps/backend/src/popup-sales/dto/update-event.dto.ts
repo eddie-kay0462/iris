@@ -18,6 +18,10 @@ export class UpdateEventDto {
   event_date?: string;
 
   @IsOptional()
+  @IsDateString()
+  end_date?: string;
+
+  @IsOptional()
   @IsEnum(['draft', 'active', 'closed'])
   status?: 'draft' | 'active' | 'closed';
 }

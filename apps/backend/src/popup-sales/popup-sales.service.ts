@@ -356,6 +356,7 @@ export class PopupSalesService {
       .single();
 
     if (eventError || !event) throw new NotFoundException('Event not found');
+    if (event.status === 'closed') throw new BadRequestException('This event is closed and cannot accept new orders');
 
     // Generate order number: POP-YYYY-XXXX
     const year = new Date().getFullYear();
@@ -463,6 +464,24 @@ export class PopupSalesService {
 
     const wasAlreadyCompleted = existingOrder?.status === 'completed';
     const isBeingCompleted = dto.status === 'completed' && !wasAlreadyCompleted;
+
+    const VALID_TRANSITIONS: Partial<Record<string, string[]>> = {
+      active:           ['awaiting_payment', 'on_hold', 'completed', 'cancelled'],
+      on_hold:          ['active', 'cancelled'],
+      awaiting_payment: ['confirmed', 'active', 'cancelled'],
+      confirmed:        ['completed', 'cancelled'],
+      completed:        ['refunded'],
+      cancelled:        [],
+      refunded:         [],
+    };
+    if (dto.status && existingOrder?.status && dto.status !== existingOrder.status) {
+      const allowed = VALID_TRANSITIONS[existingOrder.status] ?? [];
+      if (!allowed.includes(dto.status)) {
+        throw new BadRequestException(
+          `Cannot transition order from '${existingOrder.status}' to '${dto.status}'`,
+        );
+      }
+    }
 
     const updatePayload: Record<string, any> = {};
     if (dto.status !== undefined) updatePayload.status = dto.status;

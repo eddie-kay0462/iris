@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsArray, ValidateNested, Min, IsIn } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsArray, ValidateNested, Min, IsIn, IsUUID } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class PreorderItemDto {
@@ -49,4 +49,8 @@ export class CreatePopupPreorderDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsUUID()
+  event_id?: string;
 }

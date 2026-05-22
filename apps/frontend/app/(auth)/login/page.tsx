@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiClient, setToken } from "@/lib/api/client";
 import { toast } from "sonner";
+import PasswordInput from "../components/PasswordInput";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
@@ -64,8 +65,7 @@ function LoginForm() {
           required
           className="w-full border border-gray-300 p-2 rounded"
         />
-        <input
-          type="password"
+        <PasswordInput
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
