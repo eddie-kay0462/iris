@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   Plus,
   Minus,
@@ -28,7 +28,7 @@ import {
   Lock,
   Unlock,
 } from "lucide-react";
-import { useCreatePopupPreorder } from "@/lib/api/preorders";
+import { useCreatePopupPreorder, usePopupEventPreorders, type Preorder } from "@/lib/api/preorders";
 import {
   usePopupEvents,
   usePopupStats,
@@ -50,6 +50,8 @@ import {
   type CreateOrderItemInput,
 } from "@/lib/api/popup-sales";
 import { apiClient } from "@/lib/api/client";
+
+type DisplayOrder = PopupOrder & { _isPreorder?: boolean };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -522,8 +524,12 @@ function MoMoChargeModal({
   const charge = useChargePopupOrder();
   const submitOtp = useSubmitPopupOtp();
   const verify = useVerifyPopupPayment();
-  const [phone, setPhone] = useState(order.customer_phone || "");
-  const [provider, setProvider] = useState<"mtn" | "vod" | "tgo">("mtn");
+  const [phone, setPhone] = useState(
+    order.customer_phone ? toLocalPhone(order.customer_phone) : ""
+  );
+  const [provider, setProvider] = useState<"mtn" | "vod" | "tgo">(
+    order.customer_phone ? detectProvider(order.customer_phone) : "mtn"
+  );
   const [step, setStep] = useState<"charge" | "otp" | "waiting" | "confirmed">("charge");
   const [otp, setOtp] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -574,12 +580,14 @@ function MoMoChargeModal({
       <div className="w-full max-w-sm rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <h2 className="text-base font-semibold text-slate-900">Charge via MoMo</h2>
-          <button
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          {step !== "charge" && (
+            <button
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
         <div className="p-6">
           {step === "confirmed" ? (
@@ -677,7 +685,10 @@ function MoMoChargeModal({
                   type="tel"
                   required
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => {
+                    setPhone(e.target.value);
+                    if (e.target.value.length >= 3) setProvider(detectProvider(e.target.value));
+                  }}
                   placeholder="e.g. 0244000000"
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
                 />
@@ -701,22 +712,13 @@ function MoMoChargeModal({
                   {(charge.error as any)?.message || "Charge failed. Please try again."}
                 </p>
               )}
-              <div className="flex gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={!phone.trim() || charge.isPending}
-                  className="flex-1 rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
-                  {charge.isPending ? "Sending…" : "Send USSD Prompt"}
-                </button>
-              </div>
+              <button
+                type="submit"
+                disabled={!phone.trim() || charge.isPending}
+                className="w-full rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+              >
+                {charge.isPending ? "Sending…" : "Send USSD Prompt"}
+              </button>
             </form>
           )}
         </div>
@@ -1181,6 +1183,36 @@ type PaymentMethodLocal = "cash" | "momo" | "bank_transfer";
 type MoMoNetwork = "mtn" | "telecel" | "airteltigo";
 type DiscountType = "none" | "percentage" | "fixed";
 
+function detectGhanaNetwork(digits: string): MoMoNetwork {
+  let n = digits.trim().replace(/\s+/g, "");
+  if (n.startsWith("+233")) n = "0" + n.slice(4);
+  else if (n.startsWith("233")) n = "0" + n.slice(3);
+  else if (!n.startsWith("0")) n = "0" + n;
+  const prefix = n.slice(0, 3);
+  if (["024", "025", "053", "054", "055", "059"].includes(prefix)) return "mtn";
+  if (["020", "050"].includes(prefix)) return "telecel";
+  if (["026", "027", "056", "057"].includes(prefix)) return "airteltigo";
+  return "mtn";
+}
+
+function toLocalPhone(p: string): string {
+  if (p.startsWith("+233")) return "0" + p.slice(4);
+  if (p.startsWith("233")) return "0" + p.slice(3);
+  return p;
+}
+
+function detectProvider(p: string): "mtn" | "vod" | "tgo" {
+  let n = p.trim().replace(/\s+/g, "");
+  if (n.startsWith("+233")) n = "0" + n.slice(4);
+  else if (n.startsWith("233")) n = "0" + n.slice(3);
+  else if (!n.startsWith("0")) n = "0" + n;
+  const prefix = n.slice(0, 3);
+  if (["024", "025", "053", "054", "055", "059"].includes(prefix)) return "mtn";
+  if (["020", "050"].includes(prefix)) return "vod";
+  if (["026", "027", "056", "057"].includes(prefix)) return "tgo";
+  return "mtn";
+}
+
 interface SplitEntry {
   id: string;
   method: PaymentMethodLocal;
@@ -1279,10 +1311,9 @@ function NewOrderModal({
   const [momoNetwork, setMomoNetwork] = useState<MoMoNetwork>("mtn");
   const [momoPhone, setMomoPhone] = useState("");
   const [momoReference, setMomoReference] = useState("");
-  const [momoSentToPaystack, setMomoSentToPaystack] = useState(false);
   const [bankName, setBankName] = useState("");
   const [bankReference, setBankReference] = useState("");
-  const [bankSentToPaystack, setBankSentToPaystack] = useState(false);
+  const [chargeTargetOrder, setChargeTargetOrder] = useState<any>(null);
 
   // ── Hold state ─────────────────────────────────────────────────────────────
   const [showHold, setShowHold] = useState(false);
@@ -1311,10 +1342,10 @@ function NewOrderModal({
     if (!customerSearch.trim()) { setCustomerResults([]); setCustomerSearching(false); return; }
     setCustomerSearching(true);
     clearTimeout(customerSearchTimeout.current);
-    customerSearchTimeout.current = setTimeout(async () => {
+    customerSearchTimeout.current = setTimeout(async () => { // 200ms debounce
       try {
         const res = await apiClient<{ data: { id: string; first_name: string | null; last_name: string | null; email: string | null; phone_number: string | null }[] }>(
-          `/orders/admin/customers?search=${encodeURIComponent(customerSearch)}&limit=6`
+          `/orders/admin/customers?search=${encodeURIComponent(customerSearch)}&limit=6&include_all_roles=true`
         );
         setCustomerResults(
           (res.data || []).map((c) => ({
@@ -1326,7 +1357,7 @@ function NewOrderModal({
         );
       } catch { setCustomerResults([]); }
       finally { setCustomerSearching(false); }
-    }, 300);
+    }, 200);
     return () => clearTimeout(customerSearchTimeout.current);
   }, [customerSearch]);
 
@@ -1354,6 +1385,7 @@ function NewOrderModal({
         ? customerForm.phone.slice(1)
         : customerForm.phone;
     setMomoPhone((prev) => (prev ? prev : digits));
+    if (digits.length >= 3) setMomoNetwork(detectGhanaNetwork(digits));
   }, [paymentMethod, customerForm.phone]);
 
   // ── Computed ───────────────────────────────────────────────────────────────
@@ -1369,9 +1401,7 @@ function NewOrderModal({
   const changeDue = cashReceived ? parseFloat(cashReceived) - total : null;
   const allocatedAmount = splits.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
   const isAllocatedOk = Math.abs(allocatedAmount - total) < 0.01;
-  const hasAwaitingConfirmation = isSplit
-    ? splits.some((p) => p.sentToPaystack)
-    : (paymentMethod === "momo" && momoSentToPaystack) || (paymentMethod === "bank_transfer" && bankSentToPaystack);
+  const hasAwaitingConfirmation = isSplit && splits.some((p) => p.sentToPaystack);
 
   // ── Cart helpers ───────────────────────────────────────────────────────────
   const addItem = useCallback((product: ProductSearchResult, variant: ProductSearchResult["product_variants"][0]) => {
@@ -1464,7 +1494,7 @@ function NewOrderModal({
         sent_to_paystack: p.sentToPaystack,
       }))
       : paymentMethod === "momo"
-        ? [{ method: "momo" as PopupPaymentMethod, amount: total, network: momoNetwork, phone: momoPhone || undefined, reference: momoReference || undefined, sent_to_paystack: momoSentToPaystack }]
+        ? [{ method: "momo" as PopupPaymentMethod, amount: total, network: momoNetwork, phone: momoPhone || undefined, reference: momoReference || undefined, sent_to_paystack: false }]
         : undefined;
 
     const newOrder = await createOrder.mutateAsync({
@@ -1482,11 +1512,6 @@ function NewOrderModal({
       items: items.map(({ _localId, inventory_quantity, ...rest }) => rest),
     });
 
-    // If MoMo charge was already sent to Paystack, move order to awaiting_payment
-    if (!isSplit && paymentMethod === "momo" && momoSentToPaystack) {
-      await updateOrder.mutateAsync({ id: newOrder.id, dto: { status: "awaiting_payment" } });
-    }
-
     // Save customer to the database if requested and not already an existing customer
     if (!selectedCustomerId && customerForm.saveToDatabase && (customerForm.name || customerForm.phone || customerForm.email)) {
       await saveCustomer.mutateAsync({
@@ -1497,6 +1522,46 @@ function NewOrderModal({
     }
 
     onClose();
+  }
+
+  async function handleChargeSubmit() {
+    if (items.length === 0) return;
+    const splitPayloads = isSplit
+      ? splits.map((p) => ({
+          method: p.method as PopupPaymentMethod,
+          amount: parseFloat(p.amount) || 0,
+          network: p.network,
+          phone: p.phone,
+          reference: p.reference,
+          bank_name: p.bankName,
+          sent_to_paystack: p.sentToPaystack,
+        }))
+      : paymentMethod === "momo"
+        ? [{ method: "momo" as PopupPaymentMethod, amount: total, network: momoNetwork, phone: momoPhone || undefined, reference: undefined, sent_to_paystack: false }]
+        : undefined;
+
+    const newOrder = await createOrder.mutateAsync({
+      customer_name: customerForm.name || undefined,
+      customer_phone: customerForm.phone || momoPhone || undefined,
+      customer_email: customerForm.email || undefined,
+      payment_method: "momo",
+      discount_type: discountType !== "none" ? discountType : undefined,
+      discount_amount: discountAmount > 0 ? discountAmount : undefined,
+      discount_reason: discountReason || undefined,
+      split_payments: splitPayloads,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      items: items.map(({ _localId, inventory_quantity, ...rest }) => rest),
+    });
+
+    if (!selectedCustomerId && customerForm.saveToDatabase && (customerForm.name || customerForm.phone || customerForm.email)) {
+      await saveCustomer.mutateAsync({
+        name: customerForm.name || undefined,
+        phone: customerForm.phone || undefined,
+        email: customerForm.email || undefined,
+      });
+    }
+
+    setChargeTargetOrder(newOrder);
   }
 
   async function handleHoldConfirm() {
@@ -1827,7 +1892,7 @@ function NewOrderModal({
                       value={customerSearch}
                       onChange={(e) => { setCustomerSearch(e.target.value); setShowCustomerDropdown(true); }}
                       onFocus={() => setShowCustomerDropdown(true)}
-                      placeholder="Search by email or phone…"
+                      placeholder="Search by name, email or phone…"
                       disabled={!!selectedCustomerId}
                       className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-8 text-sm focus:border-slate-400 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
                     />
@@ -1854,12 +1919,19 @@ function NewOrderModal({
                               key={c.id}
                               onClick={() => {
                                 setSelectedCustomerId(c.id);
-                                // Convert 0XXXXXXXXX → +233XXXXXXXXX so the form input
-                                // (which renders +233 as a static prefix) displays correctly
                                 const formPhone = c.phone.startsWith("0")
                                   ? "+233" + c.phone.slice(1)
                                   : c.phone;
                                 setCustomerForm({ name: c.name, phone: formPhone, email: c.email, saveToDatabase: false });
+                                // Prefill split MoMo entries that have no phone yet
+                                const digits = c.phone.startsWith("0") ? c.phone.slice(1) : c.phone;
+                                setSplits((prev) =>
+                                  prev.map((p) =>
+                                    p.method === "momo" && !p.phone
+                                      ? { ...p, phone: digits, network: detectGhanaNetwork(digits) }
+                                      : p
+                                  )
+                                );
                                 setCustomerSearch("");
                                 setShowCustomerDropdown(false);
                               }}
@@ -2120,7 +2192,10 @@ function NewOrderModal({
                               <input
                                 type="tel"
                                 value={momoPhone}
-                                onChange={(e) => setMomoPhone(e.target.value)}
+                                onChange={(e) => {
+                                  setMomoPhone(e.target.value);
+                                  if (e.target.value.length >= 3) setMomoNetwork(detectGhanaNetwork(e.target.value));
+                                }}
                                 placeholder="244123456"
                                 className="h-9 flex-1 rounded-r-lg border border-slate-200 px-3 text-sm focus:border-slate-400 focus:outline-none"
                               />
@@ -2136,21 +2211,14 @@ function NewOrderModal({
                               className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-400 focus:outline-none"
                             />
                           </div>
-                          <label className="flex cursor-pointer items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={momoSentToPaystack}
-                              onChange={(e) => setMomoSentToPaystack(e.target.checked)}
-                              className="h-4 w-4 rounded border-slate-300 accent-slate-900"
-                            />
-                            <span className="text-xs text-slate-600">Charge sent to Paystack</span>
-                          </label>
-                          {momoSentToPaystack && (
-                            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                              <Clock className="h-3.5 w-3.5 flex-shrink-0 text-amber-600" />
-                              <p className="text-xs text-amber-800">Awaiting customer confirmation. You can serve the next customer.</p>
-                            </div>
-                          )}
+                          <button
+                            type="button"
+                            onClick={handleChargeSubmit}
+                            disabled={!momoPhone.trim() || items.length === 0 || createOrder.isPending}
+                            className="w-full rounded-lg bg-violet-700 py-2 text-xs font-semibold text-white hover:bg-violet-800 disabled:opacity-50"
+                          >
+                            {createOrder.isPending ? "Creating order…" : "Create Order & Charge via Paystack"}
+                          </button>
                         </div>
                       )}
 
@@ -2177,21 +2245,6 @@ function NewOrderModal({
                               className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-400 focus:outline-none"
                             />
                           </div>
-                          <label className="flex cursor-pointer items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={bankSentToPaystack}
-                              onChange={(e) => setBankSentToPaystack(e.target.checked)}
-                              className="h-4 w-4 rounded border-slate-300 accent-slate-900"
-                            />
-                            <span className="text-xs text-slate-600">Charge sent to Paystack</span>
-                          </label>
-                          {bankSentToPaystack && (
-                            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                              <Clock className="h-3.5 w-3.5 flex-shrink-0 text-amber-600" />
-                              <p className="text-xs text-amber-800">Awaiting bank confirmation. You can serve the next customer.</p>
-                            </div>
-                          )}
                         </div>
                       )}
                     </>
@@ -2258,8 +2311,11 @@ function NewOrderModal({
                                 <input
                                   type="tel"
                                   value={payment.phone || ""}
-                                  onChange={(e) => updateSplit(payment.id, "phone", e.target.value)}
-                                  placeholder="+233244123456"
+                                  onChange={(e) => {
+                                    updateSplit(payment.id, "phone", e.target.value);
+                                    if (e.target.value.length >= 3) updateSplit(payment.id, "network", detectGhanaNetwork(e.target.value));
+                                  }}
+                                  placeholder="0244123456"
                                   className="h-9 w-full rounded-lg border border-slate-200 px-3 text-xs focus:border-slate-400 focus:outline-none"
                                 />
                                 <label className="flex cursor-pointer items-center gap-2">
@@ -2493,6 +2549,13 @@ function NewOrderModal({
             </div>
           </div>
         </div>
+      )}
+
+      {chargeTargetOrder && (
+        <MoMoChargeModal
+          order={chargeTargetOrder}
+          onClose={() => { setChargeTargetOrder(null); onClose(); }}
+        />
       )}
     </>
   );
@@ -2933,7 +2996,7 @@ function OrderTable({
   onEditOrder,
   onRefundOrder,
 }: {
-  orders: PopupOrder[];
+  orders: DisplayOrder[];
   isLoading: boolean;
   onUpdate: (id: string, status: PopupOrderStatus, paymentMethod?: PopupPaymentMethod) => void;
   onChargeMomo: (order: PopupOrder) => void;
@@ -2987,7 +3050,14 @@ function OrderTable({
                 className="border-b border-slate-100 last:border-0"
               >
                 <td className="px-5 py-4 text-sm font-medium text-slate-800">
-                  {order.order_number}
+                  <div className="flex items-center gap-2">
+                    {order.order_number}
+                    {order._isPreorder && (
+                      <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                        Pre-order
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-5 py-4">
                   <p className="text-sm text-slate-800">
@@ -3052,6 +3122,20 @@ function OrderTable({
 export default function PopupSalesPage() {
   const { data: events = [], isLoading: eventsLoading } = usePopupEvents();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (eventsLoading || events.length === 0) return;
+    const saved = localStorage.getItem("popup_selected_event_id");
+    if (saved && events.some((e) => e.id === saved)) {
+      setSelectedEventId(saved);
+    }
+  }, [eventsLoading, events]);
+
+  function selectEvent(id: string | null) {
+    setSelectedEventId(id);
+    if (id) localStorage.setItem("popup_selected_event_id", id);
+    else localStorage.removeItem("popup_selected_event_id");
+  }
   const [activeTab, setActiveTab] = useState<Tab>("active");
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [showNewEvent, setShowNewEvent] = useState(false);
@@ -3085,6 +3169,68 @@ export default function PopupSalesPage() {
   const orders = ordersData?.data ?? [];
   const awaitingCount = stats?.awaiting_payment ?? 0;
 
+  const { data: fulfilledPreordersData } = usePopupEventPreorders(
+    activeTab === "completed" ? selectedEventId : null,
+    { status: "fulfilled" }
+  );
+
+  const preorderDisplayRows = useMemo<DisplayOrder[]>(() => {
+    const all = fulfilledPreordersData?.data ?? [];
+    const groups = new Map<string, Preorder[]>();
+    for (const p of all) {
+      if (!groups.has(p.order_number)) groups.set(p.order_number, []);
+      groups.get(p.order_number)!.push(p);
+    }
+    return Array.from(groups.values()).map((items) => {
+      const first = items[0];
+      const total = items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+      return {
+        id: first.id,
+        event_id: selectedEventId ?? "",
+        order_number: first.order_number,
+        customer_name: first.customer_name,
+        customer_phone: first.customer_phone,
+        customer_email: first.customer_email,
+        served_by: null,
+        status: "completed" as PopupOrderStatus,
+        payment_method: (first.payment_method as PopupPaymentMethod) ?? null,
+        payment_reference: first.payment_reference,
+        subtotal: total,
+        discount_type: null,
+        discount_amount: 0,
+        discount_reason: null,
+        hold_duration_minutes: null,
+        hold_note: null,
+        total,
+        notes: first.notes,
+        created_at: first.created_at,
+        updated_at: first.updated_at,
+        profiles: null,
+        popup_order_items: items.map((i) => ({
+          id: i.id,
+          order_id: first.id,
+          product_id: null,
+          variant_id: i.variant_id,
+          product_name: i.product_name,
+          variant_title: i.variant_title,
+          sku: null,
+          quantity: i.quantity,
+          unit_price: i.unit_price,
+          total_price: i.unit_price * i.quantity,
+          created_at: i.created_at,
+        })),
+        _isPreorder: true,
+      };
+    });
+  }, [fulfilledPreordersData, selectedEventId]);
+
+  const mergedOrders: DisplayOrder[] = useMemo(() => {
+    if (activeTab !== "completed") return orders as DisplayOrder[];
+    return [...(orders as DisplayOrder[]), ...preorderDisplayRows].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }, [orders, preorderDisplayRows, activeTab]);
+
   if (eventsLoading) {
     return (
       <section className="space-y-6">
@@ -3104,7 +3250,7 @@ export default function PopupSalesPage() {
       <>
         <EventHubView
           events={events}
-          onSelectEvent={setSelectedEventId}
+          onSelectEvent={selectEvent}
           onCreateEvent={() => setShowNewEvent(true)}
         />
         {showNewEvent && (
@@ -3130,7 +3276,7 @@ export default function PopupSalesPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setSelectedEventId(null)}
+              onClick={() => selectEvent(null)}
               className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -3259,7 +3405,7 @@ export default function PopupSalesPage() {
           )}
 
           <OrderTable
-            orders={orders}
+            orders={mergedOrders}
             isLoading={ordersLoading}
             onUpdate={handleUpdateOrder}
             onChargeMomo={setMomoChargeOrder}

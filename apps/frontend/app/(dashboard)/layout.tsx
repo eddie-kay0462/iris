@@ -48,7 +48,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               alt="1NRI"
               width={96}
               height={38}
-              className="h-7 w-auto dark:invert"
+              className="h-7 w-auto dark:brightness-0 dark:invert"
               unoptimized
             />
           </Link>

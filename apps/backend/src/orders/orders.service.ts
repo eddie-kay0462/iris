@@ -511,11 +511,13 @@ export class OrdersService {
     limit?: string;
     min_orders?: string;
     max_orders?: string;
+    include_all_roles?: string;
   }) {
     const db = this.supabase.getAdminClient();
     const page = parseInt(query.page || '1', 10);
     const limit = parseInt(query.limit || '20', 10);
     const hasOrderFilter = query.min_orders !== undefined || query.max_orders !== undefined;
+    const includeAllRoles = query.include_all_roles === 'true';
 
     // ── 1. Fetch profiles ────────────────────────────────────────────────────
     // When an order-count filter is active we must fetch ALL matching profiles
@@ -526,8 +528,11 @@ export class OrdersService {
     const buildBaseQuery = () => {
       let q = db
         .from('profiles')
-        .select('*', { count: 'exact' })
-        .or('role.eq.public,role.is.null');
+        .select('*', { count: 'exact' });
+
+      if (!includeAllRoles) {
+        q = q.or('role.eq.public,role.is.null');
+      }
 
       if (query.search) {
         q = q.or(

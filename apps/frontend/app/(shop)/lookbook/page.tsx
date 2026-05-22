@@ -427,7 +427,7 @@ export default function LookbookPage() {
                 alt="1NRI"
                 width={72}
                 height={29}
-                className="h-5 w-auto min-w-[36px] dark:invert"
+                className="h-5 w-auto min-w-[36px] dark:brightness-0 dark:invert"
                 unoptimized
               />
               <span className="text-[10px] font-bold uppercase tracking-[0.3em] sm:text-xs">

@@ -64,7 +64,7 @@ export class OrdersController {
   @Get('admin/customers')
   @RequirePermission('customers:read')
   findAdminCustomers(
-    @Query() query: { search?: string; page?: string; limit?: string; min_orders?: string; max_orders?: string },
+    @Query() query: { search?: string; page?: string; limit?: string; min_orders?: string; max_orders?: string; include_all_roles?: string },
   ) {
     return this.ordersService.findAdminCustomers(query);
   }

@@ -16,4 +16,12 @@ export class QueryPreordersDto {
   @IsOptional()
   @IsString()
   limit?: string;
+
+  @IsOptional()
+  @IsString()
+  event_id?: string;
+
+  @IsOptional()
+  @IsString()
+  source?: string;
 }

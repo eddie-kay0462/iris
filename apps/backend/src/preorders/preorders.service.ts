@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, InternalServerErrorException, NotFound
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../common/supabase/supabase.service';
 import { LetsfishService } from '../letsfish/letsfish.service';
+import { EmailService } from '../email/email.service';
 import { CreatePreorderDto } from './dto/create-preorder.dto';
 import { CreatePopupPreorderDto } from './dto/create-popup-preorder.dto';
 import { QueryPreordersDto } from './dto/query-preorders.dto';
@@ -16,6 +17,7 @@ export class PreordersService {
     private readonly supabase: SupabaseService,
     private readonly configService: ConfigService,
     private readonly letsfish: LetsfishService,
+    private readonly emailService: EmailService,
   ) {
     this.paystackSecretKey = this.configService.get<string>('PAYSTACK_SECRET_KEY', '');
   }
@@ -163,6 +165,23 @@ export class PreordersService {
       results.push(preorder);
     }
 
+    if (dto.customer_email && results.length > 0) {
+      const isPaid = !!(dto.payment_method && dto.payment_method !== 'pending');
+      this.emailService.sendPopupPreorderConfirmation({
+        email: dto.customer_email,
+        customer_name: dto.customer_name ?? null,
+        order_number: orderNumber,
+        items: dto.items.map((i) => ({
+          product_name: i.productTitle,
+          variant_title: i.variantTitle ?? null,
+          quantity: i.quantity,
+          price: i.price,
+        })),
+        payment_method: dto.payment_method ?? null,
+        payment_status: isPaid ? 'paid' : 'awaiting',
+      }).catch(() => {});
+    }
+
     return results;
   }
 
@@ -191,6 +210,8 @@ export class PreordersService {
 
     if (query.status) q = q.eq('status', query.status);
     if (query.variant_id) q = q.eq('variant_id', query.variant_id);
+    if (query.event_id) q = q.eq('popup_event_id', query.event_id);
+    if (query.source) q = q.eq('source', query.source);
 
     const { data, count, error } = await q;
     if (error) throw error;
