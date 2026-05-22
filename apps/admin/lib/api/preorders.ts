@@ -102,6 +102,20 @@ export function usePreorders(params?: { status?: string; variant_id?: string; pa
   });
 }
 
+export function usePopupEventPreorders(eventId: string | null, params?: { status?: string }) {
+  const qs = new URLSearchParams();
+  if (eventId) qs.set("event_id", eventId);
+  qs.set("source", "popup");
+  qs.set("limit", "200");
+  if (params?.status) qs.set("status", params.status);
+
+  return useQuery({
+    enabled: !!eventId,
+    queryKey: ["preorders", "popup-event", eventId, params],
+    queryFn: () => apiClient<PreordersResult>(`/admin/preorders?${qs}`),
+  });
+}
+
 export function useCancelPreorder() {
   const qc = useQueryClient();
   return useMutation({

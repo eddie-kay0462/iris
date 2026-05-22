@@ -298,7 +298,7 @@ function ShopHeader() {
             width={120}
             height={48}
             className={`h-8 w-auto min-w-[60px] transition-all duration-300 ${
-              isTransparentWhite ? "invert" : "dark:invert"
+              isTransparentWhite ? "brightness-0 invert" : "dark:brightness-0 dark:invert"
             }`}
             priority
             unoptimized
@@ -353,7 +353,7 @@ function ShopFooter() {
               alt="1NRI"
               width={96}
               height={38}
-              className="h-6 w-auto min-w-[48px] dark:invert"
+              className="h-6 w-auto min-w-[48px] dark:brightness-0 dark:invert"
               unoptimized
             />
             <p className="mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">

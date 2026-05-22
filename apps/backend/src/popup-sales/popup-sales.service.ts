@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../common/supabase/supabase.service';
 import { LetsfishService } from '../letsfish/letsfish.service';
+import { EmailService } from '../email/email.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { CreatePopupOrderDto } from './dto/create-popup-order.dto';
@@ -25,6 +26,7 @@ export class PopupSalesService {
     private supabase: SupabaseService,
     private configService: ConfigService,
     private letsfish: LetsfishService,
+    private emailService: EmailService,
   ) {
     this.paystackSecretKey = this.configService.get<string>('PAYSTACK_SECRET_KEY', '');
   }
@@ -351,7 +353,7 @@ export class PopupSalesService {
     // Verify event exists and is active
     const { data: event, error: eventError } = await db
       .from('popup_events')
-      .select('id, status')
+      .select('id, status, name, location, event_date')
       .eq('id', eventId)
       .single();
 
@@ -468,7 +470,7 @@ export class PopupSalesService {
     const VALID_TRANSITIONS: Partial<Record<string, string[]>> = {
       active:           ['awaiting_payment', 'on_hold', 'completed', 'cancelled'],
       on_hold:          ['active', 'cancelled'],
-      awaiting_payment: ['confirmed', 'active', 'cancelled'],
+      awaiting_payment: ['completed', 'active', 'cancelled'],
       confirmed:        ['completed', 'cancelled'],
       completed:        ['refunded'],
       cancelled:        [],
@@ -544,6 +546,33 @@ export class PopupSalesService {
             notes: `Pop-up order ${id} completed`,
           });
         }
+      }
+
+      if (data.customer_email) {
+        const { data: evt } = await db
+          .from('popup_events')
+          .select('name, location, event_date')
+          .eq('id', data.event_id)
+          .single();
+        this.emailService.sendPopupOrderSummary({
+          email: data.customer_email,
+          customer_name: data.customer_name ?? null,
+          order_number: data.order_number,
+          event_name: evt?.name ?? 'Pop-up Event',
+          event_location: evt?.location ?? null,
+          event_date: evt?.event_date ?? null,
+          items: (orderItems ?? []).map((i: any) => ({
+            product_name: i.product_name,
+            variant_title: i.variant_title ?? null,
+            quantity: i.quantity,
+            unit_price: Number(i.unit_price),
+            total_price: Number(i.total_price),
+          })),
+          subtotal: Number(data.subtotal),
+          discount_amount: Number(data.discount_amount) > 0 ? Number(data.discount_amount) : null,
+          total: Number(data.total),
+          payment_method: data.payment_method,
+        }).catch(() => {});
       }
     }
 
@@ -685,9 +714,9 @@ export class PopupSalesService {
       throw new BadRequestException('No payment reference for this order');
     }
 
-    // Already confirmed — nothing to do
-    if (order.status === 'confirmed') {
-      return { status: 'confirmed', confirmed: true };
+    // Already completed — nothing to do
+    if (order.status === 'completed') {
+      return { status: 'completed', confirmed: true };
     }
 
     const response = await fetch(
@@ -702,7 +731,7 @@ export class PopupSalesService {
 
     if (paystackStatus === 'success') {
       await this.confirmByReference(order.payment_reference);
-      return { status: 'confirmed', confirmed: true };
+      return { status: 'completed', confirmed: true };
     }
 
     return { status: paystackStatus, confirmed: false };
@@ -713,14 +742,49 @@ export class PopupSalesService {
     const db = this.supabase.getAdminClient();
     const { data, error } = await db
       .from('popup_orders')
-      .update({ status: 'confirmed' })
+      .update({ status: 'completed' })
       .eq('payment_reference', reference)
       .eq('status', 'awaiting_payment')
-      .select('id')
+      .select('id, customer_email, customer_name, order_number, event_id, subtotal, discount_amount, total, payment_method')
       .maybeSingle();
 
     if (error) {
       console.error('Error confirming popup order by reference:', error.message);
+    }
+
+    if (data?.customer_email) {
+      (async () => {
+        try {
+          const { data: items } = await db
+            .from('popup_order_items')
+            .select('*')
+            .eq('order_id', data.id);
+          const { data: evt } = await db
+            .from('popup_events')
+            .select('name, location, event_date')
+            .eq('id', data.event_id)
+            .single();
+          await this.emailService.sendPopupOrderSummary({
+            email: data.customer_email,
+            customer_name: data.customer_name ?? null,
+            order_number: data.order_number,
+            event_name: evt?.name ?? 'Pop-up Event',
+            event_location: evt?.location ?? null,
+            event_date: evt?.event_date ?? null,
+            items: (items ?? []).map((i: any) => ({
+              product_name: i.product_name,
+              variant_title: i.variant_title ?? null,
+              quantity: i.quantity,
+              unit_price: Number(i.unit_price),
+              total_price: Number(i.total_price),
+            })),
+            subtotal: Number(data.subtotal),
+            discount_amount: Number(data.discount_amount) > 0 ? Number(data.discount_amount) : null,
+            total: Number(data.total),
+            payment_method: data.payment_method,
+          });
+        } catch { /* silent */ }
+      })();
     }
 
     return !!data;
@@ -882,8 +946,8 @@ export class PopupSalesService {
     // Normalize to E.164 before saving and querying
     const phone = dto.phone ? toE164(dto.phone) : null;
 
-    // Check if a profile already exists with this email or phone
-    let existingQuery = db.from('profiles').select('id').eq('role', 'public');
+    // Check if a profile already exists with this email or phone (any role)
+    let existingQuery = db.from('profiles').select('id');
     if (dto.email && phone) {
       existingQuery = existingQuery.or(`email.eq.${dto.email},phone_number.eq.${phone}`);
     } else if (dto.email) {

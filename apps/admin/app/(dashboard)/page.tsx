@@ -152,7 +152,7 @@ function BrandSplit({
               }`}
               style={{ backgroundColor: b.bg }}
             >
-              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: b.color }}>
+              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: b.color, fontFamily: b.name === "Unlikely Alliances" ? "Helvetica, Arial, sans-serif" : undefined }}>
                 {b.name}
               </p>
               <p className="text-xl font-bold tabular-nums" style={{ color: b.color }}>
