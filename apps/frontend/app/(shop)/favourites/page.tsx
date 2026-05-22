@@ -16,7 +16,20 @@ function toProduct(fav: NonNullable<ReturnType<typeof useFavourites>["data"]>[nu
     title: p.title,
     handle: p.handle,
     base_price: p.base_price,
-    product_images: (p.product_images ?? []).sort((a, b) => a.position - b.position),
+    product_images: (p.product_images ?? [])
+      .sort((a, b) => a.position - b.position)
+      .map((img) => ({
+        id: "",
+        product_id: p.id,
+        src: img.src,
+        alt_text: img.alt_text ?? null,
+        position: img.position,
+        image_type: "product" as const,
+        variant_id: null,
+        option1_value: null,
+        option2_value: null,
+        color_tags: [] as string[],
+      })),
     product_variants: [],
     description: null,
     status: "active",
