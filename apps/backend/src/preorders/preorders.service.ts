@@ -95,6 +95,17 @@ export class PreordersService {
 
   async createPopup(dto: CreatePopupPreorderDto, adminId: string) {
     const db = this.supabase.getAdminClient();
+
+    if (dto.event_id) {
+      const { data: event, error: eventError } = await db
+        .from('popup_events')
+        .select('id, status')
+        .eq('id', dto.event_id)
+        .single();
+      if (eventError || !event) throw new BadRequestException('Event not found');
+      if (event.status === 'closed') throw new BadRequestException('This event is closed and cannot accept new orders');
+    }
+
     const orderNumber = await this.generateOrderNumber();
     const results = [];
 
@@ -143,6 +154,7 @@ export class PreordersService {
           payment_status: dto.payment_method && dto.payment_method !== 'pending' ? 'paid' : 'awaiting',
           status: 'pending',
           notes: dto.notes ?? null,
+          popup_event_id: dto.event_id ?? null,
         })
         .select()
         .single();

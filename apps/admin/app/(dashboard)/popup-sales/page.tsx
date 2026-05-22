@@ -954,6 +954,8 @@ function EditOrderModal({
   const [discountAmount, setDiscountAmount] = useState(order.discount_amount ? String(order.discount_amount) : "");
   const [discountReason, setDiscountReason] = useState(order.discount_reason ?? "");
   const [notes, setNotes] = useState(order.notes ?? "");
+  const [holdDuration, setHoldDuration] = useState(order.hold_duration_minutes ? String(order.hold_duration_minutes) : "");
+  const [holdNote, setHoldNote] = useState(order.hold_note ?? "");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -968,6 +970,8 @@ function EditOrderModal({
         discount_type: discountType,
         discount_amount: discountType !== "none" && discountAmount ? parseFloat(discountAmount) : 0,
         discount_reason: discountReason.trim() || undefined,
+        hold_duration_minutes: holdDuration ? parseInt(holdDuration, 10) : undefined,
+        hold_note: holdNote.trim() || undefined,
         notes: notes.trim() || undefined,
       },
     });
@@ -1100,6 +1104,36 @@ function EditOrderModal({
               )}
             </div>
           </div>
+
+          {/* Hold info (only shown for on-hold orders) */}
+          {order.status === "on_hold" && (
+            <div>
+              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">Hold Info</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Hold Duration (minutes)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={holdDuration}
+                    onChange={(e) => setHoldDuration(e.target.value)}
+                    placeholder="e.g. 15"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Hold Note</label>
+                  <input
+                    type="text"
+                    value={holdNote}
+                    onChange={(e) => setHoldNote(e.target.value)}
+                    placeholder="Reason for hold…"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Notes */}
           <div>
@@ -1405,6 +1439,7 @@ function NewOrderModal({
           paymentMethod === "momo" ? momoReference || undefined :
           paymentMethod === "bank_transfer" ? bankReference || undefined : undefined,
         notes: undefined,
+        event_id: eventId,
       });
       onClose();
       return;
@@ -2884,88 +2919,6 @@ function EventHubView({
         />
       )}
     </>
-  );
-}
-
-// ─── Event Selector ───────────────────────────────────────────────────────────
-
-function EventSelector({
-  events,
-  selectedId,
-  onSelect,
-  onNewEvent,
-}: {
-  events: PopupEvent[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  onNewEvent: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const selected = events.find((e) => e.id === selectedId);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-700 hover:bg-slate-50"
-      >
-        <span>{selected?.name ?? "Select event"}</span>
-        <ChevronDown className="h-4 w-4 text-slate-400" />
-      </button>
-      {open && (
-        <div className="absolute right-0 z-20 mt-1 w-64 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-          {events.map((event) => (
-            <button
-              key={event.id}
-              onClick={() => {
-                onSelect(event.id);
-                setOpen(false);
-              }}
-              className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm hover:bg-slate-50 ${event.id === selectedId
-                ? "font-medium text-slate-900"
-                : "text-slate-700"
-                }`}
-            >
-              <span>{event.name}</span>
-              <span
-                className={`text-xs ${event.status === "active"
-                  ? "text-green-600"
-                  : event.status === "closed"
-                    ? "text-slate-400"
-                    : "text-amber-500"
-                  }`}
-              >
-                {event.status}
-              </span>
-            </button>
-          ))}
-          {events.length > 0 && (
-            <div className="my-1 border-t border-slate-100" />
-          )}
-          <button
-            onClick={() => {
-              onNewEvent();
-              setOpen(false);
-            }}
-            className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-500 hover:bg-slate-50"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New Event
-          </button>
-        </div>
-      )}
-    </div>
   );
 }
 

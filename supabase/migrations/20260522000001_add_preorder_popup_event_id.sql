@@ -1,0 +1,1 @@
+ALTER TABLE preorders ADD COLUMN IF NOT EXISTS popup_event_id UUID REFERENCES popup_events(id) ON DELETE SET NULL;
