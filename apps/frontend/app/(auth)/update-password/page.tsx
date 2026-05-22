@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import PasswordInput from "../components/PasswordInput";
 
 export default function UpdatePasswordPage() {
   const router = useRouter();
@@ -83,8 +84,7 @@ export default function UpdatePasswordPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          type="password"
+        <PasswordInput
           placeholder="New password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -92,8 +92,7 @@ export default function UpdatePasswordPage() {
           minLength={8}
           className="w-full border border-gray-300 p-2 rounded bg-transparent text-white focus:outline-none focus:ring-1 focus:ring-white"
         />
-        <input
-          type="password"
+        <PasswordInput
           placeholder="Confirm new password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
