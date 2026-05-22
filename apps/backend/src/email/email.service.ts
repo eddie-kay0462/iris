@@ -211,7 +211,7 @@ export class EmailService {
     if (brand === 'Unlikely Alliances') {
       return `<p style="margin:0;font-size:20px;font-weight:700;color:#fff;font-family:Helvetica,Arial,sans-serif;letter-spacing:0.5px;">Unlikely Alliances</p>`;
     }
-    return `<img src="${this.frontendUrl}/homepage_img/no-bg-1NRI.png" alt="1NRI" width="80" style="display:block;border:0;outline:none;text-decoration:none;" />`;
+    return `<img src="https://storefront.1nri.store/homepage_img/no-bg-1NRI.png" alt="1NRI" width="80" style="display:block;border:0;outline:none;text-decoration:none;" />`;
   }
 
   private brandBgColor(brand: string): string {
