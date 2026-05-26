@@ -132,6 +132,14 @@ export async function updateAlly(input: UpdateAllyInput) {
   const { error } = await supabase.from('allies').update(updates).eq('id', id)
   if (error) return { error: error.message }
 
+  // When deactivating, immediately terminate the ally's active session
+  if (updates.is_active === false) {
+    const { data: allyRow } = await supabase.from('allies').select('user_id').eq('id', id).single()
+    if (allyRow?.user_id) {
+      await supabase.rpc('force_logout_user', { p_user_id: allyRow.user_id })
+    }
+  }
+
   await logActivity({ action: 'updated', entity_type: 'ally', entity_id: id, changes: updates })
   revalidatePath('/markets')
   return { success: true }
@@ -155,9 +163,13 @@ export async function forceLogoutAlly(allyId: string): Promise<{ success: boolea
     return { success: false, error: 'Ally not found' }
   }
 
-  const { error: signOutError } = await supabase.auth.admin.signOut(ally.user_id)
-  if (signOutError) {
-    return { success: false, error: signOutError.message }
+  // auth.admin.signOut() expects a JWT, not a user ID.
+  // Instead we call a SECURITY DEFINER RPC that deletes from auth.sessions directly.
+  // GoTrue validates session existence on every getUser() call, so this immediately
+  // invalidates the ally's access token.
+  const { error: rpcError } = await supabase.rpc('force_logout_user', { p_user_id: ally.user_id })
+  if (rpcError) {
+    return { success: false, error: rpcError.message }
   }
 
   await logActivity({
