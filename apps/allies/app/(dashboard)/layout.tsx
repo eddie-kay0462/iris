@@ -19,6 +19,8 @@ export default async function DashboardLayout({
     .eq('user_id', user.id)
     .single()
 
+  if (ally && !ally.is_active) redirect('/api/signout?reason=deactivated')
+
   if (ally && !ally.onboarded_at) redirect('/onboarding')
 
   return (

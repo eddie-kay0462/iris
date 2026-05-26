@@ -10,16 +10,19 @@ function getServiceClient() {
   )
 }
 
-export async function recordAllyLogin(userId: string) {
+export async function recordAllyLogin(userId: string): Promise<{ allowed: boolean }> {
   const supabase = getServiceClient()
 
   const { data: ally } = await supabase
     .from('allies')
-    .select('id')
+    .select('id, is_active')
     .eq('user_id', userId)
     .single()
 
-  if (!ally) return
+  if (!ally) return { allowed: false }
+
+  if (!ally.is_active) return { allowed: false }
 
   await supabase.from('ally_logins').insert({ ally_id: ally.id })
+  return { allowed: true }
 }
