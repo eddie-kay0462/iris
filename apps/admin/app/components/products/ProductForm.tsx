@@ -274,6 +274,36 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
               />
               {errors.base_price && <p className="mt-1 text-xs text-red-500">{errors.base_price.message}</p>}
+              {mode === "edit" && product && (product.product_variants?.length ?? 0) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const price = watch("base_price");
+                    if (price == null || price === ("" as unknown as number)) return;
+                    const variants = product.product_variants ?? [];
+                    let completed = 0;
+                    variants.forEach((v) => {
+                      updateVariant.mutate(
+                        { variantId: v.id, data: { price: Number(price) } },
+                        {
+                          onSuccess: () => {
+                            completed += 1;
+                            if (completed === variants.length) {
+                              onRefresh?.();
+                              toast.success("All variant prices updated to base price");
+                            }
+                          },
+                          onError: (err) =>
+                            toast.error(err instanceof Error ? err.message : "Failed to update variant price", { duration: 6000 }),
+                        }
+                      );
+                    });
+                  }}
+                  className="mt-1.5 text-xs text-slate-500 underline underline-offset-2 hover:text-slate-800"
+                >
+                  Refresh all variant prices to base price
+                </button>
+              )}
             </div>
           </div>
 
