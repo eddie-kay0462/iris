@@ -44,8 +44,7 @@ function LoginForm() {
       }
     }
 
-    router.push('/')
-    router.refresh()
+    window.location.href = '/'
   }
 
   return (
