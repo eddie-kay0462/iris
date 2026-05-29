@@ -15,14 +15,22 @@ export async function middleware(request: NextRequest) {
   if (!user && !isLoginPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    return NextResponse.redirect(url)
+    const redirectResponse = NextResponse.redirect(url)
+    response.cookies.getAll().forEach((cookie) =>
+      redirectResponse.cookies.set(cookie.name, cookie.value)
+    )
+    return redirectResponse
   }
 
   // Already logged in and trying to visit /login → redirect to dashboard
   if (user && isLoginPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
-    return NextResponse.redirect(url)
+    const redirectResponse = NextResponse.redirect(url)
+    response.cookies.getAll().forEach((cookie) =>
+      redirectResponse.cookies.set(cookie.name, cookie.value)
+    )
+    return redirectResponse
   }
 
   return response

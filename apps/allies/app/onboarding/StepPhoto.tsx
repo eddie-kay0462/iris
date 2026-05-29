@@ -1,15 +1,19 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { motion } from 'framer-motion'
 import { uploadAllyAvatar } from './actions'
 import { toast } from 'sonner'
+import { TopBar, Eyebrow, InkCTA, HW, A, useIsDesktop } from './atoms'
 
-const CIRCLE_PX = 120 // preview circle diameter in CSS pixels
-const OUTPUT_PX = 256  // final JPEG size
+const CIRCLE_PX = 168
+const OUTPUT_PX = 256
 
 interface Props {
   ally: { id: string; full_name: string }
   onNext: (avatarUrl?: string) => void
+  onBack: () => void
+  step: number
 }
 
 function getInitials(name: string) {
@@ -25,14 +29,10 @@ function cropToJpeg(
   offsetY: number,
 ): Promise<Blob> {
   const { naturalWidth: nw, naturalHeight: nh } = img
-  // Scale so image covers the preview circle
   const previewScale = Math.max(CIRCLE_PX / nw, CIRCLE_PX / nh)
-  // How many source pixels fit inside the circle
   const srcSize = CIRCLE_PX / previewScale
-  // Center of crop in source coords, shifted by drag offset
   const srcCenterX = nw / 2 - offsetX / previewScale
   const srcCenterY = nh / 2 - offsetY / previewScale
-  // Top-left of crop, clamped so we never read outside the image
   const srcX = Math.max(0, Math.min(nw - srcSize, srcCenterX - srcSize / 2))
   const srcY = Math.max(0, Math.min(nh - srcSize, srcCenterY - srcSize / 2))
 
@@ -50,7 +50,21 @@ function cropToJpeg(
   )
 }
 
-export function StepPhoto({ ally, onNext }: Props) {
+const EASE = [0.2, 0.7, 0.2, 1] as const
+
+const stagger = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.09, delayChildren: 0.12 } },
+}
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 14 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } },
+}
+
+export function StepPhoto({ ally, onNext, onBack, step }: Props) {
+  const isDesktop = useIsDesktop()
+
   const inputRef = useRef<HTMLInputElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
   const dragRef = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(null)
@@ -65,7 +79,6 @@ export function StepPhoto({ ally, onNext }: Props) {
     if (imageSrc) URL.revokeObjectURL(imageSrc)
     setImageSrc(URL.createObjectURL(file))
     setOffset({ x: 0, y: 0 })
-    // reset input so re-picking same file still fires onChange
     e.target.value = ''
   }
 
@@ -101,23 +114,50 @@ export function StepPhoto({ ally, onNext }: Props) {
     }
   }
 
-  return (
-    <div className="text-center space-y-6">
-      <div className="mx-auto w-16 h-16 rounded-full bg-white/10 flex items-center justify-center text-3xl">
-        📸
-      </div>
-      <div className="space-y-2">
-        <h1 className="text-3xl font-semibold text-white">Add a profile photo</h1>
-        <p className="text-slate-400 text-sm leading-relaxed">
-          Help your team recognise you. This is completely optional.
-        </p>
-      </div>
+  const initials = getInitials(ally.full_name)
 
-      {/* Preview + drag area */}
-      <div className="flex flex-col items-center gap-2">
+  const photoFrame = (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.55, ease: EASE, delay: 0.3 }}
+      style={{ display: 'flex', justifyContent: 'center' }}
+    >
+      <div style={{
+        width: 220,
+        height: 220,
+        position: 'relative',
+        border: '1px solid #000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        {/* Corner ticks */}
+        {([
+          { top: -1, left: -1, borderTop: '1px solid #000', borderLeft: '1px solid #000' } as React.CSSProperties,
+          { top: -1, right: -1, borderTop: '1px solid #000', borderRight: '1px solid #000' } as React.CSSProperties,
+          { bottom: -1, left: -1, borderBottom: '1px solid #000', borderLeft: '1px solid #000' } as React.CSSProperties,
+          { bottom: -1, right: -1, borderBottom: '1px solid #000', borderRight: '1px solid #000' } as React.CSSProperties,
+        ]).map((s, i) => (
+          <div key={i} style={{ position: 'absolute', width: 12, height: 12, background: 'transparent', ...s }} />
+        ))}
+
+        {/* Inner circle — drag zone */}
         <div
-          className={`rounded-full overflow-hidden border-2 bg-white/10 flex items-center justify-center relative select-none ${imageSrc ? 'cursor-grab active:cursor-grabbing border-white/40' : 'border-white/20'}`}
-          style={{ width: CIRCLE_PX, height: CIRCLE_PX }}
+          style={{
+            width: CIRCLE_PX,
+            height: CIRCLE_PX,
+            borderRadius: '50%',
+            background: '#E7E2D8',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
+            overflow: 'hidden',
+            cursor: imageSrc ? 'grab' : 'default',
+            userSelect: 'none',
+          }}
           onMouseDown={imageSrc ? (e) => { e.preventDefault(); startDrag(e.clientX, e.clientY) } : undefined}
           onMouseMove={imageSrc ? (e) => moveDrag(e.clientX, e.clientY) : undefined}
           onMouseUp={endDrag}
@@ -127,13 +167,14 @@ export function StepPhoto({ ally, onNext }: Props) {
           onTouchEnd={endDrag}
         >
           {imageSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               ref={imgRef}
               src={imageSrc}
               alt="Preview"
               draggable={false}
-              className="absolute pointer-events-none"
               style={{
+                position: 'absolute',
                 minWidth: '100%',
                 minHeight: '100%',
                 width: 'auto',
@@ -141,52 +182,225 @@ export function StepPhoto({ ally, onNext }: Props) {
                 top: '50%',
                 left: '50%',
                 transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`,
+                pointerEvents: 'none',
               }}
             />
           ) : (
-            <span className="text-white text-2xl font-semibold">
-              {getInitials(ally.full_name)}
+            <span style={{ fontFamily: HW, fontWeight: 300, fontSize: 64, color: '#000', letterSpacing: '-0.02em' }}>
+              {initials}
             </span>
           )}
-        </div>
 
-        {imageSrc && (
-          <p className="text-slate-500 text-xs tracking-wide">Drag to reposition</p>
-        )}
+          {/* Camera pip — spring pop */}
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 240, damping: 18, delay: 0.6 }}
+            style={{
+              position: 'absolute',
+              bottom: 8,
+              right: 8,
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              background: '#000',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '2px solid #E7E2D8',
+              flexShrink: 0,
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F4F3F1" strokeWidth="1.5">
+              <path d="M3 8h3l2-3h8l2 3h3v11H3z" />
+              <circle cx="12" cy="13" r="3.5" />
+            </svg>
+          </motion.div>
+        </div>
       </div>
+    </motion.div>
+  )
+
+  const actions = (
+    <>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, ease: EASE, delay: 0.5 }}
+        style={{ marginTop: 14, textAlign: 'center' }}
+      >
+        <Eyebrow style={{ fontSize: 9, color: A.meta }}>JPG · PNG · UP TO 5MB</Eyebrow>
+      </motion.div>
 
       <input
         ref={inputRef}
         type="file"
         accept="image/*"
-        className="sr-only"
+        style={{ display: 'none' }}
         onChange={handleFileChange}
       />
 
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        className="w-full rounded-xl border border-white/20 bg-white/5 text-white py-3 text-sm font-medium hover:bg-white/10 transition-colors"
-      >
-        {imageSrc ? 'Choose a different photo' : 'Choose photo'}
-      </button>
+      <div style={{ flex: 1 }} />
 
-      {imageSrc && (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, ease: EASE, delay: 0.55 }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+      >
+        <InkCTA onClick={() => inputRef.current?.click()}>
+          {imageSrc ? 'Choose a different photo' : 'Choose Photo'}
+        </InkCTA>
+        {imageSrc && (
+          <InkCTA onClick={handleUpload} disabled={uploading}>
+            {uploading ? 'Uploading…' : 'Upload & Continue'}
+          </InkCTA>
+        )}
         <button
-          onClick={handleUpload}
-          disabled={uploading}
-          className="w-full rounded-xl bg-white text-slate-900 py-3 text-sm font-semibold hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => onNext(undefined)}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '10px 0',
+            fontFamily: HW,
+            fontWeight: 300,
+            fontSize: 13,
+            color: A.body,
+            textDecoration: 'underline',
+            textUnderlineOffset: 4,
+          }}
         >
-          {uploading ? 'Uploading…' : 'Upload & Continue'}
+          Skip for now
         </button>
-      )}
+      </motion.div>
+    </>
+  )
 
-      <button
-        onClick={() => onNext(undefined)}
-        className="text-slate-400 text-sm hover:text-white transition-colors"
-      >
-        Skip for now
-      </button>
+  if (isDesktop) {
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', width: '100%' }}>
+        {/* Left: dark editorial panel — initials fade up */}
+        <div style={{
+          width: '50%',
+          flexShrink: 0,
+          background: '#000',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+        }}>
+          <motion.span
+            initial={{ opacity: 0, scale: 0.94 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.9, ease: EASE }}
+            style={{
+              fontFamily: HW,
+              fontWeight: 300,
+              fontSize: 120,
+              color: '#F4F3F1',
+              letterSpacing: '-0.04em',
+              userSelect: 'none',
+            }}
+          >
+            {initials}
+          </motion.span>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, ease: EASE, delay: 0.6 }}
+            style={{ position: 'absolute', bottom: 40, left: 40 }}
+          >
+            <Eyebrow style={{ color: 'rgba(244,243,241,0.35)' }}>
+              this is where your face goes
+            </Eyebrow>
+          </motion.div>
+        </div>
+
+        {/* Right: content */}
+        <div style={{
+          width: '50%',
+          background: A.bg,
+          display: 'flex',
+          flexDirection: 'column',
+          overflowY: 'auto',
+          minHeight: '100vh',
+        }}>
+          <div style={{
+            maxWidth: 420,
+            width: '100%',
+            margin: '0 auto',
+            padding: '0 40px',
+            display: 'flex',
+            flexDirection: 'column',
+            flex: 1,
+            minHeight: '100vh',
+            boxSizing: 'border-box',
+          }}>
+            <TopBar step={step} onBack={onBack} desktop />
+
+            <div style={{ paddingTop: 48, flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <motion.div initial="hidden" animate="show" variants={stagger} style={{ display: 'flex', flexDirection: 'column' }}>
+                <motion.div variants={fadeUp} style={{ marginBottom: 14 }}>
+                  <Eyebrow>Chapter 03 · Your face</Eyebrow>
+                </motion.div>
+                <motion.h1 variants={fadeUp} style={{
+                  fontFamily: HW, fontWeight: 300, fontSize: 44,
+                  lineHeight: 1, color: A.ink, margin: 0, letterSpacing: '-0.01em',
+                }}>
+                  Show your<br />face.
+                </motion.h1>
+                <motion.p variants={fadeUp} style={{
+                  fontFamily: HW, fontWeight: 300, fontSize: 14,
+                  lineHeight: 1.5, color: A.body, margin: '16px 0 28px', maxWidth: 300,
+                }}>
+                  So customers know who they&apos;re buying from. The Allies team will see it too.
+                </motion.p>
+              </motion.div>
+
+              {photoFrame}
+              {actions}
+
+              <div style={{ paddingBottom: 48 }} />
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Mobile
+  return (
+    <div style={{ background: A.bg, minHeight: '100vh', width: '100%', display: 'flex', flexDirection: 'column' }}>
+      <TopBar step={step} onBack={onBack} />
+
+      <div style={{ padding: '44px 24px 0', flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <motion.div initial="hidden" animate="show" variants={stagger} style={{ display: 'flex', flexDirection: 'column' }}>
+          <motion.div variants={fadeUp} style={{ marginBottom: 14 }}>
+            <Eyebrow>Chapter 03 · Your face</Eyebrow>
+          </motion.div>
+          <motion.h1 variants={fadeUp} style={{
+            fontFamily: HW, fontWeight: 300, fontSize: 38,
+            lineHeight: 1, color: A.ink, margin: 0, letterSpacing: '-0.01em',
+          }}>
+            Show your<br />face.
+          </motion.h1>
+          <motion.p variants={fadeUp} style={{
+            fontFamily: HW, fontWeight: 300, fontSize: 14,
+            lineHeight: 1.5, color: A.body, margin: '16px 0 0', maxWidth: 300,
+          }}>
+            So customers know who they&apos;re buying from. The Allies team will see it too.
+          </motion.p>
+        </motion.div>
+
+        <div style={{ marginTop: 36 }}>
+          {photoFrame}
+        </div>
+
+        {actions}
+
+        <div style={{ padding: '0 0 16px' }} />
+      </div>
     </div>
   )
 }
