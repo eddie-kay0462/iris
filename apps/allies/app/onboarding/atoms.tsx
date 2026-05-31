@@ -59,17 +59,19 @@ interface StepTicksProps {
   dark?: boolean
 }
 
+const ACTIVE_WIDTHS = [14, 32, 20, 40]
+
 export function StepTicks({ step, total = 4, dark }: StepTicksProps) {
   return (
     <div style={{ display: 'flex', gap: 4 }}>
       {Array.from({ length: total }).map((_, i) => (
         <div key={i} style={{
           height: 2,
-          width: i === step ? 22 : 8,
+          width: i === step ? (ACTIVE_WIDTHS[i] ?? 22) : 8,
           background: i <= step
             ? (dark ? '#fff' : '#000')
             : (dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)'),
-          transition: 'width 240ms cubic-bezier(0.2,0.7,0.2,1)',
+          transition: 'width 280ms cubic-bezier(0.2,0.7,0.2,1), background 200ms ease',
         }} />
       ))}
     </div>

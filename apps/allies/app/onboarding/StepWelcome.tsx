@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { TopBar, Eyebrow, InkCTA, HW, A, useIsDesktop } from './atoms'
 
@@ -51,14 +52,17 @@ export function StepWelcome({ ally, onNext, onBack, step }: Props) {
             initial={{ scale: 1.05 }}
             animate={{ scale: 1 }}
             transition={{ duration: 1.8, ease: EASE }}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              backgroundImage: 'url(/onboarding/lookbook-1.jpeg)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center 18%',
-            }}
-          />
+            style={{ position: 'absolute', inset: 0 }}
+          >
+            <Image
+              src="/onboarding/lookbook-1.jpeg"
+              alt=""
+              fill
+              priority
+              sizes="50vw"
+              style={{ objectFit: 'cover', objectPosition: 'center 18%' }}
+            />
+          </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -74,7 +78,7 @@ export function StepWelcome({ ally, onNext, onBack, step }: Props) {
           >
             <Eyebrow dark style={{ color: 'rgba(255,255,255,0.85)' }}>FW&apos;26 · CLASS 04</Eyebrow>
             <div style={{ fontFamily: HW, fontWeight: 700, color: '#fff', fontSize: 11, letterSpacing: '0.06em' }}>
-              TWO HOUSES · 24 ALLiES · 12 LOCATIONS
+              Join the Ally Family
             </div>
           </motion.div>
         </div>
@@ -156,12 +160,17 @@ export function StepWelcome({ ally, onNext, onBack, step }: Props) {
           initial={{ scale: 1.05 }}
           animate={{ scale: 1 }}
           transition={{ duration: 1.8, ease: EASE }}
-          style={{
-            position: 'absolute', inset: 0,
-            backgroundImage: 'url(/onboarding/lookbook-1.jpeg)',
-            backgroundSize: 'cover', backgroundPosition: 'center 18%',
-          }}
-        />
+          style={{ position: 'absolute', inset: 0 }}
+        >
+          <Image
+            src="/onboarding/lookbook-1.jpeg"
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            style={{ objectFit: 'cover', objectPosition: 'center 12%' }}
+          />
+        </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -171,9 +180,9 @@ export function StepWelcome({ ally, onNext, onBack, step }: Props) {
             display: 'flex', flexDirection: 'column', gap: 8,
           }}
         >
-          <Eyebrow dark style={{ color: 'rgba(255,255,255,0.85)' }}>FW&apos;26 · CLASS 04</Eyebrow>
+          <Eyebrow dark style={{ color: 'rgba(255,255,255,0.85)' }}>FW&apos;25</Eyebrow>
           <div style={{ fontFamily: HW, fontWeight: 700, color: '#fff', fontSize: 11, letterSpacing: '0.06em' }}>
-            TWO HOUSES · 24 ALLiES · 12 LOCATIONS
+            Join the Ally Family
           </div>
         </motion.div>
       </div>

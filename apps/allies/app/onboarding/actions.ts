@@ -31,13 +31,13 @@ export async function uploadAllyAvatar(
 
   const { error: uploadError } = await supabase.storage
     .from('avatars')
-    .upload(storagePath, buffer, { contentType: 'image/jpeg', upsert: true })
+    .upload(storagePath, new Uint8Array(buffer), { contentType: 'image/jpeg', upsert: true })
 
   if (uploadError) return { error: uploadError.message }
 
-  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/${storagePath}`
+  const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(storagePath)
 
-  await supabase.from('allies').update({ avatar_url: url }).eq('id', allyId)
+  await supabase.from('allies').update({ avatar_url: publicUrl }).eq('id', allyId)
 
-  return { url }
+  return { url: publicUrl }
 }

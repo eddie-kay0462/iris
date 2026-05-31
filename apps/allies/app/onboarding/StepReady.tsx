@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { TopBar, Eyebrow, InkCTA, HW, A, useIsDesktop } from './atoms'
 
@@ -87,25 +88,30 @@ export function StepReady({ ally, avatarUrl, onFinish, onBack, loading, step }: 
       <div style={{ display: 'flex', minHeight: '100vh', width: '100%' }}>
         {/* Left: Ken Burns hero + right-edge bone fade + avatar pip at boundary */}
         <div style={{ width: '50%', flexShrink: 0, position: 'relative', overflow: 'visible' }}>
-          <motion.div
-            initial={{ scale: 1.05 }}
-            animate={{ scale: 1 }}
-            transition={{ duration: 1.8, ease: EASE }}
-            style={{
+          {/* Inner clip so the Ken Burns scale doesn't bleed over the avatar pip */}
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+            <motion.div
+              initial={{ scale: 1.05 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 1.8, ease: EASE }}
+              style={{ position: 'absolute', inset: 0 }}
+            >
+              <Image
+                src="/onboarding/lookbook-3.jpg"
+                alt=""
+                fill
+                sizes="50vw"
+                style={{ objectFit: 'cover', objectPosition: 'center' }}
+              />
+            </motion.div>
+            {/* Right-edge fade into bone */}
+            <div style={{
               position: 'absolute',
               inset: 0,
-              backgroundImage: 'url(/onboarding/lookbook-3.png)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-            }}
-          />
-          {/* Right-edge fade into bone */}
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'linear-gradient(to right, transparent 55%, rgba(244,243,241,0.92) 100%)',
-            pointerEvents: 'none',
-          }} />
+              background: 'linear-gradient(to right, transparent 55%, rgba(244,243,241,0.92) 100%)',
+              pointerEvents: 'none',
+            }} />
+          </div>
           {/* Avatar straddling the boundary */}
           <div style={{ position: 'absolute', right: -38, top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}>
             {avatarPip}
@@ -193,12 +199,16 @@ export function StepReady({ ally, avatarUrl, onFinish, onBack, loading, step }: 
           initial={{ scale: 1.05 }}
           animate={{ scale: 1 }}
           transition={{ duration: 1.8, ease: EASE }}
-          style={{
-            position: 'absolute', inset: 0,
-            backgroundImage: 'url(/onboarding/lookbook-3.png)',
-            backgroundSize: 'cover', backgroundPosition: 'center',
-          }}
-        />
+          style={{ position: 'absolute', inset: 0 }}
+        >
+          <Image
+            src="/onboarding/lookbook-3.jpg"
+            alt=""
+            fill
+            sizes="100vw"
+            style={{ objectFit: 'cover', objectPosition: 'center' }}
+          />
+        </motion.div>
         <div style={{
           position: 'absolute', inset: 0,
           background: 'linear-gradient(to bottom, transparent 50%, rgba(244,243,241,1) 100%)',
@@ -206,7 +216,7 @@ export function StepReady({ ally, avatarUrl, onFinish, onBack, loading, step }: 
       </div>
 
       {/* Avatar overlapping the hero — rendered outside the overflow:hidden strip */}
-      <div style={{ display: 'flex', justifyContent: 'center', marginTop: -38 }}>
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: -38, position: 'relative', zIndex: 10 }}>
         {avatarPip}
       </div>
 

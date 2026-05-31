@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/client";
 import type { Product, ProductVariant } from "@/lib/api/products";
 import { useCart } from "@/lib/cart";
 
@@ -60,12 +62,22 @@ export function ProductCard({ product }: { product: Product }) {
   const image = images[0];
   const price = product.base_price;
   const { addItem } = useCart();
+  const queryClient = useQueryClient();
 
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [addingSize, setAddingSize] = useState<string | null>(null);
   const [successSize, setSuccessSize] = useState<string | null>(null);
   const [imgIndex, setImgIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const handlePrefetch = useCallback(() => {
+    const key = product.handle || product.id;
+    queryClient.prefetchQuery({
+      queryKey: ["product", key],
+      queryFn: () => apiClient(`/products/${key}`),
+      staleTime: 5 * 60 * 1000,
+    });
+  }, [queryClient, product.handle, product.id]);
 
   const sizes = extractSizes(product.product_variants || []);
   const hasSizes = sizes.length > 0;
@@ -135,6 +147,7 @@ export function ProductCard({ product }: { product: Product }) {
       ref={containerRef}
       className="group block"
       onMouseLeave={handleMouseLeave}
+      onMouseEnter={handlePrefetch}
     >
       <Link href={`/product/${product.handle || product.id}`}>
         {/* Image container */}
@@ -146,6 +159,7 @@ export function ProductCard({ product }: { product: Product }) {
             <img
               src={currentImage.src}
               alt={currentImage.alt_text || product.title}
+              loading="lazy"
               className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
             />
           ) : (

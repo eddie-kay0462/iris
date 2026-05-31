@@ -65,7 +65,6 @@ const fadeUp = {
 export function StepPhoto({ ally, onNext, onBack, step }: Props) {
   const isDesktop = useIsDesktop()
 
-  const inputRef = useRef<HTMLInputElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
   const dragRef = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(null)
 
@@ -232,14 +231,6 @@ export function StepPhoto({ ally, onNext, onBack, step }: Props) {
         <Eyebrow style={{ fontSize: 9, color: A.meta }}>JPG · PNG · UP TO 5MB</Eyebrow>
       </motion.div>
 
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        style={{ display: 'none' }}
-        onChange={handleFileChange}
-      />
-
       <div style={{ flex: 1 }} />
 
       <motion.div
@@ -248,9 +239,26 @@ export function StepPhoto({ ally, onNext, onBack, step }: Props) {
         transition={{ duration: 0.5, ease: EASE, delay: 0.55 }}
         style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
       >
-        <InkCTA onClick={() => inputRef.current?.click()}>
-          {imageSrc ? 'Choose a different photo' : 'Choose Photo'}
-        </InkCTA>
+        {/* Overlay the native file input on top of the button — avoids programmatic .click() which Safari blocks */}
+        <div style={{ position: 'relative' }}>
+          <InkCTA>
+            {imageSrc ? 'Choose a different photo' : 'Choose Photo'}
+          </InkCTA>
+          <input
+            type="file"
+            accept="image/*"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              opacity: 0,
+              cursor: 'pointer',
+              width: '100%',
+              height: '100%',
+              fontSize: 0,
+            }}
+            onChange={handleFileChange}
+          />
+        </div>
         {imageSrc && (
           <InkCTA onClick={handleUpload} disabled={uploading}>
             {uploading ? 'Uploading…' : 'Upload & Continue'}
