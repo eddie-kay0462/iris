@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import Image from 'next/image'
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
 import { TopBar, Eyebrow, InkCTA, HW, A, useIsDesktop } from './atoms'
 
@@ -91,13 +92,16 @@ export function StepTerritory({ ally, onNext, onBack, step }: Props) {
             initial={{ scale: 1.04 }}
             animate={{ scale: 1 }}
             transition={{ duration: 1.8, ease: EASE }}
-            style={{
-              position: 'absolute', inset: 0,
-              backgroundImage: 'url(/onboarding/lookbook-2.jpeg)',
-              backgroundSize: 'cover', backgroundPosition: 'center 30%',
-              filter: 'grayscale(0.15) contrast(0.95)',
-            }}
-          />
+            style={{ position: 'absolute', inset: 0, filter: 'grayscale(0.15) contrast(0.95)' }}
+          >
+            <Image
+              src="/onboarding/lookbook-2.jpeg"
+              alt=""
+              fill
+              sizes="50vw"
+              style={{ objectFit: 'cover', objectPosition: 'center 10%' }}
+            />
+          </motion.div>
         </div>
 
         {/* Right: content */}
@@ -186,12 +190,15 @@ export function StepTerritory({ ally, onNext, onBack, step }: Props) {
           transition={{ duration: 0.5, ease: EASE, delay: 0.28 }}
           style={{ marginTop: 32, border: '1px solid #000', background: '#fff' }}
         >
-          <div style={{
-            height: 160, width: '100%',
-            backgroundImage: 'url(/onboarding/lookbook-2.jpeg)',
-            backgroundSize: 'cover', backgroundPosition: 'center 5%',
-            filter: 'grayscale(0.15) contrast(0.95)',
-          }} />
+          <div style={{ height: 160, width: '100%', position: 'relative', filter: 'grayscale(0.15) contrast(0.95)', overflow: 'hidden' }}>
+            <Image
+              src="/onboarding/lookbook-2.jpeg"
+              alt=""
+              fill
+              sizes="100vw"
+              style={{ objectFit: 'cover', objectPosition: 'center 5%' }}
+            />
+          </div>
           <div style={{ height: 6, borderTop: '1px solid #000', borderBottom: '1px solid #000' }} />
           {metaRows}
         </motion.div>
