@@ -218,9 +218,9 @@ export default function RoadToHQPage() {
             src="/homepage/1.jpeg"
             alt=""
             fill
+            sizes="100vw"
             className="object-cover object-[center_0%] scale-110"
             priority
-            unoptimized
           />
         </motion.div>
         <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/30 to-black/70" />
@@ -469,7 +469,7 @@ export default function RoadToHQPage() {
                   <span>{m.units.toLocaleString()} units</span>
                 </div>
                 <div className="relative aspect-[4/3] bg-neutral-100 dark:bg-neutral-900 overflow-hidden">
-                  <Image src={m.image} alt={m.title} fill className={`object-cover ${m.objectPos ?? "object-center"}`} unoptimized />
+                  <Image src={m.image} alt={m.title} fill sizes="(max-width: 768px) 100vw, 50vw" className={`object-cover ${m.objectPos ?? "object-center"}`} />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
                   <div className="absolute top-3 left-3 inline-flex items-center gap-2 bg-black/60 backdrop-blur-sm px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.3em] text-white font-mono">
                     <span className={`h-1.5 w-1.5 rounded-full ${mDone ? "bg-emerald-400" : "bg-amber-300"}`} />
@@ -613,7 +613,7 @@ export default function RoadToHQPage() {
       {/* ── 6. CLOSING CTA ── */}
       <section ref={ctaRef} className="relative h-[80vh] min-h-[560px] overflow-hidden">
         <motion.div className="absolute inset-0 will-change-transform" style={{ y: ctaImageY }}>
-          <Image src="/homepage/2.jpeg" alt="" fill className="object-cover object-top scale-110" unoptimized />
+          <Image src="/homepage/2.jpeg" alt="" fill sizes="100vw" className="object-cover object-top scale-110" />
         </motion.div>
         <div className="absolute inset-0 bg-black/55" />
         <motion.div

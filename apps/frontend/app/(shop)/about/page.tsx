@@ -90,9 +90,9 @@ export default function AboutPage() {
             src="/homepage/1.jpeg"
             alt="1NRI editorial image"
             fill
+            sizes="100vw"
             className="object-cover object-[center_0%]"
             priority
-            unoptimized
           />
         </motion.div>
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40"></div>
@@ -227,8 +227,8 @@ export default function AboutPage() {
             src="/homepage/3.png"
             alt=""
             fill
+            sizes="100vw"
             className="object-cover object-center"
-            unoptimized
           />
           <div className="absolute inset-0 bg-black/60"></div>
         </div>

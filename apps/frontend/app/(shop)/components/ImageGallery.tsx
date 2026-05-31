@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import type { ProductImage } from "@/lib/api/products";
 
 export function ImageGallery({
@@ -31,11 +32,14 @@ export function ImageGallery({
 
   return (
     <div className="space-y-3">
-      <div className="aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
-        <img
+      <div className="relative aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
+        <Image
           src={sorted[selected].src}
           alt={sorted[selected].alt_text || "Product image"}
-          className="h-full w-full object-cover"
+          fill
+          sizes="(max-width: 768px) 100vw, 50vw"
+          className="object-cover"
+          priority
         />
       </div>
       {sorted.length > 1 && (
@@ -44,16 +48,18 @@ export function ImageGallery({
             <button
               key={img.id}
               onClick={() => setSelected(i)}
-              className={`h-16 w-16 flex-shrink-0 overflow-hidden rounded-md border-2 ${
+              className={`relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md border-2 ${
                 i === selected
                   ? "border-black dark:border-white"
                   : "border-transparent"
               }`}
             >
-              <img
+              <Image
                 src={img.src}
                 alt={img.alt_text || "Thumbnail"}
-                className="h-full w-full object-cover"
+                fill
+                sizes="64px"
+                className="object-cover"
               />
             </button>
           ))}
