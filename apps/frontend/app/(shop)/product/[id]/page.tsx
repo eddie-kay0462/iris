@@ -110,7 +110,7 @@ function PreorderModal({
 }: PreorderModalProps) {
   const router = useRouter();
   const [quantity, setQuantity] = useState(1);
-  const [status, setStatus] = useState<"idle" | "paying" | "saving" | "success">("idle");
+  const [status, setStatus] = useState<"idle" | "paying" | "saving">("idle");
 
   useEffect(() => {
     if (document.getElementById("paystack-script")) return;
@@ -131,7 +131,15 @@ function PreorderModal({
       toast.error("Payment unavailable. Please try again.", { duration: 6000 });
       return;
     }
-    const email = "customer@1nri.com";
+    let email = "";
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      email = payload.email || "";
+    } catch { email = ""; }
+    if (!email) {
+      toast.error("Could not read your account email. Please log in again.");
+      return;
+    }
     setStatus("paying");
     window.PaystackPop.setup({
       key: pk,
@@ -142,11 +150,11 @@ function PreorderModal({
       callback: async (response) => {
         setStatus("saving");
         try {
-          await createPreorder({
+          const preorder = await createPreorder({
             item: { variantId, productTitle, variantTitle: variantTitle ?? undefined, quantity, price },
             paymentReference: response.reference,
           });
-          setStatus("success");
+          router.push(`/preorders/confirmation?order=${encodeURIComponent(preorder.order_number)}`);
         } catch {
           toast.error(
             "Payment received but we couldn't record your pre-order. Please contact support with your reference: " + response.reference,
@@ -169,68 +177,50 @@ function PreorderModal({
           <X className="h-5 w-5" />
         </button>
 
-        {status === "success" ? (
-          <div className="py-6 text-center">
-            <h2 className="text-lg font-bold text-black">Pre-order confirmed!</h2>
-            <p className="mt-2 text-sm text-[#59626E]">
-              We&apos;ll contact you as soon as stock is available.
-            </p>
+        <h2 className="mb-4 text-[13px] tracking-[0.18em] uppercase font-bold text-black">Pre-order</h2>
+
+        <div className="mb-4 bg-[#f4f3f1] p-3">
+          <p className="font-medium text-black">{productTitle}</p>
+          {variantTitle && <p className="mt-0.5 text-sm text-[#59626E]">{variantTitle}</p>}
+          <p className="mt-1 text-sm text-[#3B414A]">GH₵{price.toLocaleString()} each</p>
+        </div>
+
+        <div className="mb-4 flex items-center gap-3">
+          <span className="text-sm tracking-widest uppercase text-[#59626E]">Quantity</span>
+          <div className="flex items-center border border-black">
             <button
-              onClick={() => router.push("/preorders")}
-              className="mt-5 w-full bg-black py-2.5 text-sm font-bold text-white tracking-widest uppercase"
-              style={{ fontFamily: "Inter, sans-serif" }}
-            >
-              View my pre-orders
-            </button>
+              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+              className="px-3 py-1.5 text-gray-600 hover:bg-[#f4f3f1] transition-colors"
+            >−</button>
+            <span className="min-w-[2rem] text-center text-sm font-medium">{quantity}</span>
+            <button
+              onClick={() => setQuantity((q) => q + 1)}
+              className="px-3 py-1.5 text-gray-600 hover:bg-[#f4f3f1] transition-colors"
+            >+</button>
           </div>
-        ) : (
-          <>
-            <h2 className="mb-4 text-[13px] tracking-[0.18em] uppercase font-bold text-black">Pre-order</h2>
+        </div>
 
-            <div className="mb-4 bg-[#f4f3f1] p-3">
-              <p className="font-medium text-black">{productTitle}</p>
-              {variantTitle && <p className="mt-0.5 text-sm text-[#59626E]">{variantTitle}</p>}
-              <p className="mt-1 text-sm text-[#3B414A]">GH₵{price.toLocaleString()} each</p>
-            </div>
+        <div className="mb-5 flex items-center justify-between border-t border-black/10 pt-4">
+          <span className="text-[11px] tracking-widest uppercase text-[#59626E]">Total</span>
+          <span className="text-base font-bold text-black">GH₵{total.toLocaleString()}</span>
+        </div>
 
-            <div className="mb-4 flex items-center gap-3">
-              <span className="text-sm tracking-widest uppercase text-[#59626E]">Quantity</span>
-              <div className="flex items-center border border-black">
-                <button
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  className="px-3 py-1.5 text-gray-600 hover:bg-[#f4f3f1] transition-colors"
-                >−</button>
-                <span className="min-w-[2rem] text-center text-sm font-medium">{quantity}</span>
-                <button
-                  onClick={() => setQuantity((q) => q + 1)}
-                  className="px-3 py-1.5 text-gray-600 hover:bg-[#f4f3f1] transition-colors"
-                >+</button>
-              </div>
-            </div>
+        <button
+          onClick={handlePay}
+          disabled={status === "paying" || status === "saving"}
+          className="w-full bg-black py-3 text-[13px] tracking-[0.18em] uppercase font-bold text-white disabled:opacity-60"
+          style={{ fontFamily: "Inter, sans-serif" }}
+        >
+          {status === "paying"
+            ? "Opening payment…"
+            : status === "saving"
+              ? "Saving pre-order…"
+              : `Pay GH₵${total.toLocaleString()}`}
+        </button>
 
-            <div className="mb-5 flex items-center justify-between border-t border-black/10 pt-4">
-              <span className="text-[11px] tracking-widest uppercase text-[#59626E]">Total</span>
-              <span className="text-base font-bold text-black">GH₵{total.toLocaleString()}</span>
-            </div>
-
-            <button
-              onClick={handlePay}
-              disabled={status === "paying" || status === "saving"}
-              className="w-full bg-black py-3 text-[13px] tracking-[0.18em] uppercase font-bold text-white disabled:opacity-60"
-              style={{ fontFamily: "Inter, sans-serif" }}
-            >
-              {status === "paying"
-                ? "Opening payment…"
-                : status === "saving"
-                  ? "Saving pre-order…"
-                  : `Pay GH₵${total.toLocaleString()}`}
-            </button>
-
-            <p className="mt-3 text-center text-xs text-[#768293]">
-              Processed securely via Paystack. Your item is reserved once stock arrives.
-            </p>
-          </>
-        )}
+        <p className="mt-3 text-center text-xs text-[#768293]">
+          Processed securely via Paystack. Your item is reserved once stock arrives.
+        </p>
       </div>
     </div>
   );

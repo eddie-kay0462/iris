@@ -1,6 +1,8 @@
 "use client";
 
 import { use } from "react";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   useMyOrder,
@@ -55,13 +57,10 @@ export default function CustomerOrderDetailPage({ params }: PageProps) {
   }
 
   return (
-    <div>
-      <button
-        onClick={() => router.push("/orders")}
-        className="mb-4 text-sm text-gray-500 hover:text-gray-700"
-      >
-        &larr; Back to orders
-      </button>
+    <div className="space-y-4">
+      <Link href="/orders" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors">
+        <ArrowLeft className="h-4 w-4" /> Back to orders
+      </Link>
 
       <div className="mb-6 flex items-center justify-between">
         <div>

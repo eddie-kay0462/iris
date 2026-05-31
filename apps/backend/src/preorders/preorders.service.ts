@@ -42,12 +42,17 @@ export class PreordersService {
 
     const { data: variant, error: varErr } = await db
       .from('product_variants')
-      .select('id, inventory_quantity, preorder_enabled, preorder_limit, sku, products(title)')
+      .select('id, inventory_quantity, preorder_enabled, preorder_limit, sku, price, products(title)')
       .eq('id', dto.item.variantId)
       .single();
 
     if (varErr || !variant) throw new BadRequestException('Variant not found');
     if (!variant.preorder_enabled) throw new BadRequestException('Pre-orders are not enabled for this item');
+
+    const expectedPrice = Number(variant.price);
+    if (Math.abs(expectedPrice - Number(dto.item.price)) > 0.01) {
+      throw new BadRequestException('Price mismatch. Please refresh and try again.');
+    }
 
     if (variant.preorder_limit !== null) {
       const { count } = await db
@@ -55,9 +60,19 @@ export class PreordersService {
         .select('*', { count: 'exact', head: true })
         .eq('variant_id', dto.item.variantId)
         .in('status', ['pending', 'stock_held']);
-      if ((count ?? 0) >= variant.preorder_limit) {
+      if ((count ?? 0) + dto.item.quantity > variant.preorder_limit) {
         throw new BadRequestException(`Pre-orders for this item are full (limit: ${variant.preorder_limit})`);
       }
+    }
+
+    const { count: customerCount } = await db
+      .from('preorders')
+      .select('*', { count: 'exact', head: true })
+      .eq('variant_id', dto.item.variantId)
+      .eq('user_id', userId)
+      .in('status', ['pending', 'stock_held']);
+    if ((customerCount ?? 0) > 0) {
+      throw new BadRequestException('You already have an active pre-order for this item.');
     }
 
     const { data: existingRef } = await db
@@ -81,7 +96,7 @@ export class PreordersService {
         product_name: productTitle,
         variant_title: dto.item.variantTitle ?? null,
         quantity: dto.item.quantity,
-        unit_price: dto.item.price,
+        unit_price: expectedPrice,
         payment_method: 'paystack',
         payment_reference: dto.paymentReference,
         payment_status: 'paid',
