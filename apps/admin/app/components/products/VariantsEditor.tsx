@@ -41,7 +41,20 @@ interface VariantsEditorProps {
 
 // Shared options
 const SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "XXL", "One Size"];
-const COLOR_OPTIONS = ["Black", "White", "Grey", "Navy", "Brown", "Beige", "Olive", "Red"];
+const COLOR_OPTIONS = [
+  // Blacks & greys
+  "Black", "Black and Pink", "Black-and-Pink", "Obsidian", "Charcoal", "Grey", "White", "Cream", "Off-White",
+  // Blues
+  "Navy", "Blue", "Cobalt", "Teal",
+  // Greens
+  "Olive", "Olive Grove", "Sage", "Forest Green",
+  // Browns & neutrals
+  "Brown", "Coffee-Brown", "Clay", "Camel", "Tan", "Beige", "Stone", "Khaki",
+  // Reds & pinks
+  "Red", "Burgundy", "Pink", "Coral",
+  // Warm tones
+  "Tangerine", "Mustard", "Yellow",
+];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -99,8 +112,15 @@ export function VariantsEditor({
     // 2. Color abbreviations
     if (color) {
       const cmap: Record<string, string> = {
-        Black: "BLK", White: "WHT", Grey: "GRY", Navy: "NVY", Brown: "BRN",
-        Beige: "BEI", Olive: "OLV", Red: "RED", Blue: "BLU", Green: "GRN"
+        Black: "BLK", "Black and Pink": "BKP", "Black-and-Pink": "BKP", Obsidian: "OBS", Charcoal: "CHA",
+        Grey: "GRY", White: "WHT", Cream: "CRM", "Off-White": "OFW",
+        Navy: "NVY", Blue: "BLU", Cobalt: "COB", Teal: "TEL",
+        Olive: "OLV", "Olive Grove": "OLG", Sage: "SGE", "Forest Green": "FGN",
+        Brown: "BRN", "Coffee-Brown": "CFB", Clay: "CLY",
+        Camel: "CML", Tan: "TAN", Beige: "BEI", Stone: "STN", Khaki: "KHK",
+        Red: "RED", Burgundy: "BRG", Pink: "PNK", Coral: "CRL",
+        Tangerine: "TNG", Mustard: "MUS", Yellow: "YLW",
+        Green: "GRN",
       };
       parts.push(cmap[color] || color.substring(0, 3).toUpperCase());
     }

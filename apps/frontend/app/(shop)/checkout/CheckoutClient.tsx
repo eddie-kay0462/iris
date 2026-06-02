@@ -14,6 +14,7 @@ import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
 import { useShippingOptions, DEFAULT_SHIPPING_OPTIONS } from "@/lib/api/settings";
 import { useValidatePromo, DiscountType } from "@/lib/api/promos";
 import { ChevronDown } from "lucide-react";
+import { useLocale } from "@/lib/locale/locale-provider";
 
 function generateReference() {
   const ts = Date.now();
@@ -126,6 +127,7 @@ function PayNowButton({
 export default function CheckoutClient() {
   const router = useRouter();
   const { items, subtotal, clearCart } = useCart();
+  const { currency, rates } = useLocale();
   const createOrder = useCreateOrder();
   const [isSignedIn, setIsSignedIn] = useState(false);
   useEffect(() => { setIsSignedIn(hasToken()); }, []);
@@ -751,6 +753,11 @@ export default function CheckoutClient() {
                 GH₵ {total.toLocaleString()}
               </span>
             </div>
+            {currency !== "GHS" && rates[currency] && (
+              <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+                Exchange rate: 1 {currency} = {(1 / rates[currency]).toFixed(2)} GH₵ · You will be charged GH₵ {total.toLocaleString()}
+              </p>
+            )}
           </div>
 
           {/* Delivery options */}

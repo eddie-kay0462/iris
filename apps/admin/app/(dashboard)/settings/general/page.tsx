@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Save, AlertCircle } from "lucide-react";
+import { Save, AlertCircle, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { useRevenueTarget, useUpdateRevenueTarget } from "@/lib/api/orders";
 import { useShippingOptions, useUpdateShippingOptions, ShippingOption } from "@/lib/api/settings";
 import { toast } from "sonner";
@@ -72,6 +73,9 @@ export default function GeneralSettingsPage() {
 
   return (
     <section className="space-y-6 max-w-4xl">
+      <Link href="/settings" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900 transition-colors">
+        <ArrowLeft className="h-4 w-4" /> Back to Settings
+      </Link>
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">General Settings</h1>
         <p className="text-sm text-slate-500">

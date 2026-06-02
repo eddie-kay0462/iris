@@ -7,6 +7,8 @@ import {
   useUpdateOrderStatus,
   type OrderStatusHistory,
 } from "@/lib/api/orders";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { StatusBadge } from "../../../components/StatusBadge";
 
 const STATUS_OPTIONS = [
@@ -73,14 +75,11 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
 
   return (
     <section className="space-y-6">
+      <Link href="/orders" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900 transition-colors">
+        <ArrowLeft className="h-4 w-4" /> Back to orders
+      </Link>
       <header className="flex items-center justify-between">
         <div>
-          <button
-            onClick={() => router.push("/orders")}
-            className="mb-2 text-sm text-slate-500 hover:text-slate-700"
-          >
-            &larr; Back to orders
-          </button>
           <h1 className="text-2xl font-semibold">{order.order_number}</h1>
           <div className="mt-1 flex items-center gap-3">
             <StatusBadge status={order.status} />

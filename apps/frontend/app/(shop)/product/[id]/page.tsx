@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useMemo, useCallback, useEffect } from "react";
+import { use, useState, useMemo, useCallback, useEffect, Suspense } from "react";
 import { useProduct, useProducts, type ProductVariant } from "@/lib/api/products";
 import { useCart } from "@/lib/cart";
 import {
@@ -13,7 +13,8 @@ import { ProductCard } from "../../components/ProductCard";
 import { createPreorder } from "@/lib/api/preorders";
 import { getToken } from "@/lib/api/client";
 import { useToggleFavourite } from "@/lib/favourites";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useLocale } from "@/lib/locale/locale-provider";
 import Link from "next/link";
 import {
   X,
@@ -110,7 +111,7 @@ function PreorderModal({
 }: PreorderModalProps) {
   const router = useRouter();
   const [quantity, setQuantity] = useState(1);
-  const [status, setStatus] = useState<"idle" | "paying" | "saving" | "success">("idle");
+  const [status, setStatus] = useState<"idle" | "paying" | "saving">("idle");
 
   useEffect(() => {
     if (document.getElementById("paystack-script")) return;
@@ -131,7 +132,15 @@ function PreorderModal({
       toast.error("Payment unavailable. Please try again.", { duration: 6000 });
       return;
     }
-    const email = "customer@1nri.com";
+    let email = "";
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      email = payload.email || "";
+    } catch { email = ""; }
+    if (!email) {
+      toast.error("Could not read your account email. Please log in again.");
+      return;
+    }
     setStatus("paying");
     window.PaystackPop.setup({
       key: pk,
@@ -142,11 +151,11 @@ function PreorderModal({
       callback: async (response) => {
         setStatus("saving");
         try {
-          await createPreorder({
+          const preorder = await createPreorder({
             item: { variantId, productTitle, variantTitle: variantTitle ?? undefined, quantity, price },
             paymentReference: response.reference,
           });
-          setStatus("success");
+          router.push(`/preorders/confirmation?order=${encodeURIComponent(preorder.order_number)}`);
         } catch {
           toast.error(
             "Payment received but we couldn't record your pre-order. Please contact support with your reference: " + response.reference,
@@ -169,68 +178,50 @@ function PreorderModal({
           <X className="h-5 w-5" />
         </button>
 
-        {status === "success" ? (
-          <div className="py-6 text-center">
-            <h2 className="text-lg font-bold text-black">Pre-order confirmed!</h2>
-            <p className="mt-2 text-sm text-[#59626E]">
-              We&apos;ll contact you as soon as stock is available.
-            </p>
+        <h2 className="mb-4 text-[13px] tracking-[0.18em] uppercase font-bold text-black">Pre-order</h2>
+
+        <div className="mb-4 bg-[#f4f3f1] p-3">
+          <p className="font-medium text-black">{productTitle}</p>
+          {variantTitle && <p className="mt-0.5 text-sm text-[#59626E]">{variantTitle}</p>}
+          <p className="mt-1 text-sm text-[#3B414A]">GH₵{price.toLocaleString()} each</p>
+        </div>
+
+        <div className="mb-4 flex items-center gap-3">
+          <span className="text-sm tracking-widest uppercase text-[#59626E]">Quantity</span>
+          <div className="flex items-center border border-black">
             <button
-              onClick={() => router.push("/preorders")}
-              className="mt-5 w-full bg-black py-2.5 text-sm font-bold text-white tracking-widest uppercase"
-              style={{ fontFamily: "Inter, sans-serif" }}
-            >
-              View my pre-orders
-            </button>
+              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+              className="px-3 py-1.5 text-gray-600 hover:bg-[#f4f3f1] transition-colors"
+            >−</button>
+            <span className="min-w-[2rem] text-center text-sm font-medium">{quantity}</span>
+            <button
+              onClick={() => setQuantity((q) => q + 1)}
+              className="px-3 py-1.5 text-gray-600 hover:bg-[#f4f3f1] transition-colors"
+            >+</button>
           </div>
-        ) : (
-          <>
-            <h2 className="mb-4 text-[13px] tracking-[0.18em] uppercase font-bold text-black">Pre-order</h2>
+        </div>
 
-            <div className="mb-4 bg-[#f4f3f1] p-3">
-              <p className="font-medium text-black">{productTitle}</p>
-              {variantTitle && <p className="mt-0.5 text-sm text-[#59626E]">{variantTitle}</p>}
-              <p className="mt-1 text-sm text-[#3B414A]">GH₵{price.toLocaleString()} each</p>
-            </div>
+        <div className="mb-5 flex items-center justify-between border-t border-black/10 pt-4">
+          <span className="text-[11px] tracking-widest uppercase text-[#59626E]">Total</span>
+          <span className="text-base font-bold text-black">GH₵{total.toLocaleString()}</span>
+        </div>
 
-            <div className="mb-4 flex items-center gap-3">
-              <span className="text-sm tracking-widest uppercase text-[#59626E]">Quantity</span>
-              <div className="flex items-center border border-black">
-                <button
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  className="px-3 py-1.5 text-gray-600 hover:bg-[#f4f3f1] transition-colors"
-                >−</button>
-                <span className="min-w-[2rem] text-center text-sm font-medium">{quantity}</span>
-                <button
-                  onClick={() => setQuantity((q) => q + 1)}
-                  className="px-3 py-1.5 text-gray-600 hover:bg-[#f4f3f1] transition-colors"
-                >+</button>
-              </div>
-            </div>
+        <button
+          onClick={handlePay}
+          disabled={status === "paying" || status === "saving"}
+          className="w-full bg-black py-3 text-[13px] tracking-[0.18em] uppercase font-bold text-white disabled:opacity-60"
+          style={{ fontFamily: "Inter, sans-serif" }}
+        >
+          {status === "paying"
+            ? "Opening payment…"
+            : status === "saving"
+              ? "Saving pre-order…"
+              : `Pay GH₵${total.toLocaleString()}`}
+        </button>
 
-            <div className="mb-5 flex items-center justify-between border-t border-black/10 pt-4">
-              <span className="text-[11px] tracking-widest uppercase text-[#59626E]">Total</span>
-              <span className="text-base font-bold text-black">GH₵{total.toLocaleString()}</span>
-            </div>
-
-            <button
-              onClick={handlePay}
-              disabled={status === "paying" || status === "saving"}
-              className="w-full bg-black py-3 text-[13px] tracking-[0.18em] uppercase font-bold text-white disabled:opacity-60"
-              style={{ fontFamily: "Inter, sans-serif" }}
-            >
-              {status === "paying"
-                ? "Opening payment…"
-                : status === "saving"
-                  ? "Saving pre-order…"
-                  : `Pay GH₵${total.toLocaleString()}`}
-            </button>
-
-            <p className="mt-3 text-center text-xs text-[#768293]">
-              Processed securely via Paystack. Your item is reserved once stock arrives.
-            </p>
-          </>
-        )}
+        <p className="mt-3 text-center text-xs text-[#768293]">
+          Processed securely via Paystack. Your item is reserved once stock arrives.
+        </p>
       </div>
     </div>
   );
@@ -401,6 +392,43 @@ function AccordionItem({
 
 type PageProps = { params: Promise<{ id: string }> };
 
+function ProductDetailPageInner({ id, initialColor }: { id: string; initialColor: string | null }) {
+  return <ProductDetailBody id={id} initialColor={initialColor} />;
+}
+
+function ProductDetailPageWrapper({ params }: PageProps) {
+  const { id } = use(params);
+  const searchParams = useSearchParams();
+  const initialColor = searchParams.get("color");
+  return <ProductDetailPageInner id={id} initialColor={initialColor} />;
+}
+
+export default function ProductDetailPage({ params }: PageProps) {
+  return (
+    <Suspense fallback={<ProductDetailSkeleton />}>
+      <ProductDetailPageWrapper params={params} />
+    </Suspense>
+  );
+}
+
+function ProductDetailSkeleton() {
+  return (
+    <div className="bg-white min-h-screen">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8">
+        <div className="grid gap-8 lg:gap-20 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
+          <div className="aspect-[4/5] animate-pulse bg-[#f4f3f1]" />
+          <div className="space-y-4 pt-6">
+            <div className="h-3 w-1/3 animate-pulse bg-[#f4f3f1]" />
+            <div className="h-8 w-3/4 animate-pulse bg-[#f4f3f1]" />
+            <div className="h-6 w-1/4 animate-pulse bg-[#f4f3f1]" />
+            <div className="h-24 animate-pulse bg-[#f4f3f1]" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function getOptionGroups(variants: ProductVariant[]) {
   const slots = [
     { nameKey: "option1_name", valueKey: "option1_value", slot: 1 },
@@ -425,14 +453,12 @@ function selectedFromVariant(variant: ProductVariant, groups: OptionSlot[]): Rec
   return sel;
 }
 
-const fmt = (n: number) =>
-  "GH₵" + n.toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ProductDetailPage({ params }: PageProps) {
-  const { id } = use(params);
+function ProductDetailBody({ id, initialColor }: { id: string; initialColor: string | null }) {
   const { data: product, isLoading, error } = useProduct(id);
+  const { formatPrice } = useLocale();
   const { addItem } = useCart();
   const { isFavourited, toggle: toggleFavourite } = useToggleFavourite(product?.id ?? "");
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
@@ -448,13 +474,16 @@ export default function ProductDetailPage({ params }: PageProps) {
     if (initialized || variants.length === 0) return;
     const groups = extractOptionGroups(variants);
     if (groups.length === 0) { setInitialized(true); return; }
-    // Auto-select non-size options (e.g. Color) so all colours show as available.
-    // Size is left unselected so the user picks it intentionally.
     const firstInStock = variants.find((v) => v.inventory_quantity > 0) || variants[0];
     const sel: Record<string, string> = {};
     for (const g of groups) {
       if (g.name.toLowerCase() === "size") continue;
       const key = g.slot === 1 ? "option1_value" : g.slot === 2 ? "option2_value" : "option3_value";
+      const isColorGroup = g.name.toLowerCase() === "color" || g.name.toLowerCase() === "colour";
+      if (isColorGroup && initialColor) {
+        const match = g.values.find((v) => v.toLowerCase() === initialColor.toLowerCase());
+        if (match) { sel[g.name] = match; continue; }
+      }
       const val = firstInStock[key];
       if (val) sel[g.name] = val;
     }
@@ -481,23 +510,7 @@ export default function ProductDetailPage({ params }: PageProps) {
     if (product) addRecentlyViewed(product);
   }, [product?.id]);
 
-  if (isLoading) {
-    return (
-      <div className="bg-white min-h-screen">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8">
-          <div className="grid gap-8 lg:gap-20 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
-            <div className="aspect-[4/5] animate-pulse bg-[#f4f3f1]" />
-            <div className="space-y-4 pt-6">
-              <div className="h-3 w-1/3 animate-pulse bg-[#f4f3f1]" />
-              <div className="h-8 w-3/4 animate-pulse bg-[#f4f3f1]" />
-              <div className="h-6 w-1/4 animate-pulse bg-[#f4f3f1]" />
-              <div className="h-24 animate-pulse bg-[#f4f3f1]" />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (isLoading) return <ProductDetailSkeleton />;
 
   if (error || !product) {
     return (
@@ -579,11 +592,11 @@ export default function ProductDetailPage({ params }: PageProps) {
           {/* Price */}
           <div className="flex items-baseline gap-3">
             {displayPrice != null && (
-              <span className="text-[22px] font-light">{fmt(displayPrice)}</span>
+              <span className="text-[22px] font-light">{formatPrice(displayPrice)}</span>
             )}
             {comparePrice != null && comparePrice > (displayPrice || 0) && (
               <>
-                <span className="text-base text-[#59626E] line-through">{fmt(comparePrice)}</span>
+                <span className="text-base text-[#59626E] line-through">{formatPrice(comparePrice)}</span>
                 <span className="text-[10px] tracking-[0.18em] uppercase px-2 py-[3px] bg-black text-[#F4F3F1]">
                   −{Math.round((1 - (displayPrice || 0) / comparePrice) * 100)}%
                 </span>
@@ -700,7 +713,7 @@ export default function ProductDetailPage({ params }: PageProps) {
                   : added
                     ? "Added to Cart"
                     : displayPrice != null
-                      ? `Add to Cart — ${fmt(displayPrice)}`
+                      ? `Add to Cart — ${formatPrice(displayPrice)}`
                       : "Add to Cart"}
               </button>
             )}

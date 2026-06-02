@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useCart } from "@/lib/cart";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useLocale } from "@/lib/locale/locale-provider";
 
 export default function CartPage() {
   const { items, subtotal, removeItem, updateQuantity } = useCart();
+  const { formatPrice } = useLocale();
 
   if (items.length === 0) {
     return (
@@ -103,7 +105,7 @@ export default function CartPage() {
 
                 {/* Price */}
                 <span className="font-medium text-gray-900 dark:text-white">
-                  GH₵{(item.price * item.quantity).toLocaleString()}
+                  {formatPrice(item.price * item.quantity)}
                 </span>
               </div>
             </div>
@@ -115,7 +117,7 @@ export default function CartPage() {
       <div className="mt-8 border-t border-gray-200 pt-6 dark:border-gray-800">
         <div className="flex items-center justify-between text-lg font-semibold text-gray-900 dark:text-white">
           <span>Subtotal</span>
-          <span>GH₵{subtotal.toLocaleString()}</span>
+          <span>{formatPrice(subtotal)}</span>
         </div>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           Shipping calculated at checkout.

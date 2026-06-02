@@ -3071,3 +3071,392 @@ Some flows already have sufficient visual feedback and don't need a toast on top
 | `apps/allies/app/onboarding/StepPhoto.tsx` | Error toasts |
 
 *Last updated: 2026-04-22*
+
+---
+
+## Storefront Navbar Redesign & UI Polish (May–June 2026)
+
+### What Got Done
+
+**Rebuilt the storefront header from scratch to match a cleaner editorial fashion aesthetic.**
+
+1. **Transparent homepage header** — On the homepage, the navbar has no background (transparent). As soon as you scroll, it snaps to a solid white (light mode) or dark (`gray-950`) background with a bottom border. On all other pages it's always solid. This is powered by a `scrolled` state that listens to the window scroll event.
+
+2. **Centered 1NRI logo** — The brand logo (`/homepage_img/no-bg-1NRI.png`) is absolutely centered in the navbar. It's white (CSS `brightness-0 invert`) when transparent on the homepage, and natural color otherwise. The logo renders at `h-8` (32px) with a minimum width so it never collapses.
+
+3. **Left nav links (desktop only)** — Three links in `text-xs font-medium uppercase tracking-widest`: "Road to HQ", "Shop", "About". Active link is black/white; inactive links are muted gray with a hover transition. Hidden on mobile.
+
+4. **Right icons** — In order: Locale/Currency selector (desktop only), Favourites (heart with count badge), User (avatar letter or icon), Cart (bag with count badge). Each has consistent `p-1 transition` styling and separate transparent/solid color states.
+
+5. **Mobile hamburger** — A `Menu`/`X` icon toggles a dropdown below the header. The dropdown always has a solid background even when the header above is transparent, so links are readable on any page background.
+
+6. **Dark/light toggle moved to footer** — The moon/sun theme toggle button is no longer in the header. It now sits in the footer's bottom bar, right-aligned next to the copyright line. The footer bottom bar became a `flex justify-between` layout instead of centered text.
+
+### Files Modified
+
+- `apps/frontend/app/(shop)/layout.tsx` — full `ShopHeader` rewrite, footer bottom bar updated
+
+---
+
+## ProductCard — Color Swatches & Color-Matched Navigation (May–June 2026)
+
+### What Got Done
+
+**Added color swatches to every product card, and wired the selected color through to the product detail page.**
+
+### Color Swatches on Cards
+
+Each product card now shows a row of small circular swatches (16×16px) below the product title. The swatches come from `color_tags` stored on product images — each distinct tag gets one swatch. Clicking a swatch:
+
+- Changes the card's displayed image to the first image tagged with that color
+- Highlights the swatch with a ring (`ring-1 ring-gray-900`)
+- On mouse leave, the image returns to the selected color's image (not image 0)
+
+The color name is converted to a hex value using `COLOR_HEX` — a lookup table with 150+ entries covering every fashion color you'd encounter: blacks, whites, grays, creams, tans, browns, blues (navy through powder), greens (forest through pistachio), reds, pinks, purples, yellows, oranges, and pattern labels like "camo". Colors not in the table get a consistent hue via `hashColor()` (deterministic hash → HSL), so swatches never appear blank.
+
+### Color Passed to the Product Detail Page
+
+The `Link` on the product card now appends `?color=<selectedColor>` to the URL when a color is selected:
+
+```
+/product/my-tee          ← no color selected (defaults to first in-stock)
+/product/my-tee?color=Black  ← card was showing Black colorway
+```
+
+### PDP Pre-Selects the Correct Color
+
+The product detail page reads the `color` URL param via `useSearchParams()`. In the initialization `useEffect`, before defaulting to the first in-stock variant, it checks if the color param matches any value in the color option group and pre-selects it. If the param doesn't match any option (e.g. a color name mismatch), it falls back to the default behavior gracefully.
+
+Since `useSearchParams()` requires Suspense in the Next.js App Router, the PDP was refactored:
+- `ProductDetailBody` — the main component, receives `id` and `initialColor` as props
+- `ProductDetailPageWrapper` — reads `use(params)` and `useSearchParams()`, passes both down
+- `ProductDetailPage` (exported default) — wraps everything in `<Suspense fallback={<ProductDetailSkeleton />}>`
+- `ProductDetailSkeleton` — extracted into its own function, used by both Suspense fallback and the data-loading state
+
+### Files Modified
+
+- `apps/frontend/app/(shop)/components/ProductCard.tsx` — `COLOR_HEX` map, `hashColor()`, color swatches UI, `?color=` URL param in Link
+- `apps/frontend/app/(shop)/product/[id]/page.tsx` — `useSearchParams`, Suspense wrapper, `initialColor` prop, pre-selection logic in `useEffect`
+
+---
+
+## Currency Selector, Region Indicator & Live Price Conversion (June 2026)
+
+### What Got Done
+
+**Added a region display and currency selector to the navbar (desktop/tablet only), plus live exchange rate conversion for all shop-facing prices.**
+
+### The Navbar Button
+
+On screens `md:` and wider, the right side of the navbar now has a new element before the other icons:
+
+```
+🇬🇭 GHANA (GH) · ₵ GHS ∨
+```
+
+Clicking it opens a dropdown with 7 currency options. The currently selected currency gets a light `bg-gray-100` highlight. Click outside or select a currency to close it.
+
+On mobile (`< md`), the button is `hidden` — the mobile layout is unchanged.
+
+### Region Detection (VPN-Resistant)
+
+Region is detected from `Intl.DateTimeFormat().resolvedOptions().timeZone` — the operating system's timezone. This is configured at the OS level and is **not changed by VPN software**, making it considerably more stable than IP-based geolocation. No API call needed; it's instant and works offline.
+
+A lookup table maps ~25 common timezones to `{ country, countryCode, flag }`:
+
+```
+Africa/Accra        → 🇬🇭 Ghana (GH)
+Africa/Lagos        → 🇳🇬 Nigeria (NG)
+Europe/London       → 🇬🇧 United Kingdom (GB)
+America/New_York    → 🇺🇸 United States (US)
+America/Toronto     → 🇨🇦 Canada (CA)
+Australia/Sydney    → 🇦🇺 Australia (AU)
+Asia/Dubai          → 🇦🇪 UAE (AE)
+... and ~18 more
+```
+
+Unknown or unmapped timezones fall back to `🌐 Global`.
+
+**Tradeoff:** A user who manually changed their system timezone (very rare) or who travels without updating their timezone gets a "wrong" region label. This is acceptable — the region display is informational only, and the user always controls the currency they see via the dropdown.
+
+### Supported Currencies
+
+| Code | Name              | Symbol |
+|------|-------------------|--------|
+| GHS  | Ghana Cedi        | ₵      |
+| USD  | US Dollar         | $      |
+| EUR  | Euro              | €      |
+| GBP  | British Pound     | £      |
+| NGN  | Nigerian Naira    | ₦      |
+| AUD  | Australian Dollar | A$     |
+| CAD  | Canadian Dollar   | C$     |
+
+### Live Exchange Rates
+
+Exchange rates are fetched from `https://open.er-api.com/v6/latest/GHS` (free tier, no API key needed). The response gives rates relative to GHS, e.g. `{ "USD": 0.067, "EUR": 0.062, ... }`.
+
+To avoid hammering the API on every page load, rates are cached in `localStorage` under `iris_fx_rates` as `{ rates: {...}, ts: Date.now() }`. The cache is valid for 1 hour. If the API is offline, prices simply display in GHS (no error shown to the user).
+
+### `formatPrice(ghsAmount)` — The Conversion Function
+
+All product prices in the database are stored as raw GHS amounts (e.g. `450` = GH₵450.00). The `LocaleProvider` context exposes a `formatPrice(ghsAmount: number): string` function:
+
+```
+GHS selected:  ₵450.00
+USD selected:  $30.15  (450 × 0.067)
+EUR selected:  €27.90  (450 × 0.062)
+```
+
+Always formats to 2 decimal places with the currency symbol prepended.
+
+### What Gets Converted
+
+| Page | Converts? |
+|------|-----------|
+| Product listing cards (`/products`) | ✅ Yes |
+| Product detail page (`/product/:id`) — display + compare price, button label | ✅ Yes |
+| Cart page — item totals, subtotal | ✅ Yes |
+| Checkout — prices, totals | ❌ No (Paystack charges in GHS) |
+| Checkout — exchange rate note | ✅ Shown when non-GHS selected |
+| Dashboard / order history | ❌ No (historical GHS amounts) |
+
+The checkout note appears below the total line when a non-GHS currency is active:
+
+> _Exchange rate: 1 USD = 14.95 GH₵ · You will be charged GH₵ 450_
+
+### Persistence
+
+The selected currency is saved to `localStorage` under `iris_currency` (defaults to `"GHS"`). It survives page refresh and browser restart.
+
+### New File
+
+- `apps/frontend/lib/locale/locale-provider.tsx` — exports `LocaleProvider`, `useLocale()`, `CURRENCIES`
+
+### Provider Wrapping
+
+`ShopLayout` now uses:
+
+```tsx
+<ThemeProvider>
+  <LocaleProvider>       ← NEW
+    <CartProvider>
+      <ShopLayoutInner>…</ShopLayoutInner>
+    </CartProvider>
+  </LocaleProvider>
+</ThemeProvider>
+```
+
+### Files Modified
+
+- `apps/frontend/lib/locale/locale-provider.tsx` — **new file**
+- `apps/frontend/app/(shop)/layout.tsx` — `LocaleProvider` wrap, `LocaleSelectorButton` component
+- `apps/frontend/app/(shop)/components/ProductCard.tsx` — `useLocale().formatPrice()`
+- `apps/frontend/app/(shop)/product/[id]/page.tsx` — replaced local `fmt()` with `useLocale().formatPrice()`
+- `apps/frontend/app/(shop)/cart/page.tsx` — `useLocale().formatPrice()`
+- `apps/frontend/app/(shop)/checkout/CheckoutClient.tsx` — exchange rate note
+
+---
+
+## Product Detail Page Upgrades (May–June 2026)
+
+### What Got Done
+
+**Several quality-of-life upgrades to the product detail page that ship together.**
+
+### Gallery with Color-Based Image Filtering
+
+The `PDPGallery` component now filters the image set based on the currently selected color option. Rules:
+
+- Images with `color_tags` matching the selected color → shown
+- Images with empty `color_tags` → always shown (lifestyle/shared shots)
+- Images tagged for other colors → hidden
+
+This means switching from "Black" to "Navy" immediately shows the Navy colorway images and hides the Black ones, while any untagged brand/lifestyle shots stay visible throughout.
+
+If no images have any tags at all (product hasn't been tagged yet), the full image set is shown — so untagged products still work correctly.
+
+The gallery has two layouts: a vertical thumbnail strip on desktop (`lg:grid-cols-[64px_1fr]`) and mobile dot indicators. Navigation arrows are shown when there's more than one image. An image counter (`01 / 05`) is overlaid in the bottom-left of the main image.
+
+### Recently Viewed
+
+When you open any product page, `addRecentlyViewed(product)` is called. This stores the product in `localStorage` under `iris_recently_viewed`, keeping a max of 8 most-recent products and deduplicating by ID.
+
+At the bottom of the PDP, a "Recently Viewed" section shows up to 5 `ProductCard` components from the recently viewed list, excluding the current product. This section only renders if there are any recently viewed products.
+
+### Favourites Toggle
+
+The PDP has a "Save to Favourites" button below the add-to-cart CTA. It uses `useToggleFavourite(productId)`:
+
+- Heart icon fills when the product is saved
+- Button label switches between "Save to Favourites" and "Saved"
+- If not logged in, clicking redirects to `/login`
+- Optimistic update — heart fills immediately while the API call is in flight
+
+### Preorder Modal with Paystack Inline
+
+When a product variant has `preorder_enabled = true`, the add-to-cart button is replaced by "Pre-order Now". Clicking opens a full-screen modal overlay:
+
+- Product title + variant name + unit price
+- Quantity picker (±1 buttons, minimum 1)
+- Running total
+- "Pay GH₵{total}" button that triggers Paystack inline (not the hosted page)
+
+The modal loads the Paystack script dynamically on mount so it doesn't slow down the initial page load. On successful payment, a preorder record is created via `POST /preorders` and the user is redirected to `/preorders/confirmation?order={orderNumber}`.
+
+Note: the preorder modal always displays in GHS regardless of the selected currency — Paystack processes in GHS and we want no ambiguity about what the customer is actually being charged.
+
+### You May Also Like
+
+Uses `useSimilarProducts(product.handle, 6)`. If the recommender is running, shows 5 similar products in a grid. Falls back to the 5 most recently added products via `useProducts({ limit: 8, sort_by: "created_at", sort_order: "desc" })` when the recommender is offline or returns nothing.
+
+### Files Modified
+
+- `apps/frontend/app/(shop)/product/[id]/page.tsx` — gallery, recently viewed, favourites, preorder modal, similar products
+- `apps/frontend/lib/recently-viewed.ts` — `addRecentlyViewed()`, `useRecentlyViewed()` hook
+- `apps/frontend/lib/favourites.ts` — `useToggleFavourite()`, `useFavourites()`
+
+---
+
+## Image Loading Performance Improvements (May 2026)
+
+### What Got Done
+
+**Two targeted changes to make product images load faster and look better.**
+
+1. **Lazy loading on product cards** — `ProductCard` images use `loading="lazy"`. The browser defers fetching off-screen images until the user scrolls toward them. On a typical products page with 16+ cards, only the images in the initial viewport load immediately. This significantly reduces the initial network load.
+
+2. **`object-top` crop alignment** — All product images use `object-cover object-top`. Portrait product shots (models, flatlay) have the subject near the top. `object-top` makes sure the face or key product detail isn't cropped away when the image is fitted into the card's `3:4` aspect ratio.
+
+3. **Hover prefetch on product cards** — When the user hovers a product card, `queryClient.prefetchQuery` fires for that product's detail API call (`/products/:handle`). By the time they click and the product detail page mounts, the data is already in the React Query cache — so the PDP often renders instantly with no loading spinner.
+
+4. **Onboarding flow images** — The allies/admin onboarding flows also had their image loading tuned separately around the same time.
+
+### Files Modified
+
+- `apps/frontend/app/(shop)/components/ProductCard.tsx` — `loading="lazy"`, `object-top`, `prefetchQuery` on `mouseEnter`
+
+---
+
+*Last updated: 2026-06-02*
+
+---
+
+## Storefront Navbar — Icon Tweaks & Hover Animations (June 2026)
+
+### What Got Done
+
+**Three small but visible improvements to the right-side navbar icons.**
+
+1. **Icon order** — Cart (shopping bag) now comes before User (person icon). Order is: Locale selector → Search → Favourites → Cart → User.
+
+2. **Hover animations** — Each icon has its own micro-animation on hover so the navbar feels more responsive:
+   - **Heart (Favourites)** — scales up 110% and tilts −6°
+   - **Shopping Bag (Cart)** — scales up 110% and lifts slightly (`-translate-y-0.5`)
+   - **User / Avatar** — scales up 110%
+   - **Search** — scales up 110%
+   - All use `transition-transform duration-200` so they're snappy, not sluggish
+
+3. **Mobile icon sizing** — On small screens all four icons shrink from 18px to 16px and the gap between them tightens from `gap-4` to `gap-2`. At `md:` and above everything returns to the original 18px / `gap-4`. The `LocaleSelectorButton` was already `hidden md:flex` so it never affected mobile.
+
+### Files Modified
+
+- `apps/frontend/app/(shop)/layout.tsx` — icon order, hover classes, responsive sizing
+
+---
+
+## Spotlight-Style Search (June 2026)
+
+### What Got Done
+
+**Restored the search icon to the navbar and completely redesigned the search experience to match macOS Spotlight.**
+
+### The Search Icon
+
+A magnifying glass icon sits in the right icon group (between Locale selector and Favourites). Same hover scale animation as the other icons. Opens the search overlay on click, or via **⌘K** / **Ctrl+K** from anywhere on the page.
+
+### The Overlay
+
+Instead of a small modal pinned to the top of the page, search now opens a centred panel that appears ~18% from the top — the same vertical position macOS Spotlight uses. The rest of the screen dims with a `backdrop-blur-md` overlay.
+
+**Design details:**
+
+- `max-w-[600px]` rounded `2xl` container with a deep shadow (`0 32px 80px rgba(0,0,0,0.25)`)
+- Large `17px` input with a prominent search icon — no internal borders, just one clean field
+- When the query is empty, a **Quick Access** section lists 5 category shortcuts: Shop All, Tops, Bottoms, Accessories, Footwear. Each has a small icon chip and an `→` hint.
+- When typing, the quick links are replaced by a single **"Search for '…'"** row with a description and `↵` hint
+- A clear button (`×`) appears inside the input while there's text; an `ESC` pill shows when the field is empty
+- Footer bar shows keyboard hints: `↑↓` navigate · `esc` close
+- Full dark mode support (`dark:bg-[#1c1c1e]`)
+
+### Keyboard shortcut
+
+`⌘K` / `Ctrl+K` is wired as a global `keydown` listener inside `ShopHeader`. It fires `setSearchOpen(true)` from anywhere — doesn't interfere with browser defaults since `e.preventDefault()` is called only when both modifier + K are pressed.
+
+### Files Modified
+
+- `apps/frontend/app/(shop)/layout.tsx` — `SearchOverlay` full rewrite, `QUICK_LINKS` constant, ⌘K global listener, search icon in right icons
+
+---
+
+## Search & Filter Bug Fixes (June 2026)
+
+### What Got Done
+
+**Fixed three bugs that caused search and category filters to silently do nothing.**
+
+### Bug 1 — Stale state when navigating to `/products` from within the same session
+
+`ProductCatalogContent` initialises its `search`, `category`, and `productType` states from `useSearchParams()` via `useState(initialValue)`. `useState` only runs once on mount — if the user was already on `/products` and then navigated to `/products?search=hoodie` (via the search overlay), the URL updated but the component didn't remount, so the state stayed at the old value.
+
+**Fix:** Added a `useEffect` that watches `searchParams` and syncs all three states when the URL changes:
+
+```ts
+useEffect(() => {
+  setSearch(searchParams.get("search") || "");
+  setCategory(searchParams.get("category") || "");
+  setProductType(searchParams.get("product_type") || "");
+}, [searchParams]);
+```
+
+### Bug 2 — Category case mismatch
+
+The search overlay quick links were sending `?category=tops` (lowercase) but `ProductFilters` and the API both expect `"Tops"` (capitalised). The filter tabs would never highlight, and the API query would receive the wrong value.
+
+**Fix:** All quick links now use properly capitalised values (`?category=Tops`, `?category=Bottoms`, etc.).
+
+### Bug 3 — `?tag=new` was silently ignored
+
+The "New Arrivals" quick link was using `?tag=new`. The products page never reads a `tag` URL param, so clicking it just loaded `/products` with no filter applied. Replaced with a working "Footwear" category link.
+
+### Files Modified
+
+- `apps/frontend/app/(shop)/products/page.tsx` — added `useEffect` URL sync, added `useRouter` import
+- `apps/frontend/app/(shop)/layout.tsx` — fixed `QUICK_LINKS` (capitalised categories, replaced broken tag link)
+
+---
+
+## Clear All Filters (June 2026)
+
+### What Got Done
+
+**Added active filter chips and a "Clear all" button to the product catalogue.**
+
+When any filter is active (search query, category, subcategory, gender, or a non-default sort), a new row of chips appears between the category tabs and the subcategory pills. Each chip shows what's currently filtered and has its own `×` to remove just that one filter. A "Clear all" underline link at the end resets everything at once.
+
+**Chip types:**
+
+| Filter | Example chip |
+|---|---|
+| Search query | 🔍 "hoodie" × |
+| Category | Tops × |
+| Subcategory / product type | T-Shirts × |
+| Gender | Men's × |
+
+**"Clear all"** resets all five filter states (`gender`, `sort`, `search`, `category`, `productType`) back to their defaults and calls `router.replace("/products")` to also clean the URL — so if the user refreshes the page after clearing, they still get the default view rather than a stale search URL.
+
+The chip row only renders when `hasActiveFilters` is true, so on a fresh unfiltered browse it's completely invisible.
+
+### Files Modified
+
+- `apps/frontend/app/(shop)/components/ProductFilters.tsx` — added `onClearAll` prop, `hasActiveFilters` computed value, chip row UI
+- `apps/frontend/app/(shop)/products/page.tsx` — added `handleClearAll` callback (`useCallback`), passes it as `onClearAll` to `ProductFilters`

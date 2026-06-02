@@ -50,7 +50,7 @@ export function InfiniteProductGrid({
 
     if (isLoading) {
         return (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-x-0.5 gap-y-10 sm:grid-cols-3 lg:grid-cols-4">
                 {Array.from({ length: 8 }).map((_, i) => (
                     <div key={i} className="space-y-3">
                         <div className="aspect-[3/4] animate-pulse bg-gray-100 dark:bg-gray-800" />
@@ -82,7 +82,7 @@ export function InfiniteProductGrid({
 
     return (
         <>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-x-0.5 gap-y-10 sm:grid-cols-3 lg:grid-cols-4">
                 {products.map((product) => (
                     <ProductCard key={product.id} product={product} />
                 ))}
