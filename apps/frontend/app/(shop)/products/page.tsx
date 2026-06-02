@@ -1,23 +1,38 @@
 "use client";
 
 import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { InfiniteProductGrid } from "../components/InfiniteProductGrid";
 import { ProductFilters } from "../components/ProductFilters";
 import { PersonalisedStrip } from "../components/PersonalisedStrip";
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 function ProductCatalogContent() {
   const searchParams = useSearchParams();
-  const initialSearch = searchParams.get("search") || "";
-  const initialCategory = searchParams.get("category") || "";
-  const initialProductType = searchParams.get("product_type") || "";
+  const router = useRouter();
 
   const [gender, setGender] = useState("");
   const [sort, setSort] = useState("created_at:desc");
-  const [search, setSearch] = useState(initialSearch);
-  const [category, setCategory] = useState(initialCategory);
-  const [productType, setProductType] = useState(initialProductType);
+  const [search, setSearch] = useState(searchParams.get("search") || "");
+  const [category, setCategory] = useState(searchParams.get("category") || "");
+  const [productType, setProductType] = useState(searchParams.get("product_type") || "");
+
+  // Sync URL params → state whenever the URL changes (e.g. searching from the navbar
+  // while already on this page doesn't remount the component, only re-renders it)
+  useEffect(() => {
+    setSearch(searchParams.get("search") || "");
+    setCategory(searchParams.get("category") || "");
+    setProductType(searchParams.get("product_type") || "");
+  }, [searchParams]);
+
+  const handleClearAll = useCallback(() => {
+    setGender("");
+    setSort("created_at:desc");
+    setSearch("");
+    setCategory("");
+    setProductType("");
+    router.replace("/products");
+  }, [router]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
@@ -44,6 +59,7 @@ function ProductCatalogContent() {
             setProductType("");
           }}
           onProductTypeChange={setProductType}
+          onClearAll={handleClearAll}
         />
       </div>
 

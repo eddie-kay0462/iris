@@ -59,7 +59,7 @@ function FavouritesLink({ isTransparent = false }: { isTransparent?: boolean }) 
           : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
       }`}
     >
-      <Heart className="h-[18px] w-[18px] transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-6" strokeWidth={1.5} />
+      <Heart className="h-[16px] w-[16px] md:h-[18px] md:w-[18px] transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-6" strokeWidth={1.5} />
       {count > 0 && (
         <span className={`absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${
           isTransparent
@@ -84,7 +84,7 @@ function CartLink({ isTransparent = false }: { isTransparent?: boolean }) {
           : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
       }`}
     >
-      <ShoppingBag className="h-[18px] w-[18px] transition-transform duration-200 group-hover:scale-110 group-hover:-translate-y-0.5" strokeWidth={1.5} />
+      <ShoppingBag className="h-[16px] w-[16px] md:h-[18px] md:w-[18px] transition-transform duration-200 group-hover:scale-110 group-hover:-translate-y-0.5" strokeWidth={1.5} />
       {itemCount > 0 && (
         <span className={`absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${
           isTransparent
@@ -144,11 +144,19 @@ function UserLink({ isTransparent = false }: { isTransparent?: boolean }) {
           {avatarLetter}
         </span>
       ) : (
-        <User className="h-[18px] w-[18px] transition-transform duration-200 group-hover:scale-110" strokeWidth={1.5} />
+        <User className="h-[16px] w-[16px] md:h-[18px] md:w-[18px] transition-transform duration-200 group-hover:scale-110" strokeWidth={1.5} />
       )}
     </button>
   );
 }
+
+const QUICK_LINKS = [
+  { label: "Shop All",    href: "/products" },
+  { label: "Tops",        href: "/products?category=Tops" },
+  { label: "Bottoms",     href: "/products?category=Bottoms" },
+  { label: "Accessories", href: "/products?category=Accessories" },
+  { label: "Footwear",    href: "/products?category=Footwear" },
+];
 
 function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
@@ -157,7 +165,7 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
 
   useEffect(() => {
     if (open) {
-      inputRef.current?.focus();
+      setTimeout(() => inputRef.current?.focus(), 10);
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
@@ -181,35 +189,107 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
     onClose();
   }
 
+  function handleQuickLink(href: string) {
+    router.push(href);
+    onClose();
+  }
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 pt-[18vh]"
+      onClick={onClose}
+    >
       <div
-        className="mt-24 w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl dark:bg-gray-900"
+        className="w-full max-w-[600px] mx-4 overflow-hidden rounded-2xl bg-white shadow-[0_32px_80px_rgba(0,0,0,0.25)] dark:bg-[#1c1c1e] dark:shadow-[0_32px_80px_rgba(0,0,0,0.6)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <form
-          onSubmit={(e) => { e.preventDefault(); submit(); }}
-          className="flex items-center gap-3"
-        >
-          <Search className="h-5 w-5 shrink-0 text-gray-400" strokeWidth={1.5} />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search products..."
-            className="flex-1 bg-transparent text-base text-gray-900 outline-none placeholder:text-gray-400 dark:text-white dark:placeholder:text-gray-500"
-          />
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-          >
-            ESC
-          </button>
+        {/* Search input row */}
+        <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
+          <div className="flex items-center gap-3 px-5 py-4">
+            <Search className="h-5 w-5 shrink-0 text-gray-400 dark:text-gray-500" strokeWidth={2} />
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search products…"
+              className="flex-1 bg-transparent text-[17px] text-gray-900 outline-none placeholder:text-gray-400 dark:text-white dark:placeholder:text-gray-500"
+            />
+            {query ? (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-300 text-gray-600 transition hover:bg-gray-400 dark:bg-gray-600 dark:text-gray-300"
+              >
+                <X className="h-3 w-3" strokeWidth={2.5} />
+              </button>
+            ) : (
+              <kbd className="hidden select-none items-center gap-0.5 rounded border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-500 sm:flex dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+                ESC
+              </kbd>
+            )}
+          </div>
         </form>
+
+        {/* Divider */}
+        <div className="h-px bg-gray-100 dark:bg-gray-700/60" />
+
+        {/* Body */}
+        <div className="max-h-[340px] overflow-y-auto">
+          {query.trim() ? (
+            /* Search suggestion row */
+            <button
+              onClick={submit}
+              className="flex w-full items-center gap-3.5 px-5 py-3.5 text-left transition hover:bg-gray-50 dark:hover:bg-white/5"
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800">
+                <Search className="h-4 w-4 text-gray-500 dark:text-gray-400" strokeWidth={1.8} />
+              </span>
+              <div>
+                <p className="text-[14px] text-gray-900 dark:text-white">
+                  Search for <span className="font-semibold">"{query.trim()}"</span>
+                </p>
+                <p className="text-[12px] text-gray-400 dark:text-gray-500">Browse all matching products</p>
+              </div>
+              <span className="ml-auto text-[11px] text-gray-300 dark:text-gray-600">↵</span>
+            </button>
+          ) : (
+            /* Quick links */
+            <div className="px-5 pb-4 pt-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+                Quick Access
+              </p>
+              <div className="space-y-0.5">
+                {QUICK_LINKS.map((link) => (
+                  <button
+                    key={link.href}
+                    onClick={() => handleQuickLink(link.href)}
+                    className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-gray-50 dark:hover:bg-white/5"
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-100 dark:bg-gray-800">
+                      <Search className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500" strokeWidth={1.8} />
+                    </span>
+                    <span className="text-[14px] text-gray-700 dark:text-gray-300">{link.label}</span>
+                    <span className="ml-auto text-[11px] text-gray-300 dark:text-gray-600">→</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer hint */}
+        <div className="flex items-center justify-between border-t border-gray-100 px-5 py-2.5 dark:border-gray-700/60">
+          <span className="text-[11px] text-gray-400 dark:text-gray-500">
+            {query.trim() ? "Press ↵ to search" : "Start typing to search"}
+          </span>
+          <div className="flex items-center gap-3 text-[11px] text-gray-300 dark:text-gray-600">
+            <span className="flex items-center gap-1"><kbd className="rounded border border-gray-200 bg-gray-50 px-1 dark:border-gray-700 dark:bg-gray-800">↑</kbd><kbd className="rounded border border-gray-200 bg-gray-50 px-1 dark:border-gray-700 dark:bg-gray-800">↓</kbd> navigate</span>
+            <span className="flex items-center gap-1"><kbd className="rounded border border-gray-200 bg-gray-50 px-1 dark:border-gray-700 dark:bg-gray-800">esc</kbd> close</span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -295,6 +375,17 @@ function ShopHeader() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   function isActive(href: string) {
     if (href.includes("?")) return false;
     return pathname === href || pathname.startsWith(href + "/");
@@ -364,8 +455,19 @@ function ShopHeader() {
         </Link>
 
         {/* Right icons */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
           <LocaleSelectorButton isTransparent={isTransparentWhite} />
+          <button
+            onClick={() => setSearchOpen(true)}
+            aria-label="Search"
+            className={`group p-1 transition ${
+              isTransparentWhite
+                ? "text-white/80 hover:text-white"
+                : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
+            }`}
+          >
+            <Search className="h-[16px] w-[16px] md:h-[18px] md:w-[18px] transition-transform duration-200 group-hover:scale-110" strokeWidth={1.5} />
+          </button>
           <FavouritesLink isTransparent={isTransparentWhite} />
           <CartLink isTransparent={isTransparentWhite} />
           <UserLink isTransparent={isTransparentWhite} />

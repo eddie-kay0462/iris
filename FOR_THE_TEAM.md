@@ -3338,3 +3338,125 @@ Uses `useSimilarProducts(product.handle, 6)`. If the recommender is running, sho
 ---
 
 *Last updated: 2026-06-02*
+
+---
+
+## Storefront Navbar — Icon Tweaks & Hover Animations (June 2026)
+
+### What Got Done
+
+**Three small but visible improvements to the right-side navbar icons.**
+
+1. **Icon order** — Cart (shopping bag) now comes before User (person icon). Order is: Locale selector → Search → Favourites → Cart → User.
+
+2. **Hover animations** — Each icon has its own micro-animation on hover so the navbar feels more responsive:
+   - **Heart (Favourites)** — scales up 110% and tilts −6°
+   - **Shopping Bag (Cart)** — scales up 110% and lifts slightly (`-translate-y-0.5`)
+   - **User / Avatar** — scales up 110%
+   - **Search** — scales up 110%
+   - All use `transition-transform duration-200` so they're snappy, not sluggish
+
+3. **Mobile icon sizing** — On small screens all four icons shrink from 18px to 16px and the gap between them tightens from `gap-4` to `gap-2`. At `md:` and above everything returns to the original 18px / `gap-4`. The `LocaleSelectorButton` was already `hidden md:flex` so it never affected mobile.
+
+### Files Modified
+
+- `apps/frontend/app/(shop)/layout.tsx` — icon order, hover classes, responsive sizing
+
+---
+
+## Spotlight-Style Search (June 2026)
+
+### What Got Done
+
+**Restored the search icon to the navbar and completely redesigned the search experience to match macOS Spotlight.**
+
+### The Search Icon
+
+A magnifying glass icon sits in the right icon group (between Locale selector and Favourites). Same hover scale animation as the other icons. Opens the search overlay on click, or via **⌘K** / **Ctrl+K** from anywhere on the page.
+
+### The Overlay
+
+Instead of a small modal pinned to the top of the page, search now opens a centred panel that appears ~18% from the top — the same vertical position macOS Spotlight uses. The rest of the screen dims with a `backdrop-blur-md` overlay.
+
+**Design details:**
+
+- `max-w-[600px]` rounded `2xl` container with a deep shadow (`0 32px 80px rgba(0,0,0,0.25)`)
+- Large `17px` input with a prominent search icon — no internal borders, just one clean field
+- When the query is empty, a **Quick Access** section lists 5 category shortcuts: Shop All, Tops, Bottoms, Accessories, Footwear. Each has a small icon chip and an `→` hint.
+- When typing, the quick links are replaced by a single **"Search for '…'"** row with a description and `↵` hint
+- A clear button (`×`) appears inside the input while there's text; an `ESC` pill shows when the field is empty
+- Footer bar shows keyboard hints: `↑↓` navigate · `esc` close
+- Full dark mode support (`dark:bg-[#1c1c1e]`)
+
+### Keyboard shortcut
+
+`⌘K` / `Ctrl+K` is wired as a global `keydown` listener inside `ShopHeader`. It fires `setSearchOpen(true)` from anywhere — doesn't interfere with browser defaults since `e.preventDefault()` is called only when both modifier + K are pressed.
+
+### Files Modified
+
+- `apps/frontend/app/(shop)/layout.tsx` — `SearchOverlay` full rewrite, `QUICK_LINKS` constant, ⌘K global listener, search icon in right icons
+
+---
+
+## Search & Filter Bug Fixes (June 2026)
+
+### What Got Done
+
+**Fixed three bugs that caused search and category filters to silently do nothing.**
+
+### Bug 1 — Stale state when navigating to `/products` from within the same session
+
+`ProductCatalogContent` initialises its `search`, `category`, and `productType` states from `useSearchParams()` via `useState(initialValue)`. `useState` only runs once on mount — if the user was already on `/products` and then navigated to `/products?search=hoodie` (via the search overlay), the URL updated but the component didn't remount, so the state stayed at the old value.
+
+**Fix:** Added a `useEffect` that watches `searchParams` and syncs all three states when the URL changes:
+
+```ts
+useEffect(() => {
+  setSearch(searchParams.get("search") || "");
+  setCategory(searchParams.get("category") || "");
+  setProductType(searchParams.get("product_type") || "");
+}, [searchParams]);
+```
+
+### Bug 2 — Category case mismatch
+
+The search overlay quick links were sending `?category=tops` (lowercase) but `ProductFilters` and the API both expect `"Tops"` (capitalised). The filter tabs would never highlight, and the API query would receive the wrong value.
+
+**Fix:** All quick links now use properly capitalised values (`?category=Tops`, `?category=Bottoms`, etc.).
+
+### Bug 3 — `?tag=new` was silently ignored
+
+The "New Arrivals" quick link was using `?tag=new`. The products page never reads a `tag` URL param, so clicking it just loaded `/products` with no filter applied. Replaced with a working "Footwear" category link.
+
+### Files Modified
+
+- `apps/frontend/app/(shop)/products/page.tsx` — added `useEffect` URL sync, added `useRouter` import
+- `apps/frontend/app/(shop)/layout.tsx` — fixed `QUICK_LINKS` (capitalised categories, replaced broken tag link)
+
+---
+
+## Clear All Filters (June 2026)
+
+### What Got Done
+
+**Added active filter chips and a "Clear all" button to the product catalogue.**
+
+When any filter is active (search query, category, subcategory, gender, or a non-default sort), a new row of chips appears between the category tabs and the subcategory pills. Each chip shows what's currently filtered and has its own `×` to remove just that one filter. A "Clear all" underline link at the end resets everything at once.
+
+**Chip types:**
+
+| Filter | Example chip |
+|---|---|
+| Search query | 🔍 "hoodie" × |
+| Category | Tops × |
+| Subcategory / product type | T-Shirts × |
+| Gender | Men's × |
+
+**"Clear all"** resets all five filter states (`gender`, `sort`, `search`, `category`, `productType`) back to their defaults and calls `router.replace("/products")` to also clean the URL — so if the user refreshes the page after clearing, they still get the default view rather than a stale search URL.
+
+The chip row only renders when `hasActiveFilters` is true, so on a fresh unfiltered browse it's completely invisible.
+
+### Files Modified
+
+- `apps/frontend/app/(shop)/components/ProductFilters.tsx` — added `onClearAll` prop, `hasActiveFilters` computed value, chip row UI
+- `apps/frontend/app/(shop)/products/page.tsx` — added `handleClearAll` callback (`useCallback`), passes it as `onClearAll` to `ProductFilters`

@@ -11,6 +11,7 @@ interface ProductFiltersProps {
   onSearchChange: (search: string) => void;
   onCategoryChange: (category: string) => void;
   onProductTypeChange: (productType: string) => void;
+  onClearAll: () => void;
 }
 
 const genderTabs = [
@@ -58,8 +59,15 @@ export function ProductFilters({
   onSearchChange,
   onCategoryChange,
   onProductTypeChange,
+  onClearAll,
 }: ProductFiltersProps) {
   const subcategories = category ? subcategoryMap[category] ?? [] : [];
+  const hasActiveFilters =
+    search !== "" ||
+    category !== "" ||
+    productType !== "" ||
+    gender !== "" ||
+    sort !== "created_at:desc";
 
   return (
     <div className="space-y-6">
@@ -125,6 +133,43 @@ export function ProductFilters({
           <option value="title:asc">A to Z</option>
         </select>
       </div>
+
+      {/* Active filter chips + clear all */}
+      {hasActiveFilters && (
+        <div className="flex flex-wrap items-center gap-2">
+          {search && (
+            <span className="flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-50 px-3 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+              <svg className="h-3 w-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35" strokeLinecap="round"/></svg>
+              "{search}"
+              <button onClick={() => onSearchChange("")} className="ml-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">×</button>
+            </span>
+          )}
+          {category && (
+            <span className="flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-50 px-3 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+              {category}
+              <button onClick={() => { onCategoryChange(""); onProductTypeChange(""); }} className="ml-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">×</button>
+            </span>
+          )}
+          {productType && (
+            <span className="flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-50 px-3 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+              {productType}
+              <button onClick={() => onProductTypeChange("")} className="ml-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">×</button>
+            </span>
+          )}
+          {gender && (
+            <span className="flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-50 px-3 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+              {gender === "men" ? "Men's" : "Women's"}
+              <button onClick={() => onGenderChange("")} className="ml-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">×</button>
+            </span>
+          )}
+          <button
+            onClick={onClearAll}
+            className="text-xs text-gray-400 underline underline-offset-2 transition hover:text-black dark:hover:text-white"
+          >
+            Clear all
+          </button>
+        </div>
+      )}
 
       {/* Subcategory pills — appear when a broad category is selected */}
       {subcategories.length > 0 && (
