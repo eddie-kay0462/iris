@@ -53,13 +53,13 @@ function FavouritesLink({ isTransparent = false }: { isTransparent?: boolean }) 
     <Link
       href="/favourites"
       aria-label="Saved items"
-      className={`relative p-1 transition ${
+      className={`group relative p-1 transition ${
         isTransparent
           ? "text-white/80 hover:text-white"
           : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
       }`}
     >
-      <Heart className="h-[18px] w-[18px]" strokeWidth={1.5} />
+      <Heart className="h-[18px] w-[18px] transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-6" strokeWidth={1.5} />
       {count > 0 && (
         <span className={`absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${
           isTransparent
@@ -78,13 +78,13 @@ function CartLink({ isTransparent = false }: { isTransparent?: boolean }) {
   return (
     <Link
       href="/cart"
-      className={`relative p-1 transition ${
+      className={`group relative p-1 transition ${
         isTransparent
           ? "text-white/80 hover:text-white"
           : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
       }`}
     >
-      <ShoppingBag className="h-[18px] w-[18px]" strokeWidth={1.5} />
+      <ShoppingBag className="h-[18px] w-[18px] transition-transform duration-200 group-hover:scale-110 group-hover:-translate-y-0.5" strokeWidth={1.5} />
       {itemCount > 0 && (
         <span className={`absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${
           isTransparent
@@ -129,14 +129,14 @@ function UserLink({ isTransparent = false }: { isTransparent?: boolean }) {
     <button
       onClick={handleClick}
       aria-label={loggedIn ? "My account" : "Log in"}
-      className={`p-1 transition ${
+      className={`group p-1 transition ${
         isTransparent
           ? "text-white/80 hover:text-white"
           : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
       }`}
     >
       {loggedIn && avatarLetter ? (
-        <span className={`flex h-[22px] w-[22px] items-center justify-center rounded-full text-[11px] font-semibold ${
+        <span className={`flex h-[22px] w-[22px] items-center justify-center rounded-full text-[11px] font-semibold transition-transform duration-200 group-hover:scale-110 ${
           isTransparent
             ? "bg-white text-black"
             : "bg-black text-white dark:bg-white dark:text-black"
@@ -144,7 +144,7 @@ function UserLink({ isTransparent = false }: { isTransparent?: boolean }) {
           {avatarLetter}
         </span>
       ) : (
-        <User className="h-[18px] w-[18px]" strokeWidth={1.5} />
+        <User className="h-[18px] w-[18px] transition-transform duration-200 group-hover:scale-110" strokeWidth={1.5} />
       )}
     </button>
   );
@@ -367,8 +367,8 @@ function ShopHeader() {
         <div className="flex items-center gap-4">
           <LocaleSelectorButton isTransparent={isTransparentWhite} />
           <FavouritesLink isTransparent={isTransparentWhite} />
-          <UserLink isTransparent={isTransparentWhite} />
           <CartLink isTransparent={isTransparentWhite} />
+          <UserLink isTransparent={isTransparentWhite} />
         </div>
       </div>
 
