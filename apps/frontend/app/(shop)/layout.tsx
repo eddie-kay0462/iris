@@ -4,11 +4,12 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, X, ShoppingBag, Search, User, Heart } from "lucide-react";
+import { Menu, X, ShoppingBag, Search, User, Heart, ChevronDown } from "lucide-react";
 import { ThemeProvider, useTheme } from "@/lib/theme/theme-provider";
 import { CartProvider, useCart } from "@/lib/cart";
 import { hasToken, apiClient } from "@/lib/api/client";
 import { useFavourites } from "@/lib/favourites";
+import { LocaleProvider, useLocale, CURRENCIES } from "@/lib/locale/locale-provider";
 
 function ThemeToggle({ isTransparent = false }: { isTransparent?: boolean }) {
   const { theme, toggleTheme } = useTheme();
@@ -214,6 +215,63 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
   );
 }
 
+function LocaleSelectorButton({ isTransparent = false }: { isTransparent?: boolean }) {
+  const { region, currency, setCurrency } = useLocale();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const activeCurrency = CURRENCIES.find((c) => c.code === currency) ?? CURRENCIES[0];
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const textClass = isTransparent
+    ? "text-white/80 hover:text-white"
+    : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white";
+
+  return (
+    <div ref={ref} className="relative hidden md:flex">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-widest transition ${textClass}`}
+      >
+        <span className="text-sm leading-none">{region.flag}</span>
+        <span>{region.country.toUpperCase()} ({region.countryCode})</span>
+        <span className="mx-0.5 opacity-30">·</span>
+        <span>{activeCurrency.symbol} {activeCurrency.code}</span>
+        <ChevronDown
+          className={`h-3 w-3 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          strokeWidth={2}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-2 min-w-[220px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
+          {CURRENCIES.map((cur) => (
+            <button
+              key={cur.code}
+              onClick={() => { setCurrency(cur.code); setOpen(false); }}
+              className={`flex w-full items-center justify-between px-4 py-3 text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 ${
+                cur.code === currency
+                  ? "bg-gray-100 dark:bg-gray-800"
+                  : ""
+              }`}
+            >
+              <span className="text-gray-900 dark:text-white">{cur.name}</span>
+              <span className="text-gray-400 dark:text-gray-500">{cur.symbol}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const navLinks = [
   { href: "/", label: "Road to HQ" },
   { href: "/products", label: "Shop" },
@@ -307,7 +365,7 @@ function ShopHeader() {
 
         {/* Right icons */}
         <div className="flex items-center gap-4">
-          <ThemeToggle isTransparent={isTransparentWhite} />
+          <LocaleSelectorButton isTransparent={isTransparentWhite} />
           <FavouritesLink isTransparent={isTransparentWhite} />
           <UserLink isTransparent={isTransparentWhite} />
           <CartLink isTransparent={isTransparentWhite} />
@@ -469,10 +527,11 @@ function ShopFooter() {
           </div>
         </div>
 
-        <div className="mt-10 border-t border-gray-200 pt-6 dark:border-gray-800">
-          <p className="text-center text-[11px] text-gray-400 dark:text-gray-500">
+        <div className="mt-10 flex items-center justify-between border-t border-gray-200 pt-6 dark:border-gray-800">
+          <p className="text-[11px] text-gray-400 dark:text-gray-500">
             &copy; {new Date().getFullYear()} 1NRI. All rights reserved.
           </p>
+          <ThemeToggle />
         </div>
       </div>
     </footer>
@@ -494,9 +553,11 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
 export default function ShopLayout({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
-      <CartProvider>
-        <ShopLayoutInner>{children}</ShopLayoutInner>
-      </CartProvider>
+      <LocaleProvider>
+        <CartProvider>
+          <ShopLayoutInner>{children}</ShopLayoutInner>
+        </CartProvider>
+      </LocaleProvider>
     </ThemeProvider>
   );
 }

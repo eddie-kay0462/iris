@@ -14,6 +14,7 @@ import { createPreorder } from "@/lib/api/preorders";
 import { getToken } from "@/lib/api/client";
 import { useToggleFavourite } from "@/lib/favourites";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useLocale } from "@/lib/locale/locale-provider";
 import Link from "next/link";
 import {
   X,
@@ -452,13 +453,12 @@ function selectedFromVariant(variant: ProductVariant, groups: OptionSlot[]): Rec
   return sel;
 }
 
-const fmt = (n: number) =>
-  "GH₵" + n.toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 function ProductDetailBody({ id, initialColor }: { id: string; initialColor: string | null }) {
   const { data: product, isLoading, error } = useProduct(id);
+  const { formatPrice } = useLocale();
   const { addItem } = useCart();
   const { isFavourited, toggle: toggleFavourite } = useToggleFavourite(product?.id ?? "");
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
@@ -592,11 +592,11 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
           {/* Price */}
           <div className="flex items-baseline gap-3">
             {displayPrice != null && (
-              <span className="text-[22px] font-light">{fmt(displayPrice)}</span>
+              <span className="text-[22px] font-light">{formatPrice(displayPrice)}</span>
             )}
             {comparePrice != null && comparePrice > (displayPrice || 0) && (
               <>
-                <span className="text-base text-[#59626E] line-through">{fmt(comparePrice)}</span>
+                <span className="text-base text-[#59626E] line-through">{formatPrice(comparePrice)}</span>
                 <span className="text-[10px] tracking-[0.18em] uppercase px-2 py-[3px] bg-black text-[#F4F3F1]">
                   −{Math.round((1 - (displayPrice || 0) / comparePrice) * 100)}%
                 </span>
@@ -713,7 +713,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
                   : added
                     ? "Added to Cart"
                     : displayPrice != null
-                      ? `Add to Cart — ${fmt(displayPrice)}`
+                      ? `Add to Cart — ${formatPrice(displayPrice)}`
                       : "Add to Cart"}
               </button>
             )}

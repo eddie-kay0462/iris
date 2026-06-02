@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import type { Product, ProductImage, ProductVariant } from "@/lib/api/products";
 import { useCart } from "@/lib/cart";
+import { useLocale } from "@/lib/locale/locale-provider";
 
 /* ── Colour hex lookup ───────────────────────────────── */
 
@@ -264,6 +265,7 @@ export function ProductCard({ product }: { product: Product }) {
   const image = images[0];
   const price = product.base_price;
   const { addItem } = useCart();
+  const { formatPrice } = useLocale();
   const queryClient = useQueryClient();
 
   const variants = product.product_variants || [];
@@ -439,7 +441,7 @@ export function ProductCard({ product }: { product: Product }) {
           </h3>
           {price != null && (
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              GH₵{price.toLocaleString()}
+              {formatPrice(price)}
             </p>
           )}
           {colors.length > 0 && (
