@@ -47,7 +47,7 @@ function ProductCatalogContent() {
         />
       </div>
 
-      <div className="mt-8">
+      <div className="mt-8 xl:-mx-4">
         <InfiniteProductGrid
           gender={gender}
           sort={sort}

@@ -483,7 +483,7 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isHome = pathname === "/";
   return (
-    <div className="relative min-h-screen bg-white dark:bg-gray-950">
+    <div className="relative min-h-screen overflow-x-hidden bg-white dark:bg-gray-950">
       <ShopHeader />
       <main className={isHome ? "" : "pt-[65px]"}>{children}</main>
       <ShopFooter />

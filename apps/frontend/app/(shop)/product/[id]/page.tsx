@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useMemo, useCallback, useEffect } from "react";
+import { use, useState, useMemo, useCallback, useEffect, Suspense } from "react";
 import { useProduct, useProducts, type ProductVariant } from "@/lib/api/products";
 import { useCart } from "@/lib/cart";
 import {
@@ -13,7 +13,7 @@ import { ProductCard } from "../../components/ProductCard";
 import { createPreorder } from "@/lib/api/preorders";
 import { getToken } from "@/lib/api/client";
 import { useToggleFavourite } from "@/lib/favourites";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   X,
@@ -391,6 +391,43 @@ function AccordionItem({
 
 type PageProps = { params: Promise<{ id: string }> };
 
+function ProductDetailPageInner({ id, initialColor }: { id: string; initialColor: string | null }) {
+  return <ProductDetailBody id={id} initialColor={initialColor} />;
+}
+
+function ProductDetailPageWrapper({ params }: PageProps) {
+  const { id } = use(params);
+  const searchParams = useSearchParams();
+  const initialColor = searchParams.get("color");
+  return <ProductDetailPageInner id={id} initialColor={initialColor} />;
+}
+
+export default function ProductDetailPage({ params }: PageProps) {
+  return (
+    <Suspense fallback={<ProductDetailSkeleton />}>
+      <ProductDetailPageWrapper params={params} />
+    </Suspense>
+  );
+}
+
+function ProductDetailSkeleton() {
+  return (
+    <div className="bg-white min-h-screen">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8">
+        <div className="grid gap-8 lg:gap-20 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
+          <div className="aspect-[4/5] animate-pulse bg-[#f4f3f1]" />
+          <div className="space-y-4 pt-6">
+            <div className="h-3 w-1/3 animate-pulse bg-[#f4f3f1]" />
+            <div className="h-8 w-3/4 animate-pulse bg-[#f4f3f1]" />
+            <div className="h-6 w-1/4 animate-pulse bg-[#f4f3f1]" />
+            <div className="h-24 animate-pulse bg-[#f4f3f1]" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function getOptionGroups(variants: ProductVariant[]) {
   const slots = [
     { nameKey: "option1_name", valueKey: "option1_value", slot: 1 },
@@ -420,8 +457,7 @@ const fmt = (n: number) =>
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ProductDetailPage({ params }: PageProps) {
-  const { id } = use(params);
+function ProductDetailBody({ id, initialColor }: { id: string; initialColor: string | null }) {
   const { data: product, isLoading, error } = useProduct(id);
   const { addItem } = useCart();
   const { isFavourited, toggle: toggleFavourite } = useToggleFavourite(product?.id ?? "");
@@ -438,13 +474,16 @@ export default function ProductDetailPage({ params }: PageProps) {
     if (initialized || variants.length === 0) return;
     const groups = extractOptionGroups(variants);
     if (groups.length === 0) { setInitialized(true); return; }
-    // Auto-select non-size options (e.g. Color) so all colours show as available.
-    // Size is left unselected so the user picks it intentionally.
     const firstInStock = variants.find((v) => v.inventory_quantity > 0) || variants[0];
     const sel: Record<string, string> = {};
     for (const g of groups) {
       if (g.name.toLowerCase() === "size") continue;
       const key = g.slot === 1 ? "option1_value" : g.slot === 2 ? "option2_value" : "option3_value";
+      const isColorGroup = g.name.toLowerCase() === "color" || g.name.toLowerCase() === "colour";
+      if (isColorGroup && initialColor) {
+        const match = g.values.find((v) => v.toLowerCase() === initialColor.toLowerCase());
+        if (match) { sel[g.name] = match; continue; }
+      }
       const val = firstInStock[key];
       if (val) sel[g.name] = val;
     }
@@ -471,23 +510,7 @@ export default function ProductDetailPage({ params }: PageProps) {
     if (product) addRecentlyViewed(product);
   }, [product?.id]);
 
-  if (isLoading) {
-    return (
-      <div className="bg-white min-h-screen">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8">
-          <div className="grid gap-8 lg:gap-20 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
-            <div className="aspect-[4/5] animate-pulse bg-[#f4f3f1]" />
-            <div className="space-y-4 pt-6">
-              <div className="h-3 w-1/3 animate-pulse bg-[#f4f3f1]" />
-              <div className="h-8 w-3/4 animate-pulse bg-[#f4f3f1]" />
-              <div className="h-6 w-1/4 animate-pulse bg-[#f4f3f1]" />
-              <div className="h-24 animate-pulse bg-[#f4f3f1]" />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (isLoading) return <ProductDetailSkeleton />;
 
   if (error || !product) {
     return (

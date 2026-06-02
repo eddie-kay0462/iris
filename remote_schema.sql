@@ -53,6 +53,17 @@ CREATE TYPE "public"."popup_payment_method" AS ENUM (
 ALTER TYPE "public"."popup_payment_method" OWNER TO "postgres";
 
 
+CREATE TYPE "public"."promo_discount_type" AS ENUM (
+    'fixed',
+    'percentage',
+    'free_shipping',
+    'product'
+);
+
+
+ALTER TYPE "public"."promo_discount_type" OWNER TO "postgres";
+
+
 CREATE TYPE "public"."user_role" AS ENUM (
     'public',
     'admin',
@@ -64,6 +75,20 @@ CREATE TYPE "public"."user_role" AS ENUM (
 
 
 ALTER TYPE "public"."user_role" OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."force_logout_user"("p_user_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'auth', 'public'
+    AS $$
+BEGIN
+  -- Deleting from auth.sessions cascades to auth.refresh_tokens via session_id FK
+  DELETE FROM auth.sessions WHERE user_id = p_user_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."force_logout_user"("p_user_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_drop_products"("drop_handle" "text") RETURNS TABLE("id" "uuid", "handle" "text", "title" "text", "base_price" numeric, "sort_order" integer)
@@ -105,6 +130,24 @@ $$;
 
 
 ALTER FUNCTION "public"."get_products_by_gender"("target_gender" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."handle_user_email_confirmed"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  IF OLD.email_confirmed_at IS NULL AND NEW.email_confirmed_at IS NOT NULL THEN
+    UPDATE public.profiles
+    SET is_activated = true, updated_at = now()
+    WHERE id = NEW.id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."handle_user_email_confirmed"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."log_inventory_change"() RETURNS "trigger"
@@ -233,6 +276,100 @@ CREATE TABLE IF NOT EXISTS "public"."admin_activity_logs" (
 ALTER TABLE "public"."admin_activity_logs" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."allies" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid",
+    "full_name" "text" NOT NULL,
+    "email" "text" NOT NULL,
+    "phone" "text",
+    "location" "text" NOT NULL,
+    "location_type" "text" NOT NULL,
+    "commission_rate" numeric(5,4) DEFAULT 0.15 NOT NULL,
+    "is_active" boolean DEFAULT true NOT NULL,
+    "joined_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "commission_quota" numeric(12,2) DEFAULT NULL::numeric,
+    "onboarded_at" timestamp with time zone,
+    "avatar_url" "text",
+    "brand" "text" DEFAULT '1NRI'::"text" NOT NULL,
+    CONSTRAINT "allies_brand_check" CHECK (("brand" = ANY (ARRAY['1NRI'::"text", 'Unlikely Alliances'::"text"]))),
+    CONSTRAINT "allies_location_type_check" CHECK (("location_type" = ANY (ARRAY['campus'::"text", 'city'::"text"])))
+);
+
+
+ALTER TABLE "public"."allies" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."ally_logins" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "ally_id" "uuid" NOT NULL,
+    "logged_in_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."ally_logins" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."ally_sale_items" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "sale_id" "uuid" NOT NULL,
+    "product_id" "uuid",
+    "product_name" "text" NOT NULL,
+    "variant_title" "text",
+    "sku" "text",
+    "unit_price" numeric(12,2) NOT NULL,
+    "quantity" integer DEFAULT 1 NOT NULL,
+    "total_price" numeric(12,2) NOT NULL
+);
+
+
+ALTER TABLE "public"."ally_sale_items" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."ally_sale_refunds" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "sale_id" "uuid" NOT NULL,
+    "amount" numeric(12,2) NOT NULL,
+    "reason" "text",
+    "status" "text" DEFAULT 'processed'::"text" NOT NULL,
+    "paystack_refund_id" "text",
+    "paystack_response" "jsonb",
+    "initiated_by" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."ally_sale_refunds" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."ally_sales" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "order_number" "text" DEFAULT ('ALS-'::"text" || ("floor"((("random"() * (900000)::double precision) + (100000)::double precision)))::"text") NOT NULL,
+    "ally_id" "uuid" NOT NULL,
+    "customer_name" "text",
+    "customer_phone" "text",
+    "customer_email" "text",
+    "payment_method" "text" NOT NULL,
+    "subtotal" numeric(12,2) NOT NULL,
+    "total" numeric(12,2) NOT NULL,
+    "commission_amount" numeric(12,2) NOT NULL,
+    "notes" "text",
+    "status" "text" DEFAULT 'completed'::"text" NOT NULL,
+    "sale_date" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "payment_reference" "text",
+    "paystack_customer_code" "text",
+    "virtual_account_number" "text",
+    "virtual_account_bank" "text",
+    "brand" "text" DEFAULT '1NRI'::"text" NOT NULL,
+    CONSTRAINT "ally_sales_payment_method_check" CHECK (("payment_method" = ANY (ARRAY['cash'::"text", 'momo'::"text", 'bank_transfer'::"text"]))),
+    CONSTRAINT "ally_sales_status_check" CHECK (("status" = ANY (ARRAY['completed'::"text", 'pending'::"text", 'refunded'::"text", 'awaiting_payment'::"text"])))
+);
+
+
+ALTER TABLE "public"."ally_sales" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."attribute_values" (
     "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
     "attribute_id" "uuid" NOT NULL,
@@ -333,6 +470,19 @@ CREATE TABLE IF NOT EXISTS "public"."collections" (
 
 
 ALTER TABLE "public"."collections" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."commission_settings" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "default_quota" numeric(12,2) DEFAULT 0 NOT NULL,
+    "default_rate" numeric(5,4) DEFAULT 0.15 NOT NULL,
+    "period" "text" DEFAULT 'monthly'::"text" NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "commission_settings_period_check" CHECK (("period" = ANY (ARRAY['monthly'::"text", 'all_time'::"text"])))
+);
+
+
+ALTER TABLE "public"."commission_settings" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."communication_logs" (
@@ -472,6 +622,8 @@ CREATE TABLE IF NOT EXISTS "public"."orders" (
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "deleted_at" timestamp with time zone,
+    "applied_promo_code_id" "uuid",
+    "guest_token" "uuid",
     CONSTRAINT "orders_status_check" CHECK (("status" = ANY (ARRAY['pending'::"text", 'paid'::"text", 'processing'::"text", 'shipped'::"text", 'delivered'::"text", 'cancelled'::"text", 'refunded'::"text"])))
 );
 
@@ -488,7 +640,8 @@ CREATE TABLE IF NOT EXISTS "public"."popup_events" (
     "status" "public"."popup_event_status" DEFAULT 'draft'::"public"."popup_event_status" NOT NULL,
     "created_by" "uuid",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "end_date" "date"
 );
 
 
@@ -576,19 +729,51 @@ CREATE TABLE IF NOT EXISTS "public"."popup_split_payments" (
 ALTER TABLE "public"."popup_split_payments" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."preorder_refunds" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "preorder_id" "uuid" NOT NULL,
+    "amount" numeric(12,2) NOT NULL,
+    "reason" "text",
+    "status" "text" DEFAULT 'processed'::"text" NOT NULL,
+    "initiated_by" "uuid",
+    "paystack_refund_id" "text",
+    "paystack_response" "jsonb",
+    "sms_sent" boolean DEFAULT false NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."preorder_refunds" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."preorders" (
-    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
-    "product_id" "uuid" NOT NULL,
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "order_number" "text" NOT NULL,
+    "source" "text" DEFAULT 'online'::"text" NOT NULL,
+    "user_id" "uuid",
+    "customer_name" "text",
+    "customer_email" "text",
+    "customer_phone" "text",
     "variant_id" "uuid" NOT NULL,
-    "preorder_start" timestamp with time zone NOT NULL,
-    "preorder_end" timestamp with time zone NOT NULL,
-    "expected_ship_date" timestamp with time zone,
-    "max_quantity" integer,
-    "max_per_customer" integer DEFAULT 1,
-    "total_preordered" integer DEFAULT 0,
-    "is_active" boolean DEFAULT true,
+    "product_name" "text" NOT NULL,
+    "variant_title" "text",
+    "quantity" integer DEFAULT 1 NOT NULL,
+    "unit_price" numeric(12,2) NOT NULL,
+    "payment_method" "text" DEFAULT 'pending'::"text" NOT NULL,
+    "payment_reference" "text",
+    "payment_status" "text" DEFAULT 'awaiting'::"text" NOT NULL,
+    "status" "text" DEFAULT 'pending'::"text" NOT NULL,
+    "priority" integer,
+    "notified_at" timestamp with time zone,
+    "notes" "text",
     "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"()
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "popup_event_id" "uuid",
+    CONSTRAINT "preorders_payment_method_check" CHECK (("payment_method" = ANY (ARRAY['paystack'::"text", 'cash'::"text", 'momo'::"text", 'bank_transfer'::"text", 'pending'::"text"]))),
+    CONSTRAINT "preorders_payment_status_check" CHECK (("payment_status" = ANY (ARRAY['awaiting'::"text", 'paid'::"text", 'refunded'::"text"]))),
+    CONSTRAINT "preorders_quantity_check" CHECK (("quantity" > 0)),
+    CONSTRAINT "preorders_source_check" CHECK (("source" = ANY (ARRAY['online'::"text", 'popup'::"text"]))),
+    CONSTRAINT "preorders_status_check" CHECK (("status" = ANY (ARRAY['pending'::"text", 'stock_held'::"text", 'fulfilled'::"text", 'cancelled'::"text", 'refunded'::"text"])))
 );
 
 
@@ -609,6 +794,7 @@ CREATE TABLE IF NOT EXISTS "public"."product_images" (
     "option2_value" "text",
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
+    "color_tags" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
     CONSTRAINT "product_images_image_type_check" CHECK (("image_type" = ANY (ARRAY['product'::"text", 'variant'::"text", 'lifestyle'::"text"])))
 );
 
@@ -662,6 +848,8 @@ CREATE TABLE IF NOT EXISTS "public"."product_variants" (
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "image_id" "uuid",
+    "preorder_enabled" boolean DEFAULT false NOT NULL,
+    "preorder_limit" integer,
     CONSTRAINT "product_variants_inventory_policy_check" CHECK (("inventory_policy" = ANY (ARRAY['deny'::"text", 'continue'::"text"]))),
     CONSTRAINT "product_variants_weight_unit_check" CHECK (("weight_unit" = ANY (ARRAY['kg'::"text", 'g'::"text", 'lb'::"text", 'oz'::"text"])))
 );
@@ -693,6 +881,7 @@ CREATE TABLE IF NOT EXISTS "public"."products" (
     "is_featured" boolean DEFAULT false,
     "early_access_start" timestamp with time zone,
     "public_release_date" timestamp with time zone,
+    "category" "text",
     CONSTRAINT "products_gender_check" CHECK (("gender" = ANY (ARRAY['men'::"text", 'women'::"text", 'all'::"text", 'unisex'::"text"]))),
     CONSTRAINT "products_gsm_check" CHECK ((("gsm" IS NULL) OR (("gsm" >= 100) AND ("gsm" <= 500)))),
     CONSTRAINT "products_status_check" CHECK (("status" = ANY (ARRAY['active'::"text", 'draft'::"text", 'archived'::"text"])))
@@ -719,11 +908,49 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "tags" "text"[],
     "shopify_total_spent" numeric(10,2) DEFAULT 0,
     "shopify_total_orders" integer DEFAULT 0,
-    "migrated_from" "text"
+    "migrated_from" "text",
+    "avatar_url" "text",
+    "is_activated" boolean DEFAULT false NOT NULL,
+    "invited_at" timestamp with time zone
 );
 
 
 ALTER TABLE "public"."profiles" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."promo_codes" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "code" "text" NOT NULL,
+    "description" "text",
+    "discount_type" "public"."promo_discount_type" NOT NULL,
+    "discount_value" numeric(10,2) DEFAULT 0 NOT NULL,
+    "applicable_product_ids" "uuid"[],
+    "min_order_amount" numeric(10,2) DEFAULT NULL::numeric,
+    "max_discount_amount" numeric(10,2) DEFAULT NULL::numeric,
+    "max_uses" integer,
+    "used_count" integer DEFAULT 0 NOT NULL,
+    "starts_at" timestamp with time zone,
+    "expires_at" timestamp with time zone,
+    "is_active" boolean DEFAULT true NOT NULL,
+    "created_by" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "promo_codes_discount_value_check" CHECK (("discount_value" >= (0)::numeric)),
+    CONSTRAINT "promo_codes_used_count_check" CHECK (("used_count" >= 0))
+);
+
+
+ALTER TABLE "public"."promo_codes" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."revenue_targets" (
+    "year" integer NOT NULL,
+    "target" numeric NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL
+);
+
+
+ALTER TABLE "public"."revenue_targets" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."stock_alerts" (
@@ -740,8 +967,69 @@ CREATE TABLE IF NOT EXISTS "public"."stock_alerts" (
 ALTER TABLE "public"."stock_alerts" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."store_settings" (
+    "key" "text" NOT NULL,
+    "value" "jsonb" NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."store_settings" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."user_favourites" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "product_id" "uuid" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."user_favourites" OWNER TO "postgres";
+
+
 ALTER TABLE ONLY "public"."admin_activity_logs"
     ADD CONSTRAINT "admin_activity_logs_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."allies"
+    ADD CONSTRAINT "allies_email_key" UNIQUE ("email");
+
+
+
+ALTER TABLE ONLY "public"."allies"
+    ADD CONSTRAINT "allies_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."allies"
+    ADD CONSTRAINT "allies_user_id_key" UNIQUE ("user_id");
+
+
+
+ALTER TABLE ONLY "public"."ally_logins"
+    ADD CONSTRAINT "ally_logins_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."ally_sale_items"
+    ADD CONSTRAINT "ally_sale_items_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."ally_sale_refunds"
+    ADD CONSTRAINT "ally_sale_refunds_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."ally_sales"
+    ADD CONSTRAINT "ally_sales_order_number_key" UNIQUE ("order_number");
+
+
+
+ALTER TABLE ONLY "public"."ally_sales"
+    ADD CONSTRAINT "ally_sales_pkey" PRIMARY KEY ("id");
 
 
 
@@ -797,6 +1085,11 @@ ALTER TABLE ONLY "public"."collections"
 
 ALTER TABLE ONLY "public"."collections"
     ADD CONSTRAINT "collections_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."commission_settings"
+    ADD CONSTRAINT "commission_settings_pkey" PRIMARY KEY ("id");
 
 
 
@@ -885,6 +1178,16 @@ ALTER TABLE ONLY "public"."popup_split_payments"
 
 
 
+ALTER TABLE ONLY "public"."preorder_refunds"
+    ADD CONSTRAINT "preorder_refunds_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."preorders"
+    ADD CONSTRAINT "preorders_order_number_key" UNIQUE ("order_number");
+
+
+
 ALTER TABLE ONLY "public"."preorders"
     ADD CONSTRAINT "preorders_pkey" PRIMARY KEY ("id");
 
@@ -940,8 +1243,38 @@ ALTER TABLE ONLY "public"."profiles"
 
 
 
+ALTER TABLE ONLY "public"."promo_codes"
+    ADD CONSTRAINT "promo_codes_code_unique" UNIQUE ("code");
+
+
+
+ALTER TABLE ONLY "public"."promo_codes"
+    ADD CONSTRAINT "promo_codes_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."revenue_targets"
+    ADD CONSTRAINT "revenue_targets_pkey" PRIMARY KEY ("year");
+
+
+
 ALTER TABLE ONLY "public"."stock_alerts"
     ADD CONSTRAINT "stock_alerts_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."store_settings"
+    ADD CONSTRAINT "store_settings_pkey" PRIMARY KEY ("key");
+
+
+
+ALTER TABLE ONLY "public"."user_favourites"
+    ADD CONSTRAINT "user_favourites_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."user_favourites"
+    ADD CONSTRAINT "user_favourites_user_id_product_id_key" UNIQUE ("user_id", "product_id");
 
 
 
@@ -970,6 +1303,38 @@ CREATE INDEX "idx_activity_logs_created" ON "public"."admin_activity_logs" USING
 
 
 CREATE INDEX "idx_activity_logs_entity" ON "public"."admin_activity_logs" USING "btree" ("entity_type", "entity_id");
+
+
+
+CREATE INDEX "idx_allies_user_id" ON "public"."allies" USING "btree" ("user_id");
+
+
+
+CREATE INDEX "idx_ally_logins_ally_id" ON "public"."ally_logins" USING "btree" ("ally_id");
+
+
+
+CREATE INDEX "idx_ally_logins_logged_in_at" ON "public"."ally_logins" USING "btree" ("logged_in_at" DESC);
+
+
+
+CREATE INDEX "idx_ally_sale_items_sale_id" ON "public"."ally_sale_items" USING "btree" ("sale_id");
+
+
+
+CREATE INDEX "idx_ally_sale_refunds_sale_id" ON "public"."ally_sale_refunds" USING "btree" ("sale_id");
+
+
+
+CREATE INDEX "idx_ally_sales_ally_id" ON "public"."ally_sales" USING "btree" ("ally_id");
+
+
+
+CREATE INDEX "idx_ally_sales_customer_email" ON "public"."ally_sales" USING "btree" ("customer_email");
+
+
+
+CREATE INDEX "idx_ally_sales_sale_date" ON "public"."ally_sales" USING "btree" ("sale_date" DESC);
 
 
 
@@ -1097,6 +1462,10 @@ CREATE INDEX "idx_orders_created" ON "public"."orders" USING "btree" ("created_a
 
 
 
+CREATE INDEX "idx_orders_guest_token" ON "public"."orders" USING "btree" ("guest_token") WHERE ("guest_token" IS NOT NULL);
+
+
+
 CREATE INDEX "idx_orders_number" ON "public"."orders" USING "btree" ("order_number");
 
 
@@ -1113,15 +1482,19 @@ CREATE INDEX "idx_orders_user" ON "public"."orders" USING "btree" ("user_id");
 
 
 
-CREATE INDEX "idx_preorders_active" ON "public"."preorders" USING "btree" ("is_active", "preorder_start", "preorder_end");
+CREATE INDEX "idx_preorders_status" ON "public"."preorders" USING "btree" ("status");
 
 
 
-CREATE INDEX "idx_preorders_product" ON "public"."preorders" USING "btree" ("product_id");
+CREATE INDEX "idx_preorders_user" ON "public"."preorders" USING "btree" ("user_id");
 
 
 
 CREATE INDEX "idx_preorders_variant" ON "public"."preorders" USING "btree" ("variant_id");
+
+
+
+CREATE INDEX "idx_product_images_color_tags" ON "public"."product_images" USING "gin" ("color_tags");
 
 
 
@@ -1130,6 +1503,10 @@ CREATE INDEX "idx_product_variants_image_id" ON "public"."product_variants" USIN
 
 
 CREATE INDEX "idx_products_best_sellers" ON "public"."products" USING "btree" ("is_best_seller", "created_at" DESC) WHERE (("is_best_seller" = true) AND ("deleted_at" IS NULL));
+
+
+
+CREATE INDEX "idx_products_category" ON "public"."products" USING "btree" ("category") WHERE ("category" IS NOT NULL);
 
 
 
@@ -1146,6 +1523,10 @@ CREATE INDEX "idx_products_handle" ON "public"."products" USING "btree" ("handle
 
 
 CREATE INDEX "idx_products_new_arrivals" ON "public"."products" USING "btree" ("is_new_arrival", "created_at" DESC) WHERE (("is_new_arrival" = true) AND ("deleted_at" IS NULL));
+
+
+
+CREATE INDEX "idx_products_product_type_idx" ON "public"."products" USING "btree" ("product_type") WHERE ("product_type" IS NOT NULL);
 
 
 
@@ -1174,6 +1555,14 @@ CREATE INDEX "idx_profiles_shopify_customer_id" ON "public"."profiles" USING "bt
 
 
 CREATE INDEX "idx_profiles_tags" ON "public"."profiles" USING "gin" ("tags");
+
+
+
+CREATE INDEX "idx_promo_codes_code" ON "public"."promo_codes" USING "btree" ("upper"("code"));
+
+
+
+CREATE INDEX "idx_promo_codes_is_active" ON "public"."promo_codes" USING "btree" ("is_active");
 
 
 
@@ -1229,6 +1618,10 @@ CREATE INDEX "idx_variants_sku" ON "public"."product_variants" USING "btree" ("s
 
 
 
+CREATE INDEX "user_favourites_user_id_idx" ON "public"."user_favourites" USING "btree" ("user_id");
+
+
+
 CREATE OR REPLACE TRIGGER "trg_popup_events_updated_at" BEFORE UPDATE ON "public"."popup_events" FOR EACH ROW EXECUTE FUNCTION "public"."update_popup_events_updated_at"();
 
 
@@ -1263,6 +1656,41 @@ CREATE OR REPLACE TRIGGER "update_products_updated_at" BEFORE UPDATE ON "public"
 
 ALTER TABLE ONLY "public"."admin_activity_logs"
     ADD CONSTRAINT "admin_activity_logs_admin_id_fkey" FOREIGN KEY ("admin_id") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."allies"
+    ADD CONSTRAINT "allies_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."ally_logins"
+    ADD CONSTRAINT "ally_logins_ally_id_fkey" FOREIGN KEY ("ally_id") REFERENCES "public"."allies"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."ally_sale_items"
+    ADD CONSTRAINT "ally_sale_items_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id");
+
+
+
+ALTER TABLE ONLY "public"."ally_sale_items"
+    ADD CONSTRAINT "ally_sale_items_sale_id_fkey" FOREIGN KEY ("sale_id") REFERENCES "public"."ally_sales"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."ally_sale_refunds"
+    ADD CONSTRAINT "ally_sale_refunds_initiated_by_fkey" FOREIGN KEY ("initiated_by") REFERENCES "public"."allies"("id");
+
+
+
+ALTER TABLE ONLY "public"."ally_sale_refunds"
+    ADD CONSTRAINT "ally_sale_refunds_sale_id_fkey" FOREIGN KEY ("sale_id") REFERENCES "public"."ally_sales"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."ally_sales"
+    ADD CONSTRAINT "ally_sales_ally_id_fkey" FOREIGN KEY ("ally_id") REFERENCES "public"."allies"("id") ON DELETE RESTRICT;
 
 
 
@@ -1337,6 +1765,11 @@ ALTER TABLE ONLY "public"."order_status_history"
 
 
 ALTER TABLE ONLY "public"."orders"
+    ADD CONSTRAINT "orders_applied_promo_code_id_fkey" FOREIGN KEY ("applied_promo_code_id") REFERENCES "public"."promo_codes"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."orders"
     ADD CONSTRAINT "orders_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
 
 
@@ -1386,13 +1819,28 @@ ALTER TABLE ONLY "public"."popup_split_payments"
 
 
 
-ALTER TABLE ONLY "public"."preorders"
-    ADD CONSTRAINT "preorders_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."preorder_refunds"
+    ADD CONSTRAINT "preorder_refunds_initiated_by_fkey" FOREIGN KEY ("initiated_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."preorder_refunds"
+    ADD CONSTRAINT "preorder_refunds_preorder_id_fkey" FOREIGN KEY ("preorder_id") REFERENCES "public"."preorders"("id") ON DELETE CASCADE;
 
 
 
 ALTER TABLE ONLY "public"."preorders"
-    ADD CONSTRAINT "preorders_variant_id_fkey" FOREIGN KEY ("variant_id") REFERENCES "public"."product_variants"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "preorders_popup_event_id_fkey" FOREIGN KEY ("popup_event_id") REFERENCES "public"."popup_events"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."preorders"
+    ADD CONSTRAINT "preorders_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."preorders"
+    ADD CONSTRAINT "preorders_variant_id_fkey" FOREIGN KEY ("variant_id") REFERENCES "public"."product_variants"("id") ON DELETE RESTRICT;
 
 
 
@@ -1431,6 +1879,11 @@ ALTER TABLE ONLY "public"."profiles"
 
 
 
+ALTER TABLE ONLY "public"."promo_codes"
+    ADD CONSTRAINT "promo_codes_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
+
+
+
 ALTER TABLE ONLY "public"."stock_alerts"
     ADD CONSTRAINT "stock_alerts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
 
@@ -1438,6 +1891,16 @@ ALTER TABLE ONLY "public"."stock_alerts"
 
 ALTER TABLE ONLY "public"."stock_alerts"
     ADD CONSTRAINT "stock_alerts_variant_id_fkey" FOREIGN KEY ("variant_id") REFERENCES "public"."product_variants"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."user_favourites"
+    ADD CONSTRAINT "user_favourites_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."user_favourites"
+    ADD CONSTRAINT "user_favourites_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
 
 
 
@@ -1489,6 +1952,10 @@ CREATE POLICY "Admin roles can read popup_split_payments" ON "public"."popup_spl
 
 
 
+CREATE POLICY "Allow authenticated full access to revenue_targets" ON "public"."revenue_targets" TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
 CREATE POLICY "Managers can manage popup_refunds" ON "public"."popup_refunds" USING ((EXISTS ( SELECT 1
    FROM "public"."profiles"
   WHERE (("profiles"."id" = "auth"."uid"()) AND ("profiles"."role" = ANY (ARRAY['admin'::"public"."user_role", 'manager'::"public"."user_role"]))))));
@@ -1508,10 +1975,6 @@ CREATE POLICY "Public can view active campaigns" ON "public"."campaigns" FOR SEL
 
 
 CREATE POLICY "Public can view active drops" ON "public"."drops" FOR SELECT USING (("is_active" = true));
-
-
-
-CREATE POLICY "Public can view active preorders" ON "public"."preorders" FOR SELECT USING (("is_active" = true));
 
 
 
@@ -1567,9 +2030,21 @@ CREATE POLICY "Service role has full access to newsletter_subscribers" ON "publi
 
 
 
+CREATE POLICY "Service role has full access to user_favourites" ON "public"."user_favourites" TO "service_role" USING (true) WITH CHECK (true);
+
+
+
 CREATE POLICY "Staff can read popup_refunds" ON "public"."popup_refunds" FOR SELECT USING ((EXISTS ( SELECT 1
    FROM "public"."profiles"
   WHERE (("profiles"."id" = "auth"."uid"()) AND ("profiles"."role" = ANY (ARRAY['admin'::"public"."user_role", 'manager'::"public"."user_role", 'staff'::"public"."user_role"]))))));
+
+
+
+CREATE POLICY "Users can delete own favourites" ON "public"."user_favourites" FOR DELETE TO "authenticated" USING (("user_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Users can insert own favourites" ON "public"."user_favourites" FOR INSERT TO "authenticated" WITH CHECK (("user_id" = "auth"."uid"()));
 
 
 
@@ -1578,6 +2053,10 @@ CREATE POLICY "Users can insert own profile" ON "public"."profiles" FOR INSERT T
 
 
 CREATE POLICY "Users can manage own stock alerts" ON "public"."stock_alerts" USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can read own favourites" ON "public"."user_favourites" FOR SELECT TO "authenticated" USING (("user_id" = "auth"."uid"()));
 
 
 
@@ -1598,6 +2077,81 @@ CREATE POLICY "Users can view own stock alerts" ON "public"."stock_alerts" FOR S
 
 
 ALTER TABLE "public"."admin_activity_logs" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "admin_read" ON "public"."promo_codes" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM "public"."profiles"
+  WHERE (("profiles"."id" = "auth"."uid"()) AND ("profiles"."role" = ANY (ARRAY['admin'::"public"."user_role", 'manager'::"public"."user_role", 'staff'::"public"."user_role"]))))));
+
+
+
+CREATE POLICY "admin_write" ON "public"."promo_codes" TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM "public"."profiles"
+  WHERE (("profiles"."id" = "auth"."uid"()) AND ("profiles"."role" = ANY (ARRAY['admin'::"public"."user_role", 'manager'::"public"."user_role"])))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM "public"."profiles"
+  WHERE (("profiles"."id" = "auth"."uid"()) AND ("profiles"."role" = ANY (ARRAY['admin'::"public"."user_role", 'manager'::"public"."user_role"]))))));
+
+
+
+ALTER TABLE "public"."allies" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "allies_select_authenticated" ON "public"."allies" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "allies_update_own" ON "public"."allies" FOR UPDATE USING (("auth"."uid"() = "user_id"));
+
+
+
+ALTER TABLE "public"."ally_logins" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."ally_sale_items" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ally_sale_items_insert_own" ON "public"."ally_sale_items" FOR INSERT WITH CHECK (("sale_id" IN ( SELECT "ally_sales"."id"
+   FROM "public"."ally_sales"
+  WHERE ("ally_sales"."ally_id" = ( SELECT "allies"."id"
+           FROM "public"."allies"
+          WHERE ("allies"."user_id" = "auth"."uid"()))))));
+
+
+
+CREATE POLICY "ally_sale_items_select_authenticated" ON "public"."ally_sale_items" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+ALTER TABLE "public"."ally_sale_refunds" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ally_sale_refunds_insert" ON "public"."ally_sale_refunds" FOR INSERT WITH CHECK (("initiated_by" = ( SELECT "allies"."id"
+   FROM "public"."allies"
+  WHERE ("allies"."user_id" = "auth"."uid"()))));
+
+
+
+CREATE POLICY "ally_sale_refunds_select" ON "public"."ally_sale_refunds" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+ALTER TABLE "public"."ally_sales" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ally_sales_insert_own" ON "public"."ally_sales" FOR INSERT WITH CHECK (("ally_id" = ( SELECT "allies"."id"
+   FROM "public"."allies"
+  WHERE ("allies"."user_id" = "auth"."uid"()))));
+
+
+
+CREATE POLICY "ally_sales_select_authenticated" ON "public"."ally_sales" FOR SELECT USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "ally_sales_update_own" ON "public"."ally_sales" FOR UPDATE USING (("ally_id" = ( SELECT "allies"."id"
+   FROM "public"."allies"
+  WHERE ("allies"."user_id" = "auth"."uid"()))));
+
 
 
 ALTER TABLE "public"."attribute_values" ENABLE ROW LEVEL SECURITY;
@@ -1660,6 +2214,9 @@ ALTER TABLE "public"."popup_refunds" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."popup_split_payments" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."preorder_refunds" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."preorders" ENABLE ROW LEVEL SECURITY;
 
 
@@ -1678,16 +2235,69 @@ ALTER TABLE "public"."products" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."promo_codes" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "public_read_active" ON "public"."promo_codes" FOR SELECT TO "authenticated", "anon" USING (("is_active" = true));
+
+
+
+ALTER TABLE "public"."revenue_targets" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "service_role_all" ON "public"."promo_codes" TO "service_role" USING (true) WITH CHECK (true);
+
+
+
 ALTER TABLE "public"."stock_alerts" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."user_favourites" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "users_see_own_preorders" ON "public"."preorders" FOR SELECT TO "authenticated" USING (("user_id" = "auth"."uid"()));
+
 
 
 REVOKE USAGE ON SCHEMA "public" FROM PUBLIC;
 GRANT ALL ON SCHEMA "public" TO PUBLIC;
+GRANT USAGE ON SCHEMA "public" TO "anon";
+GRANT USAGE ON SCHEMA "public" TO "authenticated";
+GRANT USAGE ON SCHEMA "public" TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."force_logout_user"("p_user_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."force_logout_user"("p_user_id" "uuid") TO "service_role";
 
 
 
 GRANT ALL ON TABLE "public"."admin_activity_logs" TO "service_role";
 GRANT ALL ON TABLE "public"."admin_activity_logs" TO "authenticated";
+
+
+
+GRANT ALL ON TABLE "public"."allies" TO "service_role";
+GRANT SELECT,INSERT,UPDATE ON TABLE "public"."allies" TO "authenticated";
+
+
+
+GRANT ALL ON TABLE "public"."ally_logins" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."ally_sale_items" TO "service_role";
+GRANT SELECT,INSERT ON TABLE "public"."ally_sale_items" TO "authenticated";
+
+
+
+GRANT ALL ON TABLE "public"."ally_sale_refunds" TO "service_role";
+GRANT SELECT,INSERT ON TABLE "public"."ally_sale_refunds" TO "authenticated";
+
+
+
+GRANT ALL ON TABLE "public"."ally_sales" TO "service_role";
+GRANT SELECT,INSERT,UPDATE ON TABLE "public"."ally_sales" TO "authenticated";
 
 
 
@@ -1723,6 +2333,11 @@ GRANT ALL ON TABLE "public"."collection_products" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."collections" TO "service_role";
 GRANT ALL ON TABLE "public"."collections" TO "authenticated";
+
+
+
+GRANT ALL ON TABLE "public"."commission_settings" TO "service_role";
+GRANT SELECT ON TABLE "public"."commission_settings" TO "authenticated";
 
 
 
@@ -1794,8 +2409,12 @@ GRANT ALL ON TABLE "public"."popup_split_payments" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."preorder_refunds" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."preorders" TO "service_role";
-GRANT ALL ON TABLE "public"."preorders" TO "authenticated";
+GRANT SELECT ON TABLE "public"."preorders" TO "authenticated";
 
 
 
@@ -1825,8 +2444,25 @@ GRANT ALL ON TABLE "public"."profiles" TO "anon";
 
 
 
+GRANT ALL ON TABLE "public"."promo_codes" TO "service_role";
+GRANT ALL ON TABLE "public"."promo_codes" TO "authenticated";
+GRANT ALL ON TABLE "public"."promo_codes" TO "anon";
+
+
+
+GRANT ALL ON TABLE "public"."revenue_targets" TO "service_role";
+GRANT ALL ON TABLE "public"."revenue_targets" TO "authenticated";
+GRANT SELECT ON TABLE "public"."revenue_targets" TO "anon";
+
+
+
 GRANT ALL ON TABLE "public"."stock_alerts" TO "service_role";
 GRANT ALL ON TABLE "public"."stock_alerts" TO "authenticated";
+
+
+
+GRANT ALL ON TABLE "public"."user_favourites" TO "service_role";
+GRANT SELECT,INSERT,DELETE ON TABLE "public"."user_favourites" TO "authenticated";
 
 
 
