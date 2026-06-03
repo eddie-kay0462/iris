@@ -119,7 +119,7 @@ function UserLink({ isTransparent = false }: { isTransparent?: boolean }) {
 
   function handleClick() {
     if (loggedIn) {
-      router.push("/profile");
+      router.push("/account");
     } else {
       router.push("/login");
     }
@@ -198,7 +198,7 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 pt-[18vh]"
+      className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50  pt-[18vh]"
       onClick={onClose}
     >
       <div
