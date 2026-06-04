@@ -166,20 +166,13 @@ export class PromosService {
 
   async applyToOrder(promoCodeId: string): Promise<void> {
     const db = this.supabase.getAdminClient();
-    const { data } = await db
-      .from('promo_codes')
-      .select('used_count')
-      .eq('id', promoCodeId)
-      .single();
-
-    if (data) {
-      await db
-        .from('promo_codes')
-        .update({
-          used_count: data.used_count + 1,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', promoCodeId);
+    const { error } = await db.rpc('increment_promo_used_count', {
+      promo_id: promoCodeId,
+    });
+    if (error) {
+      throw new Error(
+        `Failed to increment used_count for promo ${promoCodeId}: ${error.message}`,
+      );
     }
   }
 
