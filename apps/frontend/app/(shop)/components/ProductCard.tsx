@@ -261,8 +261,9 @@ function extractColorsFromTags(images: ProductImage[]): string[] {
   const colors: string[] = [];
   for (const img of images) {
     for (const tag of img.color_tags ?? []) {
-      if (tag && !seen.has(tag)) {
-        seen.add(tag);
+      const key = tag.toLowerCase();
+      if (tag && !seen.has(key)) {
+        seen.add(key);
         colors.push(tag);
       }
     }

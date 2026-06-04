@@ -256,10 +256,11 @@ function PDPGallery({
   // color_tags = [] means "show for all colours" (shared / lifestyle shots).
   // Fall back to the full set when no image has any tags yet (untagged product).
   const anyTagged = allSorted.some((img) => (img.color_tags ?? []).length > 0);
-  const sorted = anyTagged && colorFilter
+  const cfLower = colorFilter?.toLowerCase();
+  const sorted = anyTagged && cfLower
     ? allSorted.filter((img) => {
         const tags = img.color_tags ?? [];
-        return tags.length === 0 || tags.includes(colorFilter);
+        return tags.length === 0 || tags.some((t) => t.toLowerCase() === cfLower);
       })
     : allSorted;
 
