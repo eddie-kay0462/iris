@@ -261,8 +261,9 @@ function extractColorsFromTags(images: ProductImage[]): string[] {
   const colors: string[] = [];
   for (const img of images) {
     for (const tag of img.color_tags ?? []) {
-      if (tag && !seen.has(tag)) {
-        seen.add(tag);
+      const key = tag.toLowerCase();
+      if (tag && !seen.has(key)) {
+        seen.add(key);
         colors.push(tag);
       }
     }
@@ -291,12 +292,15 @@ export function ProductCard({
 }) {
   const images = product.product_images || [];
   const image = images[0];
-  const price = product.base_price;
   const { addItem } = useCart();
   const { formatPrice } = useLocale();
   const queryClient = useQueryClient();
 
   const variants = product.product_variants || [];
+  const firstVariant = variants[0] ?? null;
+  const price = firstVariant?.price ?? product.base_price;
+  const compareAtPrice = firstVariant?.compare_at_price ?? null;
+  const isOnSale = compareAtPrice != null && compareAtPrice > (price ?? 0);
   const sizes = extractSizes(variants);
   const colors = extractColorsFromTags(images);
   const hasSizes = sizes.length > 0;
@@ -573,9 +577,16 @@ export function ProductCard({
             {product.title}
           </h3>
           {price != null && (
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {formatPrice(price)}
-            </p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <p className={`text-xs ${isOnSale ? "font-medium text-red-600 dark:text-red-400" : "text-gray-500 dark:text-gray-400"}`}>
+                {formatPrice(price)}
+              </p>
+              {isOnSale && compareAtPrice != null && (
+                <p className="text-xs text-gray-400 line-through dark:text-gray-600">
+                  {formatPrice(compareAtPrice)}
+                </p>
+              )}
+            </div>
           )}
           {colors.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">

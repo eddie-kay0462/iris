@@ -150,13 +150,6 @@ export class OrdersService {
 
     if (itemsError) throw itemsError;
 
-    // 5b. Increment promo used_count — fire and forget; order already created
-    if (appliedPromoCodeId) {
-      this.promosService.applyToOrder(appliedPromoCodeId).catch((err) => {
-        console.error(`Failed to increment promo used_count for ${appliedPromoCodeId}:`, err);
-      });
-    }
-
     // 6. Deduct inventory — failures are logged but do not throw so the order
     // record is never left without matching inventory movements silently failing
     // while still destroying the order reference.
@@ -1171,7 +1164,32 @@ export class OrdersService {
       (sum, i) => sum + i.price * i.quantity,
       0,
     );
-    const total = subtotal;
+    const shippingCost = dto.shippingCost ?? 0;
+
+    // 2b. Validate promo code if supplied
+    let discountAmount = 0;
+    let appliedPromoCodeId: string | null = null;
+
+    if (dto.promoCode) {
+      try {
+        const promoResult = await this.promosService.validate({
+          code: dto.promoCode,
+          subtotal,
+          shippingCost,
+          items: dto.items.map((i) => ({
+            productId: i.productId,
+            price: i.price,
+            quantity: i.quantity,
+          })),
+        });
+        discountAmount = promoResult.discountAmount;
+        appliedPromoCodeId = promoResult.promoCodeId;
+      } catch (err: any) {
+        throw new BadRequestException(err.message || 'Invalid promo code');
+      }
+    }
+
+    const total = Math.max(0, subtotal + shippingCost - discountAmount);
 
     // 3. Generate order number
     const orderNumber = await this.generateOrderNumber();
@@ -1187,12 +1205,15 @@ export class OrdersService {
         order_number: orderNumber,
         status: 'pending',
         subtotal,
+        discount: discountAmount,
+        shipping_cost: shippingCost,
         total,
         currency: 'GHS',
         shipping_address: dto.shippingAddress,
         payment_provider: 'paystack',
         payment_reference: dto.paymentReference,
         payment_status: 'pending',
+        applied_promo_code_id: appliedPromoCodeId,
         guest_token: guestToken,
       })
       .select()
@@ -1244,7 +1265,7 @@ export class OrdersService {
     const db = this.supabase.getAdminClient();
     const { data: order, error } = await db
       .from('orders')
-      .select('id, payment_status, order_number, user_id, order_items(*)')
+      .select('id, payment_status, order_number, user_id, applied_promo_code_id, order_items(*)')
       .eq('payment_reference', paymentReference)
       .maybeSingle();
 
@@ -1262,6 +1283,16 @@ export class OrdersService {
         updated_at: new Date().toISOString(),
       })
       .eq('id', order.id);
+
+    // Increment promo used_count now that payment is confirmed
+    if (order.applied_promo_code_id) {
+      this.promosService.applyToOrder(order.applied_promo_code_id).catch((err) => {
+        console.error(
+          `Failed to increment promo used_count for ${order.applied_promo_code_id}:`,
+          err,
+        );
+      });
+    }
 
     // Fetch full order to get items, email, and phone for notifications
     let fullOrder: any;
