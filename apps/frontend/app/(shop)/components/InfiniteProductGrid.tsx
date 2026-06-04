@@ -83,8 +83,8 @@ export function InfiniteProductGrid({
     return (
         <>
             <div className="grid grid-cols-2 gap-x-0.5 gap-y-10 sm:grid-cols-3 lg:grid-cols-4">
-                {products.map((product) => (
-                    <ProductCard key={product.id} product={product} />
+                {products.map((product, i) => (
+                    <ProductCard key={product.id} product={product} priority={i < 4} />
                 ))}
             </div>
 

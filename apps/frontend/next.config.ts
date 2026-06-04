@@ -20,7 +20,12 @@ try {
 
 const nextConfig: NextConfig = {
   images: {
-    formats: ["image/webp"],
+    formats: ["image/avif", "image/webp"],
+    // Origin serves `cache-control: no-cache`, so we cache the optimised output
+    // ourselves. Product filenames are immutable (timestamped) → a long TTL is safe.
+    minimumCacheTTL: 31536000,
+    // Next 16 requires non-default qualities used via the `quality` prop to be allowlisted.
+    qualities: [70, 75, 80],
     remotePatterns: [
       {
         protocol: "https",
