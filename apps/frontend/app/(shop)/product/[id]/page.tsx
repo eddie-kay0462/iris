@@ -15,6 +15,8 @@ import { getToken } from "@/lib/api/client";
 import { useToggleFavourite } from "@/lib/favourites";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale } from "@/lib/locale/locale-provider";
+import { useImagePrefetch } from "@/hooks/useImagePrefetch";
+import Image from "next/image";
 import Link from "next/link";
 import {
   X,
@@ -263,6 +265,8 @@ function PDPGallery({
 
   const [idx, setIdx] = useState(0);
 
+  useImagePrefetch(images, colorFilter ?? "", { maxPriority: 6, width: 1080, quality: 80 });
+
   // When the color changes, jump to the first image in the new set.
   useEffect(() => {
     setIdx(0);
@@ -289,14 +293,16 @@ function PDPGallery({
           <button
             key={img.id}
             onClick={() => setIdx(i)}
-            className={`w-16 h-20 overflow-hidden border transition-all duration-200 ${
+            className={`relative w-16 h-20 overflow-hidden border transition-all duration-200 ${
               i === idx ? "border-black opacity-100" : "border-transparent opacity-60 hover:opacity-100"
             }`}
           >
-            <img
+            <Image
               src={img.src}
               alt={img.alt_text || ""}
-              className="w-full h-full object-cover"
+              fill
+              sizes="64px"
+              className="object-cover"
             />
           </button>
         ))}
@@ -305,10 +311,14 @@ function PDPGallery({
       {/* Main stage */}
       <div>
         <div className="relative aspect-[4/5] bg-[#f4f3f1] overflow-hidden">
-          <img
+          <Image
             src={sorted[idx].src}
             alt={sorted[idx].alt_text || "Product image"}
-            className="w-full h-full object-cover"
+            fill
+            priority
+            sizes="(min-width: 1024px) 50vw, 100vw"
+            quality={80}
+            className="object-cover"
           />
 
           {/* Counter */}

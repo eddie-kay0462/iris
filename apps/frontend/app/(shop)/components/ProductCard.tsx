@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
@@ -8,6 +9,25 @@ import { apiClient } from "@/lib/api/client";
 import type { Product, ProductImage, ProductVariant } from "@/lib/api/products";
 import { useCart } from "@/lib/cart";
 import { useLocale } from "@/lib/locale/locale-provider";
+import { prefetchImage } from "@/hooks/useImagePrefetch";
+
+const GRID_IMAGE_QUALITY = 70;
+/** next/image default deviceSizes — mirror them so a prefetch picks the same width. */
+const DEVICE_SIZES = [640, 750, 828, 1080, 1200, 1920, 2048, 3840];
+
+/**
+ * Estimate the width next/image will request for a grid cell on the current
+ * viewport, so the prefetch warms the *same* optimised URL the swap will render
+ * (desktop ≈ 750, a 2-col phone ≈ 640). Cols mirror the grid `sizes`:
+ * 2 (<640px), 3 (<1024px), else 4.
+ */
+function gridPrefetchWidth(): number {
+  if (typeof window === "undefined") return 750;
+  const vw = window.innerWidth;
+  const cols = vw < 640 ? 2 : vw < 1024 ? 3 : 4;
+  const target = (vw / cols) * (window.devicePixelRatio || 1);
+  return DEVICE_SIZES.find((s) => s >= target) ?? DEVICE_SIZES[DEVICE_SIZES.length - 1];
+}
 
 /* ── Colour hex lookup ───────────────────────────────── */
 
@@ -260,7 +280,13 @@ function findImageIndexByTag(images: ProductImage[], colorName: string): number 
 
 /* ── Component ───────────────────────────────────────── */
 
-export function ProductCard({ product }: { product: Product }) {
+export function ProductCard({
+  product,
+  priority = false,
+}: {
+  product: Product;
+  priority?: boolean;
+}) {
   const images = product.product_images || [];
   const image = images[0];
   const price = product.base_price;
@@ -280,6 +306,7 @@ export function ProductCard({ product }: { product: Product }) {
   const [successSize, setSuccessSize] = useState<string | null>(null);
   const [imgIndex, setImgIndex] = useState(() => findImageIndexByTag(images, firstColor));
   const [selectedColor, setSelectedColor] = useState<string>(firstColor);
+  const [imgLoaded, setImgLoaded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handlePrefetch = useCallback(() => {
@@ -320,6 +347,16 @@ export function ProductCard({ product }: { product: Product }) {
       e.stopPropagation();
       setSelectedColor(colorName);
       setImgIndex(findImageIndexByTag(images, colorName));
+    },
+    [images],
+  );
+
+  // Warm a colour's first image on intent (hover / focus / touch-down) so the
+  // swap is instant — and at the width this viewport will actually render.
+  const handleColorPrefetch = useCallback(
+    (colorName: string) => {
+      const src = images[findImageIndexByTag(images, colorName)]?.src;
+      if (src) prefetchImage(src, gridPrefetchWidth(), GRID_IMAGE_QUALITY);
     },
     [images],
   );
@@ -366,12 +403,21 @@ export function ProductCard({ product }: { product: Product }) {
           })}
         >
           {currentImage ? (
-            <img
-              src={currentImage.src}
-              alt={currentImage.alt_text || product.title}
-              loading="lazy"
-              className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
-            />
+            <>
+              {!imgLoaded && (
+                <div className="absolute inset-0 animate-pulse bg-gray-100 dark:bg-gray-800" />
+              )}
+              <Image
+                src={currentImage.src}
+                alt={currentImage.alt_text || product.title}
+                fill
+                sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+                quality={GRID_IMAGE_QUALITY}
+                priority={priority}
+                onLoad={() => setImgLoaded(true)}
+                className="object-cover object-top transition-transform duration-500 group-hover:scale-105"
+              />
+            </>
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-gray-400 dark:text-gray-600">
               No image
@@ -451,6 +497,9 @@ export function ProductCard({ product }: { product: Product }) {
                   key={color}
                   title={color}
                   onClick={(e) => handleColorSelect(color, e)}
+                  onMouseEnter={() => handleColorPrefetch(color)}
+                  onFocus={() => handleColorPrefetch(color)}
+                  onTouchStart={() => handleColorPrefetch(color)}
                   className={`h-4 w-4 rounded-full transition-transform duration-150 hover:scale-110 focus:outline-none ${
                     selectedColor.toLowerCase() === color.toLowerCase()
                       ? "ring-1 ring-gray-900 ring-offset-1 dark:ring-white"
