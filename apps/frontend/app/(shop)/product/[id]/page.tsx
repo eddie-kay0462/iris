@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useMemo, useCallback, useEffect, Suspense } from "react";
+import { use, useState, useMemo, useCallback, useEffect, useRef, Suspense } from "react";
 import { useProduct, useProducts, type ProductVariant } from "@/lib/api/products";
 import { useCart } from "@/lib/cart";
 import {
@@ -264,6 +264,7 @@ function PDPGallery({
     : allSorted;
 
   const [idx, setIdx] = useState(0);
+  const touchStartX = useRef<number | null>(null);
 
   useImagePrefetch(images, colorFilter ?? "", { maxPriority: 6, width: 1080, quality: 80 });
 
@@ -310,7 +311,20 @@ function PDPGallery({
 
       {/* Main stage */}
       <div>
-        <div className="relative aspect-[4/5] bg-[#f4f3f1] overflow-hidden">
+        <div
+          className="relative aspect-[4/5] bg-[#f4f3f1] overflow-hidden"
+          onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+          onTouchEnd={(e) => {
+            if (touchStartX.current === null) return;
+            const delta = touchStartX.current - e.changedTouches[0].clientX;
+            if (Math.abs(delta) > 40) {
+              setIdx(delta > 0
+                ? (idx + 1) % sorted.length
+                : (idx - 1 + sorted.length) % sorted.length);
+            }
+            touchStartX.current = null;
+          }}
+        >
           <Image
             src={sorted[idx].src}
             alt={sorted[idx].alt_text || "Product image"}
