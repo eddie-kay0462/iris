@@ -12,6 +12,8 @@ import { useLocale } from "@/lib/locale/locale-provider";
 import { prefetchImage } from "@/hooks/useImagePrefetch";
 
 const GRID_IMAGE_QUALITY = 70;
+/** Responsive grid-cell widths — 2 cols (<640px), 3 (<1024px), else 4. */
+const GRID_SIZES = "(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw";
 /** next/image default deviceSizes — mirror them so a prefetch picks the same width. */
 const DEVICE_SIZES = [640, 750, 828, 1080, 1200, 1920, 2048, 3840];
 
@@ -307,6 +309,14 @@ export function ProductCard({
   const [imgIndex, setImgIndex] = useState(() => findImageIndexByTag(images, firstColor));
   const [selectedColor, setSelectedColor] = useState<string>(firstColor);
   const [imgLoaded, setImgLoaded] = useState(false);
+  // Liquid colour swaps: keep the settled image as a base layer and fade the
+  // newly selected colour's image in over it (once it has loaded), then promote
+  // it to the base — so a swap never hard-cuts or flashes a half-loaded image.
+  const [displaySrc, setDisplaySrc] = useState<string | undefined>(
+    () => (images[findImageIndexByTag(images, firstColor)] ?? images[0])?.src,
+  );
+  const [pendingSrc, setPendingSrc] = useState<string | null>(null);
+  const [pendingReady, setPendingReady] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handlePrefetch = useCallback(() => {
@@ -317,6 +327,43 @@ export function ProductCard({
       staleTime: 5 * 60 * 1000,
     });
   }, [queryClient, product.handle, product.id]);
+
+  // Warm every colour's image (small AVIFs at the width this viewport renders) so
+  // a colour switch ALWAYS has its crossfade target cached — letting the dissolve
+  // start immediately and play identically every time.
+  const warmAllColors = useCallback(() => {
+    const w = gridPrefetchWidth();
+    for (const color of extractColorsFromTags(images)) {
+      const src = images[findImageIndexByTag(images, color)]?.src;
+      if (src) prefetchImage(src, w, GRID_IMAGE_QUALITY);
+    }
+  }, [images]);
+
+  // Preload all colours as soon as the card is idle — no hover/touch required, so
+  // the swap animation is identical on mobile and desktop. requestIdleCallback keeps
+  // these tiny prefetches off the critical path so they never compete with the
+  // visible image.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (extractColorsFromTags(images).length < 2) return;
+    let idleId: number | undefined;
+    let timerId: ReturnType<typeof setTimeout> | undefined;
+    if (typeof window.requestIdleCallback === "function") {
+      idleId = window.requestIdleCallback(() => warmAllColors(), { timeout: 2500 });
+    } else {
+      timerId = setTimeout(() => warmAllColors(), 1200);
+    }
+    return () => {
+      if (idleId !== undefined) window.cancelIdleCallback(idleId);
+      if (timerId !== undefined) clearTimeout(timerId);
+    };
+  }, [warmAllColors, images]);
+
+  // Entering the card (desktop) gives an immediate top-up before idle fires.
+  const handleCardEnter = useCallback(() => {
+    handlePrefetch();
+    warmAllColors();
+  }, [handlePrefetch, warmAllColors]);
 
   const currentImage = images[imgIndex] ?? image;
 
@@ -340,6 +387,18 @@ export function ProductCard({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [quickAddOpen]);
+
+  // Start a crossfade whenever the selected image changes (swatch / hover-leave).
+  useEffect(() => {
+    const src = currentImage?.src;
+    if (!src || src === displaySrc) {
+      setPendingSrc(null);
+      setPendingReady(false);
+      return;
+    }
+    setPendingSrc(src);
+    setPendingReady(false);
+  }, [currentImage?.src, displaySrc]);
 
   const handleColorSelect = useCallback(
     (colorName: string, e: React.MouseEvent) => {
@@ -391,7 +450,7 @@ export function ProductCard({
       ref={containerRef}
       className="group block"
       onMouseLeave={handleMouseLeave}
-      onMouseEnter={handlePrefetch}
+      onMouseEnter={handleCardEnter}
     >
       <Link href={`/product/${product.handle || product.id}${selectedColor ? `?color=${encodeURIComponent(selectedColor)}` : ""}`}>
         {/* Image container */}
@@ -402,21 +461,49 @@ export function ProductCard({
             return prev;
           })}
         >
-          {currentImage ? (
+          {currentImage && displaySrc ? (
             <>
               {!imgLoaded && (
                 <div className="absolute inset-0 animate-pulse bg-gray-100 dark:bg-gray-800" />
               )}
+              {/* Base layer — the settled image */}
               <Image
-                src={currentImage.src}
-                alt={currentImage.alt_text || product.title}
+                src={displaySrc}
+                alt={product.title}
                 fill
-                sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+                sizes={GRID_SIZES}
                 quality={GRID_IMAGE_QUALITY}
                 priority={priority}
                 onLoad={() => setImgLoaded(true)}
                 className="object-cover object-top transition-transform duration-500 group-hover:scale-105"
               />
+              {/* Incoming layer — fades in over the base once loaded, then promotes */}
+              {pendingSrc && pendingSrc !== displaySrc && (
+                <motion.div
+                  key={pendingSrc}
+                  className="absolute inset-0"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: pendingReady ? 1 : 0 }}
+                  transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
+                  onAnimationComplete={() => {
+                    if (pendingReady) {
+                      setDisplaySrc(pendingSrc);
+                      setPendingSrc(null);
+                      setPendingReady(false);
+                    }
+                  }}
+                >
+                  <Image
+                    src={pendingSrc}
+                    alt={currentImage.alt_text || product.title}
+                    fill
+                    sizes={GRID_SIZES}
+                    quality={GRID_IMAGE_QUALITY}
+                    onLoad={() => setPendingReady(true)}
+                    className="object-cover object-top transition-transform duration-500 group-hover:scale-105"
+                  />
+                </motion.div>
+              )}
             </>
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-gray-400 dark:text-gray-600">
