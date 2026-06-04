@@ -3,6 +3,8 @@
 import { use, useState, useMemo, useCallback, useEffect, useRef, Suspense } from "react";
 import { useProduct, useProducts, type ProductVariant } from "@/lib/api/products";
 import { useCart } from "@/lib/cart";
+import { motion } from "framer-motion";
+import { prefetchImage } from "@/hooks/useImagePrefetch";
 import {
   findMatchingVariant,
   type OptionSlot,
@@ -266,12 +268,23 @@ function PDPGallery({
 
   const [idx, setIdx] = useState(0);
   const touchStartX = useRef<number | null>(null);
+  const [displaySrc, setDisplaySrc] = useState(() => sorted[0]?.src ?? "");
+  const [pendingSrc, setPendingSrc] = useState<string | null>(null);
+  const [pendingReady, setPendingReady] = useState(false);
+  // Whether the incoming image was slow enough to warrant an animated fade.
+  const [shouldFade, setShouldFade] = useState(false);
+  const pendingStartRef = useRef<number>(0);
 
   useImagePrefetch(images, colorFilter ?? "", { maxPriority: 6, width: 1080, quality: 80 });
 
-  // When the color changes, jump to the first image in the new set.
+  // When the color changes, hard-cut to the first image of the new set.
   useEffect(() => {
     setIdx(0);
+    setDisplaySrc(sorted[0]?.src ?? "");
+    setPendingSrc(null);
+    setPendingReady(false);
+    setShouldFade(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colorFilter]);
 
   useEffect(() => {
@@ -280,6 +293,34 @@ function PDPGallery({
     if (i !== -1) setIdx(i);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeImageId]);
+
+  // Start a crossfade whenever the active index changes.
+  useEffect(() => {
+    const src = sorted[idx]?.src;
+    if (!src || src === displaySrc) return;
+    pendingStartRef.current = performance.now();
+    setPendingSrc(src);
+    setPendingReady(false);
+    setShouldFade(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx, sorted]);
+
+  // Eagerly prefetch adjacent images so the next click is always a cache hit.
+  useEffect(() => {
+    if (sorted.length <= 1) return;
+    const prev = sorted[(idx - 1 + sorted.length) % sorted.length];
+    const next = sorted[(idx + 1) % sorted.length];
+    if (prev) prefetchImage(prev.src, 1080, 80);
+    if (next) prefetchImage(next.src, 1080, 80);
+  }, [idx, sorted]);
+
+  function handlePendingLoad() {
+    // Only animate if the image actually took >80ms — i.e. it wasn't already cached.
+    // On localhost / warm cache this means an instant hard-cut; on real networks it fades.
+    const slow = performance.now() - pendingStartRef.current > 80;
+    setShouldFade(slow);
+    setPendingReady(true);
+  }
 
   if (sorted.length === 0) {
     return (
@@ -326,15 +367,46 @@ function PDPGallery({
             touchStartX.current = null;
           }}
         >
-          <Image
-            src={sorted[idx].src}
-            alt={sorted[idx].alt_text || "Product image"}
-            fill
-            priority
-            sizes="(min-width: 1024px) 50vw, 100vw"
-            quality={80}
-            className="object-cover"
-          />
+          {/* Base layer — stays visible while the next image loads */}
+          {displaySrc && (
+            <Image
+              src={displaySrc}
+              alt={sorted[idx]?.alt_text || "Product image"}
+              fill
+              priority
+              sizes="(min-width: 1024px) 50vw, 100vw"
+              quality={80}
+              className="object-cover"
+            />
+          )}
+          {/* Incoming layer — hard-cuts when cached, fades when slow to load */}
+          {pendingSrc && pendingSrc !== displaySrc && (
+            <motion.div
+              key={pendingSrc}
+              className="absolute inset-0"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: pendingReady ? 1 : 0 }}
+              transition={shouldFade ? { duration: 0.35, ease: [0.4, 0, 0.2, 1] } : { duration: 0 }}
+              onAnimationComplete={() => {
+                if (pendingReady) {
+                  setDisplaySrc(pendingSrc!);
+                  setPendingSrc(null);
+                  setPendingReady(false);
+                  setShouldFade(false);
+                }
+              }}
+            >
+              <Image
+                src={pendingSrc}
+                alt={sorted[idx]?.alt_text || "Product image"}
+                fill
+                sizes="(min-width: 1024px) 50vw, 100vw"
+                quality={80}
+                onLoad={handlePendingLoad}
+                className="object-cover"
+              />
+            </motion.div>
+          )}
 
           {/* Counter */}
           <div className="absolute left-4 bottom-4 bg-white/85 backdrop-blur-[4px] px-2.5 py-1 text-[13px] font-bold text-black">
