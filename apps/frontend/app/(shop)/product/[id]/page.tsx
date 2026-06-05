@@ -566,16 +566,6 @@ function getOptionGroups(variants: ProductVariant[]) {
   return groups;
 }
 
-function selectedFromVariant(variant: ProductVariant, groups: OptionSlot[]): Record<string, string> {
-  const sel: Record<string, string> = {};
-  for (const g of groups) {
-    const key = g.slot === 1 ? "option1_value" : g.slot === 2 ? "option2_value" : "option3_value";
-    const val = variant[key];
-    if (val) sel[g.name] = val;
-  }
-  return sel;
-}
-
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -601,7 +591,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
     if (initialized || variants.length === 0) return;
     const groups = extractOptionGroups(variants);
     if (groups.length === 0) { setInitialized(true); return; }
-    const firstInStock = variants.find((v) => v.inventory_quantity > 0) || variants[0];
+    const firstInStock = variants.find((v) => v.inventory_quantity > 0) ?? variants[0]!;
     const sel: Record<string, string> = {};
     for (const g of groups) {
       if (g.name.toLowerCase() === "size") continue;
@@ -616,7 +606,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
     }
     setSelectedOptions(sel);
     setInitialized(true);
-  }, [variants, initialized]);
+  }, [variants, initialized, initialColor]);
 
   const activeVariant = useMemo(() => {
     if (variants.length === 0) return null;

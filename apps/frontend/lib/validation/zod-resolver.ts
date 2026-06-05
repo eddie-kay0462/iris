@@ -7,7 +7,7 @@ import type { ZodType, ZodError } from "zod";
  */
 export function zodResolver<T extends FieldValues>(schema: ZodType<T>) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return async (values: any) => {
+  return async (values: any, _context?: any, _options?: any): Promise<any> => {
     const result = schema.safeParse(values);
 
     if (result.success) {
