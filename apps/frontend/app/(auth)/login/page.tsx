@@ -6,6 +6,7 @@ import Link from "next/link";
 import { apiClient, setToken } from "@/lib/api/client";
 import { toast } from "sonner";
 import PasswordInput from "../components/PasswordInput";
+import GoogleAuthButton from "../components/GoogleAuthButton";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
@@ -80,6 +81,8 @@ function LoginForm() {
           {loading ? "Signing in..." : "Sign in"}
         </button>
       </form>
+
+      <GoogleAuthButton />
 
       <div className="space-y-2 text-center text-sm text-gray-500">
         <p>
