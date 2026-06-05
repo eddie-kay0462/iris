@@ -10,6 +10,7 @@ import { apiClient } from "@/lib/api/client";
 import { toast } from "sonner";
 import PhoneInput from "@/components/PhoneInput";
 import PasswordInput from "../components/PasswordInput";
+import GoogleAuthButton from "../components/GoogleAuthButton";
 
 const signupSchema = z
   .object({
@@ -153,6 +154,8 @@ export default function SignupPage() {
           {loading ? "Creating account..." : "Sign up"}
         </button>
       </form>
+
+      <GoogleAuthButton />
 
       <div className="text-center text-sm text-gray-500">
         <p>
