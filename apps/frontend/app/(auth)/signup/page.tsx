@@ -161,7 +161,7 @@ export default function SignupPage() {
         <p>
           Already have an account?{" "}
           <Link href="/login" className="text-white underline underline-offset-2 font-medium">
-            Log in
+            Log In
           </Link>
         </p>
       </div>

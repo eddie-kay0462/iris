@@ -88,7 +88,7 @@ export default function PhoneInput({
           onChange={(e) => handleChange(e.target.value)}
           placeholder={placeholder}
           required={required}
-          className="flex-1 rounded-r border border-l-0 border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-gray-900 focus:ring-1 focus:ring-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-white dark:focus:ring-white"
+          className="flex-1 rounded-r border ps-2 border-l-0 border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-gray-900 focus:ring-1 focus:ring-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-white dark:focus:ring-white"
         />
       </div>
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}

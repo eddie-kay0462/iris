@@ -54,7 +54,7 @@ function LoginForm() {
   return (
     <div className="w-full space-y-8">
       <div className="space-y-2 text-center">
-        <h2 className="text-xl font-medium uppercase tracking-[0.25em]">Log in</h2>
+        <h2 className="text-xl font-medium uppercase tracking-[0.25em]">Log In</h2>
         <p className="text-xs text-gray-500 tracking-wide">
           Enter your credentials to continue.
         </p>
@@ -91,12 +91,12 @@ function LoginForm() {
         <p>
           Don&apos;t have an account?{" "}
           <Link href="/signup" className="text-white underline underline-offset-2 font-medium">
-            Sign up
+            Sign Up
           </Link>
         </p>
         <p>
           <Link href="/reset-password" className="text-white underline underline-offset-2 font-medium">
-            Forgot password?
+            Forgot Password?
           </Link>
         </p>
       </div>
