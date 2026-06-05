@@ -48,35 +48,38 @@ function LoginForm() {
     }
   };
 
+  const inputClass =
+    "w-full border-b border-gray-700 bg-transparent py-3 text-sm placeholder:text-gray-600 focus:border-white focus:outline-none transition-colors";
+
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-8">
       <div className="space-y-2 text-center">
-        <h2 className="text-2xl font-semibold">Log in</h2>
-        <p className="text-sm text-gray-500">
+        <h2 className="text-xl font-medium uppercase tracking-[0.25em]">Log In</h2>
+        <p className="text-xs text-gray-500 tracking-wide">
           Enter your credentials to continue.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-5">
         <input
           type="email"
           placeholder="Email address"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="w-full border border-gray-300 p-2 rounded"
+          className={inputClass}
         />
         <PasswordInput
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          className="w-full border border-gray-300 p-2 rounded"
+          className={inputClass}
         />
         <button
           type="submit"
           disabled={!email || !password || loading}
-          className="w-full bg-black text-white px-4 py-2 rounded disabled:opacity-50"
+          className="w-full bg-white text-black px-4 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] transition hover:bg-white/85 disabled:opacity-40"
         >
           {loading ? "Signing in..." : "Sign in"}
         </button>
@@ -84,16 +87,16 @@ function LoginForm() {
 
       <GoogleAuthButton />
 
-      <div className="space-y-2 text-center text-sm text-gray-500">
+      <div className="space-y-2 text-center text-xs text-gray-500 tracking-wide">
         <p>
           Don&apos;t have an account?{" "}
-          <Link href="/signup" className="text-white underline">
-            Sign up
+          <Link href="/signup" className="text-white underline underline-offset-2 font-medium">
+            Sign Up
           </Link>
         </p>
         <p>
-          <Link href="/reset-password" className="text-white font-semibold underline">
-            Forgot password?
+          <Link href="/reset-password" className="text-white underline underline-offset-2 font-medium">
+            Forgot Password?
           </Link>
         </p>
       </div>

@@ -100,11 +100,16 @@ function CartLink({ isTransparent = false }: { isTransparent?: boolean }) {
 
 function UserLink({ isTransparent = false }: { isTransparent?: boolean }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [loggedIn, setLoggedIn] = useState(false);
   const [avatarLetter, setAvatarLetter] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!hasToken()) return;
+    if (!hasToken()) {
+      setLoggedIn(false);
+      setAvatarLetter(null);
+      return;
+    }
     setLoggedIn(true);
     apiClient<{ first_name: string | null; email: string | null }>("/profile")
       .then((profile) => {
@@ -115,7 +120,7 @@ function UserLink({ isTransparent = false }: { isTransparent?: boolean }) {
         setAvatarLetter(letter);
       })
       .catch(() => {});
-  }, []);
+  }, [pathname]);
 
   function handleClick() {
     if (loggedIn) {

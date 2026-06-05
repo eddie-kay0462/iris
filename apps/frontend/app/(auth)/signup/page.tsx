@@ -71,18 +71,18 @@ export default function SignupPage() {
   };
 
   const inputClass =
-    "w-full border border-gray-300 p-2 rounded focus:outline-none focus:ring-1 focus:ring-black";
+    "w-full border-b border-gray-700 bg-transparent py-3 text-sm placeholder:text-gray-600 focus:border-white focus:outline-none transition-colors";
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-8">
       <div className="space-y-2 text-center">
-        <h2 className="text-2xl font-semibold">Create an account</h2>
-        <p className="text-sm text-gray-500">
+        <h2 className="text-xl font-medium uppercase tracking-[0.25em]">Create an account</h2>
+        <p className="text-xs text-gray-500 tracking-wide">
           Fill in your details to get started.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         <div className="grid grid-cols-2 gap-3">
           <div>
             <input
@@ -149,7 +149,7 @@ export default function SignupPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-black text-white px-4 py-2 rounded disabled:opacity-50"
+          className="w-full bg-white text-black px-4 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] transition hover:bg-white/85 disabled:opacity-40"
         >
           {loading ? "Creating account..." : "Sign up"}
         </button>
@@ -157,11 +157,11 @@ export default function SignupPage() {
 
       <GoogleAuthButton />
 
-      <div className="text-center text-sm text-gray-500">
+      <div className="text-center text-xs text-gray-500 tracking-wide">
         <p>
           Already have an account?{" "}
-          <Link href="/login" className="text-white underline">
-            Log in
+          <Link href="/login" className="text-white underline underline-offset-2 font-medium">
+            Log In
           </Link>
         </p>
       </div>

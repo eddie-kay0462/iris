@@ -297,6 +297,47 @@ export class AuthService {
     };
   }
 
+  async adminSyncSession(accessToken: string) {
+    const supabase = this.supabaseService.getAdminClient();
+
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(accessToken);
+
+    if (error || !user) {
+      throw new UnauthorizedException('Invalid or expired session');
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile) {
+      throw new ForbiddenException('Account does not have admin access');
+    }
+
+    const role = (profile.role as UserRole) ?? 'public';
+
+    if (!ADMIN_ROLES.includes(role)) {
+      throw new ForbiddenException('Account does not have admin access');
+    }
+
+    await supabase
+      .from('profiles')
+      .update({ last_login_at: new Date().toISOString() })
+      .eq('id', user.id);
+
+    const token = await this.signToken(user.id, user.email!, role);
+
+    return {
+      access_token: token,
+      user: { id: user.id, email: user.email, role },
+    };
+  }
+
   private async signToken(
     userId: string,
     email: string,
