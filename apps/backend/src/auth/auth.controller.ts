@@ -72,4 +72,11 @@ export class AuthController {
   async adminLogin(@Body() dto: LoginDto) {
     return this.authService.adminLogin(dto);
   }
+
+  @Public()
+  @Post('admin/sync')
+  @HttpCode(HttpStatus.OK)
+  async adminSyncSession(@Body() dto: SyncSessionDto) {
+    return this.authService.adminSyncSession(dto.access_token);
+  }
 }
