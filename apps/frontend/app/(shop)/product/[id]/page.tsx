@@ -252,41 +252,56 @@ function PDPGallery({
   activeImageId?: string | null;
   colorFilter?: string | null;
 }) {
-  const allSorted = [...images].sort((a, b) => a.position - b.position);
+  // Images for the selected colour. color_tags = [] means "show for all colours"
+  // (shared / lifestyle shots). Fall back to the full set when nothing is tagged.
+  const sorted = useMemo(() => {
+    const allSorted = [...images].sort((a, b) => a.position - b.position);
+    const anyTagged = allSorted.some((img) => (img.color_tags ?? []).length > 0);
+    const cfLower = colorFilter?.toLowerCase();
+    if (!anyTagged || !cfLower) return allSorted;
+    return allSorted.filter((img) => {
+      const tags = img.color_tags ?? [];
+      return tags.length === 0 || tags.some((t) => t.toLowerCase() === cfLower);
+    });
+  }, [images, colorFilter]);
 
-  // Show only images tagged to the selected color.
-  // color_tags = [] means "show for all colours" (shared / lifestyle shots).
-  // Fall back to the full set when no image has any tags yet (untagged product).
-  const anyTagged = allSorted.some((img) => (img.color_tags ?? []).length > 0);
-  const cfLower = colorFilter?.toLowerCase();
-  const sorted = anyTagged && cfLower
-    ? allSorted.filter((img) => {
-        const tags = img.color_tags ?? [];
-        return tags.length === 0 || tags.some((t) => t.toLowerCase() === cfLower);
-      })
-    : allSorted;
+  // Index of the variant's representative image within a set (0 when none).
+  const indexOfActive = useCallback(
+    (set: GalleryImage[]) => {
+      if (!activeImageId) return 0;
+      const i = set.findIndex((img) => img.id === activeImageId);
+      return i === -1 ? 0 : i;
+    },
+    [activeImageId],
+  );
 
-  const [idx, setIdx] = useState(0);
-  const touchStartX = useRef<number | null>(null);
-  const [displaySrc, setDisplaySrc] = useState(() => sorted[0]?.src ?? "");
+  const [idx, setIdx] = useState(() => indexOfActive(sorted));
+  const [displaySrc, setDisplaySrc] = useState(() => sorted[indexOfActive(sorted)]?.src ?? "");
+  // Incoming image layered over the base while it loads.
   const [pendingSrc, setPendingSrc] = useState<string | null>(null);
   const [pendingReady, setPendingReady] = useState(false);
   // Whether the incoming image was slow enough to warrant an animated fade.
   const [shouldFade, setShouldFade] = useState(false);
-  const pendingStartRef = useRef<number>(0);
+  const pendingStartRef = useRef(0);
+  // Guards markReady against the duplicate calls an inline ref callback makes.
+  const readyForRef = useRef<string | null>(null);
+  const touchStartX = useRef<number | null>(null);
 
   useImagePrefetch(images, colorFilter ?? "", { maxPriority: 6, width: 1080, quality: 80 });
 
-  // When the color changes, hard-cut to the first image of the new set.
+  // Colour change → hard-cut straight to the variant's main image in the new set.
   useEffect(() => {
-    setIdx(0);
-    setDisplaySrc(sorted[0]?.src ?? "");
+    const resolved = indexOfActive(sorted);
+    setIdx(resolved);
+    setDisplaySrc(sorted[resolved]?.src ?? "");
     setPendingSrc(null);
     setPendingReady(false);
     setShouldFade(false);
+    readyForRef.current = null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colorFilter]);
 
+  // Variant change within the same colour (e.g. a size mapped to another image).
   useEffect(() => {
     if (!activeImageId) return;
     const i = sorted.findIndex((img) => img.id === activeImageId);
@@ -294,18 +309,36 @@ function PDPGallery({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeImageId]);
 
-  // Start a crossfade whenever the active index changes.
+  // Begin a swap whenever the active image changes. Keyed on `idx` only: `sorted`
+  // is memoised and colour resets are driven by the effects above, so depending on
+  // `sorted` here would spuriously fire mid-colour-switch (when `sorted` is the new
+  // set but `idx` is still the old value) and crossfade to the wrong image.
+  // Readiness is detected on the real incoming <Image> below (ref + onLoad), so a
+  // cached image — whose load event can fire before React attaches the handler —
+  // never leaves the gallery stuck on the previous picture.
   useEffect(() => {
-    const src = sorted[idx]?.src;
-    if (!src || src === displaySrc) return;
+    const target = sorted[idx]?.src;
+    if (!target || target === displaySrc) return;
     pendingStartRef.current = performance.now();
-    setPendingSrc(src);
+    readyForRef.current = null;
+    setPendingSrc(target);
     setPendingReady(false);
     setShouldFade(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idx, sorted]);
+  }, [idx]);
 
-  // Eagerly prefetch adjacent images so the next click is always a cache hit.
+  // Mark the incoming image painted. Called from both a completeness ref check
+  // (covers cache hits) and onLoad (covers network loads); the ref guards against
+  // the duplicate invocations an inline ref callback makes across renders.
+  const markReady = useCallback((src: string) => {
+    if (readyForRef.current === src) return;
+    readyForRef.current = src;
+    // Effectively-instant loads (warm cache) hard-cut; real loads fade in.
+    setShouldFade(performance.now() - pendingStartRef.current > 80);
+    setPendingReady(true);
+  }, []);
+
+  // Eagerly warm adjacent images so the next click is a cache hit.
   useEffect(() => {
     if (sorted.length <= 1) return;
     const prev = sorted[(idx - 1 + sorted.length) % sorted.length];
@@ -313,14 +346,6 @@ function PDPGallery({
     if (prev) prefetchImage(prev.src, 1080, 80);
     if (next) prefetchImage(next.src, 1080, 80);
   }, [idx, sorted]);
-
-  function handlePendingLoad() {
-    // Only animate if the image actually took >80ms — i.e. it wasn't already cached.
-    // On localhost / warm cache this means an instant hard-cut; on real networks it fades.
-    const slow = performance.now() - pendingStartRef.current > 80;
-    setShouldFade(slow);
-    setPendingReady(true);
-  }
 
   if (sorted.length === 0) {
     return (
@@ -389,7 +414,7 @@ function PDPGallery({
               transition={shouldFade ? { duration: 0.35, ease: [0.4, 0, 0.2, 1] } : { duration: 0 }}
               onAnimationComplete={() => {
                 if (pendingReady) {
-                  setDisplaySrc(pendingSrc!);
+                  setDisplaySrc(pendingSrc);
                   setPendingSrc(null);
                   setPendingReady(false);
                   setShouldFade(false);
@@ -402,7 +427,8 @@ function PDPGallery({
                 fill
                 sizes="(min-width: 1024px) 50vw, 100vw"
                 quality={80}
-                onLoad={handlePendingLoad}
+                ref={(el) => { if (el && el.complete && el.naturalWidth > 0) markReady(pendingSrc); }}
+                onLoad={() => markReady(pendingSrc)}
                 className="object-cover"
               />
             </motion.div>
@@ -540,16 +566,6 @@ function getOptionGroups(variants: ProductVariant[]) {
   return groups;
 }
 
-function selectedFromVariant(variant: ProductVariant, groups: OptionSlot[]): Record<string, string> {
-  const sel: Record<string, string> = {};
-  for (const g of groups) {
-    const key = g.slot === 1 ? "option1_value" : g.slot === 2 ? "option2_value" : "option3_value";
-    const val = variant[key];
-    if (val) sel[g.name] = val;
-  }
-  return sel;
-}
-
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -566,12 +582,16 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
 
   const variants = product?.product_variants || [];
   const optionGroups = useMemo(() => extractOptionGroups(variants), [variants]);
+  const images = useMemo(
+    () => [...(product?.product_images ?? [])].sort((a, b) => a.position - b.position),
+    [product?.product_images],
+  );
 
   useEffect(() => {
     if (initialized || variants.length === 0) return;
     const groups = extractOptionGroups(variants);
     if (groups.length === 0) { setInitialized(true); return; }
-    const firstInStock = variants.find((v) => v.inventory_quantity > 0) || variants[0];
+    const firstInStock = variants.find((v) => v.inventory_quantity > 0) ?? variants[0]!;
     const sel: Record<string, string> = {};
     for (const g of groups) {
       if (g.name.toLowerCase() === "size") continue;
@@ -586,7 +606,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
     }
     setSelectedOptions(sel);
     setInitialized(true);
-  }, [variants, initialized]);
+  }, [variants, initialized, initialColor]);
 
   const activeVariant = useMemo(() => {
     if (variants.length === 0) return null;
@@ -647,8 +667,6 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
   }
-
-  const images = [...(product.product_images || [])].sort((a, b) => a.position - b.position);
 
   return (
     <div className="bg-white text-black min-h-screen">

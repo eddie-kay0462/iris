@@ -105,17 +105,17 @@ interface LocaleContextValue {
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
 export function LocaleProvider({ children }: { children: React.ReactNode }) {
-  const [region] = useState<Region>(() => {
-    if (typeof window === "undefined") return FALLBACK_REGION;
-    return detectRegion();
-  });
-
-  const [currency, setCurrencyState] = useState<string>(() => {
-    if (typeof window === "undefined") return "GHS";
-    return localStorage.getItem("iris_currency") ?? "GHS";
-  });
-
+  // Always start with the fallback so server and client render the same HTML.
+  // useEffect updates to the real values after hydration.
+  const [region, setRegion] = useState<Region>(FALLBACK_REGION);
+  const [currency, setCurrencyState] = useState<string>("GHS");
   const [rates, setRates] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    setRegion(detectRegion());
+    const stored = localStorage.getItem("iris_currency");
+    if (stored) setCurrencyState(stored);
+  }, []);
 
   useEffect(() => {
     const cached = loadCachedRates();

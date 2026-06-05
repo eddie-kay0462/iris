@@ -3573,3 +3573,40 @@ cd apps/frontend && npm run dev
 2. Scroll quickly to the bottom — images should appear in ~1s, not 40s.
 3. Hover (or tap) a colour swatch, then click it — the image should swap instantly.
 4. On the product page, check the thumbnail strip — those should now be ~1KB images, not the full-size photo.
+
+---
+
+## PDP Image Switching — Reliability & Smoothness Fixes (June 2026)
+
+### What Got Done
+
+**Fixed the product page gallery's image switching.** This is the follow-up to the earlier "partially fixed image switching" work — the gallery had a crossfade mechanism in place, but three bugs were left in it. The headline one: the main image often **wouldn't change on the first click**, and would only start working after you left the page and came back. We tracked all three to their root causes and reworked the gallery's swap logic so switching is reliable and smooth — both between images of the same colour and when changing colour.
+
+### The Three Bugs (in plain terms)
+
+1. **The image didn't change on the first click.** The gallery revealed each new image only when the browser fired the image's `load` event. But that event **doesn't fire for an image that's already in the browser's cache** — it can fire before our code is even listening. And because the gallery *pre-loads the neighbouring images* (so the next click feels instant), the image you click to is usually already cached. Result: the `load` event never came, so the new image stayed invisible and the gallery looked stuck. Leaving and returning reshuffled what was cached, so a later click happened to work — which is exactly the flaky "works the second time" behaviour that was reported.
+
+2. **Switching felt janky / did extra work.** The list of images was being rebuilt from scratch on every single re-render. That made the swap and pre-load logic re-run constantly — including in the middle of a fade, where it could reset a transition that was already in progress and stall it.
+
+3. **Changing colour did a visible double-jump.** Picking a new colour first cut the gallery to the *first* image of that colour, and then a separate piece of logic jumped to the *variant's* image — so you saw a hard cut immediately followed by a stray fade to a different picture.
+
+### What Changed
+
+1. **Readiness is now detected on the real image, not a cache-unreliable event.** When a new image is shown, we check the actual `<Image>` element directly — "is it already painted?" (`img.complete && img.naturalWidth > 0`) — *and* still listen for the `load` event for images that genuinely have to download. Either path reveals the image, so a cached image can never leave the gallery stuck again.
+2. **The image list is memoised.** It's only recomputed when the images or the selected colour actually change, so the swap/pre-load logic stops firing on unrelated re-renders and in-flight fades aren't interrupted.
+3. **One clean path for colour changes.** Selecting a colour now hard-cuts straight to that colour variant's main image (falling back to the first image tagged for the colour) — no more cut-then-fade double jump. The swap effect is keyed on the image index alone so it can't fire mid-colour-switch with a stale index and crossfade to the wrong picture.
+
+**Net behaviour now:** a cached image swaps instantly (hard cut); an image that genuinely has to load fades in over ~0.35s so you never see an empty frame; and changing colour lands on that colour's main image in a single clean cut.
+
+### Files Modified
+
+| File | What Changed |
+|---|---|
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | Reworked the `PDPGallery` swap logic: ref-based readiness detection (replaces the cache-unreliable `onLoad`-only gate), memoised the image list, and unified colour-change handling to land on the variant's main image without a double-jump. Memoised the `images` list passed into the gallery. |
+
+### Something Not Working? / Things to Know
+
+- **Test it on a cold load.** Hard-refresh a product with several images, then immediately click the next/prev arrows, the thumbnails, and the mobile dots — the main image should change on the *first* tap every time. This is the regression that was fixed.
+- **Throttle the network to see the fade.** In DevTools (Network → Slow 3G), switching images should hold the old photo and crossfade the new one in — no grey/empty frame, no stall.
+- **Changing colour** should jump straight to that colour's main shot in one cut, with the counter and thumbnail strip updating to the new set.
+- The pre-existing `next build` type errors in `lib/validation/zod-resolver.test.ts` still stand (unrelated to this work, noted in the previous entry). The gallery change itself is type-clean and lint-clean.
