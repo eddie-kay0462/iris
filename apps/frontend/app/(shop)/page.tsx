@@ -238,7 +238,7 @@ export default function RoadToHQPage() {
             <span><span className="text-green-400">Live</span> · Deadline</span>
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-white/80" />
           </div>
-          <div className={`${caveat.className} text-8xl sm:text-9xl lg:text-[8rem] text-white leading-none`} style={{ fontWeight: 500 }}>
+          <div className={`${caveat.className} text-8xl sm:text-7xl lg:text-7xl text-white leading-none`} style={{ fontWeight: 500 }}>
             26.12.2026
           </div>
         </motion.div>
