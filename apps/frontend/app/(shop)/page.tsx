@@ -88,6 +88,13 @@ const MILESTONES = [
   },
 ];
 
+/* ── Image prefetch ── */
+function prefetchImage(src: string) {
+  if (typeof window === "undefined") return;
+  const img = new window.Image();
+  img.src = src;
+}
+
 /* ── Shared animation variants ── */
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
 
@@ -215,17 +222,19 @@ export default function RoadToHQPage() {
         {/* Parallax image */}
         <motion.div className="absolute inset-0 will-change-transform" style={{ y: heroImageY }}>
           <Image
-            src="/homepage/1.jpeg"
+            src="/homepage/7.jpg"
             alt=""
             fill
             sizes="100vw"
-            className="hidden sm:block object-cover object-[center_0%] scale-110"
+            style={{transform: "scaleY(-1) scaleX(-1)"}}
+            className="hidden sm:block object-cover object-[center_85%] scale-110"
             priority
           />
           <Image
-            src="/homepage/mobile.png"
+            src="/homepage/7.jpg"
             alt=""
             fill
+            style={{transform: "scaleY(-1) scaleX(-1)"}}
             sizes="100vw"
             className="block sm:hidden object-cover object-[50%_25%] scale-110"
             priority
