@@ -3610,3 +3610,87 @@ cd apps/frontend && npm run dev
 - **Throttle the network to see the fade.** In DevTools (Network → Slow 3G), switching images should hold the old photo and crossfade the new one in — no grey/empty frame, no stall.
 - **Changing colour** should jump straight to that colour's main shot in one cut, with the counter and thumbnail strip updating to the new set.
 - The pre-existing `next build` type errors in `lib/validation/zod-resolver.test.ts` still stand (unrelated to this work, noted in the previous entry). The gallery change itself is type-clean and lint-clean.
+
+---
+
+## Road to HQ — Mobile Responsive Fixes (June 2026)
+
+### What Got Done
+
+**Fixed the homepage (Road to HQ campaign page) on mobile viewports (≤ 639px).** The desktop layout was correct and is untouched. All fixes are base/mobile-first values that the existing `sm:` overrides restore to the original desktop appearance at ≥ 640px.
+
+### Bugs Fixed
+
+**1. Hero date "26.12.2026" overflowing the viewport**
+
+The date was set to `text-8xl` (6rem / 96px) at the base (mobile) size — far too large. Changed to `text-[2.4375rem]` (30% larger than `text-3xl` baseline, fitting 375px screens).
+
+**2. Hero title "Road to HQ" too large on mobile**
+
+`text-5xl` (48px) was clipping in bold uppercase Helvetica on narrow screens. Reduced to `text-[2.25rem]` (36px) at base. Desktop `sm:text-7xl lg:text-[7.5rem]` unchanged.
+
+**3. Counter grid (Sold / Progress / Target) clipping on the right**
+
+The three-column counter had no width cap and its numbers were `text-2xl` (24px) at base. Reduced numbers to `text-xl` (20px), tightened gap from `gap-3` to `gap-2`, shortened the progress bar from `w-24` to `w-16`, and added `max-w-xs` to the grid so it stays centred and inside the viewport on small screens.
+
+**4. CTA buttons ("Shop Now" / "Learn More") not full-width on mobile**
+
+Both buttons had a fixed `w-56` — on mobile they either clipped or didn't centre properly. Changed to `w-full sm:w-56` with reduced horizontal padding (`px-6 sm:px-10`). Added `justify-center` to the flex container so the fixed-width buttons sit centred on desktop.
+
+**5. Mobile hero background image not displaying**
+
+There was only a single desktop hero image (`/homepage/1.jpeg`). Added the portrait mobile image (`hero-apoluo-mobile.png`, copied from the design handoff assets) as `/public/homepage/mobile.png`. The desktop image gets `hidden sm:block` and the new mobile image gets `block sm:hidden` with `object-[50%_25%]` to frame the model's upper body correctly.
+
+**6. Gap between deadline block and hero title**
+
+The deadline kicker (`top-[150px]` absolute) and the centered copy section (`translate-y-8`) left a large visual gap on mobile now that the date is smaller. Removed the `translate-y-8` downward push on mobile (`sm:translate-y-8`) and tightened the h1 top margin to `mt-1 sm:mt-4`.
+
+### Files Modified
+
+| File | What Changed |
+|---|---|
+| `apps/frontend/app/(shop)/page.tsx` | Mobile sizing for date, title, counter, CTA buttons; mobile/desktop image swap; gap reduction |
+| `apps/frontend/public/homepage/mobile.png` | **New** — portrait hero image for mobile (<640px) |
+
+---
+
+## Google OAuth — PKCE Code Verifier Bug Fix (June 2026)
+
+### What Got Done
+
+**Fixed a recurring `pkce_code_verifier_not_found` error on Google OAuth login** — the one that made the first (or occasional) login attempt with Google fail with "The authentication link was invalid or has expired."
+
+### Root Cause
+
+The bug lives in the interaction between `@supabase/auth-js`'s `_removeSession()` and `signInWithOAuth()`.
+
+When a user has stale or expired session cookies in their browser (the `sb-...-auth-token.0/.1` cookies from a previous login), opening the login page causes `createBrowserClient` to start its `initialize()` flow. During initialization, `_recoverAndRefresh()` detects the expired session, can't refresh the token, and calls `_removeSession()`. `_removeSession()` (line 2080 of `GoTrueClient.js`) explicitly deletes **`storageKey-code-verifier`** as part of its cleanup:
+
+```js
+await removeItemAsync(this.storage, this.storageKey + '-code-verifier');
+```
+
+The problem: **`signInWithOAuth()` does not await `initializePromise`** — it fires immediately without waiting for initialization to finish. So the race is:
+
+1. `createClient()` starts initialization (reads session → detects expiry → calls `_removeSession()`)
+2. User clicks "Continue with Google" → `signInWithOAuth()` stores the PKCE code verifier in a cookie
+3. `_removeSession()` completes and **deletes the code verifier**
+4. Browser navigates to Google → comes back to `/api/auth/callback?code=...`
+5. The callback route can't find the code verifier → `pkce_code_verifier_not_found`
+
+### Fix
+
+Added `await supabase.auth.getSession()` before `signInWithOAuth()` in `GoogleAuthButton.tsx`. `getSession` does `await this.initializePromise` internally, so by the time it returns, any `_removeSession()` has already completed. The code verifier is then stored cleanly and stays in the cookie through the OAuth redirect.
+
+```ts
+// Ensure initialization (and any _removeSession cleanup) finishes before
+// storing the PKCE code verifier — signInWithOAuth doesn't await initializePromise.
+await supabase.auth.getSession();
+const { error } = await supabase.auth.signInWithOAuth({ ... });
+```
+
+### Files Modified
+
+| File | What Changed |
+|---|---|
+| `apps/frontend/app/(auth)/components/GoogleAuthButton.tsx` | Added `await supabase.auth.getSession()` before `signInWithOAuth` |
