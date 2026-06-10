@@ -9,14 +9,17 @@ export default function GoogleAuthButton() {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     const supabase = createClient();
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/api/auth/callback`,
       },
     });
-    // No finally — browser navigates away on success; on error Supabase returns
-    // and the button would be stuck loading, so reset it.
+    // On success the browser navigates away — leave loading=true so the
+    // button stays disabled until the page unloads. On error, reset it.
+    if (error) {
+      setLoading(false);
+    }
   };
 
   return (

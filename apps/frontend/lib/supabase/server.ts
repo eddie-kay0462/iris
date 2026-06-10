@@ -25,7 +25,7 @@ export const createClient = async () => {
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
+              cookieStore.set(name, value, { ...options, path: "/" });
             });
           } catch {
             // setAll is called from Server Components where cookies can't be written.
