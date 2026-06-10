@@ -226,7 +226,7 @@ export default function RoadToHQPage() {
             alt=""
             fill
             sizes="100vw"
-            style={{transform: "scaleY(-1) scaleX(-1)"}}
+            style={{transform: "scaleX(-1)"}}
             className="hidden sm:block object-cover object-[center_85%] scale-110"
             priority
           />
@@ -234,7 +234,7 @@ export default function RoadToHQPage() {
             src="/homepage/7.jpg"
             alt=""
             fill
-            style={{transform: "scaleY(-1) scaleX(-1)"}}
+            style={{transform: "scaleX(-1)"}}
             sizes="100vw"
             className="block sm:hidden object-cover object-[50%_25%] scale-110"
             priority
