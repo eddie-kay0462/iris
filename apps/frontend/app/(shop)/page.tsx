@@ -227,7 +227,7 @@ export default function RoadToHQPage() {
             fill
             sizes="100vw"
             style={{transform: "scaleX(-1)"}}
-            className="hidden sm:block object-cover object-[center_85%] scale-110"
+            className="hidden sm:block object-cover object-[center_20%] scale-110"
             priority
           />
           <Image
