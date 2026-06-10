@@ -1,0 +1,5 @@
+/* ─────────────────────────────────────────────────────────────────
+   1NRI WORLDWIDE — Design System Entry Point
+   Import this file to pull in all foundation tokens.
+   ───────────────────────────────────────────────────────────────── */
+@import "./colors_and_type.css";

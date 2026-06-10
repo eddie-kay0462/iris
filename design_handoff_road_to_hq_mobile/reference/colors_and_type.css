@@ -1,0 +1,253 @@
+/* ─────────────────────────────────────────────────────────────────
+   1NRI WORLDWIDE — Foundations
+   Colors, Type, Spacing, Borders, Motion
+   ───────────────────────────────────────────────────────────────── */
+
+/* The brand's primary face. Self-hosted Regular from the uploaded TTF.
+   Light + Bold fall back to system Helvetica — the proper TTFs are
+   still missing and should be provided by the brand team. */
+@font-face {
+  font-family: "HelveticaWorld";
+  src: url("./fonts/HelveticaWorld-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ── INK & PAPER ────────────────────────────────────────────────
+     1NRI is a black-on-white system. The page is bone-white; type
+     and rules are pure black. Everything else is a quiet support
+     palette. */
+  --ink:           #000000;            /* primary text, rules, fills */
+  --ink-70:        rgba(0, 0, 0, 0.70);
+  --ink-50:        rgba(0, 0, 0, 0.50);
+  --ink-25:        rgba(0, 0, 0, 0.25);
+  --ink-10:        rgba(0, 0, 0, 0.10);
+
+  --paper:         #FFFFFF;            /* default background */
+  --bone:          #F4F3F1;            /* off-white on dark surfaces */
+  --cloud:         #F4F6F8;            /* form/input fill */
+
+  /* ── NEUTRAL SCALE (UI chrome, forms, dividers) ──────────────── */
+  --char:          #1E2125;            /* heading dark on light */
+  --slate:         #3B414A;            /* body text */
+  --steel:         #59626E;            /* secondary text */
+  --mist:          #768293;            /* placeholder, default borders */
+  --fog:           #A9B5C6;            /* hairlines, disabled */
+  --cloud-stroke:  #EAEDF1;            /* very-soft dividers */
+  --ash:           #8C8C8C;            /* secondary text/borders */
+
+  /* ── ACCENTS (use sparingly) ──────────────────────────────────── */
+  --brick:         #D6763C;            /* warm editorial accent */
+  --mint:          #9AF16E;            /* success / "step complete" */
+  --crimson:       #FF5454;            /* error / urgency */
+
+  /* ── SEMANTIC TOKENS ──────────────────────────────────────────── */
+  --fg-1:          var(--ink);          /* primary copy */
+  --fg-2:          var(--slate);        /* secondary copy */
+  --fg-3:          var(--steel);        /* tertiary / meta */
+  --fg-on-dark:    var(--bone);         /* text on black surfaces */
+
+  --bg-1:          var(--paper);        /* page background */
+  --bg-2:          var(--bone);         /* soft surface */
+  --bg-3:          var(--cloud);        /* input / form surface */
+  --bg-invert:     var(--ink);          /* CTA / footer / overlays */
+
+  --rule:          var(--ink);          /* default page hairlines */
+  --rule-soft:     var(--cloud-stroke); /* checkout / form dividers */
+  --border-input:  var(--mist);         /* form-field stroke */
+  --overlay:       rgba(0, 0, 0, 0.5);  /* modal / side-cart scrim */
+
+  /* ── TYPE FACES ───────────────────────────────────────────────── */
+  --font-sans:
+    "HelveticaWorld", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  /* Roboto is used in checkout / forms only (system UI feel). */
+  --font-system:
+    "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* Serif accent — Hiragino Mincho Pro in Figma. Used for prices on
+     some mobile views. Falls back to a humanist serif on web. */
+  --font-serif:
+    "Hiragino Mincho Pro", "Times New Roman", "Songti SC", serif;
+
+  /* ── TYPE WEIGHTS ─────────────────────────────────────────────── */
+  --weight-light:    300;   /* 1NRI's signature weight — used everywhere */
+  --weight-regular:  400;
+  --weight-bold:     700;
+
+  /* ── TYPE SIZES (px values are intentional — site is desktop-led) */
+  --size-display-xl:  96px;   /* hero "New Arrivals" */
+  --size-display-l:   64px;   /* mobile hi-greeting */
+  --size-display:     48px;   /* lookbook / mobile hero */
+  --size-h1:          40px;   /* "Your Cart (3)", lookbook sub */
+  --size-h2:          32px;   /* section headers, "SAVED PIECES" */
+  --size-h3:          30px;   /* product detail title */
+  --size-h4:          20px;   /* product card title, footer link */
+  --size-body:        16px;   /* nav, default body */
+  --size-meta:        14px;   /* form meta, fine print */
+  --size-fine:        12px;   /* swatch labels, footnotes */
+  --size-mini:        10px;   /* asterisk lines */
+
+  /* ── SPACING SCALE (4-base) ───────────────────────────────────── */
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   24px;
+  --space-6:   32px;
+  --space-7:   48px;
+  --space-8:   64px;
+  --space-9:   96px;
+  --space-10: 128px;
+
+  /* ── BORDERS ─────────────────────────────────────────────────── */
+  --hairline:        1px solid var(--ink);
+  --hairline-double: 6px;   /* the page chrome's signature double rule */
+  --border-thin:     1px solid var(--ink-50);
+  --border-form:     1px solid var(--border-input);
+  --border-soft:     1px solid var(--rule-soft);
+
+  /* ── RADII (sharp by default — soft only for cart/checkout) ──── */
+  --radius-0:     0;       /* nav, product cards, primary buttons */
+  --radius-xs:    1px;     /* size-picker outline */
+  --radius-sm:    4px;     /* cart product thumb, payment fields */
+  --radius-md:    8px;     /* hero "SHOP NOW" CTA */
+  --radius-pill:  9999px;
+
+  /* ── SHADOWS (use sparingly — almost never) ──────────────────── */
+  --shadow-overlay: 0 4px 4px rgba(0, 0, 0, 0.25); /* on hero text */
+  --shadow-soft:    0 6px 16px rgba(0, 0, 0, 0.06);
+
+  /* ── MOTION ──────────────────────────────────────────────────── */
+  --ease-out:    cubic-bezier(0.2, 0.7, 0.2, 1);   /* @kind other */
+  --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);   /* @kind other */
+  --dur-fast:    140ms;                              /* @kind other */
+  --dur-base:    240ms;                              /* @kind other */
+  --dur-slow:    480ms;                              /* @kind other */
+
+  /* ── LAYOUT ──────────────────────────────────────────────────── */
+  --page-pad-desktop: 32px;
+  --page-pad-mobile:  16px;
+  --nav-height:       113px;     /* desktop, incl. double rule */
+  --nav-height-mob:   74px;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   ELEMENT DEFAULTS
+   ───────────────────────────────────────────────────────────────── */
+html {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-light);
+  color: var(--fg-1);
+  background: var(--bg-1);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body { margin: 0; }
+
+/* The page's signature: every section header is bare type — no chip,
+   no rule, no caps-and-trail-divider. We never want browser default
+   margins doing the spacing. */
+h1, h2, h3, h4, h5, h6, p, figure { margin: 0; }
+
+/* ── SEMANTIC TYPE STYLES ───────────────────────────────────────── */
+
+.t-display-xl {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-light);
+  font-size: var(--size-display-xl);
+  line-height: 100%;
+  letter-spacing: -0.01em;
+}
+.t-display {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-light);
+  font-size: var(--size-display);
+  line-height: 100%;
+}
+.t-h1 {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-light);
+  font-size: var(--size-h1);
+  line-height: 100%;
+}
+.t-h2 {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-light);
+  font-size: var(--size-h2);
+  line-height: 100%;
+}
+.t-h3 {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-light);
+  font-size: var(--size-h3);
+  line-height: 100%;
+}
+.t-h4 {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-light);
+  font-size: var(--size-h4);
+  line-height: 100%;
+}
+.t-body {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-light);
+  font-size: var(--size-body);
+  line-height: 1.4;
+}
+.t-meta {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-light);
+  font-size: var(--size-meta);
+  line-height: 1.3;
+  color: var(--fg-2);
+}
+.t-fine {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-light);
+  font-size: var(--size-fine);
+  line-height: 1.2;
+  color: var(--fg-2);
+}
+.t-nav,
+.t-label {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-light);
+  font-size: var(--size-body);
+  line-height: 100%;
+  /* Labels and nav items in 1NRI's system are usually sentence-case
+     or "Mixed Case With a Lowercase i" — never tracked-out caps. */
+}
+.t-button {
+  font-family: "Inter", var(--font-sans);
+  font-weight: var(--weight-bold);
+  font-size: var(--size-body);
+  line-height: 1.5;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+.t-system {
+  font-family: var(--font-system);
+  font-weight: var(--weight-regular);
+  font-size: var(--size-body);
+  line-height: 1.3;
+}
+
+/* ── INTERACTION STATES ─────────────────────────────────────────── */
+.is-link { text-decoration: underline; text-underline-offset: 3px; }
+.is-link:hover { opacity: 0.6; }
+
+/* The page's signature double hairline. */
+.rule-double {
+  width: 100%;
+  height: 6px;
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+}
+.rule-single {
+  width: 100%;
+  height: 1px;
+  background: var(--ink);
+}

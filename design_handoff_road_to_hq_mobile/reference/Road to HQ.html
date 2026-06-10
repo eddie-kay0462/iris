@@ -1,0 +1,1021 @@
+<!doctype html>
+<!-- @dsCard group="Brand" name="Road to HQ" subtitle="Interactive landing — almost-full-circle milestones, units counter, video-ready hero" viewport="1440x900" -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Road to HQ — 1NRI</title>
+<meta name="description" content="6,000 units. One headquarters in Accra. Follow the road." />
+
+<!-- Geist no longer used — site type is now Helvetica Neue throughout. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['"Helvetica Neue"', "Helvetica", "Arial", "sans-serif"],
+          mono: ['"Helvetica Neue"', "Helvetica", "Arial", "sans-serif"],
+          script: ['"Caveat"', "cursive"],
+        },
+      },
+    },
+  };
+</script>
+
+<style>
+  html, body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+  /* Reduce CLS / smooth in-page jump */
+  html { scroll-behavior: smooth; }
+
+  /* Marquee */
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  .marquee-track { animation: marquee 38s linear infinite; }
+
+  /* Pulse for current-position dot */
+  @keyframes ring-pulse {
+    0%   { transform: scale(1);   opacity: .6; }
+    100% { transform: scale(2.6); opacity: 0;  }
+  }
+  .ring-pulse::after {
+    content: "";
+    position: absolute; inset: 0;
+    border-radius: 9999px;
+    background: currentColor;
+    animation: ring-pulse 2.2s ease-out infinite;
+  }
+
+  /* Slow draw-in for the road arc */
+  @keyframes draw-road {
+    from { stroke-dashoffset: var(--len); }
+    to   { stroke-dashoffset: 0; }
+  }
+  .road-draw { stroke-dasharray: var(--len); animation: draw-road 2.4s cubic-bezier(0.2,0.7,0.2,1) .2s both; }
+
+  /* Card slide swap */
+  .ms-card { transition: opacity .35s ease, transform .35s ease; }
+  .ms-card.is-leaving { opacity: 0; transform: translateY(8px); }
+
+  /* Hover lift on milestone dots */
+  .ms-dot:hover { transform: scale(1.18); }
+  .ms-dot { transition: transform .2s cubic-bezier(0.2,0.7,0.2,1), filter .2s; cursor: pointer; }
+  .ms-dot.is-active { transform: scale(1.18); }
+
+  /* Subtle dotted road centerline */
+  .road-centerline { stroke-dasharray: 1 14; stroke-linecap: round; }
+
+  /* Hide scrollbar in horizontal milestone strip on mobile */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* Tweaks panel pop */
+  .tweaks-shadow { box-shadow: 0 12px 40px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.08); }
+
+  /* Heading kerning */
+  .display { letter-spacing: -0.015em; }
+
+  /* ── MOBILE REFINEMENTS ─────────────────────────────────── */
+
+  /* Hero: use mobile-optimised portrait image on small screens */
+  @media (max-width: 639px) {
+    .hero-bg-desktop { display: none; }
+    .hero-bg-mobile  { display: block; }
+    .hero-video      { display: none; }
+  }
+  @media (min-width: 640px) {
+    .hero-bg-mobile  { display: none; }
+    .hero-bg-desktop { display: block; }
+  }
+
+  /* Hero text: tighten spacing on very small screens */
+  @media (max-width: 374px) {
+    .hero-title { font-size: 2.5rem !important; }    /* ~40px */
+    .hero-date  { font-size: 2.25rem !important; }   /* ~36px */
+  }
+
+  /* Timeline: stack on mobile */
+  @media (max-width: 639px) {
+    .tl-row {
+      grid-template-columns: 48px 1fr !important;
+      grid-template-rows: auto auto;
+      gap: 4px 12px !important;
+      padding-top: 20px !important;
+      padding-bottom: 20px !important;
+    }
+    .tl-units  { grid-column: 2; grid-row: 1; }
+    .tl-detail { grid-column: 1 / -1; grid-row: 2; padding-top: 8px; }
+    .tl-status { grid-column: 2; grid-row: 1; justify-self: end; }
+    .tl-num    { grid-row: 1; grid-column: 1; }
+  }
+</style>
+
+<!-- Set theme before paint -->
+<script>
+  (function () {
+    try {
+      var t = localStorage.getItem("1nri-theme");
+      if (t === "dark") {
+        document.documentElement.classList.add("dark");
+        document.documentElement.style.colorScheme = "dark";
+      }
+    } catch (e) {}
+  })();
+</script>
+</head>
+
+<body class="bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100 antialiased">
+
+<!-- ────────────────────────────────────────────────────────────
+     HEADER (transparent on hero, solid on scroll — iris pattern)
+     ─────────────────────────────────────────────────────────── -->
+<header id="site-header"
+        class="fixed top-0 z-50 w-full transition-all duration-300 border-b border-transparent bg-transparent"
+        data-transparent="true">
+  <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
+    <nav class="hidden items-center gap-6 md:flex" id="nav-left">
+      <a href="Road to HQ.html" data-active class="nav-link whitespace-nowrap text-xs font-medium uppercase tracking-widest text-white">Road to HQ</a>
+      <a href="#" class="nav-link whitespace-nowrap text-xs font-medium uppercase tracking-widest text-white/70 hover:text-white">Shop</a>
+      <a href="About.html" class="nav-link whitespace-nowrap text-xs font-medium uppercase tracking-widest text-white/70 hover:text-white">About</a>
+    </nav>
+
+    <button class="md:hidden text-white" aria-label="Menu" id="menu-btn">
+      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+        <path d="M4 6h16M4 12h16M4 18h16" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
+    <a href="Road to HQ.html" class="absolute left-1/2 -translate-x-1/2 flex items-center" aria-label="1NRI home">
+      <img id="brand-mark" src="assets/iris/1nri-logo.png" alt="1NRI" class="h-8 w-auto min-w-[60px] transition-all duration-300 invert" />
+    </a>
+
+    <div class="flex items-center gap-4" id="nav-right">
+      <button id="theme-btn" class="p-1 text-white/80 hover:text-white" aria-label="Toggle theme">
+        <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </svg>
+      </button>
+      <a href="#" class="p-1 text-white/80 hover:text-white" aria-label="Search">
+        <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3" stroke-linecap="round"/>
+        </svg>
+      </a>
+      <a href="#" class="p-1 text-white/80 hover:text-white" aria-label="Account">
+        <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>
+        </svg>
+      </a>
+      <a href="#" class="relative p-1 text-white/80 hover:text-white" aria-label="Cart">
+        <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/>
+          <path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>
+        </svg>
+      </a>
+    </div>
+  </div>
+</header>
+
+<!-- ────────────────────────────────────────────────────────────
+     1. HERO — Video-ready background + units counter + 2 CTAs
+     ─────────────────────────────────────────────────────────── -->
+<section class="relative h-screen min-h-[600px] sm:min-h-[720px] overflow-hidden bg-neutral-900" data-screen-label="01 Hero">
+
+  <!-- Background: image first (always renders) then optional video overlay. -->
+  <img src="assets/iris/homepage-1.jpeg" alt="" class="hero-bg-desktop absolute inset-0 h-full w-full object-cover object-[50%_30%]" />
+  <img src="assets/hero-apoluo-mobile.png" alt="" class="hero-bg-mobile absolute inset-0 h-full w-full object-cover object-[50%_25%]" />
+  <video id="hero-video" class="hero-video absolute inset-0 h-full w-full object-cover object-[50%_30%]" autoplay muted loop playsinline
+         poster="assets/iris/homepage-1.jpeg">
+    <!-- <source src="assets/road-to-hq-bryan-bernard.mp4" type="video/mp4" /> -->
+  </video>
+
+  <!-- Grain + vignette -->
+  <div class="absolute inset-0 bg-gradient-to-b from-black/45 via-black/35 to-black/75"></div>
+  <div class="absolute inset-0 bg-black/25"></div>
+
+  <!-- Hero content — one balanced column: deadline up top (centered in the
+       available space above the copy), main copy centered, hint pinned low. -->
+  <div class="absolute inset-0 flex flex-col items-center px-5 sm:px-6 pt-[72px] pb-7 text-center">
+
+    <!-- Top zone: deadline kicker, vertically centered in the available space -->
+    <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
+      <div class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-white/60">
+        <span class="inline-block h-1.5 w-1.5 rounded-full bg-white/80"></span>
+        <span>Live · Deadline</span>
+        <span class="inline-block h-1.5 w-1.5 rounded-full bg-white/80"></span>
+      </div>
+      <div class="hero-date font-script text-4xl sm:text-6xl lg:text-7xl text-white leading-none" style="font-weight:500;">26.12.2026</div>
+    </div>
+
+    <!-- Middle zone: hero copy (stays centered between the two flex spacers) -->
+    <div class="flex shrink-0 flex-col items-center">
+      <p class="text-[10px] font-medium uppercase tracking-[0.4em] text-white/50 font-mono whitespace-nowrap">A 1NRI initiative &middot; Accra, Ghana</p>
+      <h1 class="hero-title display mt-4 text-[2.75rem] font-bold uppercase tracking-tight text-white sm:text-7xl lg:text-[7.5rem] leading-[0.9]">
+        Road to HQ
+      </h1>
+      <p class="mt-3 sm:mt-4 max-w-xl text-[13px] text-white/70 sm:text-base leading-relaxed">
+        Six thousand units stand between us and a permanent home in Accra. Every piece moves the needle.
+      </p>
+
+      <!-- Counter -->
+      <div class="mt-8 sm:mt-10 grid w-full max-w-md grid-cols-3 items-end gap-3 sm:gap-6 text-white sm:max-w-none">
+        <div class="text-left">
+          <div class="text-[10px] font-medium uppercase tracking-[0.3em] text-white/50">Sold</div>
+          <div class="mt-1 font-mono text-2xl font-semibold tabular-nums sm:text-4xl" data-units-sold>0</div>
+        </div>
+        <div class="flex flex-col items-center">
+          <!-- Progress bar -->
+          <div class="h-px w-28 sm:w-56 bg-white/20 overflow-hidden">
+            <div class="h-full bg-white" data-progress-bar style="width: 0%"></div>
+          </div>
+          <div class="mt-2 text-[10px] font-medium uppercase tracking-[0.3em] text-white/40 font-mono">
+            <span data-progress-pct>0.0%</span> of the journey
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="text-[10px] font-medium uppercase tracking-[0.3em] text-white/50">Target</div>
+          <div class="mt-1 font-mono text-2xl font-semibold tabular-nums sm:text-4xl">6,000</div>
+        </div>
+      </div>
+
+      <!-- CTAs -->
+      <div class="mt-8 sm:mt-10 flex w-full max-w-xs flex-col items-center gap-3 sm:max-w-none sm:flex-row sm:gap-4">
+        <a href="#"
+           class="inline-block w-full sm:w-56 bg-white px-10 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] text-black transition hover:bg-white/85">
+          Shop Now
+        </a>
+        <a href="#learn-more"
+           class="inline-block w-full sm:w-56 border border-white/80 bg-white/5 px-10 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] text-white backdrop-blur-sm transition hover:bg-white hover:text-black">
+          Learn More
+        </a>
+      </div>
+    </div>
+
+    <!-- Bottom zone: scroll hint, pinned toward the bottom -->
+    <div class="flex min-h-0 flex-1 flex-col items-center justify-end">
+      <a href="#learn-more" class="flex flex-col items-center gap-2 text-white/50 hover:text-white">
+        <span class="text-[9px] font-medium uppercase tracking-[0.4em] font-mono">Keep scrolling</span>
+        <svg class="h-4 w-4 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+        </svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────────────────────────────────────────────
+     2. MANIFESTO — "We have to sell 6,000 units…"
+     ─────────────────────────────────────────────────────────── -->
+<section id="learn-more" class="border-t border-neutral-200 dark:border-neutral-800 py-16 sm:py-32 px-5 sm:px-6" data-screen-label="02 Manifesto">
+  <div class="mx-auto max-w-4xl">
+    <div class="flex items-center justify-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500 font-mono">
+      <span>Ch. 01</span><span class="h-px w-8 bg-neutral-300 dark:bg-neutral-700"></span><span>The plan, plainly</span>
+    </div>
+    <h2 class="display mt-6 text-center text-2xl sm:text-5xl lg:text-6xl font-bold uppercase tracking-tight">
+      We have to sell <span class="font-mono tabular-nums">6,000</span> units<br/>
+      <span class="text-neutral-400 dark:text-neutral-500">to afford a place to live.</span>
+      <span class="font-mono text-neutral-300 dark:text-neutral-700">LOL</span>
+    </h2>
+    <p class="mt-6 sm:mt-8 mx-auto max-w-2xl text-center text-sm sm:text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed px-2 sm:px-0">
+      1NRI is moving into its first permanent headquarters in Accra by <span class="font-mono">26.12.2026</span> &mdash; a studio, a fitting room, and somewhere our distributed production network in Northern Ghana can finally call home. The math is simple. The road is not.
+    </p>
+
+    <!-- Three meta stats -->
+    <div class="mt-8 sm:mt-12 grid grid-cols-3 gap-3 sm:gap-6 text-center">
+      <div>
+        <div class="font-mono text-2xl sm:text-4xl font-semibold tabular-nums">6,000</div>
+        <div class="mt-1 sm:mt-2 text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500 font-mono">Units to sell</div>
+      </div>
+      <div class="border-x border-neutral-200 dark:border-neutral-800">
+        <div class="font-mono text-2xl sm:text-4xl font-semibold tabular-nums" data-days-left>—</div>
+        <div class="mt-1 sm:mt-2 text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500 font-mono">Days remaining</div>
+      </div>
+      <div>
+        <div class="font-mono text-2xl sm:text-4xl font-semibold tabular-nums">06</div>
+        <div class="mt-1 sm:mt-2 text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500 font-mono">Milestones</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────────────────────────────────────────────
+     3. THE ROAD — Almost-full-circle interactive milestones
+     ─────────────────────────────────────────────────────────── -->
+<section class="relative bg-neutral-100 dark:bg-neutral-900 border-y border-neutral-200 dark:border-neutral-800 py-16 sm:py-32 px-5 sm:px-6 overflow-hidden" data-screen-label="03 The Road">
+
+  <!-- Section header -->
+  <div class="mx-auto max-w-7xl mb-12 sm:mb-20">
+    <div class="flex items-center justify-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500 font-mono">
+      <span>Ch. 02</span><span class="h-px w-8 bg-neutral-300 dark:bg-neutral-700"></span><span>The road, charted</span>
+    </div>
+    <h2 class="display mt-6 text-center text-2xl sm:text-5xl font-bold uppercase tracking-tight">
+      Six milestones.<br/><span class="text-neutral-400 dark:text-neutral-600">One headquarters.</span>
+    </h2>
+  </div>
+
+  <div class="mx-auto max-w-7xl grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-12 items-start">
+
+    <!-- SVG ROAD -->
+    <div class="relative">
+      <svg id="road-svg" viewBox="-60 0 920 820" class="w-full max-w-[760px] mx-auto block overflow-visible" aria-label="Road to HQ — milestone circle">
+        <defs>
+          <!-- Slight inner shadow on the road -->
+          <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="currentColor" stop-opacity="0.06"/>
+            <stop offset="60%" stop-color="currentColor" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+
+        <!-- Subtle center glow -->
+        <circle cx="400" cy="400" r="280" fill="url(#centerGlow)" class="text-neutral-900 dark:text-white" />
+
+        <!-- ROAD: outer rule (faint) -->
+        <path id="road-outer-shadow" d="" fill="none"
+              class="stroke-neutral-300 dark:stroke-neutral-700"
+              stroke-width="64" stroke-linecap="round" opacity="0.35"/>
+
+        <!-- ROAD: body -->
+        <path id="road-body" d="" fill="none"
+              class="stroke-neutral-900 dark:stroke-neutral-100"
+              stroke-width="2" stroke-linecap="round"/>
+
+        <!-- ROAD: dashed centerline -->
+        <path id="road-centerline" d="" fill="none"
+              class="road-centerline stroke-neutral-900 dark:stroke-neutral-100"
+              stroke-width="2" opacity="0.55"/>
+
+        <!-- PROGRESS arc -->
+        <path id="road-progress" d="" fill="none"
+              class="stroke-neutral-900 dark:stroke-neutral-100"
+              stroke-width="8" stroke-linecap="round"/>
+
+        <!-- START label -->
+        <g id="start-marker"></g>
+
+        <!-- END label "HQ" sits at the gap end -->
+        <g id="end-marker"></g>
+
+        <!-- Milestone dots get injected here -->
+        <g id="milestones"></g>
+
+        <!-- Current-position marker (overlays current spot on path) -->
+        <g id="position-marker"></g>
+
+        <!-- Center label -->
+        <g id="center-label" text-anchor="middle">
+          <text x="400" y="376" class="fill-neutral-400 dark:fill-neutral-600 font-mono"
+                style="font-size:11px; letter-spacing:.32em; text-transform:uppercase">Goal</text>
+          <text x="400" y="420" class="fill-neutral-900 dark:fill-neutral-100"
+                style="font-size:72px; font-weight:700; letter-spacing:-0.02em">HQ</text>
+          <text x="400" y="448" class="fill-neutral-500 dark:fill-neutral-400 font-mono"
+                style="font-size:11px; letter-spacing:.32em; text-transform:uppercase">Accra · 26.12.2026</text>
+        </g>
+      </svg>
+
+      <!-- Drag/keyboard hint -->
+      <p class="mt-4 text-center text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-600 font-mono">
+        Click a milestone · ←/→ to cycle
+      </p>
+    </div>
+
+    <!-- MILESTONE DETAIL CARD -->
+    <aside class="lg:sticky lg:top-28">
+      <article id="ms-card" class="ms-card border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950">
+        <!-- header -->
+        <div class="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-800 px-5 py-4 font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-500 dark:text-neutral-400">
+          <span data-ms-index>Milestone 01 / 06</span>
+          <span data-ms-unit-label>1,000 units</span>
+        </div>
+        <!-- image -->
+        <div class="relative aspect-[4/3] bg-neutral-100 dark:bg-neutral-900 overflow-hidden">
+          <div data-ms-image class="absolute inset-0 bg-cover bg-center transition-opacity duration-300" style="background-image:url(assets/iris/homepage-1.jpeg)"></div>
+          <div class="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
+          <div class="absolute top-3 left-3 inline-flex items-center gap-2 bg-black/60 backdrop-blur-sm px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.3em] text-white font-mono">
+            <span data-ms-status-pip class="h-1.5 w-1.5 rounded-full bg-amber-300"></span>
+            <span data-ms-status>Upcoming</span>
+          </div>
+        </div>
+        <!-- body -->
+        <div class="px-5 py-6">
+          <p class="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500" data-ms-kicker>Promise</p>
+          <h3 class="display mt-2 text-2xl sm:text-3xl font-bold uppercase tracking-tight" data-ms-title>A day out with a customer</h3>
+          <p class="mt-3 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed" data-ms-body>
+            When we hit our first thousand units, we&rsquo;re showing up &mdash; in person &mdash; for one customer who&rsquo;s been with us. A whole day, on us. Coffee, the city, the wardrobe edit they didn&rsquo;t know they needed.
+          </p>
+
+          <div class="mt-5 grid grid-cols-2 gap-3 text-[11px] font-mono uppercase tracking-[0.2em] text-neutral-500 dark:text-neutral-400 border-t border-neutral-200 dark:border-neutral-800 pt-4">
+            <div>
+              <div class="text-neutral-400 dark:text-neutral-600">Trigger</div>
+              <div class="mt-1 text-neutral-900 dark:text-neutral-100" data-ms-trigger>1,000 sold</div>
+            </div>
+            <div>
+              <div class="text-neutral-400 dark:text-neutral-600">Window</div>
+              <div class="mt-1 text-neutral-900 dark:text-neutral-100" data-ms-window>Q1 · 2026</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- nav row -->
+        <div class="flex border-t border-neutral-200 dark:border-neutral-800">
+          <button id="ms-prev" class="flex-1 px-4 py-3 text-[11px] font-medium uppercase tracking-[0.25em] text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition flex items-center justify-center gap-2">
+            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+            Prev
+          </button>
+          <div class="w-px bg-neutral-200 dark:bg-neutral-800"></div>
+          <button id="ms-next" class="flex-1 px-4 py-3 text-[11px] font-medium uppercase tracking-[0.25em] text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition flex items-center justify-center gap-2">
+            Next
+            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+      </article>
+
+      <!-- Buy CTA below the card -->
+      <div class="mt-4 flex flex-col gap-2">
+        <a href="#" class="block w-full text-center bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-6 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] hover:bg-neutral-700 dark:hover:bg-neutral-200 transition">
+          Add one to the count
+        </a>
+        <p class="text-center text-[10px] font-mono uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-600">
+          Every piece sold = one notch closer
+        </p>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Mobile horizontal milestone strip (small screens won't see full circle interactivity) -->
+  <div class="lg:hidden mt-14 -mx-6 px-6 overflow-x-auto no-scrollbar">
+    <div id="ms-strip" class="flex gap-4 min-w-max"></div>
+  </div>
+</section>
+
+<!-- ────────────────────────────────────────────────────────────
+     4. MARQUEE — "ROAD TO HQ · 26.12.2026 ·"
+     ─────────────────────────────────────────────────────────── -->
+<section class="overflow-hidden border-b border-neutral-200 dark:border-neutral-800 py-6 bg-neutral-50 dark:bg-neutral-950">
+  <div class="flex whitespace-nowrap marquee-track">
+    <div class="flex items-center gap-8 px-8 text-2xl sm:text-4xl font-bold uppercase tracking-tight text-neutral-900 dark:text-neutral-100">
+      <span>Road to HQ</span><span class="text-neutral-300 dark:text-neutral-700">·</span>
+      <span class="font-mono">26.12.2026</span><span class="text-neutral-300 dark:text-neutral-700">·</span>
+      <span>Accra, Ghana</span><span class="text-neutral-300 dark:text-neutral-700">·</span>
+      <span>6,000 units</span><span class="text-neutral-300 dark:text-neutral-700">·</span>
+    </div>
+    <div class="flex items-center gap-8 px-8 text-2xl sm:text-4xl font-bold uppercase tracking-tight text-neutral-900 dark:text-neutral-100" aria-hidden="true">
+      <span>Road to HQ</span><span class="text-neutral-300 dark:text-neutral-700">·</span>
+      <span class="font-mono">26.12.2026</span><span class="text-neutral-300 dark:text-neutral-700">·</span>
+      <span>Accra, Ghana</span><span class="text-neutral-300 dark:text-neutral-700">·</span>
+      <span>6,000 units</span><span class="text-neutral-300 dark:text-neutral-700">·</span>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────────────────────────────────────────────
+     5. TIMELINE — Linear listing of milestones
+     ─────────────────────────────────────────────────────────── -->
+<section class="py-16 sm:py-32 px-5 sm:px-6" data-screen-label="04 Timeline">
+  <div class="mx-auto max-w-5xl">
+    <div class="flex items-center justify-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500 font-mono">
+      <span>Ch. 03</span><span class="h-px w-8 bg-neutral-300 dark:bg-neutral-700"></span><span>The whole list</span>
+    </div>
+    <h2 class="display mt-6 text-center text-3xl sm:text-5xl font-bold uppercase tracking-tight">Every promise, in order.</h2>
+
+    <ol id="timeline" class="mt-14 divide-y divide-neutral-200 dark:divide-neutral-800 border-t border-b border-neutral-200 dark:border-neutral-800"></ol>
+  </div>
+</section>
+
+<!-- ────────────────────────────────────────────────────────────
+     6. CLOSING CTA
+     ─────────────────────────────────────────────────────────── -->
+<section class="relative h-[70vh] sm:h-[80vh] min-h-[440px] sm:min-h-[560px] overflow-hidden" data-screen-label="05 CTA">
+  <div class="absolute inset-0">
+    <img src="assets/iris/homepage-2.jpeg" alt="" class="h-full w-full object-cover object-top" />
+    <div class="absolute inset-0 bg-black/55"></div>
+  </div>
+  <div class="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center">
+    <p class="text-[10px] font-medium uppercase tracking-[0.4em] text-white/60 font-mono">Be part of it</p>
+    <h2 class="display mt-4 text-3xl sm:text-6xl lg:text-7xl font-bold uppercase tracking-tight text-white">
+      One unit at a time.
+    </h2>
+    <p class="mt-4 max-w-md text-sm text-white/70">Pick a piece. Move the dial. Watch the road close.</p>
+    <a href="#" class="mt-10 inline-block whitespace-nowrap bg-white px-12 py-4 text-xs font-semibold uppercase tracking-[0.25em] text-black transition hover:bg-white/85">
+      Shop the drop
+    </a>
+  </div>
+</section>
+
+<!-- ────────────────────────────────────────────────────────────
+     FOOTER
+     ─────────────────────────────────────────────────────────── -->
+<footer class="border-t border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950">
+  <div class="mx-auto max-w-7xl px-4 py-12">
+    <div class="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
+      <div>
+        <img src="assets/iris/1nri-logo.png" alt="1NRI" class="h-6 w-auto min-w-[48px] dark:invert" />
+        <p class="mt-3 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">
+          Quality streetwear for the tasteful and stylish. Made in Ghana.
+        </p>
+      </div>
+      <div>
+        <h4 class="text-xs font-semibold uppercase tracking-widest text-neutral-900 dark:text-neutral-100">Shop</h4>
+        <ul class="mt-3 space-y-2 text-xs text-neutral-500 dark:text-neutral-400">
+          <li><a href="#" class="hover:text-black dark:hover:text-white">All Products</a></li>
+          <li><a href="#" class="hover:text-black dark:hover:text-white">New Arrivals</a></li>
+          <li><a href="#" class="hover:text-black dark:hover:text-white">Lookbook</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="text-xs font-semibold uppercase tracking-widest text-neutral-900 dark:text-neutral-100">Brand</h4>
+        <ul class="mt-3 space-y-2 text-xs text-neutral-500 dark:text-neutral-400">
+          <li><a href="About.html" class="hover:text-black dark:hover:text-white">About</a></li>
+          <li><a href="Road to HQ.html" class="hover:text-black dark:hover:text-white">Road to HQ</a></li>
+          <li><a href="#" class="hover:text-black dark:hover:text-white">Manufacturing</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="text-xs font-semibold uppercase tracking-widest text-neutral-900 dark:text-neutral-100">Connect</h4>
+        <div class="mt-3 flex items-center gap-4 text-neutral-500 dark:text-neutral-400">
+          <a href="https://instagram.com/1nriworldwide" target="_blank" rel="noopener noreferrer" aria-label="Instagram" class="hover:text-black dark:hover:text-white">
+            <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+          </a>
+          <a href="https://www.tiktok.com/@1nriworldwide" target="_blank" rel="noopener noreferrer" aria-label="TikTok" class="hover:text-black dark:hover:text-white">
+            <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>
+          </a>
+          <a href="https://youtube.com/@1nriworldwide" target="_blank" rel="noopener noreferrer" aria-label="YouTube" class="hover:text-black dark:hover:text-white">
+            <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"/></svg>
+          </a>
+          <a href="https://linkedin.com/company/1nri-worldwide" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" class="hover:text-black dark:hover:text-white">
+            <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.063 2.063 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+    <div class="mt-10 border-t border-neutral-200 pt-6 dark:border-neutral-800">
+      <p class="text-center text-[11px] text-neutral-400 dark:text-neutral-500" id="footer-year">&copy; 1NRI Worldwide Ltd. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
+
+<!-- ────────────────────────────────────────────────────────────
+     SCRIPTS
+     ─────────────────────────────────────────────────────────── -->
+<script>
+/* ════════════════════════════════════════════════════════════
+   Tweakable defaults (editable on disk via tweaks protocol)
+   ═══════════════════════════════════════════════════════════ */
+const TWEAKS = /*EDITMODE-BEGIN*/{
+  "unitsSold": 0,
+  "targetUnits": 6000,
+  "deadline": "2026-12-26"
+}/*EDITMODE-END*/;
+
+/* ════════════════════════════════════════════════════════════
+   Milestone data
+   ═══════════════════════════════════════════════════════════ */
+const MILESTONES = [
+  {
+    units: 1000,
+    kicker: "Promise",
+    title: "A day out with a customer",
+    body: "When we hit our first thousand units, we\u2019re showing up \u2014 in person \u2014 for one customer who\u2019s been with us. A whole day, on us. Coffee, the city, the wardrobe edit they didn\u2019t know they needed.",
+    window: "Q1 · 2026",
+    image: "assets/iris/homepage-1.jpeg",
+  },
+  {
+    units: 2000,
+    kicker: "Promise",
+    title: "Open studio in Accra",
+    body: "We open the doors for a day. Try on the next drop before anyone else, meet the production team, see the fabric we\u2019re building the year around. Capped guestlist, drawn from customers.",
+    window: "Q2 · 2026",
+    image: "assets/iris/homepage-2.jpeg",
+  },
+  {
+    units: 3000,
+    kicker: "Promise",
+    title: "Run a half marathon · 21 km",
+    body: "Half the units, half the distance. Bryan + Bernard run a 21\u00A0km half marathon in 1NRI kit, livestreamed. Pace targets, kit field-tested in public, no excuses.",
+    window: "Q2 · 2026",
+    image: "assets/iris/homepage-3.png",
+  },
+  {
+    units: 4000,
+    kicker: "Promise",
+    title: "Hire one full-time tailor",
+    body: "Two thirds of the way. We bring our first full\u2011time tailor onto the team from the Northern Ghana network \u2014 structured income, technical training, a real seat at the table.",
+    window: "Q3 · 2026",
+    image: "assets/iris/homepage-1.jpeg",
+  },
+  {
+    units: 5000,
+    kicker: "Promise",
+    title: "Hand-numbered capsule",
+    body: "We design a small capsule made entirely from textile-recovery fabric, hand\u2011numbered 1\u2013100. Released to customers who carried the road this far.",
+    window: "Q4 · 2026",
+    image: "assets/iris/homepage-2.jpeg",
+  },
+  {
+    units: 6000,
+    kicker: "Goal",
+    title: "Climb Mount Afadjato",
+    body: "We close the road. The team climbs Mount Afadjato \u2014 Ghana\u2019s highest peak \u2014 the same week we move into the new HQ in Accra. Every customer who took us there gets the summit photo, mailed.",
+    window: "Dec · 2026",
+    image: "assets/iris/homepage-3.png",
+  },
+];
+
+/* ════════════════════════════════════════════════════════════
+   Geometry: build the road arc + milestone positions
+   ═══════════════════════════════════════════════════════════ */
+const CIRCLE = { cx: 400, cy: 400, r: 280 };
+const GAP_DEG = 44;                      // top gap, opens toward HQ
+const ARC_START_DEG = GAP_DEG / 2;       // measured clockwise from 12
+const ARC_END_DEG   = 360 - GAP_DEG / 2;
+const ARC_SWEEP_DEG = ARC_END_DEG - ARC_START_DEG;
+
+function pointOnArc(deg) {
+  const rad = (deg * Math.PI) / 180;
+  return {
+    x: CIRCLE.cx + CIRCLE.r * Math.sin(rad),
+    y: CIRCLE.cy - CIRCLE.r * Math.cos(rad),
+  };
+}
+function arcPath(fromDeg, toDeg) {
+  const s = pointOnArc(fromDeg), e = pointOnArc(toDeg);
+  const large = (toDeg - fromDeg) > 180 ? 1 : 0;
+  return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${CIRCLE.r} ${CIRCLE.r} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
+}
+function arcLength(deg) { return (deg / 360) * 2 * Math.PI * CIRCLE.r; }
+
+// Position each milestone: 6 dots along the arc, with the 6th sitting at the very end (HQ side of the gap).
+const MS_POSITIONS_DEG = MILESTONES.map((m, i) => {
+  // distribute 6 dots from 0/6 to 6/6 of the arc, but skip the START (0) so they're at ratios 1/6 .. 6/6 = arc end.
+  const t = (i + 1) / MILESTONES.length;
+  return ARC_START_DEG + ARC_SWEEP_DEG * t;
+});
+
+const ROAD_OUTER  = document.getElementById("road-outer-shadow");
+const ROAD_BODY   = document.getElementById("road-body");
+const ROAD_CENTER = document.getElementById("road-centerline");
+const ROAD_PROG   = document.getElementById("road-progress");
+
+const fullPath = arcPath(ARC_START_DEG, ARC_END_DEG);
+ROAD_OUTER.setAttribute("d", fullPath);
+ROAD_BODY.setAttribute("d", fullPath);
+ROAD_CENTER.setAttribute("d", fullPath);
+
+// Draw-in animation
+const fullLen = arcLength(ARC_SWEEP_DEG);
+ROAD_BODY.style.setProperty("--len", fullLen.toFixed(2));
+ROAD_BODY.classList.add("road-draw");
+
+/* Start/End markers ────────────────────────────────────────── */
+const startPt = pointOnArc(ARC_START_DEG);
+const endPt   = pointOnArc(ARC_END_DEG);
+
+document.getElementById("start-marker").innerHTML = `
+  <line x1="${startPt.x}" y1="${startPt.y - 22}" x2="${startPt.x}" y2="${startPt.y + 22}"
+        class="stroke-neutral-900 dark:stroke-neutral-100" stroke-width="2"/>
+  <text x="${startPt.x - 14}" y="${startPt.y - 30}"
+        text-anchor="end"
+        class="fill-neutral-500 dark:fill-neutral-400 font-mono"
+        style="font-size:11px; letter-spacing:.32em; text-transform:uppercase">Start</text>
+  <text x="${startPt.x - 14}" y="${startPt.y - 14}"
+        text-anchor="end"
+        class="fill-neutral-900 dark:fill-neutral-100"
+        style="font-size:14px; font-weight:600;">0 sold</text>
+`;
+document.getElementById("end-marker").innerHTML = `
+  <line x1="${endPt.x}" y1="${endPt.y - 22}" x2="${endPt.x}" y2="${endPt.y + 22}"
+        class="stroke-neutral-900 dark:stroke-neutral-100" stroke-width="2"/>
+  <text x="${endPt.x + 14}" y="${endPt.y - 30}"
+        class="fill-neutral-500 dark:fill-neutral-400 font-mono"
+        style="font-size:11px; letter-spacing:.32em; text-transform:uppercase">Finish</text>
+  <text x="${endPt.x + 14}" y="${endPt.y - 14}"
+        class="fill-neutral-900 dark:fill-neutral-100"
+        style="font-size:14px; font-weight:600;">HQ open</text>
+`;
+
+/* Milestone dots ───────────────────────────────────────────── */
+const msGroup = document.getElementById("milestones");
+MS_POSITIONS_DEG.forEach((deg, i) => {
+  const p = pointOnArc(deg);
+  // External label position: push outward
+  const rad = (deg * Math.PI) / 180;
+  const lx = CIRCLE.cx + (CIRCLE.r + 40) * Math.sin(rad);
+  const ly = CIRCLE.cy - (CIRCLE.r + 40) * Math.cos(rad);
+  // label alignment based on side
+  const anchor = Math.sin(rad) > 0.1 ? "start" : Math.sin(rad) < -0.1 ? "end" : "middle";
+  // dy offset for top/bottom
+  const dy = Math.cos(rad) > 0.3 ? -4 : Math.cos(rad) < -0.3 ? 18 : 6;
+
+  const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  g.setAttribute("class", "ms-dot");
+  g.setAttribute("data-i", i);
+  g.setAttribute("tabindex", "0");
+  g.setAttribute("transform-origin", `${p.x} ${p.y}`);
+  g.innerHTML = `
+    <circle cx="${p.x}" cy="${p.y}" r="22"
+            class="fill-neutral-50 dark:fill-neutral-900 stroke-neutral-900 dark:stroke-neutral-100"
+            stroke-width="2"/>
+    <text x="${p.x}" y="${p.y + 5}" text-anchor="middle"
+          class="fill-neutral-900 dark:fill-neutral-100 font-mono"
+          style="font-size:13px; font-weight:600;">${String(i+1).padStart(2,"0")}</text>
+    <text x="${lx}" y="${ly + dy}" text-anchor="${anchor}"
+          class="fill-neutral-500 dark:fill-neutral-400 font-mono"
+          style="font-size:10px; letter-spacing:.32em; text-transform:uppercase">${MILESTONES[i].units.toLocaleString()} units</text>
+  `;
+  msGroup.appendChild(g);
+});
+
+/* Position marker (current units) ──────────────────────────── */
+const POS_MARKER = document.getElementById("position-marker");
+function setPositionMarker(deg) {
+  const p = pointOnArc(deg);
+  POS_MARKER.innerHTML = `
+    <g>
+      <foreignObject x="${p.x - 14}" y="${p.y - 14}" width="28" height="28">
+        <div xmlns="http://www.w3.org/1999/xhtml" class="relative w-full h-full">
+          <div class="absolute inset-0 ring-pulse text-neutral-900 dark:text-white"></div>
+          <div class="absolute inset-0 rounded-full bg-neutral-900 dark:bg-white border-2 border-neutral-50 dark:border-neutral-900"></div>
+        </div>
+      </foreignObject>
+    </g>
+  `;
+}
+
+/* Progress arc ─────────────────────────────────────────────── */
+function setProgress(units) {
+  const ratio = Math.max(0, Math.min(1, units / TWEAKS.targetUnits));
+  const curDeg = ARC_START_DEG + ARC_SWEEP_DEG * ratio;
+  if (ratio > 0.0005) {
+    ROAD_PROG.setAttribute("d", arcPath(ARC_START_DEG, curDeg));
+    ROAD_PROG.style.opacity = "1";
+  } else {
+    ROAD_PROG.setAttribute("d", "");
+  }
+  setPositionMarker(curDeg);
+
+  document.querySelectorAll("[data-units-sold]").forEach(n => n.textContent = units.toLocaleString());
+  document.querySelectorAll("[data-progress-pct]").forEach(n => n.textContent = (ratio * 100).toFixed(1) + "%");
+  document.querySelectorAll("[data-progress-bar]").forEach(n => n.style.width = (ratio * 100) + "%");
+  // also color dots that are "past"
+  document.querySelectorAll(".ms-dot").forEach((g, i) => {
+    const done = MILESTONES[i].units <= units;
+    const circle = g.querySelector("circle");
+    if (done) {
+      circle.setAttribute("class", "fill-neutral-900 dark:fill-neutral-100 stroke-neutral-900 dark:stroke-neutral-100");
+      g.querySelector("text").setAttribute("class", "fill-neutral-50 dark:fill-neutral-900 font-mono");
+    }
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
+   Active milestone (detail card + dot highlight)
+   ═══════════════════════════════════════════════════════════ */
+let active = 0;
+
+const card = document.getElementById("ms-card");
+function renderActive(i) {
+  active = ((i % MILESTONES.length) + MILESTONES.length) % MILESTONES.length;
+  const m = MILESTONES[active];
+
+  card.classList.add("is-leaving");
+  setTimeout(() => {
+    card.querySelector("[data-ms-index]").textContent = `Milestone ${String(active+1).padStart(2,"0")} / 06`;
+    card.querySelector("[data-ms-unit-label]").textContent = m.units.toLocaleString() + " units";
+    card.querySelector("[data-ms-kicker]").textContent = m.kicker;
+    card.querySelector("[data-ms-title]").textContent = m.title;
+    card.querySelector("[data-ms-body]").textContent = m.body;
+    card.querySelector("[data-ms-trigger]").textContent = m.units.toLocaleString() + " sold";
+    card.querySelector("[data-ms-window]").textContent = m.window;
+    card.querySelector("[data-ms-image]").style.backgroundImage = `url(${m.image})`;
+
+    const done = m.units <= TWEAKS.unitsSold;
+    card.querySelector("[data-ms-status]").textContent = done ? "Reached" : "Upcoming";
+    const pip = card.querySelector("[data-ms-status-pip]");
+    pip.classList.toggle("bg-amber-300", !done);
+    pip.classList.toggle("bg-emerald-400", done);
+
+    card.classList.remove("is-leaving");
+  }, 220);
+
+  // highlight dot
+  document.querySelectorAll(".ms-dot").forEach((g, idx) => g.classList.toggle("is-active", idx === active));
+}
+
+document.getElementById("ms-prev").addEventListener("click", () => renderActive(active - 1));
+document.getElementById("ms-next").addEventListener("click", () => renderActive(active + 1));
+
+document.querySelectorAll(".ms-dot").forEach((g) => {
+  g.addEventListener("click", () => renderActive(parseInt(g.dataset.i, 10)));
+  g.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); renderActive(parseInt(g.dataset.i, 10)); }
+  });
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  if (e.key === "ArrowLeft")  { renderActive(active - 1); }
+  if (e.key === "ArrowRight") { renderActive(active + 1); }
+});
+
+/* ════════════════════════════════════════════════════════════
+   Mobile horizontal milestone strip
+   ═══════════════════════════════════════════════════════════ */
+const strip = document.getElementById("ms-strip");
+MILESTONES.forEach((m, i) => {
+  const c = document.createElement("button");
+  c.className = "w-64 shrink-0 text-left border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-4";
+  c.innerHTML = `
+    <div class="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">${String(i+1).padStart(2,"0")} · ${m.units.toLocaleString()} units</div>
+    <div class="mt-2 text-sm font-semibold uppercase tracking-tight">${m.title}</div>
+    <div class="mt-2 text-xs text-neutral-500 dark:text-neutral-400 leading-snug">${m.body.slice(0, 110)}…</div>
+  `;
+  c.addEventListener("click", () => renderActive(i));
+  strip.appendChild(c);
+});
+
+/* ════════════════════════════════════════════════════════════
+   Timeline list (section 5)
+   ═══════════════════════════════════════════════════════════ */
+const tl = document.getElementById("timeline");
+MILESTONES.forEach((m, i) => {
+  const done = m.units <= TWEAKS.unitsSold;
+  const li = document.createElement("li");
+  li.className = "tl-row grid grid-cols-[60px_120px_1fr_140px] sm:grid-cols-[60px_140px_1fr_180px] items-center gap-4 py-6";
+  li.innerHTML = `
+    <div class="tl-num font-mono text-2xl sm:text-3xl font-semibold text-neutral-300 dark:text-neutral-700 tabular-nums">${String(i+1).padStart(2,"0")}</div>
+    <div class="tl-units font-mono text-sm tabular-nums text-neutral-900 dark:text-neutral-100">${m.units.toLocaleString()} units</div>
+    <div class="tl-detail">
+      <div class="text-base sm:text-lg font-semibold uppercase tracking-tight">${m.title}</div>
+      <div class="text-xs text-neutral-500 dark:text-neutral-400 mt-1 leading-snug max-w-xl">${m.body}</div>
+    </div>
+    <div class="tl-status text-right sm:text-right">
+      <span class="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.3em] ${done ? "text-emerald-600" : "text-neutral-500 dark:text-neutral-400"}">
+        <span class="h-1.5 w-1.5 rounded-full ${done ? "bg-emerald-500" : "bg-neutral-300 dark:bg-neutral-700"}"></span>
+        ${done ? "Reached" : m.window}
+      </span>
+    </div>
+  `;
+  li.addEventListener("click", () => {
+    renderActive(i);
+    document.getElementById("road-svg").scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  li.style.cursor = "pointer";
+  tl.appendChild(li);
+});
+
+/* ════════════════════════════════════════════════════════════
+   Days remaining (live)
+   ═══════════════════════════════════════════════════════════ */
+function updateDaysLeft() {
+  const target = new Date(TWEAKS.deadline + "T00:00:00");
+  const now = new Date();
+  const ms = target - now;
+  const days = Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
+  document.querySelectorAll("[data-days-left]").forEach(n => n.textContent = days.toLocaleString());
+}
+updateDaysLeft();
+
+/* ════════════════════════════════════════════════════════════
+   Header transparent/solid toggle (matches iris)
+   ═══════════════════════════════════════════════════════════ */
+const header = document.getElementById("site-header");
+const brand  = document.getElementById("brand-mark");
+function syncHeader() {
+  const transparent = window.scrollY < 80;
+  header.dataset.transparent = String(transparent);
+  if (transparent) {
+    header.className = "fixed top-0 z-50 w-full transition-all duration-300 border-b border-transparent bg-transparent";
+    brand.className = "h-8 w-auto min-w-[60px] transition-all duration-300 invert";
+    header.querySelectorAll("#nav-left a").forEach((a, i) => {
+      a.className = "nav-link whitespace-nowrap text-xs font-medium uppercase tracking-widest " + (i===0 ? "text-white" : "text-white/70 hover:text-white");
+    });
+    header.querySelectorAll("#nav-right > *").forEach(b => {
+      b.className = b.className.replace(/text-(neutral-600|gray-600)|hover:text-(black|white)|dark:text-neutral-400|dark:hover:text-white/g, "");
+      b.classList.add("p-1", "text-white/80", "hover:text-white");
+    });
+    document.getElementById("menu-btn").classList.add("text-white");
+  } else {
+    header.className = "fixed top-0 z-50 w-full transition-all duration-300 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950";
+    brand.className = "h-8 w-auto min-w-[60px] transition-all duration-300 dark:invert";
+    header.querySelectorAll("#nav-left a").forEach((a, i) => {
+      a.className = "nav-link whitespace-nowrap text-xs font-medium uppercase tracking-widest " + (i===0 ? "text-black dark:text-white" : "text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white");
+    });
+    header.querySelectorAll("#nav-right > *").forEach(b => {
+      b.classList.remove("text-white/80", "hover:text-white");
+      b.classList.add("text-neutral-600", "hover:text-black", "dark:text-neutral-400", "dark:hover:text-white");
+    });
+    document.getElementById("menu-btn").classList.remove("text-white");
+  }
+}
+window.addEventListener("scroll", syncHeader, { passive: true });
+syncHeader();
+
+/* Theme toggle ──────────────────────────────────────────── */
+document.getElementById("theme-btn").addEventListener("click", () => {
+  const isDark = document.documentElement.classList.toggle("dark");
+  document.documentElement.style.colorScheme = isDark ? "dark" : "light";
+  try { localStorage.setItem("1nri-theme", isDark ? "dark" : "light"); } catch (e) {}
+});
+
+/* ════════════════════════════════════════════════════════════
+   INITIAL RENDER
+   ═══════════════════════════════════════════════════════════ */
+function tweenSold(to, duration = 1200) {
+  const start = performance.now();
+  const from = 0;
+  function step(now) {
+    const t = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+    const v = Math.round(from + (to - from) * eased);
+    setProgress(v);
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+tweenSold(TWEAKS.unitsSold);
+renderActive(0);
+
+/* ════════════════════════════════════════════════════════════
+   TWEAKS PANEL — toolbar toggle "Tweaks"
+   ═══════════════════════════════════════════════════════════ */
+let tweaksPanel = null;
+function buildTweaksPanel() {
+  if (tweaksPanel) return tweaksPanel;
+  const el = document.createElement("div");
+  el.id = "tweaks-panel";
+  el.className = "fixed bottom-6 right-6 z-[200] w-80 bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 tweaks-shadow text-neutral-900 dark:text-neutral-100";
+  el.innerHTML = `
+    <div class="flex items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-neutral-800 cursor-move" id="tweaks-handle">
+      <div class="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-500">Tweaks</div>
+      <button id="tweaks-close" class="text-neutral-400 hover:text-neutral-900 dark:hover:text-white" aria-label="Close">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="px-4 py-5 space-y-5">
+      <div>
+        <label class="flex items-center justify-between text-xs uppercase tracking-widest text-neutral-500">
+          <span>Units sold</span>
+          <span class="font-mono text-neutral-900 dark:text-neutral-100 tabular-nums" id="tweak-units-value">${TWEAKS.unitsSold}</span>
+        </label>
+        <input id="tweak-units" type="range" min="0" max="${TWEAKS.targetUnits}" step="10" value="${TWEAKS.unitsSold}" class="w-full mt-2 accent-neutral-900 dark:accent-white" />
+        <div class="mt-1 flex justify-between text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-400 dark:text-neutral-600">
+          <span>0</span><span>${TWEAKS.targetUnits.toLocaleString()}</span>
+        </div>
+      </div>
+
+      <div>
+        <label class="flex items-center justify-between text-xs uppercase tracking-widest text-neutral-500">
+          <span>Quick presets</span>
+        </label>
+        <div class="mt-2 grid grid-cols-4 gap-2">
+          ${[0, 1000, 3000, 6000].map(v => `<button class="tweak-preset font-mono text-[11px] py-2 border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-900" data-v="${v}">${v}</button>`).join("")}
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(el);
+
+  const range = el.querySelector("#tweak-units");
+  const label = el.querySelector("#tweak-units-value");
+  range.addEventListener("input", () => {
+    const v = parseInt(range.value, 10);
+    label.textContent = v.toLocaleString();
+    TWEAKS.unitsSold = v;
+    setProgress(v);
+    renderActive(active); // refresh status pip
+    window.parent?.postMessage({ type: "__edit_mode_set_keys", edits: { unitsSold: v } }, "*");
+  });
+  el.querySelectorAll(".tweak-preset").forEach(b => b.addEventListener("click", () => {
+    range.value = b.dataset.v;
+    range.dispatchEvent(new Event("input"));
+  }));
+  el.querySelector("#tweaks-close").addEventListener("click", () => {
+    el.style.display = "none";
+    window.parent?.postMessage({ type: "__edit_mode_dismissed" }, "*");
+  });
+
+  tweaksPanel = el;
+  return el;
+}
+
+window.addEventListener("message", (e) => {
+  const t = e.data?.type;
+  if (t === "__activate_edit_mode") {
+    const p = buildTweaksPanel();
+    p.style.display = "block";
+  } else if (t === "__deactivate_edit_mode") {
+    if (tweaksPanel) tweaksPanel.style.display = "none";
+  }
+});
+window.parent?.postMessage({ type: "__edit_mode_available" }, "*");
+</script>
+
+</body>
+</html>
