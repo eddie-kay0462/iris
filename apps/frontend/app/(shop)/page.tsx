@@ -49,44 +49,51 @@ const MILESTONES = [
   {
     units: 1000, kicker: "Promise", title: "A day out with a customer",
     body: "When we hit our first thousand units, we're showing up — in person — for one customer who's been with us. A whole day, on us. Coffee, the city, the wardrobe edit they didn't know they needed.",
-    window: "Q1 · 2026",
+    window: "Q2 · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/1nri-quarter-zip/black__shot-3__1770027218488.jpg",
     objectPos: "object-[center_30%]",
   },
   {
-    units: 2000, kicker: "Promise", title: "Open studio in Accra",
-    body: "We open the doors for a day. Try on the next drop before anyone else, meet the production team, see the fabric we're building the year around. Capped guestlist, drawn from customers.",
+    units: 2000, kicker: "Promise", title: "Climb Mount Afadjato",
+    body: "Two thousand deep. The team climbs Mount Afadjato — Ghana's highest peak, 885 m. Full 1NRI kit, filmed start to summit. If we're asking you to back us, we should be willing to suffer a little too.",
     window: "Q2 · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/genesis-basic-top/product__main__1774011630200.jpg",
   },
   {
-    units: 3000, kicker: "Promise", title: "Run a half marathon · 21 km",
-    body: "Half the units, half the distance. Bryan + Bernard run a 21 km half marathon in 1NRI kit, livestreamed. Pace targets, kit field-tested in public, no excuses.",
-    window: "Q2 · 2026",
+    units: 3000, kicker: "Promise", title: "Wildcard — a customer decides",
+    body: "Halfway there, we hand the wheel over. One customer gets to pick the milestone — whatever they want us to do, build, or attempt. No veto, no committee. Their call, our commitment. (Nothing too crazy tho🫠)",
+    window: "Q3 · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/intercessory-dept-hoodie-real-tree/product__shot-4__1774018322078.jpg",
   },
   {
-    units: 4000, kicker: "Promise", title: "Hire one full-time tailor",
-    body: "Two thirds of the way. We bring our first full-time tailor onto the team from the Ghana network — structured income, technical training, a real seat at the table.",
+    units: 4000, kicker: "Promise", title: "Charity Donation",
+    body: "Four thousand units moved. We make a meaningful donation to a cause close to the community we're building in — chosen transparently, receipts shared. The road isn't just about us.",
     window: "Q3 · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/olive-grove/product__shot-4__1779112535448.jpg",
     objectPos: "object-[center_15%]",
   },
   {
-    units: 5000, kicker: "Promise", title: "Hand-numbered capsule",
-    body: "We design a small capsule made entirely from textile-recovery fabric, hand-numbered 1–100. Released to customers who carried the road this far.",
+    units: 5000, kicker: "Promise", title: "Street Interviews About Our Brand",
+    body: "Five thousand in and we go to the streets — camera rolling, no script. We ask real people what they think of 1NRI: the clothes, the price, the name, all of it. Uncut, unfiltered, published raw.",
     window: "Q4 · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/sackcloth/product__shot-2__1774014162916.jpg",
     objectPos: "object-[center_10%]",
   },
   {
-    units: 6000, kicker: "Goal", title: "Climb Mount Afadjato",
-    body: "We close the road. The team climbs Mount Afadjato — Ghana's highest peak — the same week we move into the new HQ in Accra. Every customer who took us there gets the summit photo, mailed.",
+    units: 6000, kicker: "Goal", title: "HQ Tour & Party",
+    body: "We close the road and open the doors. The new Accra headquarters, live and in person. A tour of the studio, the fitting room, the lounge — then a party for every customer who helped us get here.",
     window: "Dec · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/dusk-before-dawn-button-up/beige__main__1770027225978.jpg",
     objectPos: "object-[center_20%]",
   },
 ];
+
+/* ── Image prefetch ── */
+function prefetchImage(src: string) {
+  if (typeof window === "undefined") return;
+  const img = new window.Image();
+  img.src = src;
+}
 
 /* ── Shared animation variants ── */
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
@@ -215,11 +222,21 @@ export default function RoadToHQPage() {
         {/* Parallax image */}
         <motion.div className="absolute inset-0 will-change-transform" style={{ y: heroImageY }}>
           <Image
-            src="/homepage/1.jpeg"
+            src="/homepage/7.jpg"
             alt=""
             fill
             sizes="100vw"
-            className="object-cover object-[center_0%] scale-110"
+            style={{transform: "scaleY(-1) scaleX(-1)"}}
+            className="hidden sm:block object-cover object-[center_85%] scale-110"
+            priority
+          />
+          <Image
+            src="/homepage/7.jpg"
+            alt=""
+            fill
+            style={{transform: "scaleY(-1) scaleX(-1)"}}
+            sizes="100vw"
+            className="block sm:hidden object-cover object-[50%_25%] scale-110"
             priority
           />
         </motion.div>
@@ -238,49 +255,49 @@ export default function RoadToHQPage() {
             <span><span className="text-green-400">Live</span> · Deadline</span>
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-white/80" />
           </div>
-          <div className={`${caveat.className} text-8xl sm:text-7xl lg:text-7xl text-white leading-none`} style={{ fontWeight: 500 }}>
+          <div className={`${caveat.className} text-[2.4375rem] sm:text-6xl lg:text-7xl text-white leading-none`} style={{ fontWeight: 500 }}>
             26.12.2026
           </div>
         </motion.div>
 
         {/* Center copy — staggered */}
         <motion.div
-          className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center translate-y-8"
+          className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center sm:translate-y-8"
           variants={stagger}
           initial="hidden"
           animate="visible"
         >
-          <motion.h1 variants={fadeUp} className="display mt-4 text-5xl font-bold uppercase tracking-tight text-white sm:text-7xl lg:text-[7.5rem]">
+          <motion.h1 variants={fadeUp} className="display mt-1 sm:mt-4 text-[2.25rem] font-bold uppercase tracking-tight text-white sm:text-7xl lg:text-[7.5rem]">
             Road to HQ
           </motion.h1>
           <motion.p variants={fadeUp} className="mt-4 max-w-xl text-sm text-white/100 sm:text-base">
             Six thousand units stand between us and a permanent home in Accra. Every piece moves the needle.
           </motion.p>
 
-          <motion.div variants={fadeUp} className="mt-10 grid grid-cols-3 items-end gap-3 sm:gap-6 text-white">
+          <motion.div variants={fadeUp} className="mt-10 w-full max-w-xs sm:max-w-lg grid grid-cols-3 items-end sm:items-center gap-2 sm:gap-6 text-white">
             <div className="text-left">
               <div className="text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.3em] text-white/50">Sold</div>
-              <div className="mt-1 font-mono text-2xl sm:text-3xl font-semibold tabular-nums md:text-4xl">{displayUnits.toLocaleString()}</div>
+              <div className="mt-1 font-mono text-xl sm:text-3xl font-semibold tabular-nums md:text-4xl">{displayUnits.toLocaleString()}</div>
             </div>
             <div className="flex flex-col items-center">
-              <div className="h-px w-24 sm:w-40 md:w-56 bg-white/20 overflow-hidden">
+              <div className="h-px w-16 sm:w-40 md:w-56 bg-white/20 overflow-hidden">
                 <div className="h-full bg-white" style={{ width: `${ratio * 100}%` }} />
               </div>
-              <div className="mt-2 text-[10px] sm:text-[13px] font-medium uppercase tracking-[0.2em] sm:tracking-[0.3em] text-white/80 font-mono">
+              <div className="mt-2 text-[9px] sm:text-[13px] font-medium uppercase tracking-[0.15em] sm:tracking-[0.3em] text-white/80 font-mono">
                 {(ratio * 100).toFixed(1)}%
               </div>
             </div>
             <div className="text-right">
               <div className="text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.3em] text-white/50">Target</div>
-              <div className="mt-1 font-mono text-2xl sm:text-3xl font-semibold tabular-nums md:text-4xl">6,000</div>
+              <div className="mt-1 font-mono text-xl sm:text-3xl font-semibold tabular-nums md:text-4xl">6,000</div>
             </div>
           </motion.div>
 
-          <motion.div variants={fadeUp} className="mt-10 flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
-            <Link href="/products" className="inline-block w-56 bg-white px-10 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] text-black transition hover:bg-white/85">
+          <motion.div variants={fadeUp} className="mt-10 flex w-full max-w-xs sm:max-w-none flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+            <Link href="/products" className="inline-block w-full sm:w-56 bg-white px-6 sm:px-10 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] text-black transition hover:bg-white/85 text-center">
               Shop Now
             </Link>
-            <a href="#learn-more" className="inline-block w-56 border border-white/80 bg-white/5 px-10 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] text-white backdrop-blur-sm transition hover:bg-white hover:text-black">
+            <a href="#learn-more" className="inline-block w-full sm:w-56 border border-white/80 bg-white/5 px-6 sm:px-10 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] text-white backdrop-blur-sm transition hover:bg-white hover:text-black text-center">
               Learn More
             </a>
           </motion.div>
