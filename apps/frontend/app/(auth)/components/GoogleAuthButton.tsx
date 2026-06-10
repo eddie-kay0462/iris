@@ -9,6 +9,11 @@ export default function GoogleAuthButton() {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     const supabase = createClient();
+    // Await initialization before starting OAuth. Without this, a concurrent
+    // _removeSession() (triggered by an expired refresh token during initialize())
+    // can delete the PKCE code verifier right after signInWithOAuth stores it —
+    // because signInWithOAuth does not itself await initializePromise.
+    await supabase.auth.getSession();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
