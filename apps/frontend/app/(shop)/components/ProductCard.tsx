@@ -307,6 +307,18 @@ export function ProductCard({
 
   const firstColor = colors[0] ?? "";
 
+  const inStockVariants = variants.filter(
+    (v) => v.inventory_quantity > 0 && v.available !== false,
+  );
+  const allOutOfStock = variants.length > 0 && inStockVariants.length === 0;
+  const hasPreorder =
+    allOutOfStock &&
+    variants.some(
+      (v) =>
+        (v.inventory_quantity <= 0 || v.available === false) &&
+        v.preorder_enabled === true,
+    );
+
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [addingSize, setAddingSize] = useState<string | null>(null);
   const [successSize, setSuccessSize] = useState<string | null>(null);
@@ -512,6 +524,21 @@ export function ProductCard({
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-gray-400 dark:text-gray-600">
               No image
+            </div>
+          )}
+
+          {/* ── Stock / Pre-order badge ──────────────── */}
+          {(allOutOfStock || hasPreorder) && (
+            <div className="absolute left-2.5 top-2.5 z-10">
+              {hasPreorder ? (
+                <span className="bg-black px-2 py-[3px] text-[9px] font-bold tracking-[0.16em] uppercase text-white">
+                  Pre-order
+                </span>
+              ) : (
+                <span className="bg-white/90 px-2 py-[3px] text-[9px] font-bold tracking-[0.16em] uppercase text-[#59626E]">
+                  Sold Out
+                </span>
+              )}
             </div>
           )}
 

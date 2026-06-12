@@ -93,7 +93,29 @@ function isValueInStock(
       return v[key] === val;
     }),
   );
-  return matching.some((v) => v.inventory_quantity > 0);
+  return matching.some((v) => v.inventory_quantity > 0 && v.available !== false);
+}
+
+function isValuePreorderable(
+  variants: ProductVariant[],
+  groups: OptionGroup[],
+  selected: Record<string, string>,
+  targetGroup: OptionGroup,
+  targetValue: string,
+): boolean {
+  const testSelected = { ...selected, [targetGroup.name]: targetValue };
+  const matching = variants.filter((v) =>
+    groups.every((g) => {
+      const val = testSelected[g.name];
+      if (!val) return true;
+      const key =
+        g.slot === 1 ? "option1_value" : g.slot === 2 ? "option2_value" : "option3_value";
+      return v[key] === val;
+    }),
+  );
+  return matching.some(
+    (v) => (v.inventory_quantity <= 0 || v.available === false) && v.preorder_enabled === true,
+  );
 }
 
 // ─── PreorderModal ────────────────────────────────────────────────────────────
@@ -765,6 +787,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
                   {group.values.map((val) => {
                     const isSelected = selectedOptions[group.name] === val;
                     const inStockForVal = isValueInStock(variants, optionGroups, selectedOptions, group, val);
+                    const preorderableForVal = !inStockForVal && isValuePreorderable(variants, optionGroups, selectedOptions, group, val);
                     return (
                       <button
                         key={val}
@@ -772,18 +795,32 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
                         className={`${isSize ? "h-11" : "h-11 px-4"} border font-light text-[13px] tracking-[0.06em] transition-all duration-[160ms] ${
                           isSelected && inStockForVal
                             ? "bg-black text-[#F4F3F1] border-black"
-                            : isSelected && !inStockForVal
-                              ? "bg-black text-[#F4F3F1] border-black line-through"
-                              : !inStockForVal
-                                ? "text-[#A9B5C6] line-through border-black/25 hover:border-black/50"
-                                : "border-black/25 hover:border-black bg-white text-black"
+                            : isSelected && preorderableForVal
+                              ? "bg-black text-[#F4F3F1] border-dashed border-black"
+                              : isSelected && !inStockForVal
+                                ? "bg-black text-[#F4F3F1] border-black line-through"
+                                : preorderableForVal
+                                  ? "border-dashed border-black/50 text-black/70 hover:border-black bg-white"
+                                  : !inStockForVal
+                                    ? "text-[#A9B5C6] line-through border-black/25 hover:border-black/50"
+                                    : "border-black/25 hover:border-black bg-white text-black"
                         }`}
                       >
                         {val}
+                        {isSelected && preorderableForVal && (
+                          <span className="block text-[9px] tracking-[0.08em] opacity-75 leading-none mt-0.5">PRE-ORDER</span>
+                        )}
                       </button>
                     );
                   })}
                 </div>
+                {group.values.some((val) =>
+                  isValuePreorderable(variants, optionGroups, selectedOptions, group, val)
+                ) && (
+                  <p className="text-[11px] text-[#59626E] tracking-[0.06em]">
+                    Dashed options are available for pre-order
+                  </p>
+                )}
               </div>
             );
           })}
