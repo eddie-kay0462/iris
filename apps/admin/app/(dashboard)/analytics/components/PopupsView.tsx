@@ -192,54 +192,54 @@ function HypothesisBanner() {
   const items = [
     {
       icon: Star,
-      color: "text-amber-500",
-      bg: "bg-amber-50",
+      color: "text-slate-700",
+      bg: "bg-slate-50",
       title: "Community Loyalty",
       desc: "Customers wearing 1NRI receive a 5% discount, testing whether existing customers convert and spend more than new visitors.",
     },
     {
       icon: Target,
-      color: "text-blue-500",
-      bg: "bg-blue-50",
+      color: "text-slate-700",
+      bg: "bg-slate-50",
       title: "Pop-up Retail Effectiveness",
       desc: "Measuring how well a physical activation converts attention into purchases.",
     },
     {
       icon: Percent,
-      color: "text-purple-500",
-      bg: "bg-purple-50",
+      color: "text-slate-700",
+      bg: "bg-slate-50",
       title: "Pricing Sensitivity",
       desc: "Some products discounted, others at full retail — comparing demand at different price points.",
     },
     {
       icon: BarChart2,
-      color: "text-emerald-500",
-      bg: "bg-emerald-50",
+      color: "text-slate-700",
+      bg: "bg-slate-50",
       title: "Product-Market Fit",
       desc: "Tracking which products sell strongly and which do not via IR:IS pop-up analytics.",
     },
   ];
 
   return (
-    <div className="rounded-xl border border-indigo-100 bg-indigo-50">
+    <div className="rounded-xl border border-slate-200 bg-slate-50">
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between px-5 py-4"
       >
         <div className="flex items-center gap-3">
-          <Info className="h-4 w-4 text-indigo-500 shrink-0" />
-          <span className="text-sm font-semibold text-indigo-800">
+          <Info className="h-4 w-4 text-slate-500 shrink-0" />
+          <span className="text-sm font-semibold text-slate-800">
             What We Are Testing
           </span>
         </div>
         <ChevronRight
-          className={`h-4 w-4 text-indigo-400 transition-transform ${open ? "rotate-90" : ""}`}
+          className={`h-4 w-4 text-slate-400 transition-transform ${open ? "rotate-90" : ""}`}
         />
       </button>
       {open && (
         <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2">
           {items.map((item) => (
-            <div key={item.title} className={`flex gap-3 rounded-lg p-4 ${item.bg}`}>
+            <div key={item.title} className={`flex gap-3 rounded-lg border border-slate-100 bg-white p-4`}>
               <item.icon className={`h-5 w-5 shrink-0 mt-0.5 ${item.color}`} />
               <div>
                 <p className="text-sm font-semibold text-slate-800">{item.title}</p>
@@ -266,10 +266,10 @@ function PaymentBreakdown({
 
   const totalRev = entries.reduce((s, [, v]) => s + v.revenue, 0) || 1;
   const colors: Record<string, string> = {
-    cash: "bg-emerald-500",
-    momo: "bg-violet-500",
-    bank_transfer: "bg-blue-500",
-    unknown: "bg-slate-400",
+    cash: "bg-slate-900",
+    momo: "bg-slate-600",
+    bank_transfer: "bg-slate-400",
+    unknown: "bg-slate-300",
   };
   const labels: Record<string, string> = {
     cash: "Cash",
@@ -307,13 +307,13 @@ function PaymentBreakdown({
 
 function StatusBreakdown({ data }: { data: Record<string, number> }) {
   const styles: Record<string, string> = {
-    active: "bg-blue-50 text-blue-700 border-blue-200",
-    awaiting_payment: "bg-amber-50 text-amber-700 border-amber-200",
-    confirmed: "bg-green-50 text-green-700 border-green-200",
+    active: "bg-slate-50 text-slate-700 border-slate-200",
+    awaiting_payment: "bg-slate-50 text-slate-500 border-slate-200",
+    confirmed: "bg-slate-900 text-white border-slate-900",
     completed: "bg-slate-100 text-slate-600 border-slate-200",
-    on_hold: "bg-orange-50 text-orange-700 border-orange-200",
-    cancelled: "bg-red-50 text-red-500 border-red-200",
-    refunded: "bg-purple-50 text-purple-700 border-purple-200",
+    on_hold: "bg-slate-50 text-slate-500 border-slate-300 border-dashed",
+    cancelled: "bg-rose-50 text-rose-800 border-rose-200",
+    refunded: "bg-rose-50 text-rose-800 border-rose-200",
   };
   const labels: Record<string, string> = {
     active: "Active",
@@ -375,14 +375,14 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
           value={fmt(totalRevenue)}
           sub={`${totalTransactions} paid orders`}
           icon={DollarSign}
-          accent="bg-emerald-100 text-emerald-600"
+          accent="bg-slate-900 text-white"
         />
         <MetricCard
           label="Avg. Order Value"
           value={fmt(aov)}
           sub="Per paid transaction"
           icon={ShoppingCart}
-          accent="bg-violet-100 text-violet-600"
+          accent="bg-slate-100 text-slate-700"
         />
         <MetricCard
           label="Revenue per Visitor"
@@ -393,15 +393,15 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
               : "Set visitor count on the event to enable"
           }
           icon={Users}
-          accent="bg-amber-100 text-amber-600"
+          accent="bg-slate-100 text-slate-700"
         />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <SectionCard title="Existing Customer Spend">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-indigo-100">
-              <UserCheck className="h-6 w-6 text-indigo-600" />
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-900">
+              <UserCheck className="h-6 w-6 text-white" />
             </div>
             <div className="flex-1 space-y-1">
               <p className="text-2xl font-bold text-slate-900">{fmt(existingCustomer.aov)}</p>
@@ -415,8 +415,8 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
 
         <SectionCard title="New / Walk-in Customers">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-rose-100">
-              <UserPlus className="h-6 w-6 text-rose-500" />
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-100">
+              <UserPlus className="h-6 w-6 text-slate-600" />
             </div>
             <div className="flex-1 space-y-1">
               <p className="text-2xl font-bold text-slate-900">{fmt(newCustomer.aov)}</p>
@@ -430,8 +430,8 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
             <div
               className={`mt-4 rounded-lg px-4 py-3 text-sm ${
                 existingCustomer.aov >= newCustomer.aov
-                  ? "bg-green-50 text-green-700"
-                  : "bg-amber-50 text-amber-700"
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-100 text-slate-700"
               }`}
             >
               {existingCustomer.aov >= newCustomer.aov ? (
@@ -461,14 +461,14 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
           <SectionCard title="Revenue Over Time (by Hour)">
             <MiniBarChart
               data={revenueByHour}
-              color="#3b82f6"
+              color="#0f172a"
               formatValue={(v) => `GH₵${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
             />
           </SectionCard>
           <SectionCard title="Orders Over Time (by Hour)">
             <MiniBarChart
               data={ordersByHour}
-              color="#8b5cf6"
+              color="#475569"
               formatValue={(v) => String(v)}
             />
           </SectionCard>
@@ -482,7 +482,7 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
               items={productPerformance}
               valueKey="revenue"
               labelKey="name"
-              color="#10b981"
+              color="#0f172a"
               formatValue={(v) => `GH₵${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
             />
           </SectionCard>
@@ -491,7 +491,7 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
               items={productPerformance}
               valueKey="unitsSold"
               labelKey="name"
-              color="#f59e0b"
+              color="#475569"
               formatValue={(v) => `${v} units`}
             />
           </SectionCard>
@@ -515,7 +515,7 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
           </div>
           <div className="space-y-1">
             <p className="text-xs text-slate-400">1NRI Loyalty Discounts</p>
-            <p className="text-xl font-bold text-indigo-600">{discountImpact.loyaltyOrderCount}</p>
+            <p className="text-xl font-bold text-slate-900">{discountImpact.loyaltyOrderCount}</p>
             <p className="text-xs text-slate-500">orders with 1NRI / loyalty tag</p>
           </div>
         </div>
@@ -539,7 +539,7 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
             </div>
             <div className="h-3 w-full rounded-full bg-slate-100">
               <div
-                className="h-3 rounded-full bg-indigo-500"
+                className="h-3 rounded-full bg-slate-400"
                 style={{ width: `${(discountImpact.discountedRevenue / totalDiscountRevenue) * 100}%` }}
               />
             </div>

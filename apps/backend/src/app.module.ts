@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { SupabaseModule } from './common/supabase/supabase.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { AuthModule } from './auth/auth.module';
@@ -29,6 +30,9 @@ import { FavouritesModule } from './favourites/favourites.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Rate limiting — only enforced where ThrottlerGuard is mounted
+    // (public analytics ingest routes), not globally.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     SupabaseModule,
     LetsfishModule,
     AuthModule,

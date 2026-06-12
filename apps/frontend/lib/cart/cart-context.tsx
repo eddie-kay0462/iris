@@ -8,6 +8,7 @@ import {
   useReducer,
   type ReactNode,
 } from "react";
+import { track } from "@/lib/analytics/tracker";
 
 // --- Types ---
 
@@ -152,6 +153,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addItem = useCallback(
     (item: Omit<CartItem, "quantity">, quantity?: number) => {
       dispatch({ type: "ADD", item, quantity });
+      track("add_to_cart", {
+        productId: item.productId,
+        value: item.price * (quantity ?? 1),
+      });
     },
     [],
   );

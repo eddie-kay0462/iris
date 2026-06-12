@@ -15,6 +15,7 @@ import { useShippingOptions, DEFAULT_SHIPPING_OPTIONS } from "@/lib/api/settings
 import { useValidatePromo, DiscountType } from "@/lib/api/promos";
 import { ChevronDown } from "lucide-react";
 import { useLocale } from "@/lib/locale/locale-provider";
+import { track, snapshotCheckout } from "@/lib/analytics/tracker";
 
 function generateReference() {
   const ts = Date.now();
@@ -169,6 +170,42 @@ export default function CheckoutClient() {
   const discountAmount = appliedPromo?.discountAmount ?? 0;
   const total = Math.max(0, subtotal + shippingCost - discountAmount);
 
+  // One checkout_started event per checkout visit
+  useEffect(() => {
+    if (items.length > 0) {
+      track("checkout_started", { value: subtotal });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Snapshot the checkout (cart + contact details as typed) for
+  // abandoned-checkout capture; debounced so we don't post per keystroke.
+  useEffect(() => {
+    if (items.length === 0) return;
+    const timer = setTimeout(() => {
+      snapshotCheckout({
+        // `email` is prefilled from the JWT for signed-in users
+        email: email.trim() || undefined,
+        phone: form.phone || undefined,
+        customerName:
+          `${form.firstName} ${form.lastName}`.trim() || undefined,
+        userId: profile?.id || undefined,
+        items: items.map((i) => ({
+          productId: i.productId,
+          variantId: i.variantId,
+          productName: i.productTitle,
+          variantTitle: i.variantTitle || undefined,
+          quantity: i.quantity,
+          unitPrice: i.price,
+          imageUrl: i.image || undefined,
+        })),
+        subtotal,
+      });
+    }, 2000);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, email, form.firstName, form.lastName, form.phone, profile?.id]);
+
   // Pre-fill address from the user's default address when profile loads
   useEffect(() => {
     if (!profile) return;
@@ -313,6 +350,25 @@ export default function CheckoutClient() {
       }
 
       setPendingOrderNumber(order.order_number);
+
+      // Close the abandoned-checkout snapshot for this session.
+      snapshotCheckout({
+        email: email.trim() || undefined,
+        phone: form.phone || undefined,
+        customerName: `${form.firstName} ${form.lastName}`.trim() || undefined,
+        userId: profile?.id || undefined,
+        items: items.map((i) => ({
+          productId: i.productId,
+          variantId: i.variantId,
+          productName: i.productTitle,
+          variantTitle: i.variantTitle || undefined,
+          quantity: i.quantity,
+          unitPrice: i.price,
+          imageUrl: i.image || undefined,
+        })),
+        subtotal,
+        completedOrderId: order.id,
+      });
 
       if (saveAsDefault && isSignedIn) {
         try {

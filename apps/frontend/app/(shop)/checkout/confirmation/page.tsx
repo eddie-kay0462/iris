@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useMyOrderByNumber, useGuestOrderByNumber } from "@/lib/api/orders";
 import { hasToken } from "@/lib/api/client";
 import { Loader2 } from "lucide-react";
+import { track } from "@/lib/analytics/tracker";
 
 function ConfirmationContent() {
   const searchParams = useSearchParams();
@@ -26,6 +27,19 @@ function ConfirmationContent() {
   const { data: order, isLoading, isError } = isSignedIn ? signedInQuery : guestQuery;
 
   const isPaid = order?.payment_status === "paid";
+
+  // Fire the purchase event once per order (deduped across refreshes).
+  useEffect(() => {
+    if (!order || !isPaid) return;
+    const dedupeKey = `iris_p_${order.order_number}`;
+    try {
+      if (localStorage.getItem(dedupeKey)) return;
+      localStorage.setItem(dedupeKey, "1");
+    } catch {
+      // storage unavailable — still track, worst case a duplicate
+    }
+    track("purchase", { orderId: order.id, value: order.total ?? 0 });
+  }, [order, isPaid]);
 
   if (!orderNumber) {
     return (

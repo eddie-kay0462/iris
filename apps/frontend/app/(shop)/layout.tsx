@@ -10,6 +10,7 @@ import { CartProvider, useCart } from "@/lib/cart";
 import { hasToken, apiClient } from "@/lib/api/client";
 import { useFavourites } from "@/lib/favourites";
 import { LocaleProvider, useLocale, CURRENCIES } from "@/lib/locale/locale-provider";
+import AnalyticsBeacon from "@/components/AnalyticsBeacon";
 
 function ThemeToggle({ isTransparent = false }: { isTransparent?: boolean }) {
   const { theme, toggleTheme } = useTheme();
@@ -650,6 +651,7 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
   const isHome = pathname === "/";
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-white dark:bg-gray-950">
+      <AnalyticsBeacon />
       <ShopHeader />
       <main className={isHome ? "" : "pt-[65px]"}>{children}</main>
       <ShopFooter />

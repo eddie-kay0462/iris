@@ -22,6 +22,7 @@ export interface PopupEvent {
   event_date: string | null;
   end_date: string | null;
   status: PopupEventStatus;
+  visitor_count: number | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -149,6 +150,7 @@ export interface UpdateEventInput {
   event_date?: string;
   end_date?: string;
   status?: PopupEventStatus;
+  visitor_count?: number;
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────

@@ -12,6 +12,10 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { toE164 } from '../common/utils/phone';
 import { QueryOrdersDto } from './dto/query-orders.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import {
+  ONLINE_REVENUE_STATUSES,
+  POPUP_REVENUE_STATUSES,
+} from '../analytics/analytics.constants';
 
 @Injectable()
 export class OrdersService {
@@ -891,7 +895,7 @@ export class OrdersService {
     const ordersByDay: Record<string, number> = {};
 
     (orders || []).forEach((o) => {
-      if (!['cancelled', 'refunded'].includes(o.status)) {
+      if (ONLINE_REVENUE_STATUSES.includes(o.status)) {
         const day = o.created_at.slice(0, 10);
         ordersByDay[day] = (ordersByDay[day] || 0) + 1;
         revenueByDay[day] = (revenueByDay[day] || 0) + Number(o.total);
@@ -904,7 +908,7 @@ export class OrdersService {
       .select('total, status, created_at')
       .gte('created_at', fromDate)
       .lte('created_at', toDate)
-      .not('status', 'in', '("cancelled","refunded")');
+      .in('status', POPUP_REVENUE_STATUSES);
 
     let popupRevenue = 0;
     let popupOrderCount = 0;
@@ -923,25 +927,35 @@ export class OrdersService {
     const prevFrom = new Date(fromMs - periodLength).toISOString();
     const prevTo = fromDate;
 
-    const { data: prevOrders } = await db
-      .from('orders')
-      .select('total, status')
-      .is('deleted_at', null)
-      .gte('created_at', prevFrom)
-      .lte('created_at', prevTo);
+    const [{ data: prevOrders }, { data: prevPopupOrders }] = await Promise.all([
+      db
+        .from('orders')
+        .select('total, status')
+        .is('deleted_at', null)
+        .gte('created_at', prevFrom)
+        .lte('created_at', prevTo),
+      db
+        .from('popup_orders')
+        .select('total, status')
+        .gte('created_at', prevFrom)
+        .lte('created_at', prevTo)
+        .in('status', POPUP_REVENUE_STATUSES),
+    ]);
 
-    const validPrev = (prevOrders || []).filter(
-      (o) => !['cancelled', 'refunded'].includes(o.status),
+    // Previous period uses the same revenue-status whitelist as the current
+    // period so the delta badges compare like for like (incl. popup orders).
+    const validPrev = (prevOrders || []).filter((o) =>
+      ONLINE_REVENUE_STATUSES.includes(o.status),
     );
-    const previousPeriodRevenue = validPrev.reduce(
-      (sum, o) => sum + Number(o.total),
-      0,
-    );
-    const previousPeriodOrders = prevOrders?.length || 0;
+    const previousPeriodRevenue =
+      validPrev.reduce((sum, o) => sum + Number(o.total), 0) +
+      (prevPopupOrders || []).reduce((sum, o) => sum + Number(o.total), 0);
+    const previousPeriodOrders =
+      validPrev.length + (prevPopupOrders?.length || 0);
 
     // Funnel counts from current orders
-    const validOrders = (orders || []).filter(
-      (o) => !['cancelled', 'refunded'].includes(o.status),
+    const validOrders = (orders || []).filter((o) =>
+      ONLINE_REVENUE_STATUSES.includes(o.status),
     );
     const funnelStages = ['paid', 'processing', 'shipped', 'delivered'];
     const stagePriority: Record<string, number> = {
@@ -970,7 +984,7 @@ export class OrdersService {
       { name: string; revenue: number; unitsSold: number; productId: string | null; vendor: string | null }
     > = {};
     (topItems || []).forEach((item: any) => {
-      if (['cancelled', 'refunded'].includes(item.order?.status)) return;
+      if (!ONLINE_REVENUE_STATUSES.includes(item.order?.status)) return;
       const name = item.product_name;
       if (!productMap[name]) {
         productMap[name] = { name, revenue: 0, unitsSold: 0, productId: item.product_id || null, vendor: item.product?.vendor || null };
@@ -1002,7 +1016,7 @@ export class OrdersService {
     };
 
     (topItems || []).forEach((item: any) => {
-      if (['cancelled', 'refunded'].includes(item.order?.status)) return;
+      if (!ONLINE_REVENUE_STATUSES.includes(item.order?.status)) return;
       applyVendorMetrics(
         item.product?.vendor || '1NRI',
         Number(item.total_price),
@@ -1019,7 +1033,7 @@ export class OrdersService {
       .lte('popup_orders.created_at', toDate);
 
     (popupItemsBrand || []).forEach((item: any) => {
-      if (['cancelled', 'refunded'].includes(item.order?.status)) return;
+      if (!POPUP_REVENUE_STATUSES.includes(item.order?.status)) return;
       applyVendorMetrics(
         item.product?.vendor || '1NRI',
         Number(item.total_price),
@@ -1074,7 +1088,7 @@ export class OrdersService {
       ordersByDay,
       topProducts: topProductsWithImages,
       statusBreakdown,
-      totalOrders: (orders?.length || 0) + popupOrderCount,
+      totalOrders: validOrders.length + popupOrderCount,
       totalRevenue:
         validOrders.reduce((sum, o) => sum + Number(o.total), 0) + popupRevenue,
       previousPeriodRevenue,

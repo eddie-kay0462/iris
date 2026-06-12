@@ -1,8 +1,17 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { AnalyticsService } from './analytics.service';
-import { OverviewQueryDto, RevenueChartDto, ReportQueryDto } from './dto/query-analytics.dto';
+import {
+  AbandonedCheckoutsQueryDto,
+  OverviewQueryDto,
+  RevenueChartDto,
+  ReportQueryDto,
+} from './dto/query-analytics.dto';
+import { TrackEventsDto } from './dto/track-events.dto';
+import { CheckoutSnapshotDto } from './dto/checkout-snapshot.dto';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
+import { Public } from '../common/decorators/public.decorator';
 
 @Controller('analytics')
 @UseGuards(PermissionsGuard)
@@ -143,5 +152,111 @@ export class AnalyticsController {
   @RequirePermission('analytics:read')
   getPaymentMethodsReport(@Query() query: ReportQueryDto) {
     return this.analyticsService.getPaymentMethodsReport(query);
+  }
+
+  // ─── Storefront tracking ingest (public, throttled) ───────────────────────
+
+  /**
+   * POST /analytics/track
+   * Batched first-party events from the storefront beacon.
+   */
+  @Public()
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @Post('track')
+  @HttpCode(204)
+  async trackEvents(@Body() dto: TrackEventsDto) {
+    await this.analyticsService.trackEvents(dto);
+  }
+
+  /**
+   * POST /analytics/checkout
+   * Checkout snapshot upsert — powers abandoned-checkout capture.
+   */
+  @Public()
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Post('checkout')
+  @HttpCode(204)
+  async checkoutSnapshot(@Body() dto: CheckoutSnapshotDto) {
+    await this.analyticsService.saveCheckoutSnapshot(dto);
+  }
+
+  // ─── Sessions / conversion / breakdown ─────────────────────────────────────
+
+  /**
+   * GET /analytics/sessions
+   * Session counts, conversion funnel and device/referrer/landing splits.
+   */
+  @Get('sessions')
+  @RequirePermission('analytics:read')
+  getSessions(@Query() query: ReportQueryDto) {
+    return this.analyticsService.getSessionsAnalytics(query);
+  }
+
+  /**
+   * GET /analytics/sales-breakdown
+   * Gross sales → discounts → returns → net sales → shipping → tax → total.
+   */
+  @Get('sales-breakdown')
+  @RequirePermission('analytics:read')
+  getSalesBreakdown(@Query() query: ReportQueryDto) {
+    return this.analyticsService.getSalesBreakdown(query);
+  }
+
+  /**
+   * GET /analytics/returning-customer-rate
+   * Share of period customers with a prior order (incl. Shopify history).
+   */
+  @Get('returning-customer-rate')
+  @RequirePermission('analytics:read')
+  getReturningCustomerRate(@Query() query: ReportQueryDto) {
+    return this.analyticsService.getReturningCustomerRate(query);
+  }
+
+  // ─── Abandoned checkouts ───────────────────────────────────────────────────
+
+  /**
+   * GET /analytics/abandoned-checkouts
+   * Open checkouts idle for over an hour, with customer + item details.
+   */
+  @Get('abandoned-checkouts')
+  @RequirePermission('analytics:read')
+  getAbandonedCheckouts(@Query() query: AbandonedCheckoutsQueryDto) {
+    return this.analyticsService.getAbandonedCheckouts(query);
+  }
+
+  /**
+   * GET /analytics/abandoned-checkouts/:id
+   */
+  @Get('abandoned-checkouts/:id')
+  @RequirePermission('analytics:read')
+  getAbandonedCheckout(@Param('id') id: string) {
+    return this.analyticsService.getAbandonedCheckout(id);
+  }
+
+  // ─── Unified reports engine ────────────────────────────────────────────────
+  // Note: `report` (singular) to avoid colliding with the legacy static
+  // `reports/...` routes above.
+
+  /**
+   * GET /analytics/report
+   * Registry of all available reports (id, name, category, description).
+   */
+  @Get('report')
+  @RequirePermission('analytics:read')
+  listReports() {
+    return this.analyticsService.listReportDefinitions();
+  }
+
+  /**
+   * GET /analytics/report/:reportId
+   * Unified report payload: summary metrics, chart series (current +
+   * previous period) and a data table with totals.
+   */
+  @Get('report/:reportId')
+  @RequirePermission('analytics:read')
+  runReport(@Param('reportId') reportId: string, @Query() query: ReportQueryDto) {
+    return this.analyticsService.runReport(reportId, query);
   }
 }

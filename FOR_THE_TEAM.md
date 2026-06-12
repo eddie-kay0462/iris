@@ -3694,3 +3694,121 @@ const { error } = await supabase.auth.signInWithOAuth({ ... });
 | File | What Changed |
 |---|---|
 | `apps/frontend/app/(auth)/components/GoogleAuthButton.tsx` | Added `await supabase.auth.getSession()` before `signInWithOAuth` |
+
+---
+
+## Shopify-Grade Analytics Revamp (June 2026)
+
+### What Got Done
+
+**Rebuilt the admin analytics from the ground up, modeled on Shopify's admin.** This is the biggest single update to the admin so far. In plain terms, we now have:
+
+1. **Visitor tracking on the storefront** — we finally know how many people visit the shop, what device they're on, where they came from, which page they landed on, and whether they added to cart, reached checkout, and bought. This powers real **conversion rate** metrics, just like Shopify's "Sessions → Added to cart → Reached checkout → Completed" funnel.
+2. **Abandoned checkouts** — when someone reaches checkout, types their email/name/phone, and leaves without paying, we now capture their cart and contact details. There's a new admin page listing every abandoned checkout with the customer's details and exactly which items they left behind — so we can follow up and recover the sale. If they later come back and buy, the checkout is automatically marked **Recovered**.
+3. **A Reports section** — like Shopify's Reports tab: ~20 reports organised by category (Sales, Orders, Customers, Behavior, Inventory, Finances). Each report opens with a big chart, a comparison against the previous period (dashed grey line), summary numbers with % change, a day-by-day data table with totals, and a CSV export button.
+4. **A richer dashboard and analytics page** — sparklines on the KPI cards, a Shopify-style "Total sales breakdown" (gross sales → discounts → returns → net sales → shipping → taxes → total sales) with per-line deltas, sales-by-channel donut (online vs pop-up), conversion funnel, sell-through rates, and returning-customer rate.
+5. **A premium monochrome look** — all the bright blues/purples/ambers are gone. Charts and accents now use shades of black and grey (ink for the current period, light grey dashed for the previous period, a restrained rose only for negative deltas). All charts were rebuilt on **Recharts** with proper tooltips and previous-period overlays.
+
+### ⚠️ One Number Will Change — On Purpose
+
+**Dashboard revenue may read slightly lower than before.** The old analytics counted *any* order that wasn't cancelled/refunded as revenue — including **pending orders that were never paid for**. It also compared "vs previous period" against a different population (previous-period order counts included cancelled orders; revenue didn't). Everything now uses one consistent rule: online revenue = `paid / processing / shipped / delivered`; pop-up revenue = `confirmed / completed`. The new numbers are the correct ones.
+
+### How the Tracking Works (plain terms)
+
+- The storefront quietly sends events (page view, product view, add to cart, checkout started, purchase) to our own backend — **no Google Analytics, no third parties, no cookies banner needed** (first-party, anonymous IDs only).
+- A "session" is a visit: it gets a random ID that expires after 30 minutes of inactivity. A "visitor" is the browser (persistent random ID), so we can tell new vs returning visitors apart.
+- Purchases are deduplicated, so refreshing the confirmation page doesn't double-count.
+- On the checkout page, the cart and contact fields are snapshotted (debounced, every ~2s as you type) to a `checkout_sessions` table. Completing the order closes the snapshot; leaving it idle for **1 hour** makes it an "abandoned checkout".
+- Everything fails silently — if the analytics backend is down, shopping is completely unaffected.
+- **Important:** session metrics are forward-only. There's no historical session data — conversion rate, sessions, and abandonment all start counting from the day this deploys. The UI says "Tracking since {date}" so nobody mistakes empty history for zero traffic.
+
+### What's Where in the Admin
+
+| Page | What's New |
+|---|---|
+| **Dashboard** (`/`) | Kept everything (brand/time filters, all-time chart, revenue target, brand split, orders by status) and added: 5 KPI cards with sparklines (now incl. **Conversion Rate** and **Returning Customers**), Total sales breakdown card, Sales-by-channel donut, Conversion funnel card. All-time chart now has a drag-to-zoom brush. |
+| **Analytics → Storefront** | Fully rebuilt: 6-KPI strip with sparklines, Total sales over time with previous-period overlay, sales breakdown + AOV-over-time side by side, Conversion funnel + Fulfillment funnel, abandoned-checkouts callout, Sales by product (with images), Products by sell-through rate, Sessions by device / referrer / landing page. |
+| **Analytics → Pop-ups** | All existing metrics kept; restyled monochrome. Revenue-per-visitor and conversion now actually work once you set a visitor count on an event (see below). |
+| **Analytics → Compare** | New channel overview: online vs pop-up donut + two-line channel sales chart, on top of the existing side-by-side comparisons. |
+| **Reports** (`/analytics/reports`, also in sidebar) | Searchable index with category chips → each report opens at `/analytics/reports/{id}` with range (7D/30D/90D/1Y) + granularity (daily/weekly/monthly) controls, metric switcher, comparison chart, totals + "% change vs previous period" table, CSV export. |
+| **Abandoned Checkouts** (`/orders/abandoned`, also in sidebar) | List with date, customer, item thumbnails, subtotal, status badge (Abandoned / Recovered); search by email/name/phone; click into a checkout for full cart lines, contact card (links to the customer profile if matched), and recovery status. |
+| **Pop-up Sales → Edit Event** | New **"Estimated Visitors"** field. Enter the foot traffic for an event and the pop-up analytics will show conversion rate and revenue-per-visitor. |
+
+### The Reports (full list)
+
+- **Sales:** Total sales over time · Sales by product · Sales by channel · Average order value over time · Sales by brand · Units per order
+- **Orders:** Orders over time · Orders fulfilled over time · Discounts over time
+- **Customers:** New vs returning customers · Returning customer rate over time · Customer cohort retention *(Iris-era orders only — migrated Shopify history has no per-order dates)*
+- **Behavior:** Sessions over time · **Conversion rate over time** (the flagship — Sessions / Added to cart / Reached checkout / Completed / Conversion rate) · Checkout abandonment over time · Sessions by device / referrer / landing page
+- **Inventory:** Products by sell-through rate · Inventory levels
+- **Finances:** Finances summary (monthly P&L-style) · Sales by payment method
+
+### Backend Changes
+
+- **New public endpoints** (rate-limited with `@nestjs/throttler`, validated with class-validator): `POST /analytics/track` (event batches from the beacon) and `POST /analytics/checkout` (checkout snapshots).
+- **New admin endpoints** (all require `analytics:read`): `GET /analytics/sessions`, `GET /analytics/sales-breakdown`, `GET /analytics/returning-customer-rate`, `GET /analytics/abandoned-checkouts(/:id)`, and the unified reports engine `GET /analytics/report` (list) + `GET /analytics/report/:reportId`. *(Note: singular `report` — the old static `reports/...` routes would have shadowed report ids like `payment-methods`.)*
+- **Returning customer rate** matches customers across channels (online `user_id`/email, pop-up email/phone) and counts migrated Shopify history (`shopify_total_orders > 0`) as "returning".
+- **Status-whitelist fix** in `orders.service.ts getAnalytics()` (the revenue change explained above).
+- Reports engine reads share cached loaders per request and paginate past Supabase's 1,000-row response cap (`fetchAll` in `report-context.ts`) — important once `analytics_events` grows.
+
+### Database Migrations (already applied to the remote DB)
+
+| Migration | What It Does |
+|---|---|
+| `20260612000000_create_analytics_events.sql` | `analytics_events` table — one row per tracked event. RLS on, no public policies (backend service-role only). |
+| `20260612000001_add_popup_event_visitor_count.sql` | Adds `visitor_count` to `popup_events` — the column the pop-up analytics code always read defensively but never existed. |
+| `20260612000002_create_checkout_sessions.sql` | `checkout_sessions` table — live checkout snapshots; one open checkout per browsing session (partial unique index). |
+
+### Files Created/Modified (highlights)
+
+**Backend (`apps/backend`):**
+- `src/analytics/analytics.constants.ts` — **new**, the revenue status whitelist + date-bucketing helpers (single source of truth)
+- `src/analytics/reports/` — **new**: `report-types.ts`, `report-context.ts` (shared cached loaders), `report-registry.ts` (~20 report builders)
+- `src/analytics/dto/track-events.dto.ts`, `dto/checkout-snapshot.dto.ts` — **new** validated ingest DTOs
+- `src/analytics/analytics.controller.ts` / `analytics.service.ts` — all the new endpoints
+- `src/orders/orders.service.ts` — status-whitelist fix
+- `src/app.module.ts` — registered `ThrottlerModule`
+- `src/popup-sales/dto/update-event.dto.ts` — accepts `visitor_count`
+
+**Storefront (`apps/frontend`):**
+- `lib/analytics/tracker.ts` — **new**, the beacon (session/visitor IDs, event queue, `fetch keepalive`, checkout snapshots)
+- `components/AnalyticsBeacon.tsx` — **new**, fires page/product views on route change; mounted in `app/(shop)/layout.tsx`
+- `lib/cart/cart-context.tsx` — `add_to_cart` event in `addItem`
+- `app/(shop)/checkout/CheckoutClient.tsx` — `checkout_started` event + debounced checkout snapshots + completion snapshot after order creation
+- `app/(shop)/checkout/confirmation/page.tsx` — deduplicated `purchase` event
+
+**Admin (`apps/admin`):**
+- `lib/charts/theme.ts` — **new**, the monochrome design tokens + number/date formatters (use these for any new charts)
+- `app/components/charts/` — **new** shared chart kit: `ChartCard`, `Sparkline`, `ComparisonLineChart` (+ `DualLineChart`), `DonutChart`, `HBarChart`, `MetricDataTable`
+- `app/components/DeltaBadge.tsx` — **new**, replaces the three duplicated delta implementations
+- `lib/api/analytics.ts` — **new**, all the hooks (`useSessionsAnalytics`, `useSalesBreakdown`, `useReturningCustomerRate`, `useAbandonedCheckouts`, `useReportsList`, `useReport`, `useDateRange`)
+- `app/(dashboard)/page.tsx` — dashboard revamp
+- `app/(dashboard)/analytics/` — `page.tsx` (Reports link), `components/StorefrontView.tsx` (rewrite), `BothView.tsx` (channel overview), `PopupsView.tsx` + `OrderFunnel.tsx` (monochrome), **new** `reports/page.tsx` + `reports/[reportId]/page.tsx`
+- `app/(dashboard)/orders/abandoned/` — **new** list + detail pages
+- `app/components/Sidebar.tsx` — added **Abandoned Checkouts** and **Reports** entries
+- `app/(dashboard)/popup-sales/page.tsx` + `lib/api/popup-sales.ts` — visitor-count field
+- New dependency: `recharts` (admin); `@nestjs/throttler` (backend)
+
+### Want to Test It?
+
+```bash
+# Terminal 1 — backend
+cd apps/backend && npm run start:dev
+# Terminal 2 — storefront
+cd apps/frontend && npm run dev
+# Terminal 3 — admin
+cd apps/admin && npm run dev
+```
+
+1. **Tracking:** browse the storefront (home → a product → add to cart → checkout). In Supabase, `analytics_events` should show one session with `page_view`, `product_view`, `add_to_cart`, `checkout_started` rows. Buy something and a `purchase` row appears; refresh the confirmation page — no duplicate.
+2. **Abandoned checkout:** at checkout, type a name/email, then close the tab. A row appears in `checkout_sessions`; after 1 hour idle it shows under **Orders → Abandoned Checkouts** with your cart and contact details. (Impatient? Temporarily set `updated_at` back an hour in SQL.) Buy with the same email afterwards and the status flips to **Recovered**.
+3. **Reports:** open **Reports** in the admin sidebar → "Conversion rate over time" → switch ranges/granularity, hover the chart (both periods in the tooltip), check the table's "vs previous period" row, click CSV.
+4. **Pop-up conversion:** Pop-up Sales → edit an event → set Estimated Visitors → the Pop-ups analytics tab now shows revenue-per-visitor.
+
+### Something Not Working? / Things to Know
+
+- **Conversion/sessions cards show "—" or zeros at first** — expected. Tracking is forward-only; there is no historical session data. The cards/funnels say "Tracking since {date}" once the first event lands.
+- **Revenue looks slightly lower than before** — intentional; pending unpaid orders no longer count (see the ⚠️ section above).
+- **Cohort report covers Iris-era orders only** — migrated Shopify customers have lifetime totals but no per-order dates, so they can't be placed in monthly cohorts. The report says so in its description.
+- **The ingest endpoints are public by design** (the storefront isn't authenticated) but are rate-limited (60 events/min, 30 snapshots/min per IP), schema-validated, and string-capped. Junk from a determined abuser is possible but low-stakes — it can only pollute analytics, never touch orders.
+- All three apps typecheck and build clean; the backend was smoke-tested (invalid events → 400, unauthenticated analytics reads → 401, valid track → 204).
