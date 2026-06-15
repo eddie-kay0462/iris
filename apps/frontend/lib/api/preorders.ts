@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "./client";
 
 export type PreorderStatus = "pending" | "stock_held" | "fulfilled" | "cancelled" | "refunded";
@@ -41,4 +42,11 @@ export async function createPreorder(dto: CreatePreorderInput): Promise<MyPreord
 
 export async function getMyPreorders(): Promise<MyPreorder[]> {
   return apiClient<MyPreorder[]>("/preorders/my");
+}
+
+export function useMyPreorders() {
+  return useQuery({
+    queryKey: ["my-preorders"],
+    queryFn: () => apiClient<MyPreorder[]>("/preorders/my"),
+  });
 }

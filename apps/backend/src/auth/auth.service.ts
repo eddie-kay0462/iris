@@ -194,21 +194,34 @@ export class AuthService {
     // Fetch existing profile
     let { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, avatar_url')
       .eq('id', user.id)
       .single();
+
+    // Google / OAuth providers store the profile picture in user_metadata
+    const oauthAvatarUrl: string | null =
+      user.user_metadata?.avatar_url ??
+      user.user_metadata?.picture ??
+      null;
 
     // Create profile if it doesn't exist yet (e.g. magic-link confirmed email)
     if (!profile) {
       await supabase.from('profiles').insert({
         id: user.id,
         email: user.email,
-        first_name: user.user_metadata?.first_name ?? null,
-        last_name: user.user_metadata?.last_name ?? null,
+        first_name: user.user_metadata?.first_name ?? user.user_metadata?.name?.split(' ')[0] ?? null,
+        last_name: user.user_metadata?.last_name ?? user.user_metadata?.name?.split(' ').slice(1).join(' ') || null,
         phone_number: user.user_metadata?.phone_number ?? null,
+        avatar_url: oauthAvatarUrl,
         role: 'public',
       });
-      profile = { role: 'public' };
+      profile = { role: 'public', avatar_url: oauthAvatarUrl };
+    } else if (oauthAvatarUrl && !profile.avatar_url) {
+      // Backfill avatar_url for existing OAuth users who signed up before this was tracked
+      await supabase
+        .from('profiles')
+        .update({ avatar_url: oauthAvatarUrl })
+        .eq('id', user.id);
     }
 
     const role: UserRole = (profile.role as UserRole) ?? 'public';

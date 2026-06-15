@@ -15,8 +15,12 @@ export interface UserProfile {
   id: string;
   first_name: string | null;
   last_name: string | null;
+  email: string | null;
   phone_number: string | null;
   default_address: DefaultAddress | string | null;
+  avatar_url: string | null;
+  email_notifications?: boolean;
+  sms_notifications?: boolean;
 }
 
 export function useProfile(enabled = true) {

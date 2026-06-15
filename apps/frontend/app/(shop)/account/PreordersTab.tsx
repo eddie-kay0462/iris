@@ -1,19 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getMyPreorders, type MyPreorder } from "@/lib/api/preorders";
+import { useMyPreorders } from "@/lib/api/preorders";
+import { prefetchImage } from "@/hooks/useImagePrefetch";
 import { StatusPip, EndLabel, fmt, fmtDate, supabaseImg } from "./atoms";
 
 export default function PreordersTab() {
-  const [preorders, setPreorders] = useState<MyPreorder[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    getMyPreorders()
-      .then(setPreorders)
-      .catch(() => setPreorders([]))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: preorders = [], isLoading } = useMyPreorders();
 
   return (
     <div>
@@ -30,7 +22,7 @@ export default function PreordersTab() {
         </div>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="order-list">
           {[1, 2, 3].map((i) => (
             <div
@@ -59,7 +51,12 @@ export default function PreordersTab() {
             const variantDisplay = order.variant_title ?? variantParts ?? "";
 
             return (
-              <div key={order.id} className="preorder-card">
+              <div
+                key={order.id}
+                className="preorder-card"
+                onMouseEnter={() => image && prefetchImage(image, 800, 75)}
+                onTouchStart={() => image && prefetchImage(image, 800, 75)}
+              >
                 <div
                   className="preorder-img"
                   style={image ? { backgroundImage: `url(${image})` } : undefined}

@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiClient, clearToken } from "@/lib/api/client";
 import { parseDefaultAddress } from "@/lib/api/profile";
+import type { PaginatedOrders } from "@/lib/api/orders";
+import type { MyPreorder } from "@/lib/api/preorders";
 import { toast } from "sonner";
 import ProfileTab from "./ProfileTab";
 import OrdersTab from "./OrdersTab";
@@ -37,6 +40,7 @@ interface Props {
 
 export default function AccountShell({ profile }: Props) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -50,6 +54,20 @@ export default function AccountShell({ profile }: Props) {
     setActiveTab(tab);
     window.history.replaceState(null, "", `#${tab}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function prefetchTab(tab: TabId) {
+    if (tab === "orders") {
+      queryClient.prefetchQuery({
+        queryKey: ["my-orders", { limit: 100 }],
+        queryFn: () => apiClient<PaginatedOrders>("/orders/my?limit=100"),
+      });
+    } else if (tab === "preorders") {
+      queryClient.prefetchQuery({
+        queryKey: ["my-preorders"],
+        queryFn: () => apiClient<MyPreorder[]>("/preorders/my"),
+      });
+    }
   }
 
   async function handleSignOut() {
@@ -104,6 +122,8 @@ export default function AccountShell({ profile }: Props) {
             id={`tab-${tab.id}`}
             className="acct-tab-btn"
             onClick={() => switchTab(tab.id)}
+            onMouseEnter={() => prefetchTab(tab.id)}
+            onTouchStart={() => prefetchTab(tab.id)}
             type="button"
           >
             {tab.label}

@@ -7,7 +7,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { Menu, X, ShoppingBag, Search, User, Heart, ChevronDown } from "lucide-react";
 import { ThemeProvider, useTheme } from "@/lib/theme/theme-provider";
 import { CartProvider, useCart } from "@/lib/cart";
-import { hasToken, apiClient } from "@/lib/api/client";
+import { hasToken } from "@/lib/api/client";
+import { useProfile } from "@/lib/api/profile";
 import { useFavourites } from "@/lib/favourites";
 import { LocaleProvider, useLocale, CURRENCIES } from "@/lib/locale/locale-provider";
 import AnalyticsBeacon from "@/components/AnalyticsBeacon";
@@ -101,27 +102,14 @@ function CartLink({ isTransparent = false }: { isTransparent?: boolean }) {
 
 function UserLink({ isTransparent = false }: { isTransparent?: boolean }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [avatarLetter, setAvatarLetter] = useState<string | null>(null);
+  const loggedIn = hasToken();
+  const { data: profile } = useProfile(loggedIn);
 
-  useEffect(() => {
-    if (!hasToken()) {
-      setLoggedIn(false);
-      setAvatarLetter(null);
-      return;
-    }
-    setLoggedIn(true);
-    apiClient<{ first_name: string | null; email: string | null }>("/profile")
-      .then((profile) => {
-        const letter =
-          profile.first_name?.[0]?.toUpperCase() ??
-          profile.email?.[0]?.toUpperCase() ??
-          null;
-        setAvatarLetter(letter);
-      })
-      .catch(() => {});
-  }, [pathname]);
+  const avatarUrl = profile?.avatar_url ?? null;
+  const avatarLetter =
+    profile?.first_name?.[0]?.toUpperCase() ??
+    profile?.email?.[0]?.toUpperCase() ??
+    null;
 
   function handleClick() {
     if (loggedIn) {
@@ -141,7 +129,18 @@ function UserLink({ isTransparent = false }: { isTransparent?: boolean }) {
           : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
       }`}
     >
-      {loggedIn && avatarLetter ? (
+      {loggedIn && avatarUrl ? (
+        <span className="relative flex h-[22px] w-[22px] overflow-hidden rounded-full transition-transform duration-200 group-hover:scale-110">
+          <Image
+            src={avatarUrl}
+            alt="Profile"
+            fill
+            sizes="22px"
+            className="object-cover"
+            unoptimized={avatarUrl.includes("googleusercontent.com")}
+          />
+        </span>
+      ) : loggedIn && avatarLetter ? (
         <span className={`flex h-[22px] w-[22px] items-center justify-center rounded-full text-[11px] font-semibold transition-transform duration-200 group-hover:scale-110 ${
           isTransparent
             ? "bg-white text-black"

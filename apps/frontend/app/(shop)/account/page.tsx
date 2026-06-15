@@ -1,28 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { hasToken, apiClient } from "@/lib/api/client";
+import { hasToken } from "@/lib/api/client";
+import { useProfile } from "@/lib/api/profile";
 import AccountShell from "./AccountShell";
 import "./account.css";
 
 export default function AccountPage() {
   const router = useRouter();
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: profile, isLoading, isError } = useProfile(hasToken());
 
   useEffect(() => {
-    if (!hasToken()) {
-      router.replace("/login");
-      return;
-    }
-    apiClient("/profile")
-      .then(setProfile)
-      .catch(() => router.replace("/login"))
-      .finally(() => setLoading(false));
+    if (!hasToken()) router.replace("/login");
   }, [router]);
 
-  if (loading) {
+  useEffect(() => {
+    if (isError) router.replace("/login");
+  }, [isError, router]);
+
+  if (isLoading || !profile) {
     return (
       <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ fontSize: 11, color: "#999", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: '"SF Mono", "Menlo", "Consolas", monospace' }}>
@@ -32,7 +29,5 @@ export default function AccountPage() {
     );
   }
 
-  if (!profile) return null;
-
-  return <AccountShell profile={profile} />;
+  return <AccountShell profile={profile as any} />;
 }
