@@ -529,7 +529,7 @@ export function ProductCard({
 
           {/* ── Stock / Pre-order badge ──────────────── */}
           {(allOutOfStock || hasPreorder) && (
-            <div className="absolute left-2.5 top-2.5 z-10">
+            <div className="absolute bottom-2.5 left-2.5 z-10">
               {hasPreorder ? (
                 <span className="bg-black px-2 py-[3px] text-[9px] font-bold tracking-[0.16em] uppercase text-white">
                   Pre-order
@@ -600,7 +600,7 @@ export function ProductCard({
 
         {/* Info: title + price + colour swatches */}
         <div className="mt-3">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-gray-900 dark:text-gray-100">
+          <h3 className={`text-xs font-medium uppercase tracking-wide ${allOutOfStock && !hasPreorder ? "text-gray-400 dark:text-gray-600" : "text-gray-900 dark:text-gray-100"}`}>
             {product.title}
           </h3>
           {price != null && (
