@@ -60,6 +60,8 @@ export interface Order {
   applied_promo_code_id: string | null;
   customer_notes: string | null;
   internal_notes: string | null;
+  hold_expires_at?: string | null;
+  hold_refreshed?: boolean;
   created_at: string;
   updated_at: string;
   order_items?: OrderItem[];
@@ -93,6 +95,18 @@ export async function confirmPaymentByReference(reference: string): Promise<Orde
     });
   } catch {
     return null;
+  }
+}
+
+/** Silently releases a pending order's stock hold (e.g. on Paystack modal close). */
+export async function releaseStockHold(reference: string): Promise<void> {
+  try {
+    await apiClient("/orders/release-hold", {
+      method: "POST",
+      body: { reference },
+    });
+  } catch {
+    // Best-effort — the hold will lapse on its own anyway.
   }
 }
 

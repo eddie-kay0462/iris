@@ -66,4 +66,17 @@ export class SettingsController {
   updateShippingOptions(@Body() body: { options: any[] }) {
     return this.settingsService.updateShippingOptions(body.options);
   }
+
+  @Get('stock-hold-minutes')
+  @RequirePermission('settings:read')
+  getStockHoldMinutes() {
+    return this.settingsService.getStockHoldMinutes();
+  }
+
+  @Put('stock-hold-minutes')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings:update')
+  updateStockHoldMinutes(@Body() body: { minutes: number }) {
+    return this.settingsService.updateStockHoldMinutes(body.minutes);
+  }
 }

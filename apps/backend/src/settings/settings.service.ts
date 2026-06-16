@@ -184,6 +184,31 @@ export class SettingsService {
     if (error) throw error;
     return options;
   }
+
+  async getStockHoldMinutes(): Promise<number> {
+    const db = this.supabase.getAdminClient();
+    const { data } = await db
+      .from('store_settings')
+      .select('value')
+      .eq('key', 'stock_hold_minutes')
+      .single();
+
+    if (data?.value === undefined || data?.value === null) return DEFAULT_STOCK_HOLD_MINUTES;
+    return Number(data.value);
+  }
+
+  async updateStockHoldMinutes(minutes: number): Promise<number> {
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      throw new BadRequestException('Stock hold minutes must be a positive number');
+    }
+    const db = this.supabase.getAdminClient();
+    const { error } = await db
+      .from('store_settings')
+      .upsert({ key: 'stock_hold_minutes', value: minutes, updated_at: new Date().toISOString() });
+
+    if (error) throw error;
+    return minutes;
+  }
 }
 
 export interface ShippingOption {
@@ -197,6 +222,8 @@ const DEFAULT_SHIPPING_OPTIONS: ShippingOption[] = [
   { id: 'standard', label: 'No rush shipping', estimate: '5-7 business days', price: 1 },
   { id: 'express', label: 'Express', estimate: '2-3 business days', price: 2 },
 ];
+
+const DEFAULT_STOCK_HOLD_MINUTES = 10;
 
 const ROLE_DESCRIPTIONS: Record<string, string> = {
   admin: 'Full access to all settings, users, and data.',

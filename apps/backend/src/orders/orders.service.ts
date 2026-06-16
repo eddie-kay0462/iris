@@ -3,11 +3,13 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  GoneException,
 } from '@nestjs/common';
 import { SupabaseService } from '../common/supabase/supabase.service';
 import { EmailService } from '../email/email.service';
 import { SmsService, SMS_TEMPLATES } from '../sms/sms.service';
 import { PromosService } from '../promos/promos.service';
+import { SettingsService } from '../settings/settings.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { toE164 } from '../common/utils/phone';
 import { QueryOrdersDto } from './dto/query-orders.dto';
@@ -24,7 +26,44 @@ export class OrdersService {
     private emailService: EmailService,
     private smsService: SmsService,
     private promosService: PromosService,
+    private settingsService: SettingsService,
   ) {}
+
+  /**
+   * Available stock for a variant = inventory_quantity minus quantity held by
+   * other pending orders whose hold hasn't expired yet.
+   */
+  private async getAvailableQuantities(
+    db: ReturnType<SupabaseService['getAdminClient']>,
+    variantIds: string[],
+  ): Promise<Map<string, number>> {
+    const { data: variants } = await db
+      .from('product_variants')
+      .select('id, inventory_quantity')
+      .in('id', variantIds);
+
+    const nowIso = new Date().toISOString();
+    const { data: heldItems } = await db
+      .from('order_items')
+      .select('variant_id, quantity, orders!inner(status, hold_expires_at)')
+      .in('variant_id', variantIds)
+      .eq('orders.status', 'pending')
+      .gt('orders.hold_expires_at', nowIso);
+
+    const heldByVariant = new Map<string, number>();
+    for (const item of heldItems || []) {
+      heldByVariant.set(
+        item.variant_id,
+        (heldByVariant.get(item.variant_id) ?? 0) + item.quantity,
+      );
+    }
+
+    const available = new Map<string, number>();
+    for (const v of variants || []) {
+      available.set(v.id, v.inventory_quantity - (heldByVariant.get(v.id) ?? 0));
+    }
+    return available;
+  }
 
   private async generateOrderNumber(): Promise<string> {
     const db = this.supabase.getAdminClient();
@@ -53,23 +92,63 @@ export class OrdersService {
     }
     const db = this.supabase.getAdminClient();
 
-    // 1. Validate stock for all items
-    for (const item of dto.items) {
-      const { data: variant, error } = await db
-        .from('product_variants')
-        .select('id, inventory_quantity, sku')
-        .eq('id', item.variantId)
-        .single();
+    // 0. Idempotency: a retry against the same payment_reference means the
+    // customer is either still within their stock hold (return as-is), using
+    // their one allowed hold refresh, or the hold is dead for good.
+    const { data: existingOrder } = await db
+      .from('orders')
+      .select('*, order_items(*)')
+      .eq('payment_reference', dto.paymentReference)
+      .maybeSingle();
 
-      if (error || !variant) {
-        throw new BadRequestException(
-          `Variant ${item.variantId} not found`,
+    if (existingOrder) {
+      if (existingOrder.payment_status === 'paid') {
+        return existingOrder;
+      }
+
+      const holdExpired =
+        !existingOrder.hold_expires_at ||
+        new Date(existingOrder.hold_expires_at) <= new Date();
+
+      if (!holdExpired) {
+        return existingOrder;
+      }
+
+      if (existingOrder.hold_refreshed) {
+        throw new GoneException(
+          'Your reservation has expired. Please restart checkout.',
         );
       }
 
-      if (variant.inventory_quantity < item.quantity) {
+      const holdMinutes = await this.settingsService.getStockHoldMinutes();
+      const newExpiry = new Date(Date.now() + holdMinutes * 60_000).toISOString();
+      const { data: refreshed, error: refreshError } = await db
+        .from('orders')
+        .update({ hold_expires_at: newExpiry, hold_refreshed: true })
+        .eq('id', existingOrder.id)
+        .select('*, order_items(*)')
+        .single();
+
+      if (refreshError) throw refreshError;
+      return refreshed;
+    }
+
+    // 1. Validate stock for all items against availability (inventory minus
+    // quantities held by other still-active pending orders)
+    const available = await this.getAvailableQuantities(
+      db,
+      dto.items.map((i) => i.variantId),
+    );
+
+    for (const item of dto.items) {
+      const availableQty = available.get(item.variantId);
+      if (availableQty === undefined) {
+        throw new BadRequestException(`Variant ${item.variantId} not found`);
+      }
+
+      if (availableQty < item.quantity) {
         throw new BadRequestException(
-          `Insufficient stock for "${item.productTitle}". Available: ${variant.inventory_quantity}`,
+          `Insufficient stock for "${item.productTitle}". Available: ${availableQty}`,
         );
       }
     }
@@ -110,6 +189,8 @@ export class OrdersService {
     const orderNumber = await this.generateOrderNumber();
 
     const guestToken = !userId ? crypto.randomUUID() : null;
+    const holdMinutes = await this.settingsService.getStockHoldMinutes();
+    const holdExpiresAt = new Date(Date.now() + holdMinutes * 60_000).toISOString();
 
     // 4. Insert order
     const { data: order, error: orderError } = await db
@@ -130,6 +211,8 @@ export class OrdersService {
         payment_status: 'pending',
         applied_promo_code_id: appliedPromoCodeId,
         guest_token: guestToken,
+        hold_expires_at: holdExpiresAt,
+        hold_refreshed: false,
       })
       .select()
       .single();
@@ -154,44 +237,30 @@ export class OrdersService {
 
     if (itemsError) throw itemsError;
 
-    // 6. Deduct inventory — failures are logged but do not throw so the order
-    // record is never left without matching inventory movements silently failing
-    // while still destroying the order reference.
-    try {
-      for (const item of dto.items) {
-        const { data: variant } = await db
-          .from('product_variants')
-          .select('inventory_quantity')
-          .eq('id', item.variantId)
-          .single();
-
-        const previousQty = variant?.inventory_quantity ?? 0;
-        const newQty = Math.max(0, previousQty - item.quantity);
-
-        await db
-          .from('product_variants')
-          .update({ inventory_quantity: newQty })
-          .eq('id', item.variantId);
-
-        await db.from('inventory_movements').insert({
-          variant_id: item.variantId,
-          quantity_change: -item.quantity,
-          quantity_before: previousQty,
-          quantity_after: newQty,
-          movement_type: 'sale',
-          notes: `Order ${orderNumber}`,
-          created_by: userId,
-        });
-      }
-    } catch (inventoryError) {
-      console.error(
-        `Inventory deduction failed for order ${orderNumber}:`,
-        inventoryError,
-      );
-    }
+    // Inventory is not deducted here — the order items above are held as a
+    // temporary reservation (see getAvailableQuantities) until confirmPayment()
+    // converts the hold into a real, permanent deduction.
 
     const result = await this.findOne(order.id);
     return { ...result, guest_token: guestToken };
+  }
+
+  /**
+   * Immediately expires a pending order's stock hold (e.g. the customer closed
+   * the Paystack modal without paying), freeing the reserved stock for other
+   * shoppers right away instead of waiting for the hold to lapse naturally.
+   * The order row itself is left untouched (still `pending`, same
+   * payment_reference) so a retry against the same reference is picked up by
+   * the idempotency/one-time-refresh logic in `create()`.
+   */
+  async releaseHold(paymentReference: string) {
+    const db = this.supabase.getAdminClient();
+    await db
+      .from('orders')
+      .update({ hold_expires_at: new Date().toISOString() })
+      .eq('payment_reference', paymentReference)
+      .eq('status', 'pending');
+    return { released: true };
   }
 
   async findOne(id: string) {
@@ -393,8 +462,10 @@ export class OrdersService {
 
     if (error) throw error;
 
-    // Restore inventory
-    if (order.order_items && order.order_items.length > 0) {
+    // Restore inventory — only needed if it was actually deducted, which only
+    // happens once the order reaches 'paid' via confirmPayment(). A still-
+    // 'pending' order was only ever a temporary stock hold, never decremented.
+    if (order.status === 'paid' && order.order_items && order.order_items.length > 0) {
       for (const item of order.order_items) {
         const { data: variant } = await db
           .from('product_variants')
@@ -1297,6 +1368,42 @@ export class OrdersService {
         updated_at: new Date().toISOString(),
       })
       .eq('id', order.id);
+
+    // Deduct inventory — this is where the stock hold becomes a real,
+    // permanent deduction. Failures are logged but do not throw so the
+    // order is never left unconfirmed because of an inventory hiccup.
+    try {
+      for (const item of order.order_items || []) {
+        const { data: variant } = await db
+          .from('product_variants')
+          .select('inventory_quantity')
+          .eq('id', item.variant_id)
+          .single();
+
+        const previousQty = variant?.inventory_quantity ?? 0;
+        const newQty = Math.max(0, previousQty - item.quantity);
+
+        await db
+          .from('product_variants')
+          .update({ inventory_quantity: newQty })
+          .eq('id', item.variant_id);
+
+        await db.from('inventory_movements').insert({
+          variant_id: item.variant_id,
+          quantity_change: -item.quantity,
+          quantity_before: previousQty,
+          quantity_after: newQty,
+          movement_type: 'sale',
+          notes: `Order ${order.order_number}`,
+          created_by: order.user_id,
+        });
+      }
+    } catch (inventoryError) {
+      console.error(
+        `Inventory deduction failed for order ${order.order_number}:`,
+        inventoryError,
+      );
+    }
 
     // Increment promo used_count now that payment is confirmed
     if (order.applied_promo_code_id) {

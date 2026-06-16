@@ -115,3 +115,24 @@ export function useUpdateShippingOptions() {
     },
   });
 }
+
+export function useStockHoldMinutes() {
+  return useQuery({
+    queryKey: ["stock-hold-minutes"],
+    queryFn: () => apiClient<number>("/settings/stock-hold-minutes"),
+  });
+}
+
+export function useUpdateStockHoldMinutes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (minutes: number) =>
+      apiClient<number>("/settings/stock-hold-minutes", {
+        method: "PUT",
+        body: { minutes },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["stock-hold-minutes"] });
+    },
+  });
+}
