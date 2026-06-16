@@ -138,6 +138,23 @@ export default function RoadToHQPage() {
 
   useEffect(() => { activeRef.current = active; }, [active]);
 
+  // Warm the browser cache for all milestone images so switching between
+  // them feels instant. Deferred so it doesn't compete with the hero image.
+  useEffect(() => {
+    const ric = typeof window.requestIdleCallback === "function"
+      ? window.requestIdleCallback
+      : (cb: () => void) => setTimeout(cb, 300);
+    const cic = typeof window.cancelIdleCallback === "function"
+      ? window.cancelIdleCallback
+      : clearTimeout;
+
+    const handle = ric(() => {
+      MILESTONES.forEach((ms) => prefetchImage(ms.image));
+    });
+
+    return () => cic(handle as never);
+  }, []);
+
   useEffect(() => {
     const target = new Date(DEADLINE + "T00:00:00");
     setDaysLeft(Math.max(0, Math.ceil((target.getTime() - Date.now()) / 86400000)));
