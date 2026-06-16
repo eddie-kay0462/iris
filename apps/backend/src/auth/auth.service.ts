@@ -210,7 +210,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         first_name: user.user_metadata?.first_name ?? user.user_metadata?.name?.split(' ')[0] ?? null,
-        last_name: user.user_metadata?.last_name ?? user.user_metadata?.name?.split(' ').slice(1).join(' ') || null,
+        last_name: user.user_metadata?.last_name ?? (user.user_metadata?.name?.split(' ').slice(1).join(' ') || null),
         phone_number: user.user_metadata?.phone_number ?? null,
         avatar_url: oauthAvatarUrl,
         role: 'public',
