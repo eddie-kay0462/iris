@@ -440,6 +440,8 @@ export function ProductCard({
     (size: string) => {
       const variant = findVariantBySize(variants, size);
       if (!variant) return;
+      const inStock = variant.inventory_quantity > 0 && variant.available !== false;
+      if (!inStock && !variant.preorder_enabled) return;
       setAddingSize(size);
       setTimeout(() => {
         addItem({
@@ -569,29 +571,38 @@ export function ProductCard({
                   transition={{ duration: 0.2 }}
                   className="flex w-full items-center justify-center gap-0.5 bg-white/95 py-2 dark:bg-black/90"
                 >
-                  {sizes.map((size, i) => (
-                    <motion.button
-                      key={size}
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2, delay: i * 0.03 }}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (!addingSize && successSize !== size) handleAddToCart(size);
-                      }}
-                      disabled={!!addingSize}
-                      className={`flex h-7 min-w-[30px] items-center justify-center px-2 text-[10px] font-semibold uppercase tracking-widest transition-all duration-200 ${
-                        addingSize === size
-                          ? "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500"
-                          : successSize === size
-                            ? "bg-black text-white dark:bg-white dark:text-black"
-                            : "bg-transparent text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
-                      }`}
-                    >
-                      {addingSize === size ? <SpinnerIcon /> : successSize === size ? <CheckIcon /> : size}
-                    </motion.button>
-                  ))}
+                  {sizes.map((size, i) => {
+                    const variant = findVariantBySize(variants, size);
+                    const inStock = !!variant && variant.inventory_quantity > 0 && variant.available !== false;
+                    const canPreorder = !inStock && variant?.preorder_enabled === true;
+                    const unavailable = !inStock && !canPreorder;
+                    return (
+                      <motion.button
+                        key={size}
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2, delay: i * 0.03 }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (!addingSize && successSize !== size && !unavailable) handleAddToCart(size);
+                        }}
+                        disabled={!!addingSize || unavailable}
+                        aria-disabled={unavailable}
+                        className={`flex h-7 min-w-[30px] items-center justify-center px-2 text-[10px] font-semibold uppercase tracking-widest transition-all duration-200 ${
+                          unavailable
+                            ? "cursor-not-allowed bg-transparent text-gray-300 line-through dark:text-gray-700"
+                            : addingSize === size
+                              ? "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500"
+                              : successSize === size
+                                ? "bg-black text-white dark:bg-white dark:text-black"
+                                : "bg-transparent text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
+                        }`}
+                      >
+                        {addingSize === size ? <SpinnerIcon /> : successSize === size ? <CheckIcon /> : size}
+                      </motion.button>
+                    );
+                  })}
                 </motion.div>
               )}
             </div>
