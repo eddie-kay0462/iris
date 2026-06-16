@@ -130,7 +130,11 @@ function ImageCard({
         {/* Delete button */}
         <button
           type="button"
-          onClick={onDelete}
+          onClick={() => {
+            if (confirm("Remove this image? This can't be undone.")) {
+              onDelete();
+            }
+          }}
           className="absolute right-1 top-1 hidden group-hover:flex rounded-full bg-red-500 p-1 text-white items-center justify-center"
         >
           <XIcon />
