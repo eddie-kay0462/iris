@@ -1380,7 +1380,7 @@ export class OrdersService {
       return this.findOne(order.id); // Already confirmed
     }
 
-    // Flip to paid
+    // Flip to paid then immediately to processing
     const { error: updateError } = await db
       .from('orders')
       .update({
@@ -1388,6 +1388,17 @@ export class OrdersService {
         status: 'paid',
         updated_at: new Date().toISOString(),
       })
+      .eq('id', order.id);
+
+    // Log payment confirmation then advance to processing
+    await db.from('order_status_history').insert([
+      { order_id: order.id, from_status: 'pending', to_status: 'paid', notes: 'Payment confirmed' },
+      { order_id: order.id, from_status: 'paid', to_status: 'processing', notes: 'Auto-advanced after payment confirmation' },
+    ]);
+
+    await db
+      .from('orders')
+      .update({ status: 'processing', updated_at: new Date().toISOString() })
       .eq('id', order.id);
 
     // Deduct inventory — this is where the stock hold becomes a real,
