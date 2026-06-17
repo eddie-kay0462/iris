@@ -576,7 +576,7 @@ function ShopFooter() {
             </h4>
             <ul className="mt-3 space-y-2">
               <li>
-                <Link href="/orders" className="text-xs text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white">
+                <Link href="/track" className="text-xs text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white">
                   Track Order
                 </Link>
               </li>

@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   GoneException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../common/supabase/supabase.service';
 import { EmailService } from '../email/email.service';
 import { SmsService, SMS_TEMPLATES } from '../sms/sms.service';
@@ -21,13 +22,18 @@ import {
 
 @Injectable()
 export class OrdersService {
+  private readonly frontendUrl: string;
+
   constructor(
     private supabase: SupabaseService,
     private emailService: EmailService,
     private smsService: SmsService,
     private promosService: PromosService,
     private settingsService: SettingsService,
-  ) {}
+    private configService: ConfigService,
+  ) {
+    this.frontendUrl = this.configService.get<string>('FRONTEND_URL', 'https://storefront.1nri.store');
+  }
 
   /**
    * Available stock for a variant = inventory_quantity minus quantity held by
@@ -1340,6 +1346,21 @@ export class OrdersService {
     return data;
   }
 
+  async trackOrderByEmail(orderNumber: string, email: string) {
+    if (!orderNumber || !email) throw new NotFoundException('Order not found');
+    const db = this.supabase.getAdminClient();
+    const { data, error } = await db
+      .from('orders')
+      .select('order_number, status, payment_status, tracking_number, carrier, shipped_at, delivered_at, created_at, shipping_address, order_items(product_name, variant_title, quantity, total_price)')
+      .eq('order_number', orderNumber.toUpperCase())
+      .ilike('email', email.trim())
+      .is('deleted_at', null)
+      .single();
+
+    if (error || !data) throw new NotFoundException('Order not found');
+    return data;
+  }
+
   /**
    * Mark an order as paid by its payment_reference.
    * Idempotent: safe to call multiple times (frontend success callback +
@@ -1461,7 +1482,7 @@ export class OrdersService {
       );
       if (phone) {
         this.smsService
-          .sendSMS(phone, SMS_TEMPLATES.orderConfirmation(fullOrder.order_number))
+          .sendSMS(phone, SMS_TEMPLATES.orderConfirmation(fullOrder.order_number, `${this.frontendUrl}/track?order=${fullOrder.order_number}`))
           .catch(() => null);
       }
     } catch (notifyErr: any) {

@@ -298,7 +298,10 @@ export class EmailService {
             </tr>
           </table>
 
-          <p style="margin:28px 0 0;font-size:13px;color:#999;">We'll send you another update when your order ships.</p>
+          <div style="margin:28px 0 0;text-align:center;">
+            <a href="${this.frontendUrl}/track?order=${order.order_number}" style="display:inline-block;background:#111;color:#fff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:6px;text-decoration:none;letter-spacing:0.01em;">Track your order</a>
+          </div>
+          <p style="margin:16px 0 0;font-size:13px;color:#999;text-align:center;">We'll send you another update when your order ships.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -522,7 +525,10 @@ export class EmailService {
           <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111;">Your order is on its way!</h1>
           <p style="margin:0 0 16px;font-size:14px;color:#666;">Order <strong>${order.order_number}</strong> has shipped.</p>
           ${trackingBlock}
-          <p style="margin:24px 0 0;font-size:13px;color:#999;">Thank you for shopping with ${brandName}.</p>
+          <div style="margin:24px 0;text-align:center;">
+            <a href="${this.frontendUrl}/track?order=${order.order_number}" style="display:inline-block;background:#111;color:#fff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:6px;text-decoration:none;letter-spacing:0.01em;">Track your order</a>
+          </div>
+          <p style="margin:0;font-size:13px;color:#999;text-align:center;">Thank you for shopping with ${brandName}.</p>
         </td></tr>
       </table>
     </td></tr>

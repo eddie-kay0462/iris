@@ -152,6 +152,19 @@ export class OrdersController {
     return this.ordersService.findGuestOrder(orderNumber, token);
   }
 
+  /**
+   * Public order tracking by order number + email address.
+   * Returns a limited set of tracking fields — no payment details or guest token.
+   */
+  @Public()
+  @Get('track')
+  trackOrder(
+    @Query('orderNumber') orderNumber: string,
+    @Query('email') email: string,
+  ) {
+    return this.ordersService.trackOrderByEmail(orderNumber, email);
+  }
+
   @Get('my')
   findMyOrders(
     @CurrentUser() user: any,

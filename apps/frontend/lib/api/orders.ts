@@ -218,6 +218,25 @@ export function useGuestOrderByNumber(orderNumber: string, guestToken: string | 
   });
 }
 
+export interface TrackingOrder {
+  order_number: string;
+  status: string;
+  payment_status: string | null;
+  tracking_number: string | null;
+  carrier: string | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  created_at: string;
+  shipping_address: Order["shipping_address"];
+  order_items?: Pick<OrderItem, "product_name" | "variant_title" | "quantity" | "total_price">[];
+}
+
+export async function trackOrderByEmail(orderNumber: string, email: string): Promise<TrackingOrder> {
+  return apiClient<TrackingOrder>(
+    `/orders/track?orderNumber=${encodeURIComponent(orderNumber)}&email=${encodeURIComponent(email)}`,
+  );
+}
+
 export function useCancelOrder() {
   const qc = useQueryClient();
   return useMutation({
