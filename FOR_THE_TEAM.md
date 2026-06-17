@@ -3812,3 +3812,160 @@ cd apps/admin && npm run dev
 - **Cohort report covers Iris-era orders only** — migrated Shopify customers have lifetime totals but no per-order dates, so they can't be placed in monthly cohorts. The report says so in its description.
 - **The ingest endpoints are public by design** (the storefront isn't authenticated) but are rate-limited (60 events/min, 30 snapshots/min per IP), schema-validated, and string-capped. Junk from a determined abuser is possible but low-stakes — it can only pollute analytics, never touch orders.
 - All three apps typecheck and build clean; the backend was smoke-tested (invalid events → 400, unauthenticated analytics reads → 401, valid track → 204).
+
+---
+
+## Guest Order Tracking (June 2026)
+
+### What was the problem?
+
+We had a gap: guest customers who completed an order could see their confirmation page right after checkout, but that was it. Once they navigated away (or opened the link on a different device), they had no way to check their order status unless they created an account. The old "Track Order" link in the footer pointed to `/orders`, which requires a login — useless for a guest.
+
+### What we built
+
+A public, no-login-required order tracking system. Customers enter their order number + the email they used at checkout, and they get a full status view: payment status, a step-by-step progress tracker (Order Placed → Payment Confirmed → Processing → Shipped → Delivered), carrier/tracking number if available, the item list, and their shipping address.
+
+The flow is deliberately simple: the confirmation email and SMS both include a direct link like `storefront.1nri.store/track?order=IRD-XXXXXX`. Clicking it lands you on the `/track` page with the order number pre-filled — you just type your email and go.
+
+**Why email + order number, not the `guest_token`?**
+The guest token only lives in `sessionStorage` for the duration of the browser session. It's gone the moment the tab closes. Email + order number can be typed on any device, shared with someone else who needs to check, and bookmarked — it works like every other major e-commerce tracker.
+
+### Backend
+
+A new public endpoint was added to the orders controller:
+
+```
+GET /orders/track?orderNumber=IRD-XXXXXX&email=customer@email.com
+```
+
+No JWT required (`@Public()` decorator). The service method does a case-insensitive email match (`.ilike()`) against the order number. It only returns safe fields — no `guest_token`, no `payment_reference`, no internal notes. If nothing matches, it returns a generic 404 with no information about whether the order number or the email was wrong (avoids enumeration).
+
+`ConfigService` was injected into `OrdersService` to read `FRONTEND_URL` from the environment — this is what gets inserted into the tracking URLs in emails and SMS.
+
+### Email templates
+
+Both order-facing email templates now have a "Track your order" button:
+
+- **Order confirmation** — added below the order summary table, before the footer
+- **Shipping notification** — added as the primary CTA above the tracking number section
+
+The button is plain black on white (`background:#111; color:#fff`) with rounded corners, consistent with the rest of the email styling.
+
+### SMS templates
+
+The `SMS_TEMPLATES.orderConfirmation` function now accepts an optional `trackUrl` parameter. When passed (as it is from `confirmPayment`), the message becomes:
+
+> Order #IRD-XXXXXX confirmed! Track your order: https://storefront.1nri.store/track?order=IRD-XXXXXX We'll update you on shipping soon.
+
+Callers that don't pass a URL still get the original message — backwards compatible.
+
+Preorder SMS was intentionally left unchanged. Preorders require an account to place, so those customers can always check `/account`.
+
+### Storefront
+
+The footer "Track Order" link (in the Help section) was updated from `/orders` → `/track`. The new page:
+
+- Reads `?order=` from the URL on load and pre-fills the order number field
+- Submits via a clean form (no polling — it's a one-shot lookup)
+- Shows a step-by-step progress bar that highlights the current step based on order status
+- Shows carrier + tracking number when available, shipping address, and itemised order list with prices
+- Wrapped in `<Suspense>` as required for `useSearchParams()` in Next.js App Router
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/frontend/app/(shop)/track/page.tsx` | **New file** — public order tracking page |
+| `apps/frontend/lib/api/orders.ts` | Added `TrackingOrder` interface + `trackOrderByEmail()` function |
+| `apps/frontend/app/(shop)/layout.tsx` | Footer "Track Order" link: `/orders` → `/track` |
+| `apps/backend/src/orders/orders.controller.ts` | New `@Public() GET /orders/track` endpoint |
+| `apps/backend/src/orders/orders.service.ts` | `trackOrderByEmail()` method + `ConfigService` injection + tracking URL passed to SMS |
+| `apps/backend/src/sms/sms.service.ts` | `orderConfirmation` template accepts optional `trackUrl` |
+| `apps/backend/src/email/email.service.ts` | "Track your order" button added to order confirmation + shipping emails |
+
+### How to test
+
+1. Complete a guest checkout — note the order number from the confirmation page
+2. Open the confirmation email — there should be a "Track your order" button linking to `/track?order=IRD-XXXXXX`
+3. Click it, enter your email, and confirm the status view loads correctly
+4. Test the footer link: scroll to the bottom of any storefront page → Help → "Track Order" — should land on `/track` (not `/orders`)
+5. Try a wrong email or a made-up order number — should show "Order not found", nothing more specific
+6. On the backend, `GET /orders/track?orderNumber=IRD-XXXXXX&email=test@test.com` with no Authorization header should return 200 (or 404 if not found) — not 401
+
+---
+
+## Allies App — Session Tracking & Inactivity Timeout (June 2026)
+
+### What was the problem?
+
+The allies app recorded logins (a row in `ally_logins` on every sign-in) but had no concept of logout. That meant the admin's activity drawer showed a list of login timestamps with no information about how long each session lasted, whether the ally was still active, or why they left. It also meant a forgotten open browser tab stayed signed in indefinitely — not great for a sales app used in-field.
+
+### What we built
+
+**Full session lifecycle tracking** — every login creates a row, every logout closes it (with a reason). Combined with a 60-minute inactivity auto-logout on the dashboard, we now have clean session records: when they signed in, when they left, and why.
+
+### Inactivity timeout
+
+`DashboardShell` now runs a 60-minute idle timer. It listens to `mousemove`, `keydown`, `click`, `scroll`, and `touchstart` events and resets on any interaction. If 60 minutes pass with nothing, the ally is signed out automatically and redirected to `/login?reason=inactivity`. On the login page, that query param shows a toast: *"You were signed out after 60 minutes of inactivity."*
+
+The timer is set up with a `useCallback`-wrapped `handleLogout` (to avoid stale closures) and cleaned up properly on unmount.
+
+### Login ID in sessionStorage
+
+When an ally signs in, `recordAllyLogin` now returns the `id` of the newly created `ally_logins` row (not just `{ allowed: true }`). That ID is stashed in `sessionStorage` under `ally_login_id`. On logout — whether manual, inactivity, or admin force-logout — it's read back, used to close the record, then cleared.
+
+### Logout reasons
+
+Four reasons are tracked (enforced by a DB check constraint):
+
+| Reason | When |
+|---|---|
+| `manual` | Ally clicks "Sign out" |
+| `inactivity` | 60-minute idle timeout |
+| `force_logout` | Admin forces logout from the Markets page |
+| `session_expired` | Reserved for future use |
+
+When the admin force-logout action runs, it now also closes any open `ally_logins` rows for that ally (previously it only revoked the Supabase token via `force_logout_user` RPC but left the login record open).
+
+### Database migration
+
+New columns were added to `ally_logins`:
+
+```sql
+logged_out_at  timestamptz   -- null means session is still active
+logout_reason  text check (logout_reason in ('manual', 'inactivity', 'force_logout', 'session_expired'))
+```
+
+Three indexes: by `ally_id`, by `logged_in_at` (desc), and a partial index on open sessions only (`where logged_out_at is null`) for fast "is this ally currently active?" checks.
+
+The migration lives in both `apps/allies/supabase-migrations.sql` (the canonical file) and `supabase/migrations/20260617000000_ally_logins_logout_tracking.sql` (the versioned migration applied to the project Supabase instance).
+
+### Admin — Activity Drawer upgrades
+
+The login history section in the ally activity drawer now shows much richer info per session:
+
+- **Status dot** — green for an open/active session, grey for closed
+- **Session badge** — "Active", "Signed out", "Idle timeout", "Force logout", or "Expired" — colour-coded (green / slate / amber / red / orange)
+- **Session duration** — how long the session lasted (e.g. "2h 15m", "45m"); hidden if the session is still open
+
+This required fetching `logged_out_at` and `logout_reason` alongside `logged_in_at` in `fetchAllyActivity`, and updating the `AllyActivityData` type to include the new fields.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/allies/app/(auth)/login/actions.ts` | `recordAllyLogin` now returns `loginId`; new `recordAllyLogout` function |
+| `apps/allies/app/(auth)/login/page.tsx` | Stores `loginId` in sessionStorage after login; shows inactivity toast |
+| `apps/allies/app/(dashboard)/DashboardShell.tsx` | 60-minute inactivity timer; `handleLogout` with reason + sessionStorage cleanup |
+| `apps/allies/supabase-migrations.sql` | `logged_out_at` + `logout_reason` columns + indexes on `ally_logins` |
+| `supabase/migrations/20260617000000_ally_logins_logout_tracking.sql` | Versioned migration for the same schema change |
+| `apps/admin/app/(dashboard)/markets/actions.ts` | Force-logout closes open login rows; `fetchAllyActivity` fetches logout fields; `AllyActivityData` type updated |
+| `apps/admin/app/(dashboard)/markets/components/AllyActivityDrawer.tsx` | Session badges, duration display, status dot per login row |
+
+### How to test
+
+1. Sign into the allies app — check Supabase: a new `ally_logins` row should appear with `logged_out_at = null`
+2. Click "Sign out" — the row should get `logged_out_at` stamped and `logout_reason = 'manual'`
+3. Sign in again, leave the tab idle for 60 minutes (or temporarily set `TIMEOUT_MS` to something short like `10000`) — should auto-sign out and show the inactivity toast on the login page
+4. In the admin Markets page, open an ally's activity drawer → force-logout → their open `ally_logins` row should close with `logout_reason = 'force_logout'`
+5. The activity drawer's login history should show status badges and session durations for closed sessions
