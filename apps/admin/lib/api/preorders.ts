@@ -158,6 +158,20 @@ export function useRefundPreorder() {
   });
 }
 
+export function useSendPreorderConfirmation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, channels }: { id: string; channels: ("email" | "sms")[] }) =>
+      apiClient<{ sent: ("email" | "sms")[] }>(`/admin/preorders/${id}/send-confirmation`, {
+        method: "POST",
+        body: { channels },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["preorders"] });
+    },
+  });
+}
+
 export function useCreatePopupPreorder() {
   const qc = useQueryClient();
   return useMutation({

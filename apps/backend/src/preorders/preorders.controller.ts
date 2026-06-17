@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { PreordersService } from './preorders.service';
 import { CreatePreorderDto } from './dto/create-preorder.dto';
+import { CheckPreorderEligibilityDto } from './dto/check-preorder-eligibility.dto';
 import { CreatePopupPreorderDto } from './dto/create-popup-preorder.dto';
 import { QueryPreordersDto } from './dto/query-preorders.dto';
 import { RefundPreorderDto } from './dto/refund-preorder.dto';
@@ -17,6 +18,11 @@ export class PreordersController {
   @Post('preorders')
   create(@Body() dto: CreatePreorderDto, @CurrentUser() user: any) {
     return this.preordersService.create(dto, user.sub, user.email);
+  }
+
+  @Post('preorders/eligibility')
+  checkEligibility(@Body() dto: CheckPreorderEligibilityDto, @CurrentUser() user: any) {
+    return this.preordersService.checkEligibilityPublic(dto.item, user.sub);
   }
 
   @Get('preorders/my')
@@ -64,5 +70,11 @@ export class PreordersController {
   @RequirePermission('orders:refund')
   refund(@Param('id') id: string, @Body() dto: RefundPreorderDto, @CurrentUser() user: any) {
     return this.preordersService.refund(id, dto, user.sub);
+  }
+
+  @Post('admin/preorders/:id/send-confirmation')
+  @RequirePermission('orders:update')
+  sendConfirmation(@Param('id') id: string, @Body() body: { channels: ('email' | 'sms')[] }) {
+    return this.preordersService.sendConfirmation(id, body.channels);
   }
 }

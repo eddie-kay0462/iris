@@ -16,8 +16,11 @@ function LoginForm() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (searchParams.get('reason') === 'deactivated') {
+    const reason = searchParams.get('reason')
+    if (reason === 'deactivated') {
       toast.error('Your account has been deactivated. Contact an administrator.', { duration: 8000 })
+    } else if (reason === 'inactivity') {
+      toast.info('You were signed out after 60 minutes of inactivity.', { duration: 6000 })
     }
   }, [searchParams])
 
@@ -35,13 +38,14 @@ function LoginForm() {
     }
 
     if (data.user) {
-      const { allowed } = await recordAllyLogin(data.user.id)
+      const { allowed, loginId } = await recordAllyLogin(data.user.id)
       if (!allowed) {
         setLoading(false)
         toast.error('Your account has been deactivated. Contact an administrator.', { duration: 8000 })
         supabase.auth.signOut()
         return
       }
+      if (loginId) sessionStorage.setItem('ally_login_id', loginId)
     }
 
     window.location.href = '/'

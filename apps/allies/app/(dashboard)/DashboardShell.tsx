@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   LayoutDashboard,
@@ -21,6 +21,7 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { useAlly } from '@/lib/ally-context'
 import { Avatar } from '@/components/Avatar'
+import { recordAllyLogout } from '@/app/(auth)/login/actions'
 
 const navLinks = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -31,37 +32,22 @@ const navLinks = [
   { path: '/leaderboard', label: 'Leaderboard', icon: Trophy },
 ]
 
-function initials(name: string) {
-  return name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
-}
-
 function SidebarContent({
   onClose,
   onThemeToggle,
+  onLogout,
   isDark,
 }: {
   onClose?: () => void
   onThemeToggle: () => void
+  onLogout: () => void
   isDark: boolean
 }) {
   const pathname = usePathname()
-  const router = useRouter()
   const { ally } = useAlly()
 
   const isActive = (path: string) =>
     path === '/sales' ? pathname === '/sales' : path === '/' ? pathname === '/' : pathname.startsWith(path)
-
-  async function handleLogout() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
 
   return (
     <div className="flex h-full flex-col">
@@ -128,7 +114,7 @@ function SidebarContent({
           {isDark ? 'Light Mode' : 'Dark Mode'}
         </button>
         <button
-          onClick={handleLogout}
+          onClick={onLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 text-xs tracking-[0.1em] uppercase text-neutral-400 hover:text-red-400 hover:bg-white/5 transition-colors rounded-md"
         >
           <LogOut className="w-4 h-4" />
@@ -148,6 +134,7 @@ function SidebarContent({
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [isDark, setIsDark] = useState(false)
 
@@ -171,11 +158,41 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     })
   }
 
+  const handleLogout = useCallback(async (reason = 'manual') => {
+    const loginId = sessionStorage.getItem('ally_login_id')
+    if (loginId) await recordAllyLogout(loginId, reason)
+    sessionStorage.removeItem('ally_login_id')
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push(reason === 'inactivity' ? '/login?reason=inactivity' : '/login')
+    router.refresh()
+  }, [router])
+
+  // Inactivity timeout — sign out after 60 minutes without user interaction
+  useEffect(() => {
+    const TIMEOUT_MS = 60 * 60 * 1000
+    let timer: ReturnType<typeof setTimeout>
+
+    function resetTimer() {
+      clearTimeout(timer)
+      timer = setTimeout(() => handleLogout('inactivity'), TIMEOUT_MS)
+    }
+
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'] as const
+    events.forEach((e) => window.addEventListener(e, resetTimer, { passive: true }))
+    resetTimer()
+
+    return () => {
+      clearTimeout(timer)
+      events.forEach((e) => window.removeEventListener(e, resetTimer))
+    }
+  }, [handleLogout])
+
   return (
     <div className="flex h-dvh bg-slate-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 overflow-hidden">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-neutral-800 bg-black overflow-y-auto">
-        <SidebarContent onThemeToggle={toggleTheme} isDark={isDark} />
+        <SidebarContent onThemeToggle={toggleTheme} onLogout={() => handleLogout()} isDark={isDark} />
       </aside>
 
       {/* Mobile Overlay */}
@@ -202,6 +219,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               <SidebarContent
                 onClose={() => setMobileOpen(false)}
                 onThemeToggle={toggleTheme}
+                onLogout={() => handleLogout()}
                 isDark={isDark}
               />
             </motion.aside>

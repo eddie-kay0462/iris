@@ -40,6 +40,17 @@ export async function createPreorder(dto: CreatePreorderInput): Promise<MyPreord
   return apiClient<MyPreorder>("/preorders", { method: "POST", body: dto });
 }
 
+export async function checkPreorderEligibility(item: {
+  variantId: string;
+  quantity: number;
+  price: number;
+}): Promise<void> {
+  await apiClient<{ eligible: true }>("/preorders/eligibility", {
+    method: "POST",
+    body: { item },
+  });
+}
+
 export async function getMyPreorders(): Promise<MyPreorder[]> {
   return apiClient<MyPreorder[]>("/preorders/my");
 }

@@ -187,6 +187,27 @@ alter table public.ally_sales
 
 
 -- ================================================
+-- 7. Ally Logins table (session audit log)
+-- ================================================
+create table if not exists public.ally_logins (
+  id             uuid        default gen_random_uuid() primary key,
+  ally_id        uuid        not null references public.allies(id) on delete cascade,
+  logged_in_at   timestamptz not null default now(),
+  logged_out_at  timestamptz,
+  logout_reason  text check (logout_reason in ('manual', 'inactivity', 'force_logout', 'session_expired'))
+);
+
+create index if not exists idx_ally_logins_ally_id       on public.ally_logins (ally_id);
+create index if not exists idx_ally_logins_logged_in_at  on public.ally_logins (logged_in_at desc);
+create index if not exists idx_ally_logins_open_sessions on public.ally_logins (ally_id) where logged_out_at is null;
+
+alter table public.ally_logins enable row level security;
+
+-- No public policies — all access goes through service role key
+grant all on public.ally_logins to service_role;
+
+
+-- ================================================
 -- NOTE: Customer search (profiles table)
 -- ================================================
 -- The allies app searches the profiles table to find existing customers

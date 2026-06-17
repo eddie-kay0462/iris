@@ -12,8 +12,10 @@ import {
 import { useSimilarProducts } from "@/lib/api/recommendations";
 import { addRecentlyViewed, useRecentlyViewed } from "@/lib/recently-viewed";
 import { ProductCard } from "../../components/ProductCard";
-import { createPreorder } from "@/lib/api/preorders";
+import { createPreorder, checkPreorderEligibility } from "@/lib/api/preorders";
 import { getToken } from "@/lib/api/client";
+import { usePaystackPayment } from "react-paystack";
+import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
 import { useToggleFavourite } from "@/lib/favourites";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale } from "@/lib/locale/locale-provider";
@@ -29,24 +31,6 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
-
-// ─── Paystack inline type ────────────────────────────────────────────────────
-declare global {
-  interface Window {
-    PaystackPop?: {
-      setup: (opts: {
-        key: string;
-        email: string;
-        amount: number;
-        currency?: string;
-        ref?: string;
-        metadata?: Record<string, unknown>;
-        callback: (response: { reference: string }) => void;
-        onClose: () => void;
-      }) => { openIframe: () => void };
-    };
-  }
-}
 
 // ─── Option group helpers ─────────────────────────────────────────────────────
 interface OptionGroup {
@@ -125,6 +109,7 @@ interface PreorderModalProps {
   variantTitle: string | null;
   variantId: string;
   price: number;
+  preorderLimit: number | null;
   onClose: () => void;
 }
 
@@ -133,48 +118,51 @@ function PreorderModal({
   variantTitle,
   variantId,
   price,
+  preorderLimit,
   onClose,
 }: PreorderModalProps) {
   const router = useRouter();
   const [quantity, setQuantity] = useState(1);
-  const [status, setStatus] = useState<"idle" | "paying" | "saving">("idle");
+  const [status, setStatus] = useState<"idle" | "checking" | "paying" | "saving">("idle");
+  const [email, setEmail] = useState("");
 
   useEffect(() => {
-    if (document.getElementById("paystack-script")) return;
-    const s = document.createElement("script");
-    s.id = "paystack-script";
-    s.src = "https://js.paystack.co/v1/inline.js";
-    s.async = true;
-    document.head.appendChild(s);
+    const token = getToken();
+    if (!token) return;
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      setEmail(payload.email || "");
+    } catch { /* ignore */ }
   }, []);
 
   const total = price * quantity;
 
+  const initializePayment = usePaystackPayment({
+    email,
+    amount: Math.round(total * 100),
+    currency: "GHS",
+    reference: `PRE-${Date.now()}`,
+    publicKey: PAYSTACK_PUBLIC_KEY,
+  });
+
   async function handlePay() {
     const token = getToken();
     if (!token) { router.push("/login"); return; }
-    const pk = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
-    if (!pk || !window.PaystackPop) {
-      toast.error("Payment unavailable. Please try again.", { duration: 6000 });
-      return;
-    }
-    let email = "";
-    try {
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      email = payload.email || "";
-    } catch { email = ""; }
     if (!email) {
       toast.error("Could not read your account email. Please log in again.");
       return;
     }
+    setStatus("checking");
+    try {
+      await checkPreorderEligibility({ variantId, quantity, price });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "This pre-order is no longer available.", { duration: 6000 });
+      setStatus("idle");
+      return;
+    }
     setStatus("paying");
-    window.PaystackPop.setup({
-      key: pk,
-      email,
-      amount: Math.round(total * 100),
-      currency: "GHS",
-      metadata: { variantId, quantity, productTitle },
-      callback: async (response) => {
+    initializePayment({
+      onSuccess: async (response: { reference: string }) => {
         setStatus("saving");
         try {
           const preorder = await createPreorder({
@@ -191,7 +179,7 @@ function PreorderModal({
         }
       },
       onClose: () => setStatus("idle"),
-    }).openIframe();
+    });
   }
 
   return (
@@ -221,8 +209,13 @@ function PreorderModal({
             >−</button>
             <span className="min-w-[2rem] text-center text-sm font-medium">{quantity}</span>
             <button
-              onClick={() => setQuantity((q) => q + 1)}
-              className="px-3 py-1.5 text-gray-600 hover:bg-[#f4f3f1] transition-colors"
+              onClick={() =>
+                setQuantity((q) =>
+                  preorderLimit != null ? Math.min(preorderLimit, q + 1) : q + 1,
+                )
+              }
+              disabled={preorderLimit != null && quantity >= preorderLimit}
+              className="px-3 py-1.5 text-gray-600 hover:bg-[#f4f3f1] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >+</button>
           </div>
         </div>
@@ -234,15 +227,17 @@ function PreorderModal({
 
         <button
           onClick={handlePay}
-          disabled={status === "paying" || status === "saving"}
+          disabled={status !== "idle"}
           className="w-full bg-black py-3 text-[13px] tracking-[0.18em] uppercase font-bold text-white disabled:opacity-60"
           style={{ fontFamily: "Inter, sans-serif" }}
         >
-          {status === "paying"
-            ? "Opening payment…"
-            : status === "saving"
-              ? "Saving pre-order…"
-              : `Pay GH₵${total.toLocaleString()}`}
+          {status === "checking"
+            ? "Checking availability…"
+            : status === "paying"
+              ? "Opening payment…"
+              : status === "saving"
+                ? "Saving pre-order…"
+                : `Pay GH₵${total.toLocaleString()}`}
         </button>
 
         <p className="mt-3 text-center text-xs text-[#768293]">
@@ -981,6 +976,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
           variantTitle={variantTitle}
           variantId={active.id}
           price={displayPrice}
+          preorderLimit={active.preorder_limit}
           onClose={() => setShowPreorderModal(false)}
         />
       )}

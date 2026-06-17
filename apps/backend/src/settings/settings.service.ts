@@ -209,6 +209,31 @@ export class SettingsService {
     if (error) throw error;
     return minutes;
   }
+
+  async getPreorderEtaText(): Promise<string> {
+    const db = this.supabase.getAdminClient();
+    const { data } = await db
+      .from('store_settings')
+      .select('value')
+      .eq('key', 'preorder_eta_text')
+      .single();
+
+    if (!data?.value) return DEFAULT_PREORDER_ETA_TEXT;
+    return String(data.value);
+  }
+
+  async updatePreorderEtaText(text: string): Promise<string> {
+    if (!text || !text.trim()) {
+      throw new BadRequestException('Pre-order ETA text cannot be empty');
+    }
+    const db = this.supabase.getAdminClient();
+    const { error } = await db
+      .from('store_settings')
+      .upsert({ key: 'preorder_eta_text', value: text.trim(), updated_at: new Date().toISOString() });
+
+    if (error) throw error;
+    return text.trim();
+  }
 }
 
 export interface ShippingOption {
@@ -224,6 +249,8 @@ const DEFAULT_SHIPPING_OPTIONS: ShippingOption[] = [
 ];
 
 const DEFAULT_STOCK_HOLD_MINUTES = 10;
+
+const DEFAULT_PREORDER_ETA_TEXT = '2-3 weeks';
 
 const ROLE_DESCRIPTIONS: Record<string, string> = {
   admin: 'Full access to all settings, users, and data.',

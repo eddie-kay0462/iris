@@ -10,7 +10,7 @@ function getServiceClient() {
   )
 }
 
-export async function recordAllyLogin(userId: string): Promise<{ allowed: boolean }> {
+export async function recordAllyLogin(userId: string): Promise<{ allowed: boolean; loginId: string | null }> {
   const supabase = getServiceClient()
 
   const { data: ally } = await supabase
@@ -19,10 +19,24 @@ export async function recordAllyLogin(userId: string): Promise<{ allowed: boolea
     .eq('user_id', userId)
     .single()
 
-  if (!ally) return { allowed: false }
+  if (!ally) return { allowed: false, loginId: null }
 
-  if (!ally.is_active) return { allowed: false }
+  if (!ally.is_active) return { allowed: false, loginId: null }
 
-  await supabase.from('ally_logins').insert({ ally_id: ally.id })
-  return { allowed: true }
+  const { data: loginRow } = await supabase
+    .from('ally_logins')
+    .insert({ ally_id: ally.id })
+    .select('id')
+    .single()
+
+  return { allowed: true, loginId: loginRow?.id ?? null }
+}
+
+export async function recordAllyLogout(loginId: string, reason: string): Promise<void> {
+  const supabase = getServiceClient()
+  await supabase
+    .from('ally_logins')
+    .update({ logged_out_at: new Date().toISOString(), logout_reason: reason })
+    .eq('id', loginId)
+    .is('logged_out_at', null)
 }

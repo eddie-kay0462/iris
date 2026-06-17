@@ -10,6 +10,8 @@ import {
   ShippingOption,
   useStockHoldMinutes,
   useUpdateStockHoldMinutes,
+  usePreorderEtaText,
+  useUpdatePreorderEtaText,
 } from "@/lib/api/settings";
 import { toast } from "sonner";
 
@@ -68,6 +70,25 @@ export default function GeneralSettingsPage() {
     saveStockHold(minutes, {
       onSuccess: () => {
         toast.success("Stock hold duration updated.");
+      },
+    });
+  }
+
+  const { data: preorderEtaText, isLoading: loadingPreorderEta } = usePreorderEtaText();
+  const { mutate: savePreorderEta, isPending: savingPreorderEta } = useUpdatePreorderEtaText();
+  const [draftPreorderEta, setDraftPreorderEta] = useState<string>("");
+
+  useEffect(() => {
+    if (preorderEtaText !== undefined && preorderEtaText !== null) {
+      setDraftPreorderEta(preorderEtaText);
+    }
+  }, [preorderEtaText]);
+
+  function handleSavePreorderEta() {
+    if (!draftPreorderEta.trim()) return;
+    savePreorderEta(draftPreorderEta, {
+      onSuccess: () => {
+        toast.success("Pre-order ETA text updated.");
       },
     });
   }
@@ -210,6 +231,47 @@ export default function GeneralSettingsPage() {
             >
               <Save className="h-4 w-4" />
               {savingStockHold ? "Saving…" : "Save hold duration"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Pre-order ETA */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="p-6">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-slate-900">Pre-order ETA</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Rough estimate shown to customers in pre-order confirmation emails and SMS for when
+              they can expect to be contacted about receiving their item.
+            </p>
+          </div>
+
+          {loadingPreorderEta ? (
+            <p className="text-sm text-slate-400">Loading…</p>
+          ) : (
+            <div className="max-w-xs space-y-1">
+              <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                ETA text
+              </label>
+              <input
+                type="text"
+                value={draftPreorderEta}
+                onChange={(e) => setDraftPreorderEta(e.target.value)}
+                placeholder="e.g. 2-3 weeks"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+              />
+            </div>
+          )}
+
+          <div className="mt-6 flex items-center gap-4">
+            <button
+              onClick={handleSavePreorderEta}
+              disabled={savingPreorderEta || loadingPreorderEta}
+              className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" />
+              {savingPreorderEta ? "Saving…" : "Save ETA text"}
             </button>
           </div>
         </div>

@@ -79,4 +79,17 @@ export class SettingsController {
   updateStockHoldMinutes(@Body() body: { minutes: number }) {
     return this.settingsService.updateStockHoldMinutes(body.minutes);
   }
+
+  @Get('preorder-eta-text')
+  @RequirePermission('settings:read')
+  getPreorderEtaText() {
+    return this.settingsService.getPreorderEtaText();
+  }
+
+  @Put('preorder-eta-text')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings:update')
+  updatePreorderEtaText(@Body() body: { text: string }) {
+    return this.settingsService.updatePreorderEtaText(body.text);
+  }
 }

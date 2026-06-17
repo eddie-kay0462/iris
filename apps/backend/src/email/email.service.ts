@@ -137,10 +137,26 @@ export class EmailService {
     items: { product_name: string; variant_title?: string | null; quantity: number; price: number }[];
     payment_method?: string | null;
     payment_status: string;
+    etaText: string;
     brand?: string;
   }): Promise<void> {
     const subject = `Pre-order Confirmed — ${order.order_number}`;
-    const html = this.buildPopupPreorderConfirmationHtml(order);
+    const html = this.buildPreorderConfirmationHtml(order);
+    await this.send(order.email, subject, html, order.order_number);
+  }
+
+  async sendPreorderConfirmation(order: {
+    email: string;
+    customer_name?: string | null;
+    order_number: string;
+    items: { product_name: string; variant_title?: string | null; quantity: number; price: number }[];
+    payment_method?: string | null;
+    payment_status: string;
+    etaText: string;
+    brand?: string;
+  }): Promise<void> {
+    const subject = `Pre-order Confirmed — ${order.order_number}`;
+    const html = this.buildPreorderConfirmationHtml(order);
     await this.send(order.email, subject, html, order.order_number);
   }
 
@@ -620,12 +636,13 @@ export class EmailService {
 </html>`;
   }
 
-  private buildPopupPreorderConfirmationHtml(order: {
+  private buildPreorderConfirmationHtml(order: {
     customer_name?: string | null;
     order_number: string;
     items: { product_name: string; variant_title?: string | null; quantity: number; price: number }[];
     payment_method?: string | null;
     payment_status: string;
+    etaText: string;
     brand?: string;
   }): string {
     const brandName = order.brand || '1NRI';
@@ -693,7 +710,7 @@ export class EmailService {
             <tr>
               <td style="background:#f9fafb;border-radius:8px;padding:16px;">
                 <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#111;">What happens next?</p>
-                <p style="margin:0;font-size:13px;color:#666;line-height:1.6;">We'll reach out as soon as your items are ready for collection or dispatch. Keep an eye on your phone — we'll send you a message when your order is confirmed.</p>
+                <p style="margin:0;font-size:13px;color:#666;line-height:1.6;">We expect to reach out within ${order.etaText} once your item is ready for collection or dispatch. Keep an eye on your phone — we'll send you a message when your order is confirmed.</p>
               </td>
             </tr>
           </table>

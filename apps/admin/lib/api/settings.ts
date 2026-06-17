@@ -136,3 +136,24 @@ export function useUpdateStockHoldMinutes() {
     },
   });
 }
+
+export function usePreorderEtaText() {
+  return useQuery({
+    queryKey: ["preorder-eta-text"],
+    queryFn: () => apiClient<string>("/settings/preorder-eta-text"),
+  });
+}
+
+export function useUpdatePreorderEtaText() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (text: string) =>
+      apiClient<string>("/settings/preorder-eta-text", {
+        method: "PUT",
+        body: { text },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["preorder-eta-text"] });
+    },
+  });
+}
