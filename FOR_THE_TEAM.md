@@ -3969,3 +3969,32 @@ This required fetching `logged_out_at` and `logout_reason` alongside `logged_in_
 3. Sign in again, leave the tab idle for 60 minutes (or temporarily set `TIMEOUT_MS` to something short like `10000`) — should auto-sign out and show the inactivity toast on the login page
 4. In the admin Markets page, open an ally's activity drawer → force-logout → their open `ally_logins` row should close with `logout_reason = 'force_logout'`
 5. The activity drawer's login history should show status badges and session durations for closed sessions
+
+---
+
+## Order Status Auto-Advance: Paid → Processing (June 2026)
+
+### What was the problem?
+
+When a customer completed payment, their order sat at `paid` status indefinitely until someone on the team manually moved it. The `/track` page showed "Payment Confirmed" and just stayed there. There was no signal to the fulfilment side that the order was ready to work on, and the status history gave no indication of when picking/packing should start.
+
+### What changed
+
+In `confirmPayment()`, immediately after flipping the order to `paid`, the order is now advanced to `processing` in the same request. Both transitions are written to `order_status_history` so the audit trail is complete:
+
+| From | To | Notes |
+|---|---|---|
+| `pending` | `paid` | Payment confirmed |
+| `paid` | `processing` | Auto-advanced after payment confirmation |
+
+The customer's tracking page now shows "Processing" as the active step as soon as payment goes through, rather than stalling at "Payment Confirmed".
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/backend/src/orders/orders.service.ts` | `confirmPayment()` inserts both history rows then updates status to `processing` |
+
+### How to test
+
+Complete a checkout and confirm payment. In Supabase, the order's `status` column should read `processing` (not `paid`). The `order_status_history` table should have two new rows for that order: `pending → paid` and `paid → processing`. On the `/track` page, the "Processing" step should be highlighted.
