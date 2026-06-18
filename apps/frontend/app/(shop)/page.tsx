@@ -10,6 +10,7 @@ import {
   useScroll,
   useTransform,
 } from "framer-motion";
+import { NewsletterSection } from "@/components/shop/NewsletterSection";
 
 const caveat = Caveat({ subsets: ["latin"], weight: ["500", "700"] });
 
@@ -667,6 +668,8 @@ export default function RoadToHQPage() {
           </motion.div>
         </motion.div>
       </section>
+
+      <NewsletterSection />
     </>
   );
 }

@@ -4,6 +4,7 @@ import { useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, useScroll, useTransform } from "framer-motion";
+import { NewsletterSection } from "@/components/shop/NewsletterSection";
 
 /* ── Shared animation variants ── */
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
@@ -377,10 +378,10 @@ export default function AboutPage() {
                 For partnerships &amp; manufacturing
               </div>
               <a
-                href="mailto:1nriiworldwide@gmail.com"
+                href="mailto:info@1nri.store"
                 className="mt-2 inline-block text-lg sm:text-xl font-medium underline underline-offset-4 hover:opacity-60"
               >
-                1nriiworldwide@gmail.com
+                info@1nri.store
               </a>
             </motion.div>
             <motion.div variants={fadeUp}>
@@ -394,6 +395,8 @@ export default function AboutPage() {
           </motion.div>
         </div>
       </section>
+
+      <NewsletterSection />
     </>
   );
 }
