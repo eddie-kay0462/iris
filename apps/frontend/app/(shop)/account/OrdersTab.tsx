@@ -2,27 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { apiClient } from "@/lib/api/client";
+import { useMyOrders } from "@/lib/api/orders";
+import { prefetchImage } from "@/hooks/useImagePrefetch";
 import { StatusPip, EndLabel, fmt, fmtDate, supabaseImg } from "./atoms";
-import type { Order, PaginatedOrders } from "@/lib/api/orders";
+import type { Order } from "@/lib/api/orders";
 import type { Product } from "@/lib/api/products";
 
 export default function OrdersTab() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading } = useMyOrders({ limit: 100 });
+  const orders = data?.data ?? [];
   const [expanded, setExpanded] = useState<string | null>(null);
   // Keyed by variant_id (preferred) or product_id (fallback)
   const [imgMap, setImgMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    apiClient<PaginatedOrders>("/orders/my?limit=100")
-      .then((res) => {
-        setOrders(res.data);
-        return res.data;
-      })
-      .then(fetchImages)
-      .catch(() => setOrders([]))
-      .finally(() => setLoading(false));
-  }, []);
+    if (orders.length > 0) fetchImages(orders);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   async function fetchImages(orders: Order[]) {
     // Build a map: product_id → Set of variant_ids used in these orders
@@ -72,19 +68,13 @@ export default function OrdersTab() {
     setExpanded((prev) => (prev === id ? null : id));
   }
 
-  // Prefetch all product images for an order so they're cached before expand
+  // Prefetch all product images for an order via /_next/image so they're cache hits on expand
   function prefetchOrderImages(order: Order) {
     for (const item of order.order_items ?? []) {
       const url =
         (item.variant_id ? imgMap[item.variant_id] : null) ??
         (item.product_id ? imgMap[item.product_id] : null);
-      if (url) {
-        const link = document.createElement("link");
-        link.rel = "prefetch";
-        link.as = "image";
-        link.href = url;
-        document.head.appendChild(link);
-      }
+      if (url) prefetchImage(url, 800, 75);
     }
   }
 
@@ -100,14 +90,14 @@ export default function OrdersTab() {
         <div className="tab-hero-overlay">
           <div className="tab-hero-title">Your Orders</div>
           <div className="tab-hero-sub">
-            {loading
+            {isLoading
               ? "Loading…"
               : `${orders.length} order${orders.length !== 1 ? "s" : ""} placed`}
           </div>
         </div>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="order-list">
           {[1, 2, 3].map((i) => (
             <div
@@ -128,6 +118,7 @@ export default function OrdersTab() {
                 className="order-row"
                 onClick={() => toggle(order.id)}
                 onMouseEnter={() => prefetchOrderImages(order)}
+                onTouchStart={() => prefetchOrderImages(order)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => e.key === "Enter" && toggle(order.id)}

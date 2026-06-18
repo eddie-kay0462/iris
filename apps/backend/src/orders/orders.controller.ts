@@ -128,6 +128,17 @@ export class OrdersController {
   }
 
   /**
+   * Releases a pending order's stock hold immediately, e.g. when the customer
+   * closes the Paystack modal without paying. The order stays pending under
+   * the same reference so a retry triggers the one-time hold refresh.
+   */
+  @Public()
+  @Post('release-hold')
+  releaseHold(@Body() body: { reference: string }) {
+    return this.ordersService.releaseHold(body.reference);
+  }
+
+  /**
    * Retrieve a guest order by order number + one-time guest token.
    * The token is returned when a guest order is created and stored client-side
    * in sessionStorage. It acts as a lightweight secret to prevent enumeration.
@@ -139,6 +150,19 @@ export class OrdersController {
     @Query('token') token: string,
   ) {
     return this.ordersService.findGuestOrder(orderNumber, token);
+  }
+
+  /**
+   * Public order tracking by order number + email address.
+   * Returns a limited set of tracking fields — no payment details or guest token.
+   */
+  @Public()
+  @Get('track')
+  trackOrder(
+    @Query('orderNumber') orderNumber: string,
+    @Query('email') email: string,
+  ) {
+    return this.ordersService.trackOrderByEmail(orderNumber, email);
   }
 
   @Get('my')

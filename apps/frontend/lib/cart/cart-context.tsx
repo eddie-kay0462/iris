@@ -8,6 +8,7 @@ import {
   useReducer,
   type ReactNode,
 } from "react";
+import { track } from "@/lib/analytics/tracker";
 
 // --- Types ---
 
@@ -31,7 +32,8 @@ type CartAction =
   | { type: "REMOVE"; variantId: string }
   | { type: "UPDATE_QTY"; variantId: string; quantity: number }
   | { type: "CLEAR" }
-  | { type: "HYDRATE"; items: CartItem[] };
+  | { type: "HYDRATE"; items: CartItem[] }
+  | { type: "SYNC"; items: CartItem[] };
 
 interface CartContextValue {
   items: CartItem[];
@@ -70,8 +72,32 @@ function saveCart(items: CartItem[]) {
 
 function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
-    case "HYDRATE":
-      return { items: action.items, hydrated: true };
+    case "HYDRATE": {
+      // Hydration is deferred to an effect (to avoid SSR/client mismatches),
+      // so it's possible for an ADD to land in memory before this fires. Merge
+      // rather than replace, or that optimistic add gets silently discarded —
+      // which surfaces as the same variant "re-appearing" as a separate line
+      // the next time it's added, since the merge it should have had never happened.
+      if (state.hydrated) return state;
+      const merged = [...action.items];
+      for (const item of state.items) {
+        const idx = merged.findIndex((i) => i.variantId === item.variantId);
+        if (idx >= 0) {
+          merged[idx] = {
+            ...merged[idx],
+            quantity: merged[idx].quantity + item.quantity,
+          };
+        } else {
+          merged.push(item);
+        }
+      }
+      return { items: merged, hydrated: true };
+    }
+
+    // Another tab/window persisted a change — adopt it as-is, since it was
+    // already merged through this same reducer in that tab.
+    case "SYNC":
+      return { ...state, items: action.items, hydrated: true };
 
     case "ADD": {
       const existing = state.items.find(
@@ -142,6 +168,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "HYDRATE", items: loadCart() });
   }, []);
 
+  // Re-hydrate when another tab/window writes a newer cart, so a stale
+  // in-memory copy here doesn't overwrite it on the next save.
+  useEffect(() => {
+    function handleStorage(e: StorageEvent) {
+      if (e.key === STORAGE_KEY) {
+        dispatch({ type: "SYNC", items: loadCart() });
+      }
+    }
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
   // Persist on every change (after hydration)
   useEffect(() => {
     if (state.hydrated) {
@@ -152,6 +190,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addItem = useCallback(
     (item: Omit<CartItem, "quantity">, quantity?: number) => {
       dispatch({ type: "ADD", item, quantity });
+      track("add_to_cart", {
+        productId: item.productId,
+        value: item.price * (quantity ?? 1),
+      });
     },
     [],
   );

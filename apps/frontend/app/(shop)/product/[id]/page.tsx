@@ -12,8 +12,10 @@ import {
 import { useSimilarProducts } from "@/lib/api/recommendations";
 import { addRecentlyViewed, useRecentlyViewed } from "@/lib/recently-viewed";
 import { ProductCard } from "../../components/ProductCard";
-import { createPreorder } from "@/lib/api/preorders";
+import { createPreorder, checkPreorderEligibility } from "@/lib/api/preorders";
 import { getToken } from "@/lib/api/client";
+import { usePaystackPayment } from "react-paystack";
+import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
 import { useToggleFavourite } from "@/lib/favourites";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale } from "@/lib/locale/locale-provider";
@@ -29,24 +31,6 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
-
-// ─── Paystack inline type ────────────────────────────────────────────────────
-declare global {
-  interface Window {
-    PaystackPop?: {
-      setup: (opts: {
-        key: string;
-        email: string;
-        amount: number;
-        currency?: string;
-        ref?: string;
-        metadata?: Record<string, unknown>;
-        callback: (response: { reference: string }) => void;
-        onClose: () => void;
-      }) => { openIframe: () => void };
-    };
-  }
-}
 
 // ─── Option group helpers ─────────────────────────────────────────────────────
 interface OptionGroup {
@@ -93,7 +77,29 @@ function isValueInStock(
       return v[key] === val;
     }),
   );
-  return matching.some((v) => v.inventory_quantity > 0);
+  return matching.some((v) => v.inventory_quantity > 0 && v.available !== false);
+}
+
+function isValuePreorderable(
+  variants: ProductVariant[],
+  groups: OptionGroup[],
+  selected: Record<string, string>,
+  targetGroup: OptionGroup,
+  targetValue: string,
+): boolean {
+  const testSelected = { ...selected, [targetGroup.name]: targetValue };
+  const matching = variants.filter((v) =>
+    groups.every((g) => {
+      const val = testSelected[g.name];
+      if (!val) return true;
+      const key =
+        g.slot === 1 ? "option1_value" : g.slot === 2 ? "option2_value" : "option3_value";
+      return v[key] === val;
+    }),
+  );
+  return matching.some(
+    (v) => (v.inventory_quantity <= 0 || v.available === false) && v.preorder_enabled === true,
+  );
 }
 
 // ─── PreorderModal ────────────────────────────────────────────────────────────
@@ -103,6 +109,7 @@ interface PreorderModalProps {
   variantTitle: string | null;
   variantId: string;
   price: number;
+  preorderLimit: number | null;
   onClose: () => void;
 }
 
@@ -111,48 +118,51 @@ function PreorderModal({
   variantTitle,
   variantId,
   price,
+  preorderLimit,
   onClose,
 }: PreorderModalProps) {
   const router = useRouter();
   const [quantity, setQuantity] = useState(1);
-  const [status, setStatus] = useState<"idle" | "paying" | "saving">("idle");
+  const [status, setStatus] = useState<"idle" | "checking" | "paying" | "saving">("idle");
+  const [email, setEmail] = useState("");
 
   useEffect(() => {
-    if (document.getElementById("paystack-script")) return;
-    const s = document.createElement("script");
-    s.id = "paystack-script";
-    s.src = "https://js.paystack.co/v1/inline.js";
-    s.async = true;
-    document.head.appendChild(s);
+    const token = getToken();
+    if (!token) return;
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      setEmail(payload.email || "");
+    } catch { /* ignore */ }
   }, []);
 
   const total = price * quantity;
 
+  const initializePayment = usePaystackPayment({
+    email,
+    amount: Math.round(total * 100),
+    currency: "GHS",
+    reference: `PRE-${Date.now()}`,
+    publicKey: PAYSTACK_PUBLIC_KEY,
+  });
+
   async function handlePay() {
     const token = getToken();
     if (!token) { router.push("/login"); return; }
-    const pk = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
-    if (!pk || !window.PaystackPop) {
-      toast.error("Payment unavailable. Please try again.", { duration: 6000 });
-      return;
-    }
-    let email = "";
-    try {
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      email = payload.email || "";
-    } catch { email = ""; }
     if (!email) {
       toast.error("Could not read your account email. Please log in again.");
       return;
     }
+    setStatus("checking");
+    try {
+      await checkPreorderEligibility({ variantId, quantity, price });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "This pre-order is no longer available.", { duration: 6000 });
+      setStatus("idle");
+      return;
+    }
     setStatus("paying");
-    window.PaystackPop.setup({
-      key: pk,
-      email,
-      amount: Math.round(total * 100),
-      currency: "GHS",
-      metadata: { variantId, quantity, productTitle },
-      callback: async (response) => {
+    initializePayment({
+      onSuccess: async (response: { reference: string }) => {
         setStatus("saving");
         try {
           const preorder = await createPreorder({
@@ -169,7 +179,7 @@ function PreorderModal({
         }
       },
       onClose: () => setStatus("idle"),
-    }).openIframe();
+    });
   }
 
   return (
@@ -199,8 +209,13 @@ function PreorderModal({
             >−</button>
             <span className="min-w-[2rem] text-center text-sm font-medium">{quantity}</span>
             <button
-              onClick={() => setQuantity((q) => q + 1)}
-              className="px-3 py-1.5 text-gray-600 hover:bg-[#f4f3f1] transition-colors"
+              onClick={() =>
+                setQuantity((q) =>
+                  preorderLimit != null ? Math.min(preorderLimit, q + 1) : q + 1,
+                )
+              }
+              disabled={preorderLimit != null && quantity >= preorderLimit}
+              className="px-3 py-1.5 text-gray-600 hover:bg-[#f4f3f1] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >+</button>
           </div>
         </div>
@@ -212,15 +227,17 @@ function PreorderModal({
 
         <button
           onClick={handlePay}
-          disabled={status === "paying" || status === "saving"}
+          disabled={status !== "idle"}
           className="w-full bg-black py-3 text-[13px] tracking-[0.18em] uppercase font-bold text-white disabled:opacity-60"
           style={{ fontFamily: "Inter, sans-serif" }}
         >
-          {status === "paying"
-            ? "Opening payment…"
-            : status === "saving"
-              ? "Saving pre-order…"
-              : `Pay GH₵${total.toLocaleString()}`}
+          {status === "checking"
+            ? "Checking availability…"
+            : status === "paying"
+              ? "Opening payment…"
+              : status === "saving"
+                ? "Saving pre-order…"
+                : `Pay GH₵${total.toLocaleString()}`}
         </button>
 
         <p className="mt-3 text-center text-xs text-[#768293]">
@@ -765,6 +782,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
                   {group.values.map((val) => {
                     const isSelected = selectedOptions[group.name] === val;
                     const inStockForVal = isValueInStock(variants, optionGroups, selectedOptions, group, val);
+                    const preorderableForVal = !inStockForVal && isValuePreorderable(variants, optionGroups, selectedOptions, group, val);
                     return (
                       <button
                         key={val}
@@ -772,18 +790,32 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
                         className={`${isSize ? "h-11" : "h-11 px-4"} border font-light text-[13px] tracking-[0.06em] transition-all duration-[160ms] ${
                           isSelected && inStockForVal
                             ? "bg-black text-[#F4F3F1] border-black"
-                            : isSelected && !inStockForVal
-                              ? "bg-black text-[#F4F3F1] border-black line-through"
-                              : !inStockForVal
-                                ? "text-[#A9B5C6] line-through border-black/25 hover:border-black/50"
-                                : "border-black/25 hover:border-black bg-white text-black"
+                            : isSelected && preorderableForVal
+                              ? "bg-black text-[#F4F3F1] border-dashed border-black"
+                              : isSelected && !inStockForVal
+                                ? "bg-black text-[#F4F3F1] border-black line-through"
+                                : preorderableForVal
+                                  ? "border-dashed border-black/50 text-black/70 hover:border-black bg-white"
+                                  : !inStockForVal
+                                    ? "text-[#A9B5C6] line-through border-black/25 hover:border-black/50"
+                                    : "border-black/25 hover:border-black bg-white text-black"
                         }`}
                       >
                         {val}
+                        {isSelected && preorderableForVal && (
+                          <span className="block text-[9px] tracking-[0.08em] opacity-75 leading-none mt-0.5">PRE-ORDER</span>
+                        )}
                       </button>
                     );
                   })}
                 </div>
+                {group.values.some((val) =>
+                  isValuePreorderable(variants, optionGroups, selectedOptions, group, val)
+                ) && (
+                  <p className="text-[11px] text-[#59626E] tracking-[0.06em]">
+                    Dashed options are available for pre-order
+                  </p>
+                )}
               </div>
             );
           })}
@@ -944,6 +976,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
           variantTitle={variantTitle}
           variantId={active.id}
           price={displayPrice}
+          preorderLimit={active.preorder_limit}
           onClose={() => setShowPreorderModal(false)}
         />
       )}

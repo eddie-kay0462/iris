@@ -1,6 +1,26 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../common/supabase/supabase.service';
-import { OverviewQueryDto, RevenueChartDto, ReportQueryDto } from './dto/query-analytics.dto';
+import {
+  AbandonedCheckoutsQueryDto,
+  OverviewQueryDto,
+  RevenueChartDto,
+  ReportQueryDto,
+} from './dto/query-analytics.dto';
+import { TrackEventsDto } from './dto/track-events.dto';
+import { CheckoutSnapshotDto } from './dto/checkout-snapshot.dto';
+import { Granularity, ONLINE_REVENUE_STATUSES, round2 } from './analytics.constants';
+import {
+  aggregateSessions,
+  num,
+  onlineCustomerKey,
+  popupCustomerKey,
+  referrerLabel,
+  ReportContext,
+} from './reports/report-context';
+import { listReports, REPORTS } from './reports/report-registry';
+import { ReportPayload } from './reports/report-types';
+
+const ABANDON_AFTER_MS = 60 * 60 * 1000; // open checkout idle > 1h counts as abandoned
 
 @Injectable()
 export class AnalyticsService {
@@ -991,6 +1011,386 @@ export class AnalyticsService {
         transactionCount: d.count,
         amount: Math.round(d.amount * 100) / 100,
       })),
+    };
+  }
+
+  // ─── Event Ingest (public, storefront beacon) ─────────────────────────────
+
+  async trackEvents(dto: TrackEventsDto) {
+    const db = this.supabase.getAdminClient();
+    const rows = dto.events.map((e) => ({
+      session_id: e.sessionId.slice(0, 64),
+      visitor_id: e.visitorId?.slice(0, 64) ?? null,
+      event_type: e.eventType,
+      path: e.path?.slice(0, 512) ?? null,
+      referrer: e.referrer?.slice(0, 512) ?? null,
+      landing_page: e.landingPage?.slice(0, 512) ?? null,
+      device_type: e.deviceType ?? null,
+      user_id: e.userId ?? null,
+      product_id: e.productId ?? null,
+      order_id: e.orderId ?? null,
+      value: e.value ?? null,
+      metadata: e.metadata && JSON.stringify(e.metadata).length <= 2048 ? e.metadata : null,
+    }));
+    if (rows.length === 0) return;
+    // Ingest must never throw into the storefront; drop on failure.
+    await db.from('analytics_events').insert(rows);
+  }
+
+  // ─── Checkout snapshots (public, abandoned-checkout capture) ──────────────
+
+  async saveCheckoutSnapshot(dto: CheckoutSnapshotDto) {
+    const db = this.supabase.getAdminClient();
+    const { data: existing } = await db
+      .from('checkout_sessions')
+      .select('id')
+      .eq('session_id', dto.sessionId)
+      .eq('status', 'open')
+      .maybeSingle();
+
+    const items = dto.items.map((i) => ({
+      productId: i.productId ?? null,
+      variantId: i.variantId ?? null,
+      productName: i.productName.slice(0, 256),
+      variantTitle: i.variantTitle?.slice(0, 256) ?? null,
+      sku: i.sku ?? null,
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      lineTotal: round2(i.unitPrice * i.quantity),
+      imageUrl: i.imageUrl ?? null,
+    }));
+
+    const fields = {
+      visitor_id: dto.visitorId ?? null,
+      user_id: dto.userId ?? null,
+      email: dto.email?.toLowerCase() ?? null,
+      phone: dto.phone ?? null,
+      customer_name: dto.customerName ?? null,
+      items,
+      subtotal: dto.subtotal ?? round2(items.reduce((s, i) => s + i.lineTotal, 0)),
+      updated_at: new Date().toISOString(),
+    };
+
+    const completed = dto.completedOrderId
+      ? { status: 'completed', order_id: dto.completedOrderId, completed_at: new Date().toISOString() }
+      : {};
+
+    if (existing) {
+      await db.from('checkout_sessions').update({ ...fields, ...completed }).eq('id', existing.id);
+    } else {
+      await db.from('checkout_sessions').insert({ session_id: dto.sessionId, ...fields, ...completed });
+    }
+  }
+
+  // ─── Sessions / Conversion ─────────────────────────────────────────────────
+
+  async getSessionsAnalytics(query: ReportQueryDto) {
+    const db = this.supabase.getAdminClient();
+    const range = this.resolveDateRange(query.period, query.from, query.to);
+    const ctx = new ReportContext(db, range, (query.granularity as Granularity) ?? 'day');
+
+    const [curEvents, prevEvents, firstEvent] = await Promise.all([
+      ctx.events('current'),
+      ctx.events('previous'),
+      db.from('analytics_events').select('created_at').order('created_at', { ascending: true }).limit(1).maybeSingle(),
+    ]);
+
+    const summarize = (events: typeof curEvents) => {
+      const sessions = aggregateSessions(events);
+      const funnel = { sessions: 0, addedToCart: 0, reachedCheckout: 0, purchased: 0 };
+      const sessionsByDay: Record<string, number> = {};
+      const conversionByDay: Record<string, { sessions: number; purchased: number }> = {};
+      const byDevice: Record<string, number> = {};
+      const byReferrer: Record<string, number> = {};
+      const byLandingPage: Record<string, number> = {};
+      for (const s of sessions.values()) {
+        const day = s.firstTs.slice(0, 10);
+        funnel.sessions += 1;
+        if (s.types.has('add_to_cart')) funnel.addedToCart += 1;
+        if (s.types.has('checkout_started')) funnel.reachedCheckout += 1;
+        if (s.types.has('purchase')) funnel.purchased += 1;
+        sessionsByDay[day] = (sessionsByDay[day] ?? 0) + 1;
+        if (!conversionByDay[day]) conversionByDay[day] = { sessions: 0, purchased: 0 };
+        conversionByDay[day].sessions += 1;
+        if (s.types.has('purchase')) conversionByDay[day].purchased += 1;
+        const device = s.device ?? 'unknown';
+        byDevice[device] = (byDevice[device] ?? 0) + 1;
+        const ref = referrerLabel(s.referrer);
+        byReferrer[ref] = (byReferrer[ref] ?? 0) + 1;
+        const landing = s.landingPage ?? '/';
+        byLandingPage[landing] = (byLandingPage[landing] ?? 0) + 1;
+      }
+      const conversionRate = funnel.sessions > 0 ? round2((funnel.purchased / funnel.sessions) * 100) : 0;
+      return { funnel, conversionRate, sessionsByDay, conversionByDay, byDevice, byReferrer, byLandingPage };
+    };
+
+    const current = summarize(curEvents);
+    const previous = summarize(prevEvents);
+
+    return {
+      range,
+      trackingSince: firstEvent?.data?.created_at ?? null,
+      ...current,
+      previous: {
+        funnel: previous.funnel,
+        conversionRate: previous.conversionRate,
+        sessionsByDay: previous.sessionsByDay,
+      },
+    };
+  }
+
+  // ─── Sales breakdown (Shopify "Total sales breakdown") ────────────────────
+
+  async getSalesBreakdown(query: ReportQueryDto) {
+    const db = this.supabase.getAdminClient();
+    const range = this.resolveDateRange(query.period, query.from, query.to);
+    const ctx = new ReportContext(db, range, 'day');
+
+    const load = async (w: 'current' | 'previous') => {
+      const [online, popup, refunded, popupRefunds] = await Promise.all([
+        ctx.onlineOrders(w),
+        ctx.popupOrders(w),
+        ctx.refundedOrders(w),
+        ctx.popupRefunds(w),
+      ]);
+      let grossSales = 0;
+      let discounts = 0;
+      let shipping = 0;
+      let tax = 0;
+      let returns = 0;
+      let orders = 0;
+      for (const o of online) {
+        grossSales += num(o.subtotal);
+        discounts += num(o.discount);
+        shipping += num(o.shipping_cost);
+        tax += num(o.tax);
+        orders += 1;
+      }
+      for (const o of popup) {
+        grossSales += num(o.subtotal);
+        discounts += num(o.discount_amount);
+        orders += 1;
+      }
+      for (const o of refunded) returns += num(o.total);
+      for (const r of popupRefunds) returns += num(r.amount);
+      const netSales = grossSales - discounts - returns;
+      return {
+        grossSales: round2(grossSales),
+        discounts: round2(discounts),
+        returns: round2(returns),
+        netSales: round2(netSales),
+        shipping: round2(shipping),
+        tax: round2(tax),
+        totalSales: round2(netSales + shipping + tax),
+        orders,
+      };
+    };
+
+    const [current, previous] = await Promise.all([load('current'), load('previous')]);
+    return { range, ...current, previous };
+  }
+
+  // ─── Returning customer rate ───────────────────────────────────────────────
+
+  async getReturningCustomerRate(query: ReportQueryDto) {
+    const db = this.supabase.getAdminClient();
+    const range = this.resolveDateRange(query.period, query.from, query.to);
+    const ctx = new ReportContext(db, range, 'day');
+
+    const firstOrders = await ctx.customerFirstOrder();
+
+    // Profiles with migrated Shopify history count as returning even if this
+    // is their first Iris-era order.
+    const { data: shopifyProfiles } = await db
+      .from('profiles')
+      .select('id, email')
+      .gt('shopify_total_orders', 0)
+      .limit(5000);
+    const shopifyKeys = new Set<string>();
+    for (const p of shopifyProfiles ?? []) {
+      shopifyKeys.add(`u:${p.id}`);
+      if (p.email) shopifyKeys.add(`e:${p.email.toLowerCase()}`);
+    }
+
+    const compute = async (w: 'current' | 'previous') => {
+      const [online, popup] = await Promise.all([ctx.onlineOrders(w), ctx.popupOrders(w)]);
+      const customers = new Map<string, string>(); // key -> earliest order ts in window
+      const consider = (key: string | null, ts: string) => {
+        if (!key) return;
+        const cur = customers.get(key);
+        if (!cur || ts < cur) customers.set(key, ts);
+      };
+      for (const o of online) consider(onlineCustomerKey(o), o.created_at);
+      for (const o of popup) consider(popupCustomerKey(o), o.created_at);
+
+      let returning = 0;
+      for (const [key, ts] of customers.entries()) {
+        const first = firstOrders.get(key);
+        if ((first && first < ts) || shopifyKeys.has(key)) returning += 1;
+      }
+      const total = customers.size;
+      return { total, returning, rate: total > 0 ? round2((returning / total) * 100) : 0 };
+    };
+
+    const [current, previous] = await Promise.all([compute('current'), compute('previous')]);
+    return {
+      range,
+      totalCustomers: current.total,
+      returning: current.returning,
+      rate: current.rate,
+      previousRate: previous.rate,
+      previousTotalCustomers: previous.total,
+    };
+  }
+
+  // ─── Abandoned checkouts ───────────────────────────────────────────────────
+
+  async getAbandonedCheckouts(query: AbandonedCheckoutsQueryDto) {
+    const db = this.supabase.getAdminClient();
+    const staleCutoff = new Date(Date.now() - ABANDON_AFTER_MS).toISOString();
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    let q = db
+      .from('checkout_sessions')
+      .select('id, session_id, user_id, email, phone, customer_name, items, subtotal, status, created_at, updated_at', {
+        count: 'exact',
+      })
+      .eq('status', 'open')
+      .lt('updated_at', staleCutoff)
+      .order('updated_at', { ascending: false });
+
+    if (query.from) q = q.gte('created_at', query.from);
+    if (query.to) q = q.lte('created_at', query.to);
+    if (query.search) {
+      const s = query.search.replace(/[%,()]/g, '');
+      q = q.or(`email.ilike.%${s}%,customer_name.ilike.%${s}%,phone.ilike.%${s}%`);
+    }
+
+    const { data: rows, count } = await q.range((page - 1) * limit, page * limit - 1);
+    const enriched = await this.enrichCheckouts(rows ?? []);
+
+    return {
+      checkouts: enriched,
+      total: count ?? 0,
+      page,
+      limit,
+    };
+  }
+
+  async getAbandonedCheckout(id: string) {
+    const db = this.supabase.getAdminClient();
+    const { data: row } = await db
+      .from('checkout_sessions')
+      .select('id, session_id, user_id, email, phone, customer_name, items, subtotal, status, order_id, completed_at, created_at, updated_at')
+      .eq('id', id)
+      .maybeSingle();
+    if (!row) throw new NotFoundException('Checkout not found');
+    const [enriched] = await this.enrichCheckouts([row]);
+    return { ...enriched, items: row.items ?? [], sessionId: row.session_id, completedAt: row.completed_at };
+  }
+
+  /** Attach matched profile + recovered-order info to checkout rows. */
+  private async enrichCheckouts(rows: any[]) {
+    const db = this.supabase.getAdminClient();
+    if (rows.length === 0) return [];
+
+    const userIds = rows.map((r) => r.user_id).filter(Boolean);
+    const emails = rows.map((r) => (r.email ?? '').toLowerCase()).filter(Boolean);
+
+    const [profilesById, profilesByEmail, laterOrders] = await Promise.all([
+      userIds.length
+        ? db.from('profiles').select('id, email, first_name, last_name').in('id', userIds)
+        : Promise.resolve({ data: [] as any[] }),
+      emails.length
+        ? db.from('profiles').select('id, email, first_name, last_name').in('email', emails)
+        : Promise.resolve({ data: [] as any[] }),
+      // Any later revenue order by the same user/email marks the checkout recovered.
+      userIds.length || emails.length
+        ? db
+            .from('orders')
+            .select('id, order_number, user_id, email, created_at, total')
+            .is('deleted_at', null)
+            .in('status', ONLINE_REVENUE_STATUSES)
+            .or(
+              [
+                userIds.length ? `user_id.in.(${userIds.join(',')})` : null,
+                emails.length ? `email.in.(${emails.map((e) => `"${e}"`).join(',')})` : null,
+              ]
+                .filter(Boolean)
+                .join(','),
+            )
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+
+    const profileMap = new Map<string, any>();
+    for (const p of [...(profilesById.data ?? []), ...(profilesByEmail.data ?? [])]) {
+      profileMap.set(`u:${p.id}`, p);
+      if (p.email) profileMap.set(`e:${p.email.toLowerCase()}`, p);
+    }
+
+    return rows.map((r) => {
+      const items: any[] = Array.isArray(r.items) ? r.items : [];
+      const profile =
+        (r.user_id && profileMap.get(`u:${r.user_id}`)) ||
+        (r.email && profileMap.get(`e:${r.email.toLowerCase()}`)) ||
+        null;
+      const recoveredBy = (laterOrders.data ?? []).find(
+        (o: any) =>
+          o.created_at > r.updated_at &&
+          ((r.user_id && o.user_id === r.user_id) ||
+            (r.email && (o.email ?? '').toLowerCase() === r.email.toLowerCase())),
+      );
+      return {
+        id: r.id,
+        date: r.created_at,
+        lastActivity: r.updated_at,
+        status: recoveredBy ? 'recovered' : r.status === 'open' ? 'abandoned' : r.status,
+        customer: {
+          name:
+            r.customer_name ||
+            (profile ? `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim() : null) ||
+            null,
+          email: r.email ?? profile?.email ?? null,
+          phone: r.phone ?? null,
+          profileId: profile?.id ?? null,
+        },
+        itemCount: items.reduce((s, i) => s + (i.quantity ?? 0), 0),
+        itemThumbnails: items.map((i) => i.imageUrl).filter(Boolean).slice(0, 3),
+        items,
+        subtotal: num(r.subtotal),
+        recoveredBy: recoveredBy
+          ? { orderId: recoveredBy.id, orderNumber: recoveredBy.order_number, total: num(recoveredBy.total), date: recoveredBy.created_at }
+          : null,
+      };
+    });
+  }
+
+  // ─── Unified reports engine ────────────────────────────────────────────────
+
+  listReportDefinitions() {
+    return { reports: listReports() };
+  }
+
+  async runReport(reportId: string, query: ReportQueryDto): Promise<ReportPayload> {
+    const def = REPORTS[reportId];
+    if (!def) throw new NotFoundException(`Unknown report: ${reportId}`);
+
+    const db = this.supabase.getAdminClient();
+    const range = this.resolveDateRange(query.period, query.from, query.to);
+    const granularity = (query.granularity as Granularity) ?? def.defaultGranularity ?? 'day';
+    const ctx = new ReportContext(db, range, granularity);
+
+    const built = await def.build(ctx);
+    return {
+      id: def.id,
+      name: def.name,
+      description: def.description,
+      category: def.category,
+      range: { from: ctx.from, to: ctx.to },
+      previousRange: { from: ctx.prevFrom, to: ctx.prevTo },
+      granularity,
+      ...built,
     };
   }
 }

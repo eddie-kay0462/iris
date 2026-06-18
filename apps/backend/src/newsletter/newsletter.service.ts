@@ -7,18 +7,22 @@ export class NewsletterService {
 
   async subscribe(email: string) {
     const db = this.supabase.getAdminClient();
+    const normalised = email.toLowerCase().trim();
 
-    // Upsert — if email already exists, just update subscribed_at
+    const { data: existing } = await db
+      .from('newsletter_subscribers')
+      .select('id')
+      .eq('email', normalised)
+      .maybeSingle();
+
+    if (existing) return { ok: true, alreadySubscribed: true };
+
     const { error } = await db
       .from('newsletter_subscribers')
-      .upsert(
-        { email: email.toLowerCase().trim(), subscribed_at: new Date().toISOString() },
-        { onConflict: 'email' },
-      );
+      .insert({ email: normalised, subscribed_at: new Date().toISOString() });
 
     if (error) throw error;
-
-    return { ok: true };
+    return { ok: true, alreadySubscribed: false };
   }
 
   async findAll(query: { page?: string; limit?: string }) {

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { usePaystackPayment } from "react-paystack";
 import { useCart } from "@/lib/cart";
-import { useCreateOrder, confirmPaymentByReference } from "@/lib/api/orders";
+import { useCreateOrder, confirmPaymentByReference, releaseStockHold } from "@/lib/api/orders";
 import PhoneInput from "@/components/PhoneInput";
 import { useProfile, parseDefaultAddress } from "@/lib/api/profile";
 import { apiClient, hasToken, getToken } from "@/lib/api/client";
@@ -15,11 +15,44 @@ import { useShippingOptions, DEFAULT_SHIPPING_OPTIONS } from "@/lib/api/settings
 import { useValidatePromo, DiscountType } from "@/lib/api/promos";
 import { ChevronDown } from "lucide-react";
 import { useLocale } from "@/lib/locale/locale-provider";
+import { track, snapshotCheckout } from "@/lib/analytics/tracker";
 
 function generateReference() {
   const ts = Date.now();
   const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
   return `IRD-${ts}-${rand}`;
+}
+
+function StockHoldTimer({ expiresAt }: { expiresAt: string }) {
+  const [remainingMs, setRemainingMs] = useState(
+    () => new Date(expiresAt).getTime() - Date.now(),
+  );
+
+  useEffect(() => {
+    setRemainingMs(new Date(expiresAt).getTime() - Date.now());
+    const interval = setInterval(() => {
+      setRemainingMs(new Date(expiresAt).getTime() - Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt]);
+
+  if (remainingMs <= 0) {
+    return (
+      <p className="mt-3 text-xs font-medium text-red-500">
+        Your item hold has expired. Click &ldquo;Pay Now&rdquo; to try again.
+      </p>
+    );
+  }
+
+  const totalSeconds = Math.floor(remainingMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return (
+    <p className="mt-3 text-xs font-medium text-amber-600 dark:text-amber-400">
+      Items reserved for {minutes}:{seconds.toString().padStart(2, "0")} — complete payment before your hold expires.
+    </p>
+  );
 }
 
 
@@ -150,6 +183,7 @@ export default function CheckoutClient() {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [reference, setReference] = useState(() => generateReference());
   const [pendingOrderNumber, setPendingOrderNumber] = useState<string | null>(null);
+  const [holdExpiresAt, setHoldExpiresAt] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [saveAsDefault, setSaveAsDefault] = useState(false);
   const [shippingOption, setShippingOption] = useState<"standard" | "express" | "pickup">("standard");
@@ -168,6 +202,42 @@ export default function CheckoutClient() {
     shippingOptions.find((o) => o.id === shippingOption)?.price ?? shippingOptions[0]?.price ?? 40;
   const discountAmount = appliedPromo?.discountAmount ?? 0;
   const total = Math.max(0, subtotal + shippingCost - discountAmount);
+
+  // One checkout_started event per checkout visit
+  useEffect(() => {
+    if (items.length > 0) {
+      track("checkout_started", { value: subtotal });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Snapshot the checkout (cart + contact details as typed) for
+  // abandoned-checkout capture; debounced so we don't post per keystroke.
+  useEffect(() => {
+    if (items.length === 0) return;
+    const timer = setTimeout(() => {
+      snapshotCheckout({
+        // `email` is prefilled from the JWT for signed-in users
+        email: email.trim() || undefined,
+        phone: form.phone || undefined,
+        customerName:
+          `${form.firstName} ${form.lastName}`.trim() || undefined,
+        userId: profile?.id || undefined,
+        items: items.map((i) => ({
+          productId: i.productId,
+          variantId: i.variantId,
+          productName: i.productTitle,
+          variantTitle: i.variantTitle || undefined,
+          quantity: i.quantity,
+          unitPrice: i.price,
+          imageUrl: i.image || undefined,
+        })),
+        subtotal,
+      });
+    }, 2000);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, email, form.firstName, form.lastName, form.phone, profile?.id]);
 
   // Pre-fill address from the user's default address when profile loads
   useEffect(() => {
@@ -313,6 +383,26 @@ export default function CheckoutClient() {
       }
 
       setPendingOrderNumber(order.order_number);
+      setHoldExpiresAt(order.hold_expires_at ?? null);
+
+      // Close the abandoned-checkout snapshot for this session.
+      snapshotCheckout({
+        email: email.trim() || undefined,
+        phone: form.phone || undefined,
+        customerName: `${form.firstName} ${form.lastName}`.trim() || undefined,
+        userId: profile?.id || undefined,
+        items: items.map((i) => ({
+          productId: i.productId,
+          variantId: i.variantId,
+          productName: i.productTitle,
+          variantTitle: i.variantTitle || undefined,
+          quantity: i.quantity,
+          unitPrice: i.price,
+          imageUrl: i.image || undefined,
+        })),
+        subtotal,
+        completedOrderId: order.id,
+      });
 
       if (saveAsDefault && isSignedIn) {
         try {
@@ -338,6 +428,10 @@ export default function CheckoutClient() {
     } catch (err: any) {
       toast.error(err?.message || "Could not start your order. Please try again.", { duration: 6000 });
       setProcessing(false);
+      // Start fresh on the next attempt — if the previous reservation expired
+      // for good, retrying with the same payment reference would just fail again.
+      setReference(generateReference());
+      setHoldExpiresAt(null);
       return false;
     }
   }
@@ -610,7 +704,12 @@ export default function CheckoutClient() {
               onBeforeOpen={handleValidateAndPay}
               onSuccess={handlePaymentSuccess}
               onClose={() => {
-                setReference(generateReference());
+                // Free the held stock right away instead of waiting for the hold to
+                // lapse naturally. The reference is kept as-is so the next "Pay Now"
+                // click is picked up by the one-time hold-refresh logic in create().
+                releaseStockHold(reference);
+                setHoldExpiresAt(new Date().toISOString());
+                setProcessing(false);
                 toast.warning("Payment was cancelled. You can try again.", { duration: 5000 });
               }}
             />
@@ -799,6 +898,7 @@ export default function CheckoutClient() {
                 </label>
               ))}
             </div>
+            {holdExpiresAt && <StockHoldTimer expiresAt={holdExpiresAt} />}
           </div>
         </div>
       </div>

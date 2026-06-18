@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { FileBarChart } from "lucide-react";
 import { StorefrontView } from "./components/StorefrontView";
 import { PopupsView } from "./components/PopupsView";
 import { BothView } from "./components/BothView";
@@ -18,9 +20,18 @@ export default function AdminAnalyticsPage() {
 
   return (
     <section className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Analytics</h1>
-        <p className="text-sm text-slate-500">Performance insights and sales data.</p>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold">Analytics</h1>
+          <p className="text-sm text-slate-500">Performance insights and sales data.</p>
+        </div>
+        <Link
+          href="/analytics/reports"
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900"
+        >
+          <FileBarChart className="h-4 w-4" />
+          View reports
+        </Link>
       </header>
 
       {/* Source tab selector */}

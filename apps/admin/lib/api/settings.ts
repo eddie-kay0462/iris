@@ -115,3 +115,45 @@ export function useUpdateShippingOptions() {
     },
   });
 }
+
+export function useStockHoldMinutes() {
+  return useQuery({
+    queryKey: ["stock-hold-minutes"],
+    queryFn: () => apiClient<number>("/settings/stock-hold-minutes"),
+  });
+}
+
+export function useUpdateStockHoldMinutes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (minutes: number) =>
+      apiClient<number>("/settings/stock-hold-minutes", {
+        method: "PUT",
+        body: { minutes },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["stock-hold-minutes"] });
+    },
+  });
+}
+
+export function usePreorderEtaText() {
+  return useQuery({
+    queryKey: ["preorder-eta-text"],
+    queryFn: () => apiClient<string>("/settings/preorder-eta-text"),
+  });
+}
+
+export function useUpdatePreorderEtaText() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (text: string) =>
+      apiClient<string>("/settings/preorder-eta-text", {
+        method: "PUT",
+        body: { text },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["preorder-eta-text"] });
+    },
+  });
+}

@@ -1,12 +1,13 @@
 import { IsString, IsNumber, IsOptional, ValidateNested, Min, IsObject } from 'class-validator';
 import { Type } from 'class-transformer';
 
-class PreorderItemDto {
+export class PreorderItemDto {
   @IsString()
   variantId: string;
 
+  @IsOptional()
   @IsString()
-  productTitle: string;
+  productTitle?: string;
 
   @IsOptional()
   @IsString()
@@ -36,4 +37,8 @@ export class CreatePreorderDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsObject()
+  notify?: { email?: boolean; sms?: boolean };
 }

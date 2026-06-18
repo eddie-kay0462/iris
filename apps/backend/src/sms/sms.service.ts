@@ -11,6 +11,8 @@ export class SmsService {
 }
 
 export const SMS_TEMPLATES = {
-  orderConfirmation: (orderNumber: string) =>
-    `Order #${orderNumber} confirmed! We'll update you on shipping soon.`,
+  orderConfirmation: (orderNumber: string, trackUrl?: string) =>
+    `Order #${orderNumber} confirmed!${trackUrl ? ` Track your order: ${trackUrl}` : ''} We'll update you on shipping soon.`,
+  preorderConfirmation: (orderNumber: string, etaText: string, trackUrl?: string) =>
+    `Pre-order #${orderNumber} confirmed!${trackUrl ? ` Track: ${trackUrl}` : ''} We expect to reach out within ${etaText} once your item is ready. Thank you for pre-ordering with 1NRI.`,
 };

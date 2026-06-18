@@ -307,6 +307,18 @@ export function ProductCard({
 
   const firstColor = colors[0] ?? "";
 
+  const inStockVariants = variants.filter(
+    (v) => v.inventory_quantity > 0 && v.available !== false,
+  );
+  const allOutOfStock = variants.length > 0 && inStockVariants.length === 0;
+  const hasPreorder =
+    allOutOfStock &&
+    variants.some(
+      (v) =>
+        (v.inventory_quantity <= 0 || v.available === false) &&
+        v.preorder_enabled === true,
+    );
+
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [addingSize, setAddingSize] = useState<string | null>(null);
   const [successSize, setSuccessSize] = useState<string | null>(null);
@@ -428,6 +440,8 @@ export function ProductCard({
     (size: string) => {
       const variant = findVariantBySize(variants, size);
       if (!variant) return;
+      const inStock = variant.inventory_quantity > 0 && variant.available !== false;
+      if (!inStock && !variant.preorder_enabled) return;
       setAddingSize(size);
       setTimeout(() => {
         addItem({
@@ -515,6 +529,21 @@ export function ProductCard({
             </div>
           )}
 
+          {/* ── Stock / Pre-order badge ──────────────── */}
+          {(allOutOfStock || hasPreorder) && (
+            <div className="absolute bottom-2.5 left-2.5 z-10">
+              {hasPreorder ? (
+                <span className="bg-black px-2 py-[3px] text-[9px] font-bold tracking-[0.16em] uppercase text-white">
+                  Pre-order
+                </span>
+              ) : (
+                <span className="bg-white/90 px-2 py-[3px] text-[9px] font-bold tracking-[0.16em] uppercase text-[#59626E]">
+                  Sold Out
+                </span>
+              )}
+            </div>
+          )}
+
           {/* ── Full-width Quick Add bar ──────────────── */}
           {hasSizes && (
             <div
@@ -542,29 +571,38 @@ export function ProductCard({
                   transition={{ duration: 0.2 }}
                   className="flex w-full items-center justify-center gap-0.5 bg-white/95 py-2 dark:bg-black/90"
                 >
-                  {sizes.map((size, i) => (
-                    <motion.button
-                      key={size}
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2, delay: i * 0.03 }}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (!addingSize && successSize !== size) handleAddToCart(size);
-                      }}
-                      disabled={!!addingSize}
-                      className={`flex h-7 min-w-[30px] items-center justify-center px-2 text-[10px] font-semibold uppercase tracking-widest transition-all duration-200 ${
-                        addingSize === size
-                          ? "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500"
-                          : successSize === size
-                            ? "bg-black text-white dark:bg-white dark:text-black"
-                            : "bg-transparent text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
-                      }`}
-                    >
-                      {addingSize === size ? <SpinnerIcon /> : successSize === size ? <CheckIcon /> : size}
-                    </motion.button>
-                  ))}
+                  {sizes.map((size, i) => {
+                    const variant = findVariantBySize(variants, size);
+                    const inStock = !!variant && variant.inventory_quantity > 0 && variant.available !== false;
+                    const canPreorder = !inStock && variant?.preorder_enabled === true;
+                    const unavailable = !inStock && !canPreorder;
+                    return (
+                      <motion.button
+                        key={size}
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2, delay: i * 0.03 }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (!addingSize && successSize !== size && !unavailable) handleAddToCart(size);
+                        }}
+                        disabled={!!addingSize || unavailable}
+                        aria-disabled={unavailable}
+                        className={`flex h-7 min-w-[30px] items-center justify-center px-2 text-[10px] font-semibold uppercase tracking-widest transition-all duration-200 ${
+                          unavailable
+                            ? "cursor-not-allowed bg-transparent text-gray-300 line-through dark:text-gray-700"
+                            : addingSize === size
+                              ? "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500"
+                              : successSize === size
+                                ? "bg-black text-white dark:bg-white dark:text-black"
+                                : "bg-transparent text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
+                        }`}
+                      >
+                        {addingSize === size ? <SpinnerIcon /> : successSize === size ? <CheckIcon /> : size}
+                      </motion.button>
+                    );
+                  })}
                 </motion.div>
               )}
             </div>
@@ -573,7 +611,7 @@ export function ProductCard({
 
         {/* Info: title + price + colour swatches */}
         <div className="mt-3">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-gray-900 dark:text-gray-100">
+          <h3 className={`text-xs font-medium uppercase tracking-wide ${allOutOfStock && !hasPreorder ? "text-gray-400 dark:text-gray-600" : "text-gray-900 dark:text-gray-100"}`}>
             {product.title}
           </h3>
           {price != null && (

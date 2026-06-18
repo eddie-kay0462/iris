@@ -137,6 +137,11 @@ export async function updateAlly(input: UpdateAllyInput) {
     const { data: allyRow } = await supabase.from('allies').select('user_id').eq('id', id).single()
     if (allyRow?.user_id) {
       await supabase.rpc('force_logout_user', { p_user_id: allyRow.user_id })
+      await supabase
+        .from('ally_logins')
+        .update({ logged_out_at: new Date().toISOString(), logout_reason: 'force_logout' })
+        .eq('ally_id', id)
+        .is('logged_out_at', null)
     }
   }
 
@@ -146,7 +151,7 @@ export async function updateAlly(input: UpdateAllyInput) {
 }
 
 export type AllyActivityData = {
-  logins: { logged_in_at: string }[]
+  logins: { logged_in_at: string; logged_out_at: string | null; logout_reason: string | null }[]
   sales: { total: number; commission_amount: number; sale_date: string }[]
 }
 
@@ -172,6 +177,13 @@ export async function forceLogoutAlly(allyId: string): Promise<{ success: boolea
     return { success: false, error: rpcError.message }
   }
 
+  // Close any open login records for this ally
+  await supabase
+    .from('ally_logins')
+    .update({ logged_out_at: new Date().toISOString(), logout_reason: 'force_logout' })
+    .eq('ally_id', allyId)
+    .is('logged_out_at', null)
+
   await logActivity({
     action: 'force_logout',
     entity_type: 'ally',
@@ -188,7 +200,7 @@ export async function fetchAllyActivity(allyId: string): Promise<AllyActivityDat
   const [{ data: logins }, { data: sales }] = await Promise.all([
     supabase
       .from('ally_logins')
-      .select('logged_in_at')
+      .select('logged_in_at, logged_out_at, logout_reason')
       .eq('ally_id', allyId)
       .order('logged_in_at', { ascending: false }),
     supabase
@@ -199,7 +211,11 @@ export async function fetchAllyActivity(allyId: string): Promise<AllyActivityDat
   ])
 
   return {
-    logins: logins ?? [],
+    logins: (logins ?? []).map((l: any) => ({
+      logged_in_at: l.logged_in_at,
+      logged_out_at: l.logged_out_at ?? null,
+      logout_reason: l.logout_reason ?? null,
+    })),
     sales: (sales ?? []).map((s: any) => ({
       total: Number(s.total),
       commission_amount: Number(s.commission_amount),

@@ -3694,3 +3694,352 @@ const { error } = await supabase.auth.signInWithOAuth({ ... });
 | File | What Changed |
 |---|---|
 | `apps/frontend/app/(auth)/components/GoogleAuthButton.tsx` | Added `await supabase.auth.getSession()` before `signInWithOAuth` |
+
+---
+
+## Shopify-Grade Analytics Revamp (June 2026)
+
+### What Got Done
+
+**Rebuilt the admin analytics from the ground up, modeled on Shopify's admin.** This is the biggest single update to the admin so far. In plain terms, we now have:
+
+1. **Visitor tracking on the storefront** — we finally know how many people visit the shop, what device they're on, where they came from, which page they landed on, and whether they added to cart, reached checkout, and bought. This powers real **conversion rate** metrics, just like Shopify's "Sessions → Added to cart → Reached checkout → Completed" funnel.
+2. **Abandoned checkouts** — when someone reaches checkout, types their email/name/phone, and leaves without paying, we now capture their cart and contact details. There's a new admin page listing every abandoned checkout with the customer's details and exactly which items they left behind — so we can follow up and recover the sale. If they later come back and buy, the checkout is automatically marked **Recovered**.
+3. **A Reports section** — like Shopify's Reports tab: ~20 reports organised by category (Sales, Orders, Customers, Behavior, Inventory, Finances). Each report opens with a big chart, a comparison against the previous period (dashed grey line), summary numbers with % change, a day-by-day data table with totals, and a CSV export button.
+4. **A richer dashboard and analytics page** — sparklines on the KPI cards, a Shopify-style "Total sales breakdown" (gross sales → discounts → returns → net sales → shipping → taxes → total sales) with per-line deltas, sales-by-channel donut (online vs pop-up), conversion funnel, sell-through rates, and returning-customer rate.
+5. **A premium monochrome look** — all the bright blues/purples/ambers are gone. Charts and accents now use shades of black and grey (ink for the current period, light grey dashed for the previous period, a restrained rose only for negative deltas). All charts were rebuilt on **Recharts** with proper tooltips and previous-period overlays.
+
+### ⚠️ One Number Will Change — On Purpose
+
+**Dashboard revenue may read slightly lower than before.** The old analytics counted *any* order that wasn't cancelled/refunded as revenue — including **pending orders that were never paid for**. It also compared "vs previous period" against a different population (previous-period order counts included cancelled orders; revenue didn't). Everything now uses one consistent rule: online revenue = `paid / processing / shipped / delivered`; pop-up revenue = `confirmed / completed`. The new numbers are the correct ones.
+
+### How the Tracking Works (plain terms)
+
+- The storefront quietly sends events (page view, product view, add to cart, checkout started, purchase) to our own backend — **no Google Analytics, no third parties, no cookies banner needed** (first-party, anonymous IDs only).
+- A "session" is a visit: it gets a random ID that expires after 30 minutes of inactivity. A "visitor" is the browser (persistent random ID), so we can tell new vs returning visitors apart.
+- Purchases are deduplicated, so refreshing the confirmation page doesn't double-count.
+- On the checkout page, the cart and contact fields are snapshotted (debounced, every ~2s as you type) to a `checkout_sessions` table. Completing the order closes the snapshot; leaving it idle for **1 hour** makes it an "abandoned checkout".
+- Everything fails silently — if the analytics backend is down, shopping is completely unaffected.
+- **Important:** session metrics are forward-only. There's no historical session data — conversion rate, sessions, and abandonment all start counting from the day this deploys. The UI says "Tracking since {date}" so nobody mistakes empty history for zero traffic.
+
+### What's Where in the Admin
+
+| Page | What's New |
+|---|---|
+| **Dashboard** (`/`) | Kept everything (brand/time filters, all-time chart, revenue target, brand split, orders by status) and added: 5 KPI cards with sparklines (now incl. **Conversion Rate** and **Returning Customers**), Total sales breakdown card, Sales-by-channel donut, Conversion funnel card. All-time chart now has a drag-to-zoom brush. |
+| **Analytics → Storefront** | Fully rebuilt: 6-KPI strip with sparklines, Total sales over time with previous-period overlay, sales breakdown + AOV-over-time side by side, Conversion funnel + Fulfillment funnel, abandoned-checkouts callout, Sales by product (with images), Products by sell-through rate, Sessions by device / referrer / landing page. |
+| **Analytics → Pop-ups** | All existing metrics kept; restyled monochrome. Revenue-per-visitor and conversion now actually work once you set a visitor count on an event (see below). |
+| **Analytics → Compare** | New channel overview: online vs pop-up donut + two-line channel sales chart, on top of the existing side-by-side comparisons. |
+| **Reports** (`/analytics/reports`, also in sidebar) | Searchable index with category chips → each report opens at `/analytics/reports/{id}` with range (7D/30D/90D/1Y) + granularity (daily/weekly/monthly) controls, metric switcher, comparison chart, totals + "% change vs previous period" table, CSV export. |
+| **Abandoned Checkouts** (`/orders/abandoned`, also in sidebar) | List with date, customer, item thumbnails, subtotal, status badge (Abandoned / Recovered); search by email/name/phone; click into a checkout for full cart lines, contact card (links to the customer profile if matched), and recovery status. |
+| **Pop-up Sales → Edit Event** | New **"Estimated Visitors"** field. Enter the foot traffic for an event and the pop-up analytics will show conversion rate and revenue-per-visitor. |
+
+### The Reports (full list)
+
+- **Sales:** Total sales over time · Sales by product · Sales by channel · Average order value over time · Sales by brand · Units per order
+- **Orders:** Orders over time · Orders fulfilled over time · Discounts over time
+- **Customers:** New vs returning customers · Returning customer rate over time · Customer cohort retention *(Iris-era orders only — migrated Shopify history has no per-order dates)*
+- **Behavior:** Sessions over time · **Conversion rate over time** (the flagship — Sessions / Added to cart / Reached checkout / Completed / Conversion rate) · Checkout abandonment over time · Sessions by device / referrer / landing page
+- **Inventory:** Products by sell-through rate · Inventory levels
+- **Finances:** Finances summary (monthly P&L-style) · Sales by payment method
+
+### Backend Changes
+
+- **New public endpoints** (rate-limited with `@nestjs/throttler`, validated with class-validator): `POST /analytics/track` (event batches from the beacon) and `POST /analytics/checkout` (checkout snapshots).
+- **New admin endpoints** (all require `analytics:read`): `GET /analytics/sessions`, `GET /analytics/sales-breakdown`, `GET /analytics/returning-customer-rate`, `GET /analytics/abandoned-checkouts(/:id)`, and the unified reports engine `GET /analytics/report` (list) + `GET /analytics/report/:reportId`. *(Note: singular `report` — the old static `reports/...` routes would have shadowed report ids like `payment-methods`.)*
+- **Returning customer rate** matches customers across channels (online `user_id`/email, pop-up email/phone) and counts migrated Shopify history (`shopify_total_orders > 0`) as "returning".
+- **Status-whitelist fix** in `orders.service.ts getAnalytics()` (the revenue change explained above).
+- Reports engine reads share cached loaders per request and paginate past Supabase's 1,000-row response cap (`fetchAll` in `report-context.ts`) — important once `analytics_events` grows.
+
+### Database Migrations (already applied to the remote DB)
+
+| Migration | What It Does |
+|---|---|
+| `20260612000000_create_analytics_events.sql` | `analytics_events` table — one row per tracked event. RLS on, no public policies (backend service-role only). |
+| `20260612000001_add_popup_event_visitor_count.sql` | Adds `visitor_count` to `popup_events` — the column the pop-up analytics code always read defensively but never existed. |
+| `20260612000002_create_checkout_sessions.sql` | `checkout_sessions` table — live checkout snapshots; one open checkout per browsing session (partial unique index). |
+
+### Files Created/Modified (highlights)
+
+**Backend (`apps/backend`):**
+- `src/analytics/analytics.constants.ts` — **new**, the revenue status whitelist + date-bucketing helpers (single source of truth)
+- `src/analytics/reports/` — **new**: `report-types.ts`, `report-context.ts` (shared cached loaders), `report-registry.ts` (~20 report builders)
+- `src/analytics/dto/track-events.dto.ts`, `dto/checkout-snapshot.dto.ts` — **new** validated ingest DTOs
+- `src/analytics/analytics.controller.ts` / `analytics.service.ts` — all the new endpoints
+- `src/orders/orders.service.ts` — status-whitelist fix
+- `src/app.module.ts` — registered `ThrottlerModule`
+- `src/popup-sales/dto/update-event.dto.ts` — accepts `visitor_count`
+
+**Storefront (`apps/frontend`):**
+- `lib/analytics/tracker.ts` — **new**, the beacon (session/visitor IDs, event queue, `fetch keepalive`, checkout snapshots)
+- `components/AnalyticsBeacon.tsx` — **new**, fires page/product views on route change; mounted in `app/(shop)/layout.tsx`
+- `lib/cart/cart-context.tsx` — `add_to_cart` event in `addItem`
+- `app/(shop)/checkout/CheckoutClient.tsx` — `checkout_started` event + debounced checkout snapshots + completion snapshot after order creation
+- `app/(shop)/checkout/confirmation/page.tsx` — deduplicated `purchase` event
+
+**Admin (`apps/admin`):**
+- `lib/charts/theme.ts` — **new**, the monochrome design tokens + number/date formatters (use these for any new charts)
+- `app/components/charts/` — **new** shared chart kit: `ChartCard`, `Sparkline`, `ComparisonLineChart` (+ `DualLineChart`), `DonutChart`, `HBarChart`, `MetricDataTable`
+- `app/components/DeltaBadge.tsx` — **new**, replaces the three duplicated delta implementations
+- `lib/api/analytics.ts` — **new**, all the hooks (`useSessionsAnalytics`, `useSalesBreakdown`, `useReturningCustomerRate`, `useAbandonedCheckouts`, `useReportsList`, `useReport`, `useDateRange`)
+- `app/(dashboard)/page.tsx` — dashboard revamp
+- `app/(dashboard)/analytics/` — `page.tsx` (Reports link), `components/StorefrontView.tsx` (rewrite), `BothView.tsx` (channel overview), `PopupsView.tsx` + `OrderFunnel.tsx` (monochrome), **new** `reports/page.tsx` + `reports/[reportId]/page.tsx`
+- `app/(dashboard)/orders/abandoned/` — **new** list + detail pages
+- `app/components/Sidebar.tsx` — added **Abandoned Checkouts** and **Reports** entries
+- `app/(dashboard)/popup-sales/page.tsx` + `lib/api/popup-sales.ts` — visitor-count field
+- New dependency: `recharts` (admin); `@nestjs/throttler` (backend)
+
+### Want to Test It?
+
+```bash
+# Terminal 1 — backend
+cd apps/backend && npm run start:dev
+# Terminal 2 — storefront
+cd apps/frontend && npm run dev
+# Terminal 3 — admin
+cd apps/admin && npm run dev
+```
+
+1. **Tracking:** browse the storefront (home → a product → add to cart → checkout). In Supabase, `analytics_events` should show one session with `page_view`, `product_view`, `add_to_cart`, `checkout_started` rows. Buy something and a `purchase` row appears; refresh the confirmation page — no duplicate.
+2. **Abandoned checkout:** at checkout, type a name/email, then close the tab. A row appears in `checkout_sessions`; after 1 hour idle it shows under **Orders → Abandoned Checkouts** with your cart and contact details. (Impatient? Temporarily set `updated_at` back an hour in SQL.) Buy with the same email afterwards and the status flips to **Recovered**.
+3. **Reports:** open **Reports** in the admin sidebar → "Conversion rate over time" → switch ranges/granularity, hover the chart (both periods in the tooltip), check the table's "vs previous period" row, click CSV.
+4. **Pop-up conversion:** Pop-up Sales → edit an event → set Estimated Visitors → the Pop-ups analytics tab now shows revenue-per-visitor.
+
+### Something Not Working? / Things to Know
+
+- **Conversion/sessions cards show "—" or zeros at first** — expected. Tracking is forward-only; there is no historical session data. The cards/funnels say "Tracking since {date}" once the first event lands.
+- **Revenue looks slightly lower than before** — intentional; pending unpaid orders no longer count (see the ⚠️ section above).
+- **Cohort report covers Iris-era orders only** — migrated Shopify customers have lifetime totals but no per-order dates, so they can't be placed in monthly cohorts. The report says so in its description.
+- **The ingest endpoints are public by design** (the storefront isn't authenticated) but are rate-limited (60 events/min, 30 snapshots/min per IP), schema-validated, and string-capped. Junk from a determined abuser is possible but low-stakes — it can only pollute analytics, never touch orders.
+- All three apps typecheck and build clean; the backend was smoke-tested (invalid events → 400, unauthenticated analytics reads → 401, valid track → 204).
+
+---
+
+## Guest Order Tracking (June 2026)
+
+### What was the problem?
+
+We had a gap: guest customers who completed an order could see their confirmation page right after checkout, but that was it. Once they navigated away (or opened the link on a different device), they had no way to check their order status unless they created an account. The old "Track Order" link in the footer pointed to `/orders`, which requires a login — useless for a guest.
+
+### What we built
+
+A public, no-login-required order tracking system. Customers enter their order number + the email they used at checkout, and they get a full status view: payment status, a step-by-step progress tracker (Order Placed → Payment Confirmed → Processing → Shipped → Delivered), carrier/tracking number if available, the item list, and their shipping address.
+
+The flow is deliberately simple: the confirmation email and SMS both include a direct link like `storefront.1nri.store/track?order=IRD-XXXXXX`. Clicking it lands you on the `/track` page with the order number pre-filled — you just type your email and go.
+
+**Why email + order number, not the `guest_token`?**
+The guest token only lives in `sessionStorage` for the duration of the browser session. It's gone the moment the tab closes. Email + order number can be typed on any device, shared with someone else who needs to check, and bookmarked — it works like every other major e-commerce tracker.
+
+### Backend
+
+A new public endpoint was added to the orders controller:
+
+```
+GET /orders/track?orderNumber=IRD-XXXXXX&email=customer@email.com
+```
+
+No JWT required (`@Public()` decorator). The service method does a case-insensitive email match (`.ilike()`) against the order number. It only returns safe fields — no `guest_token`, no `payment_reference`, no internal notes. If nothing matches, it returns a generic 404 with no information about whether the order number or the email was wrong (avoids enumeration).
+
+`ConfigService` was injected into `OrdersService` to read `FRONTEND_URL` from the environment — this is what gets inserted into the tracking URLs in emails and SMS.
+
+### Email templates
+
+Both order-facing email templates now have a "Track your order" button:
+
+- **Order confirmation** — added below the order summary table, before the footer
+- **Shipping notification** — added as the primary CTA above the tracking number section
+
+The button is plain black on white (`background:#111; color:#fff`) with rounded corners, consistent with the rest of the email styling.
+
+### SMS templates
+
+The `SMS_TEMPLATES.orderConfirmation` function now accepts an optional `trackUrl` parameter. When passed (as it is from `confirmPayment`), the message becomes:
+
+> Order #IRD-XXXXXX confirmed! Track your order: https://storefront.1nri.store/track?order=IRD-XXXXXX We'll update you on shipping soon.
+
+Callers that don't pass a URL still get the original message — backwards compatible.
+
+Preorder SMS was intentionally left unchanged. Preorders require an account to place, so those customers can always check `/account`.
+
+### Storefront
+
+The footer "Track Order" link (in the Help section) was updated from `/orders` → `/track`. The new page:
+
+- Reads `?order=` from the URL on load and pre-fills the order number field
+- Submits via a clean form (no polling — it's a one-shot lookup)
+- Shows a step-by-step progress bar that highlights the current step based on order status
+- Shows carrier + tracking number when available, shipping address, and itemised order list with prices
+- Wrapped in `<Suspense>` as required for `useSearchParams()` in Next.js App Router
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/frontend/app/(shop)/track/page.tsx` | **New file** — public order tracking page |
+| `apps/frontend/lib/api/orders.ts` | Added `TrackingOrder` interface + `trackOrderByEmail()` function |
+| `apps/frontend/app/(shop)/layout.tsx` | Footer "Track Order" link: `/orders` → `/track` |
+| `apps/backend/src/orders/orders.controller.ts` | New `@Public() GET /orders/track` endpoint |
+| `apps/backend/src/orders/orders.service.ts` | `trackOrderByEmail()` method + `ConfigService` injection + tracking URL passed to SMS |
+| `apps/backend/src/sms/sms.service.ts` | `orderConfirmation` template accepts optional `trackUrl` |
+| `apps/backend/src/email/email.service.ts` | "Track your order" button added to order confirmation + shipping emails |
+
+### How to test
+
+1. Complete a guest checkout — note the order number from the confirmation page
+2. Open the confirmation email — there should be a "Track your order" button linking to `/track?order=IRD-XXXXXX`
+3. Click it, enter your email, and confirm the status view loads correctly
+4. Test the footer link: scroll to the bottom of any storefront page → Help → "Track Order" — should land on `/track` (not `/orders`)
+5. Try a wrong email or a made-up order number — should show "Order not found", nothing more specific
+6. On the backend, `GET /orders/track?orderNumber=IRD-XXXXXX&email=test@test.com` with no Authorization header should return 200 (or 404 if not found) — not 401
+
+---
+
+## Allies App — Session Tracking & Inactivity Timeout (June 2026)
+
+### What was the problem?
+
+The allies app recorded logins (a row in `ally_logins` on every sign-in) but had no concept of logout. That meant the admin's activity drawer showed a list of login timestamps with no information about how long each session lasted, whether the ally was still active, or why they left. It also meant a forgotten open browser tab stayed signed in indefinitely — not great for a sales app used in-field.
+
+### What we built
+
+**Full session lifecycle tracking** — every login creates a row, every logout closes it (with a reason). Combined with a 60-minute inactivity auto-logout on the dashboard, we now have clean session records: when they signed in, when they left, and why.
+
+### Inactivity timeout
+
+`DashboardShell` now runs a 60-minute idle timer. It listens to `mousemove`, `keydown`, `click`, `scroll`, and `touchstart` events and resets on any interaction. If 60 minutes pass with nothing, the ally is signed out automatically and redirected to `/login?reason=inactivity`. On the login page, that query param shows a toast: *"You were signed out after 60 minutes of inactivity."*
+
+The timer is set up with a `useCallback`-wrapped `handleLogout` (to avoid stale closures) and cleaned up properly on unmount.
+
+### Login ID in sessionStorage
+
+When an ally signs in, `recordAllyLogin` now returns the `id` of the newly created `ally_logins` row (not just `{ allowed: true }`). That ID is stashed in `sessionStorage` under `ally_login_id`. On logout — whether manual, inactivity, or admin force-logout — it's read back, used to close the record, then cleared.
+
+### Logout reasons
+
+Four reasons are tracked (enforced by a DB check constraint):
+
+| Reason | When |
+|---|---|
+| `manual` | Ally clicks "Sign out" |
+| `inactivity` | 60-minute idle timeout |
+| `force_logout` | Admin forces logout from the Markets page |
+| `session_expired` | Reserved for future use |
+
+When the admin force-logout action runs, it now also closes any open `ally_logins` rows for that ally (previously it only revoked the Supabase token via `force_logout_user` RPC but left the login record open).
+
+### Database migration
+
+New columns were added to `ally_logins`:
+
+```sql
+logged_out_at  timestamptz   -- null means session is still active
+logout_reason  text check (logout_reason in ('manual', 'inactivity', 'force_logout', 'session_expired'))
+```
+
+Three indexes: by `ally_id`, by `logged_in_at` (desc), and a partial index on open sessions only (`where logged_out_at is null`) for fast "is this ally currently active?" checks.
+
+The migration lives in both `apps/allies/supabase-migrations.sql` (the canonical file) and `supabase/migrations/20260617000000_ally_logins_logout_tracking.sql` (the versioned migration applied to the project Supabase instance).
+
+### Admin — Activity Drawer upgrades
+
+The login history section in the ally activity drawer now shows much richer info per session:
+
+- **Status dot** — green for an open/active session, grey for closed
+- **Session badge** — "Active", "Signed out", "Idle timeout", "Force logout", or "Expired" — colour-coded (green / slate / amber / red / orange)
+- **Session duration** — how long the session lasted (e.g. "2h 15m", "45m"); hidden if the session is still open
+
+This required fetching `logged_out_at` and `logout_reason` alongside `logged_in_at` in `fetchAllyActivity`, and updating the `AllyActivityData` type to include the new fields.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/allies/app/(auth)/login/actions.ts` | `recordAllyLogin` now returns `loginId`; new `recordAllyLogout` function |
+| `apps/allies/app/(auth)/login/page.tsx` | Stores `loginId` in sessionStorage after login; shows inactivity toast |
+| `apps/allies/app/(dashboard)/DashboardShell.tsx` | 60-minute inactivity timer; `handleLogout` with reason + sessionStorage cleanup |
+| `apps/allies/supabase-migrations.sql` | `logged_out_at` + `logout_reason` columns + indexes on `ally_logins` |
+| `supabase/migrations/20260617000000_ally_logins_logout_tracking.sql` | Versioned migration for the same schema change |
+| `apps/admin/app/(dashboard)/markets/actions.ts` | Force-logout closes open login rows; `fetchAllyActivity` fetches logout fields; `AllyActivityData` type updated |
+| `apps/admin/app/(dashboard)/markets/components/AllyActivityDrawer.tsx` | Session badges, duration display, status dot per login row |
+
+### How to test
+
+1. Sign into the allies app — check Supabase: a new `ally_logins` row should appear with `logged_out_at = null`
+2. Click "Sign out" — the row should get `logged_out_at` stamped and `logout_reason = 'manual'`
+3. Sign in again, leave the tab idle for 60 minutes (or temporarily set `TIMEOUT_MS` to something short like `10000`) — should auto-sign out and show the inactivity toast on the login page
+4. In the admin Markets page, open an ally's activity drawer → force-logout → their open `ally_logins` row should close with `logout_reason = 'force_logout'`
+5. The activity drawer's login history should show status badges and session durations for closed sessions
+
+---
+
+## Order Status Auto-Advance: Paid → Processing (June 2026)
+
+### What was the problem?
+
+When a customer completed payment, their order sat at `paid` status indefinitely until someone on the team manually moved it. The `/track` page showed "Payment Confirmed" and just stayed there. There was no signal to the fulfilment side that the order was ready to work on, and the status history gave no indication of when picking/packing should start.
+
+### What changed
+
+In `confirmPayment()`, immediately after flipping the order to `paid`, the order is now advanced to `processing` in the same request. Both transitions are written to `order_status_history` so the audit trail is complete:
+
+| From | To | Notes |
+|---|---|---|
+| `pending` | `paid` | Payment confirmed |
+| `paid` | `processing` | Auto-advanced after payment confirmation |
+
+The customer's tracking page now shows "Processing" as the active step as soon as payment goes through, rather than stalling at "Payment Confirmed".
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/backend/src/orders/orders.service.ts` | `confirmPayment()` inserts both history rows then updates status to `processing` |
+
+### How to test
+
+Complete a checkout and confirm payment. In Supabase, the order's `status` column should read `processing` (not `paid`). The `order_status_history` table should have two new rows for that order: `pending → paid` and `paid → processing`. On the `/track` page, the "Processing" step should be highlighted.
+
+---
+
+## Newsletter Subscription — Road to HQ & About Pages (June 2026)
+
+### What was added
+
+A newsletter subscription section now appears just before the footer on two pages:
+
+- **Road to HQ** (`/`) — sits after the "One unit at a time." closing CTA
+- **About** (`/about`) — sits after the "Find us" social links section
+
+The backend already had a `POST /newsletter/subscribe` endpoint and a `newsletter_subscribers` table from earlier work, but the service just did a blind upsert and always returned `{ ok: true }`. It now checks first and returns `{ ok, alreadySubscribed }` so the UI can show the right message.
+
+### How the form works
+
+Three states:
+1. **Idle** — email input + "Subscribe" button
+2. **Loading** — button shows "..." and is disabled
+3. **Done** — form is replaced by a single line:
+   - New subscriber → *"You're in. Expect drops, studio updates, and early access."*
+   - Already on the list → *"You're already on the list."*
+
+Errors (network failures, etc.) show briefly below the input then clear after 3 seconds.
+
+### Bug fixed during implementation
+
+The initial `subscribeToNewsletter()` call was passing `body: JSON.stringify({ email })` to `apiClient`. The `apiClient` wrapper already calls `JSON.stringify(body)` internally, so the body was being double-stringified — the server received a JSON-encoded string instead of an object, which caused `@IsEmail()` DTO validation to reject it with a 400. Fixed by passing the raw object: `body: { email }`.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/backend/src/newsletter/newsletter.service.ts` | `subscribe()` now checks before inserting, returns `{ ok, alreadySubscribed }` |
+| `apps/frontend/lib/api/newsletter.ts` | **New file** — `subscribeToNewsletter(email)` wrapper |
+| `apps/frontend/components/shop/NewsletterSection.tsx` | **New file** — shared newsletter form component |
+| `apps/frontend/app/(shop)/page.tsx` | Imports and renders `<NewsletterSection />` before closing tag |
+| `apps/frontend/app/(shop)/about/page.tsx` | Imports and renders `<NewsletterSection />` before closing tag |
+
+### How to test
+
+1. Go to `/` or `/about` — the "Stay on the road." newsletter section should appear just above the footer
+2. Enter a fresh email → confirmation line appears; check `newsletter_subscribers` in Supabase for a new row
+3. Submit the same email again → "You're already on the list." (no duplicate row in the table)
+4. Submit with the backend offline → error message appears briefly, form resets to idle

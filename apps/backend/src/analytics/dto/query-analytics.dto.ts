@@ -1,4 +1,4 @@
-import { IsOptional, IsIn, IsDateString, IsInt, Min, Max } from 'class-validator';
+import { IsOptional, IsIn, IsDateString, IsInt, IsString, MaxLength, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class DateRangeDto {
@@ -25,6 +25,26 @@ export class RevenueChartDto extends DateRangeDto {
   @IsOptional()
   @IsIn(['7d', '30d', '90d', '12m', 'custom'])
   period?: string = '30d';
+}
+
+export class AbandonedCheckoutsQueryDto extends DateRangeDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  search?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number = 20;
 }
 
 export class ReportQueryDto extends DateRangeDto {

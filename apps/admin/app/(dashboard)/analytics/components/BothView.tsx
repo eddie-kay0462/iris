@@ -3,7 +3,13 @@
 import { useMemo, useState } from "react";
 import { useAnalytics } from "@/lib/api/orders";
 import { usePopupEvents, usePopupAnalytics } from "@/lib/api/popup-sales";
-import { ChevronDown, DollarSign, ShoppingCart, TrendingUp } from "lucide-react";
+import { useDateRange, useReport } from "@/lib/api/analytics";
+import { ChartCard } from "@/app/components/charts/ChartCard";
+import { DualLineChart } from "@/app/components/charts/ComparisonLineChart";
+import { DonutChart } from "@/app/components/charts/DonutChart";
+import { DeltaBadge } from "@/app/components/DeltaBadge";
+import { formatGHSShort } from "@/lib/charts/theme";
+import { ChevronDown } from "lucide-react";
 
 type CompareMode = "storefront-vs-popup" | "popup-vs-popup";
 
@@ -74,6 +80,61 @@ function MetricRow({
   );
 }
 
+/** Channel split for the period: donut + per-channel sales over time. */
+function ChannelOverview({ days }: { days: string }) {
+  const range = useDateRange(parseInt(days));
+  const { data: report } = useReport("sales-by-channel", range);
+
+  const rows = useMemo(
+    () =>
+      (report?.series ?? []).map((r) => ({
+        date: String(r.date),
+        online: Number(r.online ?? 0),
+        popup: Number(r.popup ?? 0),
+      })),
+    [report],
+  );
+
+  const onlineTotal = report?.table.totals.online ?? 0;
+  const popupTotal = report?.table.totals.popup ?? 0;
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-5">
+      <ChartCard title="Sales by channel" className="lg:col-span-2">
+        <DonutChart
+          data={[
+            { name: "Online store", value: onlineTotal },
+            { name: "Pop-up", value: popupTotal },
+          ]}
+          centerValue={formatGHSShort(onlineTotal + popupTotal)}
+          centerLabel="Total"
+          height={160}
+        />
+        {report?.table.previousTotals && (
+          <div className="mt-4 flex items-center gap-6 border-t border-slate-100 pt-3 text-xs text-slate-500">
+            <span className="flex items-center gap-1.5">
+              Online <DeltaBadge current={onlineTotal} previous={report.table.previousTotals.online ?? 0} />
+            </span>
+            <span className="flex items-center gap-1.5">
+              Pop-up <DeltaBadge current={popupTotal} previous={report.table.previousTotals.popup ?? 0} />
+            </span>
+          </div>
+        )}
+      </ChartCard>
+      <ChartCard title="Channel sales over time" className="lg:col-span-3">
+        <DualLineChart
+          rows={rows}
+          keys={[
+            { key: "online", label: "Online store" },
+            { key: "popup", label: "Pop-up" },
+          ]}
+          height={220}
+        />
+      </ChartCard>
+    </div>
+  );
+}
+
 function StorefrontColumn({ days }: { days: string }) {
   const fromDate = useMemo(() => {
     const d = new Date();
@@ -88,7 +149,7 @@ function StorefrontColumn({ days }: { days: string }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-6">
       <div className="mb-4 flex items-center gap-2">
-        <span className="h-2 w-2 rounded-full bg-blue-500" />
+        <span className="h-2 w-2 rounded-full bg-slate-900" />
         <h3 className="text-sm font-semibold text-slate-700">Storefront</h3>
       </div>
       {isLoading ? (
@@ -98,7 +159,7 @@ function StorefrontColumn({ days }: { days: string }) {
           ))}
         </div>
       ) : error ? (
-        <p className="text-sm text-red-600">Failed to load data.</p>
+        <p className="text-sm text-rose-700">Failed to load data.</p>
       ) : (
         <>
           <MetricRow
@@ -131,7 +192,7 @@ function PopupColumn({
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-6">
       <div className="mb-4 flex items-center gap-2">
-        <span className="h-2 w-2 rounded-full bg-violet-500" />
+        <span className="h-2 w-2 rounded-full bg-slate-400" />
         <h3 className="text-sm font-semibold text-slate-700">{label}</h3>
       </div>
       {!eventId ? (
@@ -143,7 +204,7 @@ function PopupColumn({
           ))}
         </div>
       ) : error ? (
-        <p className="text-sm text-red-600">Failed to load data.</p>
+        <p className="text-sm text-rose-700">Failed to load data.</p>
       ) : data ? (
         <>
           <MetricRow
@@ -224,6 +285,8 @@ export function BothView() {
               loading={eventsLoading}
             />
           </div>
+
+          <ChannelOverview days={days} />
 
           <div className="grid gap-4 sm:grid-cols-2">
             <StorefrontColumn days={days} />

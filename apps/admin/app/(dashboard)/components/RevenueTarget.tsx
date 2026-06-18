@@ -44,13 +44,14 @@ export function RevenueTarget({ ytdRevenue, year }: RevenueTargetProps) {
   const overTarget = target ? ytdRevenue >= target : false;
   const remaining = target ? Math.max(target - ytdRevenue, 0) : 0;
 
+  // Monochrome ramp: ink deepens as the year progresses toward the target.
   const barColor = overTarget
-    ? "#22c55e"
+    ? "#0f172a"
     : pct > 66
-    ? "#3b82f6"
+    ? "#1e293b"
     : pct > 33
-    ? "#f59e0b"
-    : "#6366f1";
+    ? "#475569"
+    : "#94a3b8";
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-4">

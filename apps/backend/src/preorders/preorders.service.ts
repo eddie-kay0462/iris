@@ -3,7 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../common/supabase/supabase.service';
 import { LetsfishService } from '../letsfish/letsfish.service';
 import { EmailService } from '../email/email.service';
-import { CreatePreorderDto } from './dto/create-preorder.dto';
+import { SettingsService } from '../settings/settings.service';
+import { SMS_TEMPLATES } from '../sms/sms.service';
+import { CreatePreorderDto, PreorderItemDto } from './dto/create-preorder.dto';
 import { CreatePopupPreorderDto } from './dto/create-popup-preorder.dto';
 import { QueryPreordersDto } from './dto/query-preorders.dto';
 import { RefundPreorderDto } from './dto/refund-preorder.dto';
@@ -18,6 +20,7 @@ export class PreordersService {
     private readonly configService: ConfigService,
     private readonly letsfish: LetsfishService,
     private readonly emailService: EmailService,
+    private readonly settingsService: SettingsService,
   ) {
     this.paystackSecretKey = this.configService.get<string>('PAYSTACK_SECRET_KEY', '');
   }
@@ -37,20 +40,23 @@ export class PreordersService {
     return `PRE-${String(next).padStart(6, '0')}`;
   }
 
-  async create(dto: CreatePreorderDto, userId: string, email: string) {
+  private async checkEligibility(
+    item: PreorderItemDto,
+    userId: string,
+  ): Promise<{ variant: any; expectedPrice: number }> {
     const db = this.supabase.getAdminClient();
 
     const { data: variant, error: varErr } = await db
       .from('product_variants')
       .select('id, inventory_quantity, preorder_enabled, preorder_limit, sku, price, products(title)')
-      .eq('id', dto.item.variantId)
+      .eq('id', item.variantId)
       .single();
 
     if (varErr || !variant) throw new BadRequestException('Variant not found');
     if (!variant.preorder_enabled) throw new BadRequestException('Pre-orders are not enabled for this item');
 
     const expectedPrice = Number(variant.price);
-    if (Math.abs(expectedPrice - Number(dto.item.price)) > 0.01) {
+    if (Math.abs(expectedPrice - Number(item.price)) > 0.01) {
       throw new BadRequestException('Price mismatch. Please refresh and try again.');
     }
 
@@ -58,9 +64,9 @@ export class PreordersService {
       const { count } = await db
         .from('preorders')
         .select('*', { count: 'exact', head: true })
-        .eq('variant_id', dto.item.variantId)
+        .eq('variant_id', item.variantId)
         .in('status', ['pending', 'stock_held']);
-      if ((count ?? 0) + dto.item.quantity > variant.preorder_limit) {
+      if ((count ?? 0) + item.quantity > variant.preorder_limit) {
         throw new BadRequestException(`Pre-orders for this item are full (limit: ${variant.preorder_limit})`);
       }
     }
@@ -68,12 +74,25 @@ export class PreordersService {
     const { count: customerCount } = await db
       .from('preorders')
       .select('*', { count: 'exact', head: true })
-      .eq('variant_id', dto.item.variantId)
+      .eq('variant_id', item.variantId)
       .eq('user_id', userId)
       .in('status', ['pending', 'stock_held']);
     if ((customerCount ?? 0) > 0) {
       throw new BadRequestException('You already have an active pre-order for this item.');
     }
+
+    return { variant, expectedPrice };
+  }
+
+  async checkEligibilityPublic(item: PreorderItemDto, userId: string): Promise<{ eligible: true }> {
+    await this.checkEligibility(item, userId);
+    return { eligible: true };
+  }
+
+  async create(dto: CreatePreorderDto, userId: string, email: string) {
+    const db = this.supabase.getAdminClient();
+
+    const { variant, expectedPrice } = await this.checkEligibility(dto.item, userId);
 
     const { data: existingRef } = await db
       .from('preorders')
@@ -107,7 +126,50 @@ export class PreordersService {
       .single();
 
     if (error || !preorder) throw new InternalServerErrorException('Failed to create preorder');
+
+    this.sendPreorderNotifications(preorder, dto.notify).catch(() => {});
+
     return preorder;
+  }
+
+  private async sendPreorderNotifications(
+    preorder: { id: string; order_number: string; customer_email: string | null; user_id: string | null; product_name: string; variant_title: string | null; quantity: number; unit_price: number; payment_method: string; payment_status: string },
+    notify?: { email?: boolean; sms?: boolean },
+  ): Promise<void> {
+    const etaText = await this.settingsService.getPreorderEtaText();
+    const db = this.supabase.getAdminClient();
+
+    if (notify?.email !== false && preorder.customer_email) {
+      await this.emailService.sendPreorderConfirmation({
+        email: preorder.customer_email,
+        order_number: preorder.order_number,
+        items: [
+          {
+            product_name: preorder.product_name,
+            variant_title: preorder.variant_title,
+            quantity: preorder.quantity,
+            price: preorder.unit_price,
+          },
+        ],
+        payment_method: preorder.payment_method,
+        payment_status: preorder.payment_status,
+        etaText,
+      });
+    }
+
+    if (notify?.sms !== false && preorder.user_id) {
+      const { data: profile } = await db
+        .from('profiles')
+        .select('phone_number')
+        .eq('id', preorder.user_id)
+        .single();
+      if (profile?.phone_number) {
+        await this.letsfish.sendSms(
+          profile.phone_number,
+          SMS_TEMPLATES.preorderConfirmation(preorder.order_number, etaText),
+        );
+      }
+    }
   }
 
   async createPopup(dto: CreatePopupPreorderDto, adminId: string) {
@@ -183,6 +245,7 @@ export class PreordersService {
 
     if (dto.customer_email && results.length > 0) {
       const isPaid = !!(dto.payment_method && dto.payment_method !== 'pending');
+      const etaText = await this.settingsService.getPreorderEtaText();
       this.emailService.sendPopupPreorderConfirmation({
         email: dto.customer_email,
         customer_name: dto.customer_name ?? null,
@@ -195,6 +258,7 @@ export class PreordersService {
         })),
         payment_method: dto.payment_method ?? null,
         payment_status: isPaid ? 'paid' : 'awaiting',
+        etaText,
       }).catch(() => {});
     }
 
@@ -264,6 +328,52 @@ export class PreordersService {
     const { data, error } = await db.from('preorders').select('*').eq('id', id).single();
     if (error || !data) throw new NotFoundException('Preorder not found');
     return data;
+  }
+
+  async sendConfirmation(id: string, channels: ('email' | 'sms')[]): Promise<{ sent: ('email' | 'sms')[] }> {
+    const preorder = await this.findOne(id);
+    const etaText = await this.settingsService.getPreorderEtaText();
+    const sent: ('email' | 'sms')[] = [];
+
+    if (channels.includes('email')) {
+      const email = preorder.customer_email;
+      if (!email) throw new BadRequestException('This pre-order has no email on file');
+      await this.emailService.sendPreorderConfirmation({
+        email,
+        customer_name: preorder.customer_name,
+        order_number: preorder.order_number,
+        items: [
+          {
+            product_name: preorder.product_name,
+            variant_title: preorder.variant_title,
+            quantity: preorder.quantity,
+            price: preorder.unit_price,
+          },
+        ],
+        payment_method: preorder.payment_method,
+        payment_status: preorder.payment_status,
+        etaText,
+      });
+      sent.push('email');
+    }
+
+    if (channels.includes('sms')) {
+      let phone = preorder.customer_phone as string | null;
+      if (!phone && preorder.user_id) {
+        const db = this.supabase.getAdminClient();
+        const { data: profile } = await db
+          .from('profiles')
+          .select('phone_number')
+          .eq('id', preorder.user_id)
+          .single();
+        phone = profile?.phone_number ?? null;
+      }
+      if (!phone) throw new BadRequestException('This pre-order has no phone number on file');
+      await this.letsfish.sendSms(phone, SMS_TEMPLATES.preorderConfirmation(preorder.order_number, etaText));
+      sent.push('sms');
+    }
+
+    return { sent };
   }
 
   async cancel(id: string) {

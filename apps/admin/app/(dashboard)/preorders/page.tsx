@@ -9,6 +9,7 @@ import {
   useCancelPreorder,
   useRestockPreorder,
   useRefundPreorder,
+  useSendPreorderConfirmation,
   type Preorder,
   type PreorderStatus,
 } from "@/lib/api/preorders";
@@ -211,16 +212,100 @@ function RefundModal({ preorder, onClose }: { preorder: Preorder; onClose: () =>
   );
 }
 
+// ─── Resend Confirmation Modal ────────────────────────────────────────────────
+
+function ResendConfirmationModal({ preorder, onClose }: { preorder: Preorder; onClose: () => void }) {
+  const [channels, setChannels] = useState<{ email: boolean; sms: boolean }>({
+    email: !!preorder.customer_email,
+    sms: !!preorder.customer_phone || preorder.source === "online",
+  });
+  const [sentChannels, setSentChannels] = useState<("email" | "sms")[] | null>(null);
+  const sendConfirmation = useSendPreorderConfirmation();
+
+  function toggle(key: "email" | "sms") {
+    setChannels((c) => ({ ...c, [key]: !c[key] }));
+  }
+
+  async function handleSend() {
+    const selected = (["email", "sms"] as const).filter((k) => channels[k]);
+    if (selected.length === 0) return;
+    try {
+      const res = await sendConfirmation.mutateAsync({ id: preorder.id, channels: selected });
+      setSentChannels(res.sent);
+    } catch {
+      toast.error("Failed to send confirmation. Please try again.", { duration: 6000 });
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <h3 className="text-sm font-semibold text-slate-900">Resend Confirmation</h3>
+          <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          {sentChannels ? (
+            <div className="rounded-lg bg-green-50 border border-green-200 p-4">
+              <p className="text-sm font-semibold text-green-800">Confirmation sent</p>
+              <p className="text-xs text-green-700 mt-0.5">
+                Sent via {sentChannels.join(" and ")}.
+              </p>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-slate-500">{preorder.order_number} — {preorder.product_name}</p>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={channels.email}
+                    onChange={() => toggle("email")}
+                    disabled={!preorder.customer_email}
+                  />
+                  Email {!preorder.customer_email && <span className="text-xs text-slate-400">(no email on file)</span>}
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={channels.sms} onChange={() => toggle("sms")} />
+                  SMS
+                </label>
+              </div>
+              <button
+                onClick={handleSend}
+                disabled={sendConfirmation.isPending || (!channels.email && !channels.sms)}
+                className="w-full rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+              >
+                {sendConfirmation.isPending ? "Sending..." : "Send Confirmation"}
+              </button>
+            </>
+          )}
+        </div>
+        {sentChannels && (
+          <div className="border-t border-slate-100 px-5 py-3">
+            <button onClick={onClose} className="w-full rounded-lg border border-slate-200 py-2 text-sm text-slate-600 hover:bg-slate-50">
+              Close
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Actions Menu ─────────────────────────────────────────────────────────────
 
 function ActionsMenu({
   preorder,
   onRestock,
   onRefund,
+  onResendConfirmation,
 }: {
   preorder: Preorder;
   onRestock: () => void;
   onRefund: () => void;
+  onResendConfirmation: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const cancel = useCancelPreorder();
@@ -244,6 +329,12 @@ function ActionsMenu({
               className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
             >
               Restock & Allocate
+            </button>
+            <button
+              onClick={() => { setOpen(false); onResendConfirmation(); }}
+              className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Resend Confirmation
             </button>
             {canRefund && (
               <button
@@ -284,6 +375,7 @@ export default function PreordersPage() {
   const [statusTab, setStatusTab] = useState("");
   const [restockTarget, setRestockTarget] = useState<Preorder | null>(null);
   const [refundTarget, setRefundTarget] = useState<Preorder | null>(null);
+  const [resendTarget, setResendTarget] = useState<Preorder | null>(null);
 
   const { data: stats } = usePreorderStats();
   const { data: result, isLoading } = usePreorders({ status: statusTab || undefined });
@@ -389,6 +481,7 @@ export default function PreordersPage() {
                         preorder={p}
                         onRestock={() => setRestockTarget(p)}
                         onRefund={() => setRefundTarget(p)}
+                        onResendConfirmation={() => setResendTarget(p)}
                       />
                     </td>
                   </tr>
@@ -405,6 +498,9 @@ export default function PreordersPage() {
       )}
       {refundTarget && (
         <RefundModal preorder={refundTarget} onClose={() => setRefundTarget(null)} />
+      )}
+      {resendTarget && (
+        <ResendConfirmationModal preorder={resendTarget} onClose={() => setResendTarget(null)} />
       )}
     </section>
   );

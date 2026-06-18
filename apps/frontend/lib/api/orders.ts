@@ -60,6 +60,8 @@ export interface Order {
   applied_promo_code_id: string | null;
   customer_notes: string | null;
   internal_notes: string | null;
+  hold_expires_at?: string | null;
+  hold_refreshed?: boolean;
   created_at: string;
   updated_at: string;
   order_items?: OrderItem[];
@@ -93,6 +95,18 @@ export async function confirmPaymentByReference(reference: string): Promise<Orde
     });
   } catch {
     return null;
+  }
+}
+
+/** Silently releases a pending order's stock hold (e.g. on Paystack modal close). */
+export async function releaseStockHold(reference: string): Promise<void> {
+  try {
+    await apiClient("/orders/release-hold", {
+      method: "POST",
+      body: { reference },
+    });
+  } catch {
+    // Best-effort — the hold will lapse on its own anyway.
   }
 }
 
@@ -202,6 +216,25 @@ export function useGuestOrderByNumber(orderNumber: string, guestToken: string | 
       return 3000;
     },
   });
+}
+
+export interface TrackingOrder {
+  order_number: string;
+  status: string;
+  payment_status: string | null;
+  tracking_number: string | null;
+  carrier: string | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  created_at: string;
+  shipping_address: Order["shipping_address"];
+  order_items?: Pick<OrderItem, "product_name" | "variant_title" | "quantity" | "total_price">[];
+}
+
+export async function trackOrderByEmail(orderNumber: string, email: string): Promise<TrackingOrder> {
+  return apiClient<TrackingOrder>(
+    `/orders/track?orderNumber=${encodeURIComponent(orderNumber)}&email=${encodeURIComponent(email)}`,
+  );
 }
 
 export function useCancelOrder() {

@@ -4,7 +4,15 @@ import { useState, useEffect } from "react";
 import { Save, AlertCircle, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useRevenueTarget, useUpdateRevenueTarget } from "@/lib/api/orders";
-import { useShippingOptions, useUpdateShippingOptions, ShippingOption } from "@/lib/api/settings";
+import {
+  useShippingOptions,
+  useUpdateShippingOptions,
+  ShippingOption,
+  useStockHoldMinutes,
+  useUpdateStockHoldMinutes,
+  usePreorderEtaText,
+  useUpdatePreorderEtaText,
+} from "@/lib/api/settings";
 import { toast } from "sonner";
 
 export default function GeneralSettingsPage() {
@@ -42,6 +50,45 @@ export default function GeneralSettingsPage() {
     saveShipping(draftShipping, {
       onSuccess: () => {
         toast.success("Shipping options updated.");
+      },
+    });
+  }
+
+  const { data: stockHoldMinutes, isLoading: loadingStockHold } = useStockHoldMinutes();
+  const { mutate: saveStockHold, isPending: savingStockHold } = useUpdateStockHoldMinutes();
+  const [draftStockHold, setDraftStockHold] = useState<string>("");
+
+  useEffect(() => {
+    if (stockHoldMinutes !== undefined && stockHoldMinutes !== null) {
+      setDraftStockHold(String(stockHoldMinutes));
+    }
+  }, [stockHoldMinutes]);
+
+  function handleSaveStockHold() {
+    const minutes = parseFloat(draftStockHold);
+    if (isNaN(minutes) || minutes <= 0) return;
+    saveStockHold(minutes, {
+      onSuccess: () => {
+        toast.success("Stock hold duration updated.");
+      },
+    });
+  }
+
+  const { data: preorderEtaText, isLoading: loadingPreorderEta } = usePreorderEtaText();
+  const { mutate: savePreorderEta, isPending: savingPreorderEta } = useUpdatePreorderEtaText();
+  const [draftPreorderEta, setDraftPreorderEta] = useState<string>("");
+
+  useEffect(() => {
+    if (preorderEtaText !== undefined && preorderEtaText !== null) {
+      setDraftPreorderEta(preorderEtaText);
+    }
+  }, [preorderEtaText]);
+
+  function handleSavePreorderEta() {
+    if (!draftPreorderEta.trim()) return;
+    savePreorderEta(draftPreorderEta, {
+      onSuccess: () => {
+        toast.success("Pre-order ETA text updated.");
       },
     });
   }
@@ -143,6 +190,88 @@ export default function GeneralSettingsPage() {
             >
               <Save className="h-4 w-4" />
               {savingShipping ? "Saving…" : "Save shipping options"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Checkout Stock Hold */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="p-6">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-slate-900">Checkout Stock Hold</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              How long stock is reserved for a customer once they start checkout, before the hold
+              expires and the items become available to other shoppers again.
+            </p>
+          </div>
+
+          {loadingStockHold ? (
+            <p className="text-sm text-slate-400">Loading…</p>
+          ) : (
+            <div className="max-w-xs space-y-1">
+              <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                Hold duration (minutes)
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={draftStockHold}
+                onChange={(e) => setDraftStockHold(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+              />
+            </div>
+          )}
+
+          <div className="mt-6 flex items-center gap-4">
+            <button
+              onClick={handleSaveStockHold}
+              disabled={savingStockHold || loadingStockHold}
+              className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" />
+              {savingStockHold ? "Saving…" : "Save hold duration"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Pre-order ETA */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="p-6">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-slate-900">Pre-order ETA</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Rough estimate shown to customers in pre-order confirmation emails and SMS for when
+              they can expect to be contacted about receiving their item.
+            </p>
+          </div>
+
+          {loadingPreorderEta ? (
+            <p className="text-sm text-slate-400">Loading…</p>
+          ) : (
+            <div className="max-w-xs space-y-1">
+              <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                ETA text
+              </label>
+              <input
+                type="text"
+                value={draftPreorderEta}
+                onChange={(e) => setDraftPreorderEta(e.target.value)}
+                placeholder="e.g. 2-3 weeks"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+              />
+            </div>
+          )}
+
+          <div className="mt-6 flex items-center gap-4">
+            <button
+              onClick={handleSavePreorderEta}
+              disabled={savingPreorderEta || loadingPreorderEta}
+              className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" />
+              {savingPreorderEta ? "Saving…" : "Save ETA text"}
             </button>
           </div>
         </div>

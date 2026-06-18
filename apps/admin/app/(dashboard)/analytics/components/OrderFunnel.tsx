@@ -7,11 +7,12 @@ const STAGE_LABELS: Record<string, string> = {
   delivered: "Delivered",
 };
 
+// Monochrome ramp: ink deepens as orders progress through the funnel.
 const STAGE_COLORS: Record<string, string> = {
-  paid: "bg-blue-500",
-  processing: "bg-amber-500",
-  shipped: "bg-indigo-500",
-  delivered: "bg-green-500",
+  paid: "bg-slate-400",
+  processing: "bg-slate-500",
+  shipped: "bg-slate-700",
+  delivered: "bg-slate-900",
 };
 
 interface OrderFunnelProps {
@@ -49,7 +50,7 @@ export function OrderFunnel({ funnelCounts }: OrderFunnelProps) {
               <span className="text-slate-500">
                 {count} order{count !== 1 ? "s" : ""}
                 {dropOff !== null && (
-                  <span className="ml-2 text-xs text-red-500">
+                  <span className="ml-2 text-xs text-slate-400">
                     -{dropOff}% drop
                   </span>
                 )}

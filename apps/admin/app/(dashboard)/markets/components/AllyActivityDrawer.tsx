@@ -44,6 +44,24 @@ function fmtDate(iso: string): string {
   })
 }
 
+function sessionDuration(loginAt: string, logoutAt: string | null): string {
+  if (!logoutAt) return ''
+  const ms = new Date(logoutAt).getTime() - new Date(loginAt).getTime()
+  if (ms < 0) return ''
+  const totalMins = Math.floor(ms / 60000)
+  const h = Math.floor(totalMins / 60)
+  const m = totalMins % 60
+  if (h === 0) return `${m}m`
+  return m === 0 ? `${h}h` : `${h}h ${m}m`
+}
+
+const reasonBadge: Record<string, { label: string; className: string }> = {
+  manual:      { label: 'Signed out',   className: 'bg-slate-100 text-slate-500' },
+  inactivity:  { label: 'Idle timeout', className: 'bg-amber-50 text-amber-600' },
+  force_logout:{ label: 'Force logout', className: 'bg-red-50 text-red-500' },
+  session_expired: { label: 'Expired',  className: 'bg-orange-50 text-orange-500' },
+}
+
 function buildWeeks(dates: string[], numWeeks = 8): { label: string; count: number }[] {
   // Build the last `numWeeks` Sunday-start weeks
   const now = new Date()
@@ -259,15 +277,31 @@ export function AllyActivityDrawer({ allyId, allyName, onClose }: Props) {
                   <p className="text-sm text-slate-400 p-4 text-center">No logins recorded yet</p>
                 ) : (
                   <div className="divide-y divide-slate-50 max-h-64 overflow-y-auto">
-                    {data!.logins.map((login, i) => (
-                      <div key={i} className="flex items-center justify-between px-4 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
-                          <span className="text-sm text-slate-700">{fmtDate(login.logged_in_at)}</span>
+                    {data!.logins.map((login, i) => {
+                      const duration = sessionDuration(login.logged_in_at, login.logged_out_at)
+                      const badge = login.logout_reason
+                        ? reasonBadge[login.logout_reason]
+                        : { label: 'Active', className: 'bg-green-50 text-green-600' }
+                      return (
+                        <div key={i} className="px-4 py-3 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${login.logged_out_at ? 'bg-slate-300' : 'bg-green-500'}`} />
+                              <span className="text-sm text-slate-700">{fmtDate(login.logged_in_at)}</span>
+                            </div>
+                            <span className="text-xs text-slate-400">{timeAgo(login.logged_in_at)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 pl-4">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${badge.className}`}>
+                              {badge.label}
+                            </span>
+                            {duration && (
+                              <span className="text-[10px] text-slate-400">{duration} session</span>
+                            )}
+                          </div>
                         </div>
-                        <span className="text-xs text-slate-400">{timeAgo(login.logged_in_at)}</span>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>

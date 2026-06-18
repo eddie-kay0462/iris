@@ -2716,6 +2716,9 @@ function EditEventModal({ event, onClose }: { event: PopupEvent; onClose: () => 
   const [location, setLocation] = useState(event.location ?? "");
   const [startDate, setStartDate] = useState(event.event_date ?? "");
   const [endDate, setEndDate] = useState(event.end_date ?? "");
+  const [visitorCount, setVisitorCount] = useState(
+    event.visitor_count != null ? String(event.visitor_count) : "",
+  );
   const isMultiDay = !!(event.end_date);
   const [multiDay, setMultiDay] = useState(isMultiDay);
 
@@ -2729,6 +2732,7 @@ function EditEventModal({ event, onClose }: { event: PopupEvent; onClose: () => 
         location: location || undefined,
         event_date: startDate || undefined,
         end_date: multiDay && endDate ? endDate : null as any,
+        visitor_count: visitorCount !== "" ? parseInt(visitorCount, 10) : undefined,
       },
     });
     onClose();
@@ -2811,6 +2815,22 @@ function EditEventModal({ event, onClose }: { event: PopupEvent; onClose: () => 
               />
             </div>
           )}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">
+              Estimated Visitors
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={visitorCount}
+              onChange={(e) => setVisitorCount(e.target.value)}
+              placeholder="e.g. 250"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+            />
+            <p className="mt-1 text-[11px] text-slate-400">
+              Foot traffic at the event — enables conversion rate and revenue-per-visitor analytics.
+            </p>
+          </div>
           <div className="flex gap-3 pt-2">
             <button
               type="button"
