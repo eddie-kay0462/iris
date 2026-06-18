@@ -3998,3 +3998,48 @@ The customer's tracking page now shows "Processing" as the active step as soon a
 ### How to test
 
 Complete a checkout and confirm payment. In Supabase, the order's `status` column should read `processing` (not `paid`). The `order_status_history` table should have two new rows for that order: `pending → paid` and `paid → processing`. On the `/track` page, the "Processing" step should be highlighted.
+
+---
+
+## Newsletter Subscription — Road to HQ & About Pages (June 2026)
+
+### What was added
+
+A newsletter subscription section now appears just before the footer on two pages:
+
+- **Road to HQ** (`/`) — sits after the "One unit at a time." closing CTA
+- **About** (`/about`) — sits after the "Find us" social links section
+
+The backend already had a `POST /newsletter/subscribe` endpoint and a `newsletter_subscribers` table from earlier work, but the service just did a blind upsert and always returned `{ ok: true }`. It now checks first and returns `{ ok, alreadySubscribed }` so the UI can show the right message.
+
+### How the form works
+
+Three states:
+1. **Idle** — email input + "Subscribe" button
+2. **Loading** — button shows "..." and is disabled
+3. **Done** — form is replaced by a single line:
+   - New subscriber → *"You're in. Expect drops, studio updates, and early access."*
+   - Already on the list → *"You're already on the list."*
+
+Errors (network failures, etc.) show briefly below the input then clear after 3 seconds.
+
+### Bug fixed during implementation
+
+The initial `subscribeToNewsletter()` call was passing `body: JSON.stringify({ email })` to `apiClient`. The `apiClient` wrapper already calls `JSON.stringify(body)` internally, so the body was being double-stringified — the server received a JSON-encoded string instead of an object, which caused `@IsEmail()` DTO validation to reject it with a 400. Fixed by passing the raw object: `body: { email }`.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/backend/src/newsletter/newsletter.service.ts` | `subscribe()` now checks before inserting, returns `{ ok, alreadySubscribed }` |
+| `apps/frontend/lib/api/newsletter.ts` | **New file** — `subscribeToNewsletter(email)` wrapper |
+| `apps/frontend/components/shop/NewsletterSection.tsx` | **New file** — shared newsletter form component |
+| `apps/frontend/app/(shop)/page.tsx` | Imports and renders `<NewsletterSection />` before closing tag |
+| `apps/frontend/app/(shop)/about/page.tsx` | Imports and renders `<NewsletterSection />` before closing tag |
+
+### How to test
+
+1. Go to `/` or `/about` — the "Stay on the road." newsletter section should appear just above the footer
+2. Enter a fresh email → confirmation line appears; check `newsletter_subscribers` in Supabase for a new row
+3. Submit the same email again → "You're already on the list." (no duplicate row in the table)
+4. Submit with the backend offline → error message appears briefly, form resets to idle
