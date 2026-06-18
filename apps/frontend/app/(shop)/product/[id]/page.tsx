@@ -184,7 +184,7 @@ function PreorderModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
-      <div className="relative w-full max-w-md bg-white dark:bg-neutral-900 p-6">
+      <div className="relative w-full max-w-md bg-white dark:bg-[#111] p-6">
         <button
           onClick={onClose}
           className="absolute right-4 top-4 p-1 text-gray-400 hover:text-black dark:hover:text-white transition-colors"
@@ -194,7 +194,7 @@ function PreorderModal({
 
         <h2 className="mb-4 text-[13px] tracking-[0.18em] uppercase font-bold text-black dark:text-white">Pre-order</h2>
 
-        <div className="mb-4 bg-[#f4f3f1] dark:bg-neutral-800 p-3">
+        <div className="mb-4 bg-[#f4f3f1] dark:bg-[#1a1a1a] p-3">
           <p className="font-medium text-black dark:text-white">{productTitle}</p>
           {variantTitle && <p className="mt-0.5 text-sm text-[#59626E] dark:text-neutral-400">{variantTitle}</p>}
           <p className="mt-1 text-sm text-[#3B414A] dark:text-neutral-300">GH₵{price.toLocaleString()} each</p>
@@ -366,7 +366,7 @@ function PDPGallery({
 
   if (sorted.length === 0) {
     return (
-      <div className="aspect-[4/5] bg-[#f4f3f1] dark:bg-neutral-900" />
+      <div className="aspect-[4/5] bg-[#f4f3f1] dark:bg-[#111]" />
     );
   }
 
@@ -396,7 +396,7 @@ function PDPGallery({
       {/* Main stage */}
       <div>
         <div
-          className="relative aspect-[4/5] bg-[#f4f3f1] dark:bg-neutral-900 overflow-hidden"
+          className="relative aspect-[4/5] bg-[#f4f3f1] dark:bg-[#111] overflow-hidden"
           onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
           onTouchEnd={(e) => {
             if (touchStartX.current === null) return;
@@ -461,13 +461,13 @@ function PDPGallery({
             <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-2">
               <button
                 onClick={() => setIdx((idx - 1 + sorted.length) % sorted.length)}
-                className="w-9 h-9 bg-white/85 dark:bg-neutral-900/85 backdrop-blur-[4px] flex items-center justify-center text-black dark:text-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-colors duration-200"
+                className="w-9 h-9 bg-white/85 dark:bg-[#111111]/85 backdrop-blur-[4px] flex items-center justify-center text-black dark:text-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-colors duration-200"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setIdx((idx + 1) % sorted.length)}
-                className="w-9 h-9 bg-white/85 dark:bg-neutral-900/85 backdrop-blur-[4px] flex items-center justify-center text-black dark:text-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-colors duration-200"
+                className="w-9 h-9 bg-white/85 dark:bg-[#111111]/85 backdrop-blur-[4px] flex items-center justify-center text-black dark:text-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-colors duration-200"
               >
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
@@ -556,12 +556,12 @@ function ProductDetailSkeleton() {
     <div className="bg-white dark:bg-[#0a0a0a] min-h-screen">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8">
         <div className="grid gap-8 lg:gap-20 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
-          <div className="aspect-[4/5] animate-pulse bg-[#f4f3f1] dark:bg-neutral-800" />
+          <div className="aspect-[4/5] animate-pulse bg-[#f4f3f1] dark:bg-[#1a1a1a]" />
           <div className="space-y-4 pt-6">
-            <div className="h-3 w-1/3 animate-pulse bg-[#f4f3f1] dark:bg-neutral-800" />
-            <div className="h-8 w-3/4 animate-pulse bg-[#f4f3f1] dark:bg-neutral-800" />
-            <div className="h-6 w-1/4 animate-pulse bg-[#f4f3f1] dark:bg-neutral-800" />
-            <div className="h-24 animate-pulse bg-[#f4f3f1] dark:bg-neutral-800" />
+            <div className="h-3 w-1/3 animate-pulse bg-[#f4f3f1] dark:bg-[#1a1a1a]" />
+            <div className="h-8 w-3/4 animate-pulse bg-[#f4f3f1] dark:bg-[#1a1a1a]" />
+            <div className="h-6 w-1/4 animate-pulse bg-[#f4f3f1] dark:bg-[#1a1a1a]" />
+            <div className="h-24 animate-pulse bg-[#f4f3f1] dark:bg-[#1a1a1a]" />
           </div>
         </div>
       </div>

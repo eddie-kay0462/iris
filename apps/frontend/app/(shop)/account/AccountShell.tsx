@@ -88,17 +88,21 @@ export default function AccountShell({ profile }: Props) {
   );
 
   return (
-    <div className="acct-container">
+    <div className="max-w-[1280px] mx-auto px-4">
       {/* Account header */}
-      <div className="acct-header">
+      <div className="flex items-end justify-between pt-10">
         <div>
-          <div className="acct-title">My Account</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#111] dark:text-[#ededed]">
+            My Account
+          </div>
           {firstName && (
-            <div className="acct-subtitle">Welcome back, {firstName}</div>
+            <div className="mt-1 text-[13px] text-[#999] dark:text-neutral-500">
+              Welcome back, {firstName}
+            </div>
           )}
         </div>
         <button
-          className="acct-signout"
+          className="border border-[#ddd] dark:border-neutral-700 bg-transparent px-3 py-1.5 text-[11px] text-[#666] dark:text-neutral-400 cursor-pointer transition-colors duration-200 hover:border-[#111] dark:hover:border-white hover:text-[#111] dark:hover:text-white disabled:opacity-50"
           onClick={handleSignOut}
           disabled={loggingOut}
           type="button"
@@ -109,7 +113,7 @@ export default function AccountShell({ profile }: Props) {
 
       {/* Tab bar */}
       <div
-        className="acct-tab-bar"
+        className="flex gap-6 border-b border-[#e5e5e5] dark:border-neutral-800 mt-6 sticky top-[65px] z-40 bg-white dark:bg-[#0a0a0a] overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
         role="tablist"
         aria-label="Account sections"
       >
@@ -120,7 +124,11 @@ export default function AccountShell({ profile }: Props) {
             aria-selected={activeTab === tab.id}
             aria-controls={`tabpanel-${tab.id}`}
             id={`tab-${tab.id}`}
-            className="acct-tab-btn"
+            className={`pb-3 -mb-px text-[11px] font-semibold uppercase tracking-[0.12em] bg-transparent border-b-2 cursor-pointer whitespace-nowrap transition-colors duration-200 flex-shrink-0 ${
+              activeTab === tab.id
+                ? "text-[#111] dark:text-white border-[#111] dark:border-white"
+                : "text-[#bbb] dark:text-neutral-600 border-transparent hover:text-[#111] dark:hover:text-white"
+            }`}
             onClick={() => switchTab(tab.id)}
             onMouseEnter={() => prefetchTab(tab.id)}
             onTouchStart={() => prefetchTab(tab.id)}
@@ -132,7 +140,7 @@ export default function AccountShell({ profile }: Props) {
       </div>
 
       {/* Tab content */}
-      <div className="acct-tab-content">
+      <div className="pt-8 pb-20">
         {activeTab === "profile" && (
           <div
             id="tabpanel-profile"
