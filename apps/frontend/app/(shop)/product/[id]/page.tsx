@@ -184,28 +184,28 @@ function PreorderModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
-      <div className="relative w-full max-w-md bg-white p-6">
+      <div className="relative w-full max-w-md bg-white dark:bg-neutral-900 p-6">
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 p-1 text-gray-400 hover:text-black transition-colors"
+          className="absolute right-4 top-4 p-1 text-gray-400 hover:text-black dark:hover:text-white transition-colors"
         >
           <X className="h-5 w-5" />
         </button>
 
-        <h2 className="mb-4 text-[13px] tracking-[0.18em] uppercase font-bold text-black">Pre-order</h2>
+        <h2 className="mb-4 text-[13px] tracking-[0.18em] uppercase font-bold text-black dark:text-white">Pre-order</h2>
 
-        <div className="mb-4 bg-[#f4f3f1] p-3">
-          <p className="font-medium text-black">{productTitle}</p>
-          {variantTitle && <p className="mt-0.5 text-sm text-[#59626E]">{variantTitle}</p>}
-          <p className="mt-1 text-sm text-[#3B414A]">GH₵{price.toLocaleString()} each</p>
+        <div className="mb-4 bg-[#f4f3f1] dark:bg-neutral-800 p-3">
+          <p className="font-medium text-black dark:text-white">{productTitle}</p>
+          {variantTitle && <p className="mt-0.5 text-sm text-[#59626E] dark:text-neutral-400">{variantTitle}</p>}
+          <p className="mt-1 text-sm text-[#3B414A] dark:text-neutral-300">GH₵{price.toLocaleString()} each</p>
         </div>
 
         <div className="mb-4 flex items-center gap-3">
-          <span className="text-sm tracking-widest uppercase text-[#59626E]">Quantity</span>
-          <div className="flex items-center border border-black">
+          <span className="text-sm tracking-widest uppercase text-[#59626E] dark:text-neutral-400">Quantity</span>
+          <div className="flex items-center border border-black dark:border-white">
             <button
               onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-              className="px-3 py-1.5 text-gray-600 hover:bg-[#f4f3f1] transition-colors"
+              className="px-3 py-1.5 text-gray-600 dark:text-neutral-300 hover:bg-[#f4f3f1] dark:hover:bg-neutral-800 transition-colors"
             >−</button>
             <span className="min-w-[2rem] text-center text-sm font-medium">{quantity}</span>
             <button
@@ -215,20 +215,20 @@ function PreorderModal({
                 )
               }
               disabled={preorderLimit != null && quantity >= preorderLimit}
-              className="px-3 py-1.5 text-gray-600 hover:bg-[#f4f3f1] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-3 py-1.5 text-gray-600 dark:text-neutral-300 hover:bg-[#f4f3f1] dark:hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >+</button>
           </div>
         </div>
 
-        <div className="mb-5 flex items-center justify-between border-t border-black/10 pt-4">
-          <span className="text-[11px] tracking-widest uppercase text-[#59626E]">Total</span>
-          <span className="text-base font-bold text-black">GH₵{total.toLocaleString()}</span>
+        <div className="mb-5 flex items-center justify-between border-t border-black/10 dark:border-white/10 pt-4">
+          <span className="text-[11px] tracking-widest uppercase text-[#59626E] dark:text-neutral-400">Total</span>
+          <span className="text-base font-bold text-black dark:text-white">GH₵{total.toLocaleString()}</span>
         </div>
 
         <button
           onClick={handlePay}
           disabled={status !== "idle"}
-          className="w-full bg-black py-3 text-[13px] tracking-[0.18em] uppercase font-bold text-white disabled:opacity-60"
+          className="w-full bg-black dark:bg-white py-3 text-[13px] tracking-[0.18em] uppercase font-bold text-white dark:text-black disabled:opacity-60"
           style={{ fontFamily: "Inter, sans-serif" }}
         >
           {status === "checking"
@@ -240,7 +240,7 @@ function PreorderModal({
                 : `Pay GH₵${total.toLocaleString()}`}
         </button>
 
-        <p className="mt-3 text-center text-xs text-[#768293]">
+        <p className="mt-3 text-center text-xs text-[#768293] dark:text-neutral-500">
           Processed securely via Paystack. Your item is reserved once stock arrives.
         </p>
       </div>
@@ -366,7 +366,7 @@ function PDPGallery({
 
   if (sorted.length === 0) {
     return (
-      <div className="aspect-[4/5] bg-[#f4f3f1]" />
+      <div className="aspect-[4/5] bg-[#f4f3f1] dark:bg-neutral-900" />
     );
   }
 
@@ -379,7 +379,7 @@ function PDPGallery({
             key={img.id}
             onClick={() => setIdx(i)}
             className={`relative w-16 h-20 overflow-hidden border transition-all duration-200 ${
-              i === idx ? "border-black opacity-100" : "border-transparent opacity-60 hover:opacity-100"
+              i === idx ? "border-black dark:border-white opacity-100" : "border-transparent opacity-60 hover:opacity-100"
             }`}
           >
             <Image
@@ -396,7 +396,7 @@ function PDPGallery({
       {/* Main stage */}
       <div>
         <div
-          className="relative aspect-[4/5] bg-[#f4f3f1] overflow-hidden"
+          className="relative aspect-[4/5] bg-[#f4f3f1] dark:bg-neutral-900 overflow-hidden"
           onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
           onTouchEnd={(e) => {
             if (touchStartX.current === null) return;
@@ -452,7 +452,7 @@ function PDPGallery({
           )}
 
           {/* Counter */}
-          <div className="absolute left-4 bottom-4 bg-white/85 backdrop-blur-[4px] px-2.5 py-1 text-[13px] font-bold text-black">
+          <div className="absolute left-4 bottom-4 bg-white/85 dark:bg-black/85 backdrop-blur-[4px] px-2.5 py-1 text-[13px] font-bold text-black dark:text-white">
             {String(idx + 1).padStart(2, "0")} / {String(sorted.length).padStart(2, "0")}
           </div>
 
@@ -461,13 +461,13 @@ function PDPGallery({
             <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-2">
               <button
                 onClick={() => setIdx((idx - 1 + sorted.length) % sorted.length)}
-                className="w-9 h-9 bg-white/85 backdrop-blur-[4px] flex items-center justify-center text-black hover:bg-black hover:text-white transition-colors duration-200"
+                className="w-9 h-9 bg-white/85 dark:bg-neutral-900/85 backdrop-blur-[4px] flex items-center justify-center text-black dark:text-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-colors duration-200"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setIdx((idx + 1) % sorted.length)}
-                className="w-9 h-9 bg-white/85 backdrop-blur-[4px] flex items-center justify-center text-black hover:bg-black hover:text-white transition-colors duration-200"
+                className="w-9 h-9 bg-white/85 dark:bg-neutral-900/85 backdrop-blur-[4px] flex items-center justify-center text-black dark:text-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-colors duration-200"
               >
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
@@ -482,7 +482,7 @@ function PDPGallery({
               <button
                 key={i}
                 onClick={() => setIdx(i)}
-                className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? "bg-black" : "bg-black/25"}`}
+                className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? "bg-black dark:bg-white" : "bg-black/25 dark:bg-white/25"}`}
               />
             ))}
           </div>
@@ -506,7 +506,7 @@ function AccordionItem({
   children: React.ReactNode;
 }) {
   return (
-    <div className="border-b border-black/10">
+    <div className="border-b border-black/10 dark:border-white/10">
       <button
         onClick={onToggle}
         className="w-full py-4 flex justify-between items-center text-[12px] tracking-[0.16em] uppercase text-left"
@@ -520,7 +520,7 @@ function AccordionItem({
         </span>
       </button>
       {open && (
-        <div className="pb-[18px] text-[13px] leading-[1.55] text-[#3B414A]">
+        <div className="pb-[18px] text-[13px] leading-[1.55] text-[#3B414A] dark:text-neutral-400">
           {children}
         </div>
       )}
@@ -553,15 +553,15 @@ export default function ProductDetailPage({ params }: PageProps) {
 
 function ProductDetailSkeleton() {
   return (
-    <div className="bg-white min-h-screen">
+    <div className="bg-white dark:bg-[#0a0a0a] min-h-screen">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8">
         <div className="grid gap-8 lg:gap-20 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
-          <div className="aspect-[4/5] animate-pulse bg-[#f4f3f1]" />
+          <div className="aspect-[4/5] animate-pulse bg-[#f4f3f1] dark:bg-neutral-800" />
           <div className="space-y-4 pt-6">
-            <div className="h-3 w-1/3 animate-pulse bg-[#f4f3f1]" />
-            <div className="h-8 w-3/4 animate-pulse bg-[#f4f3f1]" />
-            <div className="h-6 w-1/4 animate-pulse bg-[#f4f3f1]" />
-            <div className="h-24 animate-pulse bg-[#f4f3f1]" />
+            <div className="h-3 w-1/3 animate-pulse bg-[#f4f3f1] dark:bg-neutral-800" />
+            <div className="h-8 w-3/4 animate-pulse bg-[#f4f3f1] dark:bg-neutral-800" />
+            <div className="h-6 w-1/4 animate-pulse bg-[#f4f3f1] dark:bg-neutral-800" />
+            <div className="h-24 animate-pulse bg-[#f4f3f1] dark:bg-neutral-800" />
           </div>
         </div>
       </div>
@@ -648,8 +648,8 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
 
   if (error || !product) {
     return (
-      <div className="bg-white min-h-screen flex items-center justify-center">
-        <p className="text-[13px] tracking-[0.14em] uppercase text-[#59626E]">Product not found.</p>
+      <div className="bg-white dark:bg-[#0a0a0a] min-h-screen flex items-center justify-center">
+        <p className="text-[13px] tracking-[0.14em] uppercase text-[#59626E] dark:text-neutral-400">Product not found.</p>
       </div>
     );
   }
@@ -686,14 +686,14 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
   }
 
   return (
-    <div className="bg-white text-black min-h-screen">
+    <div className="bg-white dark:bg-[#0a0a0a] text-black dark:text-[#ededed] min-h-screen">
       {/* Breadcrumbs */}
-      <nav className="max-w-[1400px] mx-auto px-4 sm:px-8 pt-5 text-[11px] tracking-[0.14em] uppercase text-[#6b7280]">
-        <Link href="/" className="hover:text-black transition-colors">Home</Link>
-        <span className="mx-2.5 text-[#d1d5db]">›</span>
-        <Link href="/products" className="hover:text-black transition-colors">Products</Link>
-        <span className="mx-2.5 text-[#d1d5db]">›</span>
-        <span className="text-black">{product.title}</span>
+      <nav className="max-w-[1400px] mx-auto px-4 sm:px-8 pt-5 text-[11px] tracking-[0.14em] uppercase text-[#6b7280] dark:text-neutral-500">
+        <Link href="/" className="hover:text-black dark:hover:text-white transition-colors">Home</Link>
+        <span className="mx-2.5 text-[#d1d5db] dark:text-neutral-700">›</span>
+        <Link href="/products" className="hover:text-black dark:hover:text-white transition-colors">Products</Link>
+        <span className="mx-2.5 text-[#d1d5db] dark:text-neutral-700">›</span>
+        <span className="text-black dark:text-white">{product.title}</span>
       </nav>
 
       {/* Main PDP grid */}
@@ -711,7 +711,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
         <aside className="lg:sticky lg:top-[90px] lg:self-start flex flex-col gap-[18px]">
           {/* Eyebrow */}
           {product.vendor && (
-            <div className="text-[10px] tracking-[0.22em] uppercase text-[#59626E]">
+            <div className="text-[10px] tracking-[0.22em] uppercase text-[#59626E] dark:text-neutral-400">
               {product.vendor}
             </div>
           )}
@@ -728,7 +728,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
             )}
             {comparePrice != null && comparePrice > (displayPrice || 0) && (
               <>
-                <span className="text-base text-[#59626E] line-through">{formatPrice(comparePrice)}</span>
+                <span className="text-base text-[#59626E] dark:text-neutral-500 line-through">{formatPrice(comparePrice)}</span>
                 <span className="text-[10px] tracking-[0.18em] uppercase px-2 py-[3px] bg-black text-[#F4F3F1]">
                   −{Math.round((1 - (displayPrice || 0) / comparePrice) * 100)}%
                 </span>
@@ -737,9 +737,9 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
           </div>
 
           {/* Stock status */}
-          <div className="flex items-center gap-2.5 py-3.5 border-t border-b border-black/10">
+          <div className="flex items-center gap-2.5 py-3.5 border-t border-b border-black/10 dark:border-white/10">
             {!sizeSelected ? (
-              <span className="text-[12px] tracking-[0.06em] uppercase text-[#59626E]">
+              <span className="text-[12px] tracking-[0.06em] uppercase text-[#59626E] dark:text-neutral-400">
                 Select a size to check availability
               </span>
             ) : (
@@ -767,11 +767,11 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
             return (
               <div key={group.name} className="flex flex-col gap-2.5">
                 <div className="flex justify-between items-baseline">
-                  <span className="text-[11px] tracking-[0.18em] uppercase text-black">
+                  <span className="text-[11px] tracking-[0.18em] uppercase text-black dark:text-white">
                     {group.name}
                   </span>
                   {selectedOptions[group.name] && (
-                    <span className="text-[11px] tracking-[0.12em] uppercase text-[#59626E]">
+                    <span className="text-[11px] tracking-[0.12em] uppercase text-[#59626E] dark:text-neutral-400">
                       {selectedOptions[group.name]}
                     </span>
                   )}
@@ -789,16 +789,16 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
                         onClick={() => handleOptionSelect(group.name, val)}
                         className={`${isSize ? "h-11" : "h-11 px-4"} border font-light text-[13px] tracking-[0.06em] transition-all duration-[160ms] ${
                           isSelected && inStockForVal
-                            ? "bg-black text-[#F4F3F1] border-black"
+                            ? "bg-black text-[#F4F3F1] border-black dark:bg-white dark:text-black dark:border-white"
                             : isSelected && preorderableForVal
-                              ? "bg-black text-[#F4F3F1] border-dashed border-black"
+                              ? "bg-black text-[#F4F3F1] border-dashed border-black dark:bg-white dark:text-black dark:border-white"
                               : isSelected && !inStockForVal
-                                ? "bg-black text-[#F4F3F1] border-black line-through"
+                                ? "bg-black text-[#F4F3F1] border-black line-through dark:bg-white/70 dark:text-black dark:border-white"
                                 : preorderableForVal
-                                  ? "border-dashed border-black/50 text-black/70 hover:border-black bg-white"
+                                  ? "border-dashed border-black/50 dark:border-white/50 text-black/70 dark:text-black/70 hover:border-black dark:hover:border-white bg-white dark:bg-white"
                                   : !inStockForVal
-                                    ? "text-[#A9B5C6] line-through border-black/25 hover:border-black/50"
-                                    : "border-black/25 hover:border-black bg-white text-black"
+                                    ? "text-[#A9B5C6] dark:text-neutral-500 line-through border-black/25 dark:border-white/20 bg-white dark:bg-white/10 hover:border-black/50 dark:hover:border-white/30"
+                                    : "border-black/25 dark:border-white/40 hover:border-black dark:hover:border-white bg-white dark:bg-white text-black dark:text-black"
                         }`}
                       >
                         {val}
@@ -812,7 +812,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
                 {group.values.some((val) =>
                   isValuePreorderable(variants, optionGroups, selectedOptions, group, val)
                 ) && (
-                  <p className="text-[11px] text-[#59626E] tracking-[0.06em]">
+                  <p className="text-[11px] text-[#59626E] dark:text-neutral-500 tracking-[0.06em]">
                     Dashed options are available for pre-order
                   </p>
                 )}
@@ -822,9 +822,9 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
 
           {/* Size guide */}
           {optionGroups.some((g) => g.name.toLowerCase() === "size") && (
-            <div className="flex justify-between text-[11px] tracking-[0.12em] uppercase text-[#59626E]">
+            <div className="flex justify-between text-[11px] tracking-[0.12em] uppercase text-[#59626E] dark:text-neutral-400">
               <span>Size</span>
-              <span className="underline underline-offset-[3px] text-black cursor-pointer">
+              <span className="underline underline-offset-[3px] text-black dark:text-white cursor-pointer">
                 Size &amp; fit guide
               </span>
             </div>
@@ -835,7 +835,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
             {!sizeSelected ? (
               <button
                 disabled
-                className="w-full h-[54px] bg-black text-[#F4F3F1] text-[13px] tracking-[0.18em] uppercase opacity-40 cursor-not-allowed"
+                className="w-full h-[54px] bg-black dark:bg-white text-[#F4F3F1] dark:text-black text-[13px] tracking-[0.18em] uppercase opacity-40 cursor-not-allowed"
                 style={{ fontFamily: "Inter, sans-serif", fontWeight: 700 }}
               >
                 Select a Size
@@ -843,7 +843,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
             ) : canPreorder ? (
               <button
                 onClick={() => setShowPreorderModal(true)}
-                className="w-full h-[54px] bg-black text-[#F4F3F1] text-[13px] tracking-[0.18em] uppercase transition-transform duration-[140ms] active:scale-[0.99]"
+                className="w-full h-[54px] bg-black dark:bg-white text-[#F4F3F1] dark:text-black text-[13px] tracking-[0.18em] uppercase transition-transform duration-[140ms] active:scale-[0.99]"
                 style={{ fontFamily: "Inter, sans-serif", fontWeight: 700 }}
               >
                 Pre-order Now
@@ -852,7 +852,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
               <button
                 onClick={handleAddToCart}
                 disabled={!inStock}
-                className="w-full h-[54px] bg-black text-[#F4F3F1] text-[13px] tracking-[0.18em] uppercase disabled:opacity-40 disabled:cursor-not-allowed transition-transform duration-[140ms] active:scale-[0.99]"
+                className="w-full h-[54px] bg-black dark:bg-white text-[#F4F3F1] dark:text-black text-[13px] tracking-[0.18em] uppercase disabled:opacity-40 disabled:cursor-not-allowed transition-transform duration-[140ms] active:scale-[0.99]"
                 style={{ fontFamily: "Inter, sans-serif", fontWeight: 700 }}
               >
                 {!inStock
@@ -867,7 +867,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
 
             <button
               onClick={toggleFavourite}
-              className="w-full h-[46px] bg-white text-black border border-black flex items-center justify-center gap-2.5 text-[12px] tracking-[0.16em] uppercase hover:bg-black hover:text-white transition-colors duration-[140ms]"
+              className="w-full h-[46px] bg-white dark:bg-transparent text-black dark:text-white border border-black dark:border-white flex items-center justify-center gap-2.5 text-[12px] tracking-[0.16em] uppercase hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-colors duration-[140ms]"
               style={{ fontFamily: "Inter, sans-serif", fontWeight: 700 }}
             >
               <Heart
@@ -880,12 +880,12 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
           </div>
 
           {/* Model note */}
-          <p className="text-xs text-[#59626E] italic leading-[1.4] mt-1">
+          <p className="text-xs text-[#59626E] dark:text-neutral-500 italic leading-[1.4] mt-1">
             For an oversized fit, size up one size.
           </p>
 
           {/* Accordion */}
-          <div className="border-t border-black/10">
+          <div className="border-t border-black/10 dark:border-white/10">
             {(product.description || product.gsm) && (
               <AccordionItem
                 title="Product details"
@@ -916,7 +916,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
           </div>
 
           {/* Delivery bar */}
-          <div className="flex gap-6 py-3.5 text-[11px] tracking-[0.14em] uppercase text-[#59626E]">
+          <div className="flex gap-6 py-3.5 text-[11px] tracking-[0.14em] uppercase text-[#59626E] dark:text-neutral-400">
             <div className="flex items-center gap-2">
               <Truck className="w-3.5 h-3.5" strokeWidth={1.5} />
               Express to Accra
@@ -938,7 +938,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
         if (recs.length === 0) return null;
         const shown = recs.slice(0, 5);
         return (
-          <section className="max-w-[1400px] mx-auto px-4 sm:px-8 py-14 border-t border-black">
+          <section className="max-w-[1400px] mx-auto px-4 sm:px-8 py-14 border-t border-black dark:border-neutral-800">
             <div className="flex justify-between items-baseline mb-7">
               <h2 className="text-[14px] tracking-[0.22em] uppercase font-medium">
                 You May Also Like
@@ -955,7 +955,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
 
       {/* Recently Viewed */}
       {recentlyViewed.length > 0 && (
-        <section className="max-w-[1400px] mx-auto px-4 sm:px-8 py-14 border-t border-black">
+        <section className="max-w-[1400px] mx-auto px-4 sm:px-8 py-14 border-t border-black dark:border-neutral-800">
           <div className="flex justify-between items-baseline mb-7">
             <h2 className="text-[14px] tracking-[0.22em] uppercase font-medium">
               Recently Viewed
