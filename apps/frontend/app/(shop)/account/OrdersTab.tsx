@@ -80,16 +80,16 @@ export default function OrdersTab() {
 
   return (
     <div>
+      {/* Hero */}
       <div
-        className="tab-hero"
-        style={{
-          backgroundImage: "url(/images/orders-cover.jpg)",
-          backgroundPosition: "center 50%",
-        }}
+        className="relative h-[25rem] overflow-hidden bg-[#f5f5f5] dark:bg-[#111] bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: "url(/images/orders-cover.jpg)", backgroundPosition: "center 50%" }}
       >
-        <div className="tab-hero-overlay">
-          <div className="tab-hero-title">Your Orders</div>
-          <div className="tab-hero-sub">
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/55 flex flex-col justify-end p-6">
+          <div className="text-[28px] font-bold text-white uppercase tracking-[-0.01em] leading-none">
+            Your Orders
+          </div>
+          <div className="mt-1 text-[11px] text-white/65 tracking-[0.04em]">
             {isLoading
               ? "Loading…"
               : `${orders.length} order${orders.length !== 1 ? "s" : ""} placed`}
@@ -98,24 +98,24 @@ export default function OrdersTab() {
       </div>
 
       {isLoading ? (
-        <div className="order-list">
+        <div className="border-t border-[#e5e5e5] dark:border-neutral-800 mt-8">
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              style={{ height: 52, borderBottom: "1px solid #f0f0f0", background: "#fafafa" }}
+              className="h-[52px] border-b border-[#f0f0f0] dark:border-neutral-900 bg-[#fafafa] dark:bg-[#111]"
             />
           ))}
         </div>
       ) : orders.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "60px 0", fontSize: 13, color: "#999" }}>
+        <div className="text-center py-[60px] text-[13px] text-[#999] dark:text-neutral-500">
           No orders yet.
         </div>
       ) : (
-        <div className="order-list">
+        <div className="border-t border-[#e5e5e5] dark:border-neutral-800 mt-8">
           {orders.map((order) => (
             <div key={order.id}>
               <div
-                className="order-row"
+                className="grid grid-cols-[1fr_auto_auto_20px] gap-6 max-sm:gap-3 items-center py-4 cursor-pointer border-b border-[#f0f0f0] dark:border-neutral-900 transition-colors duration-150 hover:bg-[#fafafa] dark:hover:bg-neutral-900"
                 onClick={() => toggle(order.id)}
                 onMouseEnter={() => prefetchOrderImages(order)}
                 onTouchStart={() => prefetchOrderImages(order)}
@@ -124,12 +124,18 @@ export default function OrdersTab() {
                 onKeyDown={(e) => e.key === "Enter" && toggle(order.id)}
                 aria-expanded={expanded === order.id}
               >
-                <div className="order-info">
-                  <div className="order-number">{order.order_number}</div>
-                  <div className="order-date">{fmtDate(order.created_at)}</div>
+                <div>
+                  <div className="text-[13px] font-medium text-[#111] dark:text-[#ededed]">
+                    {order.order_number}
+                  </div>
+                  <div className="text-[11px] text-[#999] dark:text-neutral-500 mt-0.5">
+                    {fmtDate(order.created_at)}
+                  </div>
                 </div>
                 <StatusPip status={order.status} />
-                <div className="order-total">{fmt(order.total)}</div>
+                <div className="text-[13px] font-medium text-right min-w-[80px] text-[#111] dark:text-[#ededed]">
+                  {fmt(order.total)}
+                </div>
                 <svg
                   width="12"
                   height="12"
@@ -138,7 +144,7 @@ export default function OrdersTab() {
                   stroke="currentColor"
                   strokeWidth="2"
                   strokeLinecap="round"
-                  className={`order-chevron${expanded === order.id ? " open" : ""}`}
+                  className={`text-[#111] dark:text-[#ededed] flex-shrink-0 transition-transform duration-[250ms] ${expanded === order.id ? "rotate-180" : ""}`}
                   aria-hidden="true"
                 >
                   <path d="m6 9 6 6 6-6" />
@@ -146,28 +152,31 @@ export default function OrdersTab() {
               </div>
 
               {expanded === order.id && (
-                <div className="order-detail">
-                  <div className="order-detail-inner">
+                <div className="border-b border-[#f0f0f0] dark:border-neutral-900">
+                  <div className="order-detail-inner pt-2 pb-5 flex flex-col gap-3">
                     {(order.order_items ?? []).map((item, i) => {
-                      // Prefer variant-specific image, fall back to product-level
                       const imgUrl =
                         (item.variant_id ? imgMap[item.variant_id] : null) ??
                         (item.product_id ? imgMap[item.product_id] : null) ??
                         null;
                       return (
-                        <div key={item.id ?? i} className="order-item">
+                        <div key={item.id ?? i} className="flex gap-3.5 items-center">
                           <div
-                            className="order-item-img"
+                            className="w-14 h-[70px] flex-shrink-0 bg-[#f5f5f5] dark:bg-[#1a1a1a] bg-cover bg-center bg-no-repeat"
                             style={imgUrl ? { backgroundImage: `url(${imgUrl})` } : undefined}
                           />
-                          <div className="order-item-info">
-                            <div className="order-item-name">{item.product_name}</div>
-                            <div className="order-item-variant">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[12px] font-medium uppercase tracking-[0.04em] text-[#111] dark:text-[#ededed]">
+                              {item.product_name}
+                            </div>
+                            <div className="text-[11px] text-[#999] dark:text-neutral-500 mt-0.5">
                               {item.variant_title ? `${item.variant_title} · ` : ""}Qty{" "}
                               {item.quantity}
                             </div>
                           </div>
-                          <div className="order-item-price">{fmt(item.unit_price)}</div>
+                          <div className="text-[12px] font-medium text-[#111] dark:text-[#ededed]">
+                            {fmt(item.unit_price)}
+                          </div>
                         </div>
                       );
                     })}

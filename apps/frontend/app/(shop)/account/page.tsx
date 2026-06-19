@@ -21,8 +21,8 @@ export default function AccountPage() {
 
   if (isLoading || !profile) {
     return (
-      <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ fontSize: 11, color: "#999", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: '"SF Mono", "Menlo", "Consolas", monospace' }}>
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="text-[11px] text-[#999] dark:text-neutral-500 tracking-[0.1em] uppercase font-mono">
           Loading…
         </div>
       </div>
