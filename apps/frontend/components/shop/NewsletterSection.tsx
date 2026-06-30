@@ -45,7 +45,7 @@ export function NewsletterSection() {
   }
 
   return (
-    <section className="border-t border-neutral-200 dark:border-neutral-800 px-6 py-24 sm:py-32">
+    <section className="border-t border-neutral-800 dark:border-neutral-200 bg-neutral-950 dark:bg-white px-6 py-24 sm:py-32">
       <div className="mx-auto max-w-5xl">
         <motion.div
           initial="hidden"
@@ -55,16 +55,16 @@ export function NewsletterSection() {
         >
           <motion.div
             variants={fadeUp}
-            className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500 font-mono"
+            className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-500 dark:text-neutral-400 font-mono"
           >
             <span>Newsletter</span>
-            <span className="h-px w-8 bg-neutral-300 dark:bg-neutral-700" />
+            <span className="h-px w-8 bg-neutral-700 dark:bg-neutral-300" />
             <span>Stay close</span>
           </motion.div>
 
           <motion.h2
             variants={fadeUp}
-            className="mt-6 text-3xl sm:text-5xl font-bold uppercase tracking-tight text-neutral-900 dark:text-neutral-100"
+            className="mt-6 text-3xl sm:text-5xl font-bold uppercase tracking-tight text-neutral-100 dark:text-neutral-900"
             style={{ letterSpacing: "-0.015em" }}
           >
             Stay on the road.
@@ -72,14 +72,14 @@ export function NewsletterSection() {
 
           <motion.p
             variants={fadeUp}
-            className="mt-4 max-w-xl text-base sm:text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed"
+            className="mt-4 max-w-xl text-base sm:text-lg text-neutral-400 dark:text-neutral-600 leading-relaxed"
           >
             Drops, milestone updates, and early access &mdash; direct to your inbox.
           </motion.p>
 
           <motion.div variants={fadeUp} className="mt-10">
             {status === "done" ? (
-              <p className="text-base font-medium text-neutral-900 dark:text-neutral-100">
+              <p className="text-base font-medium text-neutral-100 dark:text-neutral-900">
                 {alreadySubscribed
                   ? "You're already on the list."
                   : "You're in. Expect drops, studio updates, and early access."}
@@ -92,12 +92,12 @@ export function NewsletterSection() {
                   placeholder="your@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="flex-1 border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 px-4 py-3 text-sm text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-600 focus:outline-none focus:border-neutral-900 dark:focus:border-neutral-100 transition"
+                  className="flex-1 border border-neutral-700 dark:border-neutral-300 bg-neutral-950 dark:bg-white px-4 py-3 text-sm text-neutral-100 dark:text-neutral-900 placeholder-neutral-600 dark:placeholder-neutral-400 focus:outline-none focus:border-neutral-100 dark:focus:border-neutral-900 transition"
                 />
                 <button
                   type="submit"
                   disabled={status === "loading"}
-                  className="shrink-0 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-8 py-3 text-xs font-semibold uppercase tracking-[0.25em] hover:opacity-80 disabled:opacity-40 transition"
+                  className="shrink-0 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white px-8 py-3 text-xs font-semibold uppercase tracking-[0.25em] hover:opacity-80 disabled:opacity-40 transition"
                 >
                   {status === "loading" ? "..." : "Subscribe"}
                 </button>
