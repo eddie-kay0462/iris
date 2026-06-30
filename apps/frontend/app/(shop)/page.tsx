@@ -16,7 +16,7 @@ const caveat = Caveat({ subsets: ["latin"], weight: ["500", "700"] });
 
 /* ── Config ── */
 const TARGET_UNITS = 6000;
-const UNITS_SOLD = 0;
+const UNITS_SOLD = 475;
 const DEADLINE = "2026-12-26";
 
 /* ── SVG Geometry ── */
