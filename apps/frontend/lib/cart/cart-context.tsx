@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useReducer,
+  useState,
   type ReactNode,
 } from "react";
 import { track } from "@/lib/analytics/tracker";
@@ -40,12 +41,19 @@ interface CartContextValue {
   items: CartItem[];
   itemCount: number;
   subtotal: number;
+  /** True once the cart has loaded from localStorage — lets consumers skip
+   *  reacting to the initial hydration jump (e.g. a count-bump animation). */
+  hydrated: boolean;
   addItem: (item: Omit<CartItem, "quantity">, quantity?: number) => void;
   removeItem: (variantId: string) => void;
   updateQuantity: (variantId: string, quantity: number) => void;
   clearCart: () => void;
   /** Replace the whole cart — used by abandoned-checkout recovery links. */
   restoreItems: (items: CartItem[]) => void;
+  /** Slide-in mini-cart. Opens automatically on every `addItem`. */
+  drawerOpen: boolean;
+  openDrawer: () => void;
+  closeDrawer: () => void;
 }
 
 // --- Storage ---
@@ -169,6 +177,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     items: [],
     hydrated: false,
   });
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const openDrawer = useCallback(() => setDrawerOpen(true), []);
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
   // Hydrate from localStorage on mount
   useEffect(() => {
@@ -197,6 +209,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addItem = useCallback(
     (item: Omit<CartItem, "quantity">, quantity?: number) => {
       dispatch({ type: "ADD", item, quantity });
+      setDrawerOpen(true);
       track("add_to_cart", {
         productId: item.productId,
         value: item.price * (quantity ?? 1),
@@ -236,11 +249,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
         items: state.items,
         itemCount,
         subtotal,
+        hydrated: state.hydrated,
         addItem,
         removeItem,
         updateQuantity,
         clearCart,
         restoreItems,
+        drawerOpen,
+        openDrawer,
+        closeDrawer,
       }}
     >
       {children}

@@ -13,6 +13,7 @@ import { useFavourites } from "@/lib/favourites";
 import { LocaleProvider, useLocale, CURRENCIES } from "@/lib/locale/locale-provider";
 import AnalyticsBeacon from "@/components/AnalyticsBeacon";
 import NavDrawer from "./components/NavDrawer";
+import CartDrawer from "./components/CartDrawer";
 
 function ThemeToggle({ isTransparent = false }: { isTransparent?: boolean }) {
   const { theme, toggleTheme } = useTheme();
@@ -77,27 +78,62 @@ function FavouritesLink({ isTransparent = false }: { isTransparent?: boolean }) 
 }
 
 function CartLink({ isTransparent = false }: { isTransparent?: boolean }) {
-  const { itemCount } = useCart();
+  const { itemCount, hydrated, openDrawer } = useCart();
+  const [bump, setBump] = useState(false);
+  const prevCount = useRef(itemCount);
+  const wasHydrated = useRef(false);
+
+  // Pulse the badge (and nudge the bag) whenever the count goes up — i.e. an
+  // item was just added. Skip the hydration jump (count snaps from 0 to the
+  // saved value) and any decrease.
+  useEffect(() => {
+    if (!hydrated) return;
+    // First settle after hydration: adopt the count without animating.
+    if (!wasHydrated.current) {
+      wasHydrated.current = true;
+      prevCount.current = itemCount;
+      return;
+    }
+    if (itemCount > prevCount.current) {
+      setBump(true);
+      const t = setTimeout(() => setBump(false), 450);
+      prevCount.current = itemCount;
+      return () => clearTimeout(t);
+    }
+    prevCount.current = itemCount;
+  }, [itemCount, hydrated]);
+
   return (
-    <Link
-      href="/cart"
+    <button
+      type="button"
+      onClick={openDrawer}
+      aria-label="Open bag"
       className={`group relative p-1 transition ${
         isTransparent
           ? "text-white/80 hover:text-white"
           : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
       }`}
     >
-      <ShoppingBag className="h-[16px] w-[16px] md:h-[18px] md:w-[18px] transition-transform duration-200 group-hover:scale-110 group-hover:-translate-y-0.5" strokeWidth={1.5} />
+      <ShoppingBag
+        className={`h-[16px] w-[16px] md:h-[18px] md:w-[18px] transition-transform duration-200 group-hover:scale-110 group-hover:-translate-y-0.5 ${
+          bump ? "animate-cart-nudge" : ""
+        }`}
+        strokeWidth={1.5}
+      />
       {itemCount > 0 && (
-        <span className={`absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${
-          isTransparent
-            ? "bg-white text-black"
-            : "bg-black text-white dark:bg-white dark:text-black"
-        }`}>
+        <span
+          className={`absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${
+            bump ? "animate-cart-bump" : ""
+          } ${
+            isTransparent
+              ? "bg-white text-black"
+              : "bg-black text-white dark:bg-white dark:text-black"
+          }`}
+        >
           {itemCount > 99 ? "99+" : itemCount}
         </span>
       )}
-    </Link>
+    </button>
   );
 }
 
@@ -640,6 +676,7 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
       <ShopHeader />
       <main className={isHome ? "" : "pt-[65px]"}>{children}</main>
       <ShopFooter />
+      <CartDrawer />
     </div>
   );
 }
