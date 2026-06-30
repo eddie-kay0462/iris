@@ -32,6 +32,7 @@ type CartAction =
   | { type: "REMOVE"; variantId: string }
   | { type: "UPDATE_QTY"; variantId: string; quantity: number }
   | { type: "CLEAR" }
+  | { type: "RESTORE"; items: CartItem[] }
   | { type: "HYDRATE"; items: CartItem[] }
   | { type: "SYNC"; items: CartItem[] };
 
@@ -43,6 +44,8 @@ interface CartContextValue {
   removeItem: (variantId: string) => void;
   updateQuantity: (variantId: string, quantity: number) => void;
   clearCart: () => void;
+  /** Replace the whole cart — used by abandoned-checkout recovery links. */
+  restoreItems: (items: CartItem[]) => void;
 }
 
 // --- Storage ---
@@ -148,6 +151,10 @@ function cartReducer(state: CartState, action: CartAction): CartState {
     case "CLEAR":
       return { ...state, items: [] };
 
+    // Recovery link rebuilt the cart from a saved checkout — replace wholesale.
+    case "RESTORE":
+      return { ...state, items: action.items, hydrated: true };
+
     default:
       return state;
   }
@@ -213,6 +220,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "CLEAR" });
   }, []);
 
+  const restoreItems = useCallback((items: CartItem[]) => {
+    dispatch({ type: "RESTORE", items });
+  }, []);
+
   const itemCount = state.items.reduce((sum, i) => sum + i.quantity, 0);
   const subtotal = state.items.reduce(
     (sum, i) => sum + i.price * i.quantity,
@@ -229,6 +240,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         removeItem,
         updateQuantity,
         clearCart,
+        restoreItems,
       }}
     >
       {children}

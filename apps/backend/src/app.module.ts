@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { SupabaseModule } from './common/supabase/supabase.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -30,6 +31,8 @@ import { FavouritesModule } from './favourites/favourites.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // In-process scheduler for the abandoned-checkout recovery cron.
+    ScheduleModule.forRoot(),
     // Rate limiting — only enforced where ThrottlerGuard is mounted
     // (public analytics ingest routes), not globally.
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),

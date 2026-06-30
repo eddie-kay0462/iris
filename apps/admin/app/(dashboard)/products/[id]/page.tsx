@@ -5,7 +5,8 @@ import { ProductForm } from "../../../components/products/ProductForm";
 import { type Product, fetchAdminProduct, useDeleteProduct, usePublishProduct } from "@/lib/api/products";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 type AdminProductDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -19,6 +20,8 @@ export default function AdminProductDetailPage({
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [publishing, setPublishing] = useState(false);
 
   const deleteMutation = useDeleteProduct();
   const publishMutation = usePublishProduct();
@@ -70,12 +73,27 @@ export default function AdminProductDetailPage({
         <div className="flex gap-2">
           <button
             onClick={async () => {
-              await publishMutation.mutateAsync(product.id);
-              const updated = await fetchAdminProduct(id);
-              setProduct(updated);
+              if (product.status === "archived") {
+                toast.error("Archived products cannot be published. Change the status to Active first.", { duration: 6000 });
+                return;
+              }
+              setPublishing(true);
+              try {
+                await publishMutation.mutateAsync(product.id);
+                const updated = await fetchAdminProduct(id);
+                setProduct(updated);
+                toast.success(updated.published ? "Product published" : "Product unpublished");
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Failed to update publish status", { duration: 6000 });
+              } finally {
+                setPublishing(false);
+              }
             }}
-            className="rounded-md border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50"
+            disabled={publishing || product.status === "archived"}
+            title={product.status === "archived" ? "Change status to Active before publishing" : undefined}
+            className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
+            {publishing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {product.published ? "Unpublish" : "Publish"}
           </button>
           <button
