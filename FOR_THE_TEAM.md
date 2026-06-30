@@ -4174,3 +4174,33 @@ Also note: only sales made **after** this ships are attributed to allocations (o
 3. Log into the allies app as that ally → the Inventory page shows that product with 5 on hand; on the New Sale page you can add it and the quantity won't go past 5.
 4. Complete a sale of 2 → back in the admin, the ally's on-hand for that variant is now 3.
 5. Use **Return** on the ally page to send stock back → on-hand drops and central inventory goes back up.
+
+---
+
+## Storefront Navigation Sidebar — Redesign + Theme Toggle (June 2026)
+
+**The storefront's menu is now a proper slide-out sidebar.** Tapping **Shop** (desktop) or the hamburger (mobile) slides a panel in from the left with a dimmed backdrop. It replaces the old plain mobile dropdown, and it's the same panel on phone and desktop now — one consistent menu instead of two different ones.
+
+What's inside the panel:
+
+- **A search box** at the top — type and hit enter to jump straight to results.
+- **Shop categories** (Shop All, New Arrivals, Tops, Bottoms, Accessories, Footwear). Categories with sub-types expand in place (an accordion) so you can drill into, say, Tops → T-Shirts without leaving the menu. Every link points at the real product pages with the right filters applied.
+- **Explore and Info** shortcuts (Road to HQ, About, Track Your Order, My Account, Saved Items).
+- **A footer** that shows your account (your name and avatar if you're signed in, or a "Sign In" prompt if not), your **currency/region** picker, and a brand-new **Light / Dark mode toggle**.
+
+We also gave it a second pass to match the rest of the site's look — the clean black-and-white, sharp-edged, small-caps style used on the account pages — instead of the rounded, oversized first draft. The 1NRI logo sits centred at the top of the panel.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/frontend/app/(shop)/components/NavDrawer.tsx` | **New** — the whole sidebar: slide-in panel + backdrop, search, expandable categories, Explore/Info links, and the footer (account block, currency switcher, light/dark toggle). Reuses the existing currency, profile, and theme systems so nothing is duplicated. |
+| `apps/frontend/app/(shop)/layout.tsx` | Wired the sidebar into the header — **Shop** and the mobile hamburger now open it; removed the old inline mobile dropdown. |
+
+### How to test
+
+1. Run the storefront (`npm run dev` in `apps/frontend`) and open the home page.
+2. Click **Shop** in the top nav (or the ☰ menu on a narrow window) — the sidebar should slide in with a dark backdrop. Press **Esc** or click the backdrop to close it.
+3. Expand **Tops** (or any category with an arrow) — the sub-types drop down. Click one and confirm it lands on the matching filtered product page.
+4. In the footer, switch the **currency** and toggle **Light / Dark** — the whole site theme should flip, and both should stick after you reload.
+5. Try it signed-out (footer shows "Sign In") and signed-in (footer greets you by name and links to your account).
