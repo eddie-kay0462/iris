@@ -12,6 +12,7 @@ import { useProfile } from "@/lib/api/profile";
 import { useFavourites } from "@/lib/favourites";
 import { LocaleProvider, useLocale, CURRENCIES } from "@/lib/locale/locale-provider";
 import AnalyticsBeacon from "@/components/AnalyticsBeacon";
+import NavDrawer from "./components/NavDrawer";
 
 function ThemeToggle({ isTransparent = false }: { isTransparent?: boolean }) {
   const { theme, toggleTheme } = useTheme();
@@ -359,12 +360,11 @@ function LocaleSelectorButton({ isTransparent = false }: { isTransparent?: boole
 
 const navLinks = [
   { href: "/", label: "Road to HQ" },
-  { href: "/products", label: "Shop" },
   { href: "/about", label: "About" },
 ];
 
 function ShopHeader() {
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
@@ -407,6 +407,21 @@ function ShopHeader() {
       <div className="flex w-full items-center justify-between px-6 py-4">
         {/* Left nav (desktop) */}
         <nav className="hidden items-center gap-6 md:flex">
+          <button
+            onClick={() => setDrawerOpen(true)}
+            data-open={drawerOpen}
+            className={`group flex items-center gap-1.5 text-xs font-medium uppercase tracking-widest transition ${
+              isTransparentWhite
+                ? "text-white/70 hover:text-white"
+                : "text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white"
+            }`}
+          >
+            Shop
+            <ChevronDown
+              className="h-3 w-3 transition-transform duration-200 group-data-[open=true]:rotate-180"
+              strokeWidth={2}
+            />
+          </button>
           {navLinks.map((link) => (
             <Link
               key={link.href}
@@ -428,17 +443,13 @@ function ShopHeader() {
 
         {/* Mobile hamburger */}
         <button
-          onClick={() => setMobileOpen((o) => !o)}
+          onClick={() => setDrawerOpen(true)}
           className={`flex h-8 w-8 items-center justify-center md:hidden transition ${
             isTransparentWhite ? "text-white" : ""
           }`}
-          aria-label="Toggle menu"
+          aria-label="Open menu"
         >
-          {mobileOpen ? (
-            <X className="h-5 w-5" strokeWidth={1.5} />
-          ) : (
-            <Menu className="h-5 w-5" strokeWidth={1.5} />
-          )}
+          <Menu className="h-5 w-5" strokeWidth={1.5} />
         </button>
 
         {/* Centered logo */}
@@ -479,27 +490,7 @@ function ShopHeader() {
         </div>
       </div>
 
-      {/* Mobile dropdown — always solid so it's readable */}
-      {mobileOpen && (
-        <nav className="border-t border-gray-200 bg-white px-4 py-4 dark:border-gray-800 dark:bg-gray-950 md:hidden">
-          <div className="flex flex-col gap-4">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileOpen(false)}
-                className={`text-xs font-medium uppercase tracking-widest ${
-                  isActive(link.href)
-                    ? "text-black dark:text-white"
-                    : "text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white"
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </div>
-        </nav>
-      )}
+      <NavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
       <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
