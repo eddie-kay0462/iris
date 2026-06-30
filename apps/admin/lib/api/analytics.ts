@@ -134,6 +134,8 @@ export interface AbandonedCheckout {
   itemThumbnails: string[];
   items: AbandonedCheckoutItem[];
   subtotal: number;
+  reminderSentAt: string | null;
+  recoveredAt: string | null;
   recoveredBy: {
     orderId: string;
     orderNumber: string;
@@ -142,11 +144,18 @@ export interface AbandonedCheckout {
   } | null;
 }
 
+export interface RecoverySummary {
+  remindersSent: number;
+  recoveredCount: number;
+  recoveryRate: number;
+}
+
 export interface AbandonedCheckoutsResponse {
   checkouts: AbandonedCheckout[];
   total: number;
   page: number;
   limit: number;
+  recovery: RecoverySummary;
 }
 
 export function useAbandonedCheckouts(params: {

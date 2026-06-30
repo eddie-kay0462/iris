@@ -160,6 +160,27 @@ export class EmailService {
     await this.send(order.email, subject, html, order.order_number);
   }
 
+  async sendAbandonedCheckoutReminder(checkout: {
+    email: string;
+    customer_name?: string | null;
+    recovery_url: string;
+    subtotal: number;
+    currency?: string;
+    session_id: string;
+    brand?: string;
+    items: {
+      product_name: string;
+      variant_title?: string | null;
+      quantity: number;
+      unit_price: number;
+      image_url?: string | null;
+    }[];
+  }): Promise<void> {
+    const subject = 'You left something behind';
+    const html = this.buildAbandonedCheckoutHtml(checkout);
+    await this.send(checkout.email, subject, html, checkout.session_id);
+  }
+
   private async send(
     to: string,
     subject: string,
@@ -725,6 +746,103 @@ export class EmailService {
         <!-- Footer -->
         <tr><td style="padding:24px 32px 32px;">
           <p style="margin:0;font-size:13px;color:#999;">Thank you for pre-ordering with ${brandName}. We appreciate your patience.</p>
+        </td></tr>
+
+      </table>
+
+      <!-- Copyright -->
+      <p style="margin:16px 0 0;font-size:11px;color:#a1a1aa;text-align:center;">&copy; ${new Date().getFullYear()} ${brandName}. All rights reserved.</p>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+  }
+
+  private buildAbandonedCheckoutHtml(checkout: {
+    customer_name?: string | null;
+    recovery_url: string;
+    subtotal: number;
+    currency?: string;
+    brand?: string;
+    items: {
+      product_name: string;
+      variant_title?: string | null;
+      quantity: number;
+      unit_price: number;
+      image_url?: string | null;
+    }[];
+  }): string {
+    const brandName = checkout.brand || '1NRI';
+    const symbol = (checkout.currency || 'GHS') === 'GHS' ? 'GH₵' : checkout.currency;
+    const greeting = checkout.customer_name
+      ? `Hi ${checkout.customer_name.split(' ')[0]},`
+      : 'Hi there,';
+
+    const itemRows = checkout.items
+      .map((item) => {
+        const thumb = item.image_url
+          ? `<img src="${item.image_url}" alt="" width="56" height="56" style="display:block;border-radius:6px;border:1px solid #eee;object-fit:cover;width:56px;height:56px;" />`
+          : `<div style="width:56px;height:56px;border-radius:6px;background:#f4f4f5;"></div>`;
+        const lineTotal = item.unit_price * item.quantity;
+        return `
+        <tr>
+          <td width="56" style="padding:12px 0;vertical-align:top;">${thumb}</td>
+          <td style="padding:12px 0 12px 14px;vertical-align:top;font-size:14px;color:#333;">
+            ${item.product_name}${item.variant_title ? ` — ${item.variant_title}` : ''}
+            <span style="color:#999;">× ${item.quantity}</span>
+          </td>
+          <td style="padding:12px 0;vertical-align:top;font-size:14px;color:#333;text-align:right;white-space:nowrap;">
+            ${symbol} ${lineTotal.toLocaleString()}
+          </td>
+        </tr>`;
+      })
+      .join('');
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>You left something behind</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f4f4f5;padding:32px 0;">
+    <tr><td align="center" style="padding:0 16px;">
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:560px;background:#fff;border-radius:10px;overflow:hidden;border:1px solid #e4e4e7;">
+
+        <!-- Header -->
+        <tr><td style="background:${this.brandBgColor(brandName)};padding:24px 32px;">
+          ${this.brandHeader(brandName)}
+        </td></tr>
+
+        <!-- Body -->
+        <tr><td style="padding:32px 32px 0;">
+          <p style="margin:0 0 4px;font-size:14px;color:#666;">${greeting}</p>
+          <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111;">You left something behind</h1>
+          <p style="margin:0 0 24px;font-size:14px;color:#666;line-height:1.6;">Your cart is still saved. Pick up right where you left off before these items sell out.</p>
+
+          <!-- Items -->
+          <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+            ${itemRows}
+          </table>
+
+          <!-- Subtotal -->
+          <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:8px;border-top:2px solid #111;padding-top:14px;">
+            <tr>
+              <td style="font-size:15px;font-weight:700;color:#111;">Subtotal</td>
+              <td style="font-size:15px;font-weight:700;color:#111;text-align:right;">${symbol} ${checkout.subtotal.toLocaleString()}</td>
+            </tr>
+          </table>
+
+          <!-- CTA -->
+          <div style="margin:28px 0 8px;text-align:center;">
+            <a href="${checkout.recovery_url}" style="display:inline-block;background:#111;color:#fff;font-size:14px;font-weight:600;padding:13px 32px;border-radius:6px;text-decoration:none;letter-spacing:0.01em;">Complete your order</a>
+          </div>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:24px 32px 32px;">
+          <p style="margin:0;font-size:13px;color:#999;line-height:1.6;">If you've already completed your order, you can ignore this email. Thank you for shopping with ${brandName}.</p>
         </td></tr>
 
       </table>

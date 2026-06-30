@@ -4043,3 +4043,65 @@ The initial `subscribeToNewsletter()` call was passing `body: JSON.stringify({ e
 2. Enter a fresh email → confirmation line appears; check `newsletter_subscribers` in Supabase for a new row
 3. Submit the same email again → "You're already on the list." (no duplicate row in the table)
 4. Submit with the backend offline → error message appears briefly, form resets to idle
+
+---
+
+## Abandoned Checkout Recovery (June 2026)
+
+### What this is
+
+When a shopper adds items, reaches checkout, types in their details, and then leaves without paying, that's an "abandoned checkout." We already *captured* these (they showed up in the admin under Orders → Abandoned), but we never did anything with them. This work adds the **recovery loop**: we now automatically email the customer a reminder with a link that rebuilds their cart, and we track how many of those reminders actually bring people back to buy.
+
+It's modelled on how Shopify does it.
+
+### How it behaves
+
+- **A checkout counts as "abandoned" after 10 minutes** of inactivity (Shopify's standard). That's the threshold the admin Abandoned page uses.
+- **One reminder email goes out once the cart has been idle for an hour.** We deliberately wait the full hour rather than emailing at 10 minutes — it avoids pestering someone who's just slow to finish paying. Each cart is only ever emailed once.
+- **The email has a "Complete your order" button.** Clicking it opens a recovery link that rebuilds their cart exactly as they left it and drops them back on the checkout page. If anything in the cart sold out in the meantime, it's quietly removed and the shopper is told.
+- **No discount** is included — it's a plain reminder.
+- **Recovery rate is tracked.** The admin Abandoned page now shows three numbers at the top: how many reminders went out, how many of those carts were recovered, and the recovery rate as a percentage. Each row also shows whether a reminder was sent.
+
+It works for guests too, not just signed-in users — the only requirement is that the shopper typed their email before leaving (otherwise there's no address to send to).
+
+### How it works under the hood
+
+- A background job (`@nestjs/schedule` cron) runs every 5 minutes. Each run does two things: (1) marks any reminded carts that have since been bought as "recovered," and (2) sends reminder emails for carts that just crossed the one-hour idle mark.
+- The reminder email is a new 1NRI-styled template sent through Resend, and it's logged to `communication_logs` like all our other emails.
+- The recovery link uses a secure random token (not the cart's database id), looked up through a public endpoint that re-checks current stock and pricing before handing the cart back to the storefront.
+
+### Important bug found & fixed along the way
+
+While testing, abandoned checkouts weren't registering **at all** — no rows, no errors. Root cause: the `checkout_sessions` and `analytics_events` tables (from the earlier analytics work) had **Row Level Security turned on but were never granted access to the backend's service role.** The service role skips RLS rules, but Postgres still needs an explicit table `GRANT` — without it, every write was rejected with "permission denied," and the code was throwing that error away silently.
+
+This means our **storefront analytics tracking (page views, add-to-cart, etc.) had also been silently failing** for the same reason, since it writes to `analytics_events`.
+
+The fix is a migration that grants the service role access to both tables. We also made the checkout-save and cron code **log database errors** instead of swallowing them, so a problem like this surfaces in the backend logs next time instead of hiding.
+
+> **Action required:** this needs a migration applied to the database — run `npx supabase db push` from the repo root. Until that's run, nothing will register.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `supabase/migrations/20260626000000_abandoned_checkout_recovery.sql` | **New** — adds `reminder_sent_at`, `recovery_token`, `recovered_at` to `checkout_sessions` (+ indexes) |
+| `supabase/migrations/20260628000000_grant_service_role_analytics_tables.sql` | **New** — grants the service role access to `checkout_sessions` and `analytics_events` (the bug fix) |
+| `apps/backend/src/email/email.service.ts` | New `sendAbandonedCheckoutReminder()` + the 1NRI-styled email template |
+| `apps/backend/src/analytics/abandoned-checkout.cron.ts` | **New** — the every-5-minutes scheduled job |
+| `apps/backend/src/analytics/analytics.service.ts` | 10-min threshold, reconcile + send-reminder logic, recovery-by-token lookup, recovery-rate summary, plus error logging on the previously-silent writes |
+| `apps/backend/src/analytics/analytics.controller.ts` | New public `GET /analytics/checkout/recover/:token` endpoint |
+| `apps/backend/src/analytics/analytics.module.ts` | Registers the cron provider |
+| `apps/backend/src/app.module.ts` | Enables the scheduler (`ScheduleModule.forRoot()`) |
+| `apps/frontend/app/(shop)/checkout/recover/page.tsx` | **New** — the recovery landing page that rebuilds the cart |
+| `apps/frontend/lib/cart/cart-context.tsx` | New `restoreItems()` to replace the whole cart from a recovery link |
+| `apps/admin/app/(dashboard)/orders/abandoned/page.tsx` | Recovery-rate stat cards + "reminder sent" indicator |
+| `apps/admin/lib/api/analytics.ts` | New response fields for recovery data |
+
+### How to test
+
+The real timers are slow (10 min / 1 hour), so the trick is to **backdate a checkout in the database** and let the 5-minute cron pick it up.
+
+1. **Capture** — add items, go to `/checkout`, type an email. A row should appear in `checkout_sessions` with `status='open'` and a `recovery_token`. (If nothing appears, the grant migration above hasn't been applied.)
+2. **Reminder** — in Supabase, set that row's `updated_at` to 90 minutes ago and `reminder_sent_at` to null. Within ~5 minutes the cron sends the email; check your inbox and the `communication_logs` table, and confirm `reminder_sent_at` is now filled in.
+3. **Recovery link** — click "Complete your order" in the email → your cart is rebuilt and you land on `/checkout`.
+4. **Recovery rate** — complete the order with that same email. On the next cron run the row flips to `recovered`, and the stat cards on the admin Abandoned page update.

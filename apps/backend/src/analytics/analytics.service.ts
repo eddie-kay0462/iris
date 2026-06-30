@@ -1,5 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../common/supabase/supabase.service';
+import { EmailService } from '../email/email.service';
 import {
   AbandonedCheckoutsQueryDto,
   OverviewQueryDto,
@@ -20,11 +22,23 @@ import {
 import { listReports, REPORTS } from './reports/report-registry';
 import { ReportPayload } from './reports/report-types';
 
-const ABANDON_AFTER_MS = 60 * 60 * 1000; // open checkout idle > 1h counts as abandoned
+// Shopify standard: a checkout counts as abandoned after 10 min of inactivity.
+const ABANDON_AFTER_MS = 1 * 60 * 1000;
+// But the recovery email only goes out once the checkout has been idle for an
+// hour — long enough to be confident the customer has actually walked away.
+const REMINDER_AFTER_MS = 60 * 60 * 1000;
+// Don't email reminders for carts older than this; they're stale, not recoverable.
+const MAX_REMINDER_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private supabase: SupabaseService) {}
+  private readonly logger = new Logger(AnalyticsService.name);
+
+  constructor(
+    private supabase: SupabaseService,
+    private email: EmailService,
+    private config: ConfigService,
+  ) {}
 
   // ─── Date Helpers ──────────────────────────────────────────────────────────
 
@@ -1075,10 +1089,16 @@ export class AnalyticsService {
       ? { status: 'completed', order_id: dto.completedOrderId, completed_at: new Date().toISOString() }
       : {};
 
-    if (existing) {
-      await db.from('checkout_sessions').update({ ...fields, ...completed }).eq('id', existing.id);
-    } else {
-      await db.from('checkout_sessions').insert({ session_id: dto.sessionId, ...fields, ...completed });
+    const { error } = existing
+      ? await db.from('checkout_sessions').update({ ...fields, ...completed }).eq('id', existing.id)
+      : await db.from('checkout_sessions').insert({ session_id: dto.sessionId, ...fields, ...completed });
+
+    // Surface write failures (e.g. missing grants / RLS) instead of swallowing
+    // them — a silent failure here means abandoned checkouts never register.
+    if (error) {
+      this.logger.error(
+        `Failed to save checkout snapshot (session ${dto.sessionId}): ${error.message}`,
+      );
     }
   }
 
@@ -1253,9 +1273,10 @@ export class AnalyticsService {
 
     let q = db
       .from('checkout_sessions')
-      .select('id, session_id, user_id, email, phone, customer_name, items, subtotal, status, created_at, updated_at', {
-        count: 'exact',
-      })
+      .select(
+        'id, session_id, user_id, email, phone, customer_name, items, subtotal, status, reminder_sent_at, recovered_at, created_at, updated_at',
+        { count: 'exact' },
+      )
       .eq('status', 'open')
       .lt('updated_at', staleCutoff)
       .order('updated_at', { ascending: false });
@@ -1269,12 +1290,52 @@ export class AnalyticsService {
 
     const { data: rows, count } = await q.range((page - 1) * limit, page * limit - 1);
     const enriched = await this.enrichCheckouts(rows ?? []);
+    const recovery = await this.getRecoverySummary(query.from, query.to);
 
     return {
       checkouts: enriched,
       total: count ?? 0,
       page,
       limit,
+      recovery,
+    };
+  }
+
+  /**
+   * Recovery-rate stats over the (optional) date range: how many reminder
+   * emails went out and how many of those carts were subsequently recovered.
+   */
+  private async getRecoverySummary(from?: string, to?: string) {
+    const db = this.supabase.getAdminClient();
+    const remindedQ = db
+      .from('checkout_sessions')
+      .select('id', { count: 'exact', head: true })
+      .not('reminder_sent_at', 'is', null);
+    const recoveredQ = db
+      .from('checkout_sessions')
+      .select('id', { count: 'exact', head: true })
+      .not('reminder_sent_at', 'is', null)
+      .not('recovered_at', 'is', null);
+
+    if (from) {
+      remindedQ.gte('created_at', from);
+      recoveredQ.gte('created_at', from);
+    }
+    if (to) {
+      remindedQ.lte('created_at', to);
+      recoveredQ.lte('created_at', to);
+    }
+
+    const [{ count: remindersSent }, { count: recoveredCount }] = await Promise.all([
+      remindedQ,
+      recoveredQ,
+    ]);
+    const sent = remindersSent ?? 0;
+    const recovered = recoveredCount ?? 0;
+    return {
+      remindersSent: sent,
+      recoveredCount: recovered,
+      recoveryRate: sent > 0 ? round2((recovered / sent) * 100) : 0,
     };
   }
 
@@ -1359,11 +1420,202 @@ export class AnalyticsService {
         itemThumbnails: items.map((i) => i.imageUrl).filter(Boolean).slice(0, 3),
         items,
         subtotal: num(r.subtotal),
+        reminderSentAt: r.reminder_sent_at ?? null,
+        recoveredAt: r.recovered_at ?? null,
         recoveredBy: recoveredBy
           ? { orderId: recoveredBy.id, orderNumber: recoveredBy.order_number, total: num(recoveredBy.total), date: recoveredBy.created_at }
           : null,
       };
     });
+  }
+
+  // ─── Abandoned checkout recovery (cron-driven) ─────────────────────────────
+
+  /**
+   * Entry point for the scheduled job: first reconcile any reminded carts that
+   * have since converted, then send reminders for newly-eligible carts.
+   */
+  async runAbandonedCheckoutRecovery(): Promise<{ reminded: number; recovered: number }> {
+    const recovered = await this.reconcileRecoveries();
+    const reminded = await this.sendAbandonedCheckoutReminders();
+    return { reminded, recovered };
+  }
+
+  /**
+   * Mark reminded-but-still-open carts as recovered when the same customer has
+   * since placed a revenue order. Powers the recovery-rate metric.
+   */
+  private async reconcileRecoveries(): Promise<number> {
+    const db = this.supabase.getAdminClient();
+    const { data: rows, error } = await db
+      .from('checkout_sessions')
+      .select('id, user_id, email, reminder_sent_at')
+      .eq('status', 'open')
+      .not('reminder_sent_at', 'is', null)
+      .is('recovered_at', null);
+
+    if (error) {
+      this.logger.error(`reconcileRecoveries query failed: ${error.message}`);
+      return 0;
+    }
+    if (!rows?.length) return 0;
+
+    const userIds = rows.map((r) => r.user_id).filter(Boolean);
+    const emails = rows.map((r) => (r.email ?? '').toLowerCase()).filter(Boolean);
+    if (!userIds.length && !emails.length) return 0;
+
+    const { data: orders } = await db
+      .from('orders')
+      .select('id, user_id, email, created_at')
+      .is('deleted_at', null)
+      .in('status', ONLINE_REVENUE_STATUSES)
+      .or(
+        [
+          userIds.length ? `user_id.in.(${userIds.join(',')})` : null,
+          emails.length ? `email.in.(${emails.map((e) => `"${e}"`).join(',')})` : null,
+        ]
+          .filter(Boolean)
+          .join(','),
+      );
+
+    let recovered = 0;
+    for (const r of rows) {
+      const match = (orders ?? []).find(
+        (o: any) =>
+          o.created_at > r.reminder_sent_at &&
+          ((r.user_id && o.user_id === r.user_id) ||
+            (r.email && (o.email ?? '').toLowerCase() === (r.email ?? '').toLowerCase())),
+      );
+      if (!match) continue;
+      await db
+        .from('checkout_sessions')
+        .update({ status: 'recovered', recovered_at: new Date().toISOString(), order_id: match.id })
+        .eq('id', r.id);
+      recovered += 1;
+    }
+    return recovered;
+  }
+
+  /**
+   * Email a one-time recovery reminder for carts idle > REMINDER_AFTER_MS that
+   * haven't been reminded yet. `reminder_sent_at` is set after each send so a
+   * cart is only ever emailed once (assumes a single backend instance — revisit
+   * with a DB-level claim if the API is ever scaled horizontally).
+   */
+  private async sendAbandonedCheckoutReminders(): Promise<number> {
+    const db = this.supabase.getAdminClient();
+    const now = Date.now();
+    const idleCutoff = new Date(now - REMINDER_AFTER_MS).toISOString();
+    const ageCutoff = new Date(now - MAX_REMINDER_AGE_MS).toISOString();
+    const frontendUrl = this.config.get<string>('FRONTEND_URL', 'https://storefront.1nri.store');
+
+    const { data: rows, error } = await db
+      .from('checkout_sessions')
+      .select('id, recovery_token, email, customer_name, items, subtotal, status, updated_at')
+      .eq('status', 'open')
+      .is('reminder_sent_at', null)
+      .not('email', 'is', null)
+      .lt('updated_at', idleCutoff)
+      .gt('created_at', ageCutoff)
+      .order('updated_at', { ascending: true })
+      .limit(100);
+
+    if (error) {
+      this.logger.error(`sendAbandonedCheckoutReminders query failed: ${error.message}`);
+      return 0;
+    }
+    if (!rows?.length) return 0;
+
+    let sent = 0;
+    for (const r of rows) {
+      const items: any[] = Array.isArray(r.items) ? r.items : [];
+      if (items.length === 0) continue;
+
+      // Re-check the row is still open right before sending — guards against a
+      // checkout that completed between the batch read and now.
+      const { data: fresh } = await db
+        .from('checkout_sessions')
+        .select('status, reminder_sent_at')
+        .eq('id', r.id)
+        .maybeSingle();
+      if (!fresh || fresh.status !== 'open' || fresh.reminder_sent_at) continue;
+
+      try {
+        await this.email.sendAbandonedCheckoutReminder({
+          email: r.email,
+          customer_name: r.customer_name,
+          recovery_url: `${frontendUrl}/checkout/recover?token=${r.recovery_token}`,
+          subtotal: num(r.subtotal),
+          session_id: r.id,
+          items: items.map((i) => ({
+            product_name: i.productName,
+            variant_title: i.variantTitle ?? null,
+            quantity: i.quantity,
+            unit_price: num(i.unitPrice),
+            image_url: i.imageUrl ?? null,
+          })),
+        });
+        await db
+          .from('checkout_sessions')
+          .update({ reminder_sent_at: new Date().toISOString() })
+          .eq('id', r.id);
+        sent += 1;
+      } catch (err: any) {
+        this.logger.error(`Abandoned-checkout reminder failed for ${r.id}: ${err.message}`);
+      }
+    }
+    return sent;
+  }
+
+  /**
+   * Resolve a recovery link token to its cart, re-validated against current
+   * product availability and pricing (drops unavailable items, uses live price).
+   * Public — reached from the email CTA, no auth.
+   */
+  async getCheckoutByRecoveryToken(token: string) {
+    const db = this.supabase.getAdminClient();
+    const { data: row } = await db
+      .from('checkout_sessions')
+      .select('id, items, status')
+      .eq('recovery_token', token)
+      .maybeSingle();
+    if (!row) throw new NotFoundException('Recovery link not found');
+
+    const items: any[] = Array.isArray(row.items) ? row.items : [];
+    const variantIds = items.map((i) => i.variantId).filter(Boolean);
+    if (variantIds.length === 0) return { status: row.status, items: [], dropped: 0 };
+
+    const { data: variants } = await db
+      .from('product_variants')
+      .select('id, price, inventory_quantity, product_id, products!inner(title, status, deleted_at)')
+      .in('id', variantIds);
+
+    const variantMap = new Map<string, any>();
+    for (const v of variants ?? []) variantMap.set(v.id, v);
+
+    const validItems: any[] = [];
+    for (const i of items) {
+      const v = variantMap.get(i.variantId);
+      const product = v?.products;
+      const available =
+        v && product && product.status === 'active' && !product.deleted_at && v.inventory_quantity > 0;
+      if (!available) continue;
+      validItems.push({
+        variantId: i.variantId,
+        productId: v.product_id,
+        productTitle: product.title ?? i.productName,
+        variantTitle: i.variantTitle ?? null,
+        price: num(v.price),
+        image: i.imageUrl ?? null,
+        quantity: Math.min(i.quantity, v.inventory_quantity),
+      });
+    }
+
+    return {
+      status: row.status,
+      items: validItems,
+      dropped: items.length - validItems.length,
+    };
   }
 
   // ─── Unified reports engine ────────────────────────────────────────────────

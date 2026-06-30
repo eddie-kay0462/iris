@@ -37,9 +37,26 @@ export default function AbandonedCheckoutsPage() {
       <header className="space-y-1">
         <h1 className="text-2xl font-bold text-slate-900">Abandoned Checkouts</h1>
         <p className="text-sm text-slate-400">
-          Checkouts left idle for over an hour — with the customer and cart details captured before they left.
+          Checkouts left idle for 10+ minutes — with the customer and cart details captured before they
+          left. A recovery email goes out automatically once a cart has been idle for an hour.
         </p>
       </header>
+
+      {/* Recovery rate */}
+      {data?.recovery && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {[
+            { label: "Reminders sent", value: data.recovery.remindersSent.toLocaleString() },
+            { label: "Recovered", value: data.recovery.recoveredCount.toLocaleString() },
+            { label: "Recovery rate", value: `${data.recovery.recoveryRate}%` },
+          ].map((stat) => (
+            <div key={stat.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{stat.label}</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{stat.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Search */}
       <form
@@ -85,7 +102,7 @@ export default function AbandonedCheckoutsPage() {
             <p className="text-sm font-medium text-slate-600">No abandoned checkouts</p>
             <p className="max-w-sm text-xs text-slate-400">
               When a customer reaches checkout, enters details and leaves without paying, their cart shows
-              up here after an hour of inactivity.
+              up here after 10 minutes of inactivity.
             </p>
           </div>
         ) : (
@@ -153,8 +170,17 @@ export default function AbandonedCheckoutsPage() {
                     </Link>
                   </td>
                   <td className="border-b border-slate-100 px-4 py-3">
-                    <Link href={`/orders/abandoned/${c.id}`} className="block">
+                    <Link href={`/orders/abandoned/${c.id}`} className="block space-y-1">
                       <StatusChip status={c.status} />
+                      {c.reminderSentAt && (
+                        <p className="text-[11px] text-slate-400">
+                          Reminded{" "}
+                          {new Date(c.reminderSentAt).toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </p>
+                      )}
                     </Link>
                   </td>
                 </tr>

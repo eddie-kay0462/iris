@@ -182,6 +182,19 @@ export class AnalyticsController {
     await this.analyticsService.saveCheckoutSnapshot(dto);
   }
 
+  /**
+   * GET /analytics/checkout/recover/:token
+   * Resolve a recovery-email link to its cart (re-validated against current
+   * availability/pricing) so the storefront can rebuild it. Public.
+   */
+  @Public()
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Get('checkout/recover/:token')
+  recoverCheckout(@Param('token') token: string) {
+    return this.analyticsService.getCheckoutByRecoveryToken(token);
+  }
+
   // ─── Sessions / conversion / breakdown ─────────────────────────────────────
 
   /**
@@ -218,7 +231,8 @@ export class AnalyticsController {
 
   /**
    * GET /analytics/abandoned-checkouts
-   * Open checkouts idle for over an hour, with customer + item details.
+   * Open checkouts idle past the abandonment threshold (10 min), with customer
+   * + item details and a period recovery-rate summary.
    */
   @Get('abandoned-checkouts')
   @RequirePermission('analytics:read')
