@@ -42,7 +42,8 @@ yarn-error.log*
 next-env.d.ts
 
 # Claude Code & Planning
-CLAUDE.md
+# CLAUDE.md is shared team instructions (tracked); CLAUDE.local.md is personal (ignored)
+CLAUDE.local.md
 FORDAVID.md
 PLAN_FOR_DAVID.md
 PROGRESS.md

@@ -236,6 +236,37 @@ async function getCurrentAllyId(): Promise<string | null> {
   return data?.id ?? null
 }
 
+export type AllyStock = {
+  variantId: string
+  onHand: number
+  allocated: number
+  sold: number
+  returned: number
+}
+
+/**
+ * The current ally's stock on hand, per variant, from ally_stock_allocations.
+ * ally_stock_allocations is service-role only, so this must run server-side.
+ * Allies hold consignment stock, so this — not central product inventory — is
+ * what they actually have to sell.
+ */
+export async function fetchMyAllocations(): Promise<AllyStock[]> {
+  const allyId = await getCurrentAllyId()
+  if (!allyId) return []
+  const supabase = getServiceClient()
+  const { data } = await supabase
+    .from('ally_stock_allocations')
+    .select('variant_id, on_hand, quantity_allocated, quantity_sold, quantity_returned')
+    .eq('ally_id', allyId)
+  return (data ?? []).map((r: any) => ({
+    variantId: r.variant_id,
+    onHand: r.on_hand ?? 0,
+    allocated: r.quantity_allocated ?? 0,
+    sold: r.quantity_sold ?? 0,
+    returned: r.quantity_returned ?? 0,
+  }))
+}
+
 // ── MoMo charge ──────────────────────────────────────────────────────────────
 
 export async function chargeAllyMomo(
