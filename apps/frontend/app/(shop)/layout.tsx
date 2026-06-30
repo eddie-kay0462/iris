@@ -547,11 +547,11 @@ function ShopFooter() {
                   About
                 </Link>
               </li>
-              <li>
+              {/* <li>
                 <Link href="/lookbook" className="text-[12px] text-[#666] transition-colors hover:text-[#111] dark:text-neutral-400 dark:hover:text-[#ededed]">
                   Lookbook
                 </Link>
-              </li>
+              </li> */}
             </ul>
           </div>
 

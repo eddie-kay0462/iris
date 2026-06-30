@@ -4204,3 +4204,35 @@ We also gave it a second pass to match the rest of the site's look — the clean
 3. Expand **Tops** (or any category with an arrow) — the sub-types drop down. Click one and confirm it lands on the matching filtered product page.
 4. In the footer, switch the **currency** and toggle **Light / Dark** — the whole site theme should flip, and both should stick after you reload.
 5. Try it signed-out (footer shows "Sign In") and signed-in (footer greets you by name and links to your account).
+
+---
+
+## Footer Polish & Newsletter Card Flip (June 2026)
+
+A small visual cleanup pass on the storefront's footer and newsletter sign-up.
+
+**The footer now matches the rest of the site.** It was using slightly off-brand greys; we swapped everything over to the same clean black-and-white, small-caps styling used on the account pages, so it sits naturally with everything around it. The height and layout are unchanged.
+
+**We also fixed the footer links so they all actually go somewhere real:**
+- "My Account" pointed at a page that doesn't exist (`/profile`) — now goes to the real account page.
+- The dead "Collections" link was replaced, and the old greyed-out "Lookbook" was tidied up (it's currently hidden/commented out, easy to switch back on later).
+- The **social icons** now point to the real 1NRI accounts (Instagram `_1nriworldwide`, TikTok `@1nriworldwide`) instead of placeholder links. **Note:** the X/Twitter icon is a best-guess handle (`x.com/1nriworldwide`) — the About page only lists Instagram, TikTok, and YouTube, so this one needs confirming, or we can swap the X icon for YouTube.
+
+**The newsletter card is now inverted.** Its colours are flipped — the sign-up band that was light is now dark (and vice-versa in dark mode), with the text, input field, and Subscribe button all swapped to match. Purely a look change; it still works exactly the same.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/frontend/app/(shop)/layout.tsx` | Footer restyled to the site's black/white tokens; fixed the My Account link, replaced the dead Collections link, commented out Lookbook, and pointed the social icons at the real 1NRI accounts |
+| `apps/frontend/components/shop/NewsletterSection.tsx` | Inverted the card's colours (background, text, input, and button) in both light and dark mode |
+
+### Heads-up
+
+> The footer's **X/Twitter** link is an unverified guess. If 1NRI isn't on X, say the word and we'll swap that icon for YouTube (which has a confirmed handle).
+
+### How to test
+
+1. Scroll to the bottom of any storefront page and check the footer reads cleanly in both light and dark mode.
+2. Click each footer link — they should all land on a real page (no 404s). Hover the social icons and confirm they open the right 1NRI profiles.
+3. Look at the newsletter sign-up section — it should now be the opposite shade from before, with the Subscribe button flipped to match.
