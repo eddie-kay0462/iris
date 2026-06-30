@@ -10,10 +10,12 @@ import { CartProvider, useCart } from "@/lib/cart";
 import { hasToken } from "@/lib/api/client";
 import { useProfile } from "@/lib/api/profile";
 import { useFavourites } from "@/lib/favourites";
+import { FavouritesDrawerProvider, useFavouritesDrawer } from "@/lib/favourites-drawer";
 import { LocaleProvider, useLocale, CURRENCIES } from "@/lib/locale/locale-provider";
 import AnalyticsBeacon from "@/components/AnalyticsBeacon";
 import NavDrawer from "./components/NavDrawer";
 import CartDrawer from "./components/CartDrawer";
+import FavouritesDrawer from "./components/FavouritesDrawer";
 
 function ThemeToggle({ isTransparent = false }: { isTransparent?: boolean }) {
   const { theme, toggleTheme } = useTheme();
@@ -52,10 +54,12 @@ function ThemeToggle({ isTransparent = false }: { isTransparent?: boolean }) {
 
 function FavouritesLink({ isTransparent = false }: { isTransparent?: boolean }) {
   const { data: favourites } = useFavourites();
+  const { openDrawer } = useFavouritesDrawer();
   const count = favourites?.length ?? 0;
   return (
-    <Link
-      href="/favourites"
+    <button
+      type="button"
+      onClick={openDrawer}
       aria-label="Saved items"
       className={`group relative p-1 transition ${
         isTransparent
@@ -73,7 +77,7 @@ function FavouritesLink({ isTransparent = false }: { isTransparent?: boolean }) 
           {count > 99 ? "99+" : count}
         </span>
       )}
-    </Link>
+    </button>
   );
 }
 
@@ -677,6 +681,7 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
       <main className={isHome ? "" : "pt-[65px]"}>{children}</main>
       <ShopFooter />
       <CartDrawer />
+      <FavouritesDrawer />
     </div>
   );
 }
@@ -686,7 +691,9 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
     <ThemeProvider>
       <LocaleProvider>
         <CartProvider>
-          <ShopLayoutInner>{children}</ShopLayoutInner>
+          <FavouritesDrawerProvider>
+            <ShopLayoutInner>{children}</ShopLayoutInner>
+          </FavouritesDrawerProvider>
         </CartProvider>
       </LocaleProvider>
     </ThemeProvider>
