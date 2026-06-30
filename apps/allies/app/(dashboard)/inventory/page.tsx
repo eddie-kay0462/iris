@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Search, X, ChevronRight, ChevronDown, Package } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
+import { fetchMyAllocations } from '../sales/actions'
 
 type ProductImage = {
   id: string
@@ -92,33 +93,45 @@ export default function InventoryPage() {
   useEffect(() => {
     async function load() {
       const supabase = createClient()
-      const { data } = await supabase
-        .from('products')
-        .select(`id, title, status, vendor, tags, base_price, description, category, product_type,
-          product_variants(id, option1_value, option2_value, option3_value, price, inventory_quantity, sku),
-          product_images(id, src, alt_text, position, variant_id, image_type)`)
-        .eq('published', true)
-        .is('deleted_at', null)
-        .order('title')
+      const [{ data }, allocations] = await Promise.all([
+        supabase
+          .from('products')
+          .select(`id, title, status, vendor, tags, base_price, description, category, product_type,
+            product_variants(id, option1_value, option2_value, option3_value, price, sku),
+            product_images(id, src, alt_text, position, variant_id, image_type)`)
+          .eq('published', true)
+          .is('deleted_at', null)
+          .order('title'),
+        fetchMyAllocations(),
+      ])
+
+      // Allies hold consignment stock — show only what's been allocated to them,
+      // and use their on-hand as the stock figure (not central inventory).
+      const onHandByVariant = new Map(allocations.map((a) => [a.variantId, a.onHand]))
 
       setProducts(
-        (data ?? []).map((p: any) => ({
-          id: p.id,
-          title: p.title,
-          category: p.category ?? null,
-          product_type: p.product_type ?? null,
-          base_price: p.base_price,
-          description: p.description ?? null,
-          sizes: (p.product_variants ?? []).map((v: any) => ({
-            id: v.id,
-            size: [v.option1_value, v.option2_value, v.option3_value].filter(Boolean).join(' / ') || 'One Size',
-            stock: v.inventory_quantity ?? 0,
-            sku: v.sku ?? null,
-          })),
-          images: [...(p.product_images ?? [])]
-            .sort((a: any, b: any) => a.position - b.position)
-            .map((img: any) => ({ ...img, src: resolveImageUrl(img.src) })),
-        }))
+        (data ?? [])
+          .map((p: any) => ({
+            id: p.id,
+            title: p.title,
+            category: p.category ?? null,
+            product_type: p.product_type ?? null,
+            base_price: p.base_price,
+            description: p.description ?? null,
+            sizes: (p.product_variants ?? [])
+              .filter((v: any) => onHandByVariant.has(v.id))
+              .map((v: any) => ({
+                id: v.id,
+                size: [v.option1_value, v.option2_value, v.option3_value].filter(Boolean).join(' / ') || 'One Size',
+                stock: onHandByVariant.get(v.id) ?? 0,
+                sku: v.sku ?? null,
+              })),
+            images: [...(p.product_images ?? [])]
+              .sort((a: any, b: any) => a.position - b.position)
+              .map((img: any) => ({ ...img, src: resolveImageUrl(img.src) })),
+          }))
+          // Drop products the ally holds no stock of.
+          .filter((p: Product) => p.sizes.length > 0)
       )
       setLoading(false)
     }

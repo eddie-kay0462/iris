@@ -4105,3 +4105,72 @@ The real timers are slow (10 min / 1 hour), so the trick is to **backdate a chec
 2. **Reminder** — in Supabase, set that row's `updated_at` to 90 minutes ago and `reminder_sent_at` to null. Within ~5 minutes the cron sends the email; check your inbox and the `communication_logs` table, and confirm `reminder_sent_at` is now filled in.
 3. **Recovery link** — click "Complete your order" in the email → your cart is rebuilt and you land on `/checkout`.
 4. **Recovery rate** — complete the order with that same email. On the next cron run the row flips to `recovered`, and the stat cards on the admin Abandoned page update.
+
+---
+
+## Markets / Allies Redesign — Stock Allocation (June 2026)
+
+### What this is
+
+Allies (our campus/city resellers) can now be **given stock to sell**, and we track it centrally. Before, the admin could see an ally's sales and commission but there was no concept of "this ally is holding 5 of this hoodie." Now there is: you allocate stock to an ally, it moves out of central inventory into their hands, and as they sell, their on-hand count goes down automatically. The whole thing is built around a **consignment model** — total stock = central inventory + everything sitting with allies.
+
+It also replaces the old slide-out "activity" panel with a proper, full **ally page**.
+
+### The new ally page
+
+In the admin, **Markets → click any ally** (the whole row is clickable now) opens a dedicated page with everything in one place:
+
+- Header with status/brand, **Force logout**, and Edit.
+- Stats: total sales, orders, earnings, last login, and **units on hand**.
+- **Stock allocations** table — what they're holding per product/variant (allocated / sold / returned / on-hand), with a **Return** action per row and an **Allocate stock** button.
+- **Sales history** — paginated (7 per page).
+- Their details (email, phone, location, commission rate/quota).
+- **Activity** — login history and the 8-week login/sales charts that used to live in the sidebar drawer.
+
+The old "Activity" sidebar drawer is gone; everything moved onto this page.
+
+### Allocating stock
+
+Click **Allocate stock**, search for a product/variant, enter a quantity (capped at what's available centrally), and confirm. Behind the scenes this:
+- deducts the units from central `product_variants.inventory_quantity` (so the online store won't sell stock that's physically with an ally),
+- logs an `inventory_movements` row of type `transfer`,
+- and records the holding in the new `ally_stock_allocations` table.
+
+**Return** does the reverse — moves units back into central stock.
+
+### Auto-decrement when an ally sells
+
+When an ally completes a sale, the sold variants are automatically deducted from their on-hand. This works via database triggers so it's reliable across every sale path (cash, MoMo, bank transfer). To make it possible we added a `variant_id` to ally sale line items (they previously only stored the product, not the exact variant). Selling stock that was never allocated is allowed — it just isn't tracked against an allocation.
+
+### The allies app now shows real stock
+
+Previously the allies app's **Inventory** page and **New Sale** product picker showed the *central* warehouse stock, which is misleading — an ally doesn't have all of that. Both now show **only what's been allocated to that ally**, using their on-hand figure:
+- Inventory page lists only products they're holding, with on-hand as the stock number.
+- New Sale only lets them add variants they actually have, shows "X in stock", and **caps quantities at their on-hand** (the `+` button stops at the limit).
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `supabase/migrations/20260701000000_ally_stock_allocations.sql` | **New** — `ally_stock_allocations` table (with generated `on_hand`), grants + RLS, a `variant_id` column on `ally_sale_items`, and the auto-decrement triggers |
+| `apps/backend/src/allies/` | **New module** — allocate / return / list allocations + paginated sales history endpoints (reuses the inventory adjust logic for the `transfer`) |
+| `apps/backend/src/app.module.ts` | Registers the new allies module |
+| `apps/admin/app/(dashboard)/markets/[id]/page.tsx` | **New** — the dedicated ally page |
+| `apps/admin/app/(dashboard)/markets/page.tsx` | Rows are clickable → open the ally page |
+| `apps/admin/app/(dashboard)/markets/components/AllocateStockModal.tsx`, `AllyActivityPanel.tsx` | **New** — allocate modal + the activity section (extracted from the old drawer, which was deleted) |
+| `apps/admin/lib/api/allies.ts` | **New** — React Query hooks for allocations and sales history |
+| `apps/allies/app/(dashboard)/inventory/page.tsx`, `sales/page.tsx`, `sales/actions.ts` | Show the ally's allocated on-hand instead of central inventory; cap sale quantities at on-hand |
+
+### Heads-up / action required
+
+> This needs the migration applied — run `npx supabase db push` from the repo root. Until then, no ally will have any allocations, so the allies app will show no stock and the admin allocation tables will be empty.
+
+Also note: only sales made **after** this ships are attributed to allocations (older sale line items don't have the `variant_id`).
+
+### How to test
+
+1. Apply the migration (`npx supabase db push`).
+2. In the admin, open an ally → **Allocate stock** → pick a variant, allocate 5. Confirm: their on-hand shows 5, the variant's central inventory dropped by 5, and an `inventory_movements` `transfer` row was logged.
+3. Log into the allies app as that ally → the Inventory page shows that product with 5 on hand; on the New Sale page you can add it and the quantity won't go past 5.
+4. Complete a sale of 2 → back in the admin, the ally's on-hand for that variant is now 3.
+5. Use **Return** on the ally page to send stock back → on-hand drops and central inventory goes back up.

@@ -16,12 +16,13 @@ import {
   verifyAllyPayment,
   createAllyVirtualAccount,
   notifyAllySaleConfirmed,
+  fetchMyAllocations,
 } from './actions'
 
 type Customer = { id: string; first_name: string | null; last_name: string | null; email: string | null; phone_number: string | null; is_activated: boolean; invited_at: string | null }
-type Variant = { id: string; option1_value: string | null; option2_value: string | null; option3_value: string | null; price: number | null; sku: string | null; inventory_quantity: number }
+type Variant = { id: string; option1_value: string | null; option2_value: string | null; option3_value: string | null; price: number | null; sku: string | null; onHand: number }
 type Product = { id: string; title: string; base_price: number | null; variants: Variant[] }
-type LineItem = { variantId: string; productId: string; productName: string; variantTitle: string; unitPrice: number; quantity: number }
+type LineItem = { variantId: string; productId: string; productName: string; variantTitle: string; unitPrice: number; quantity: number; onHand: number }
 
 type PaymentMethod = 'cash' | 'momo' | 'bank_transfer'
 type MomoProvider = 'mtn' | 'vod' | 'tgo'
@@ -149,27 +150,54 @@ export default function SalesPage() {
   const refreshProducts = useCallback(async () => {
     setIsRefreshing(true)
     const supabase = createClient()
-    const { data } = await supabase
-      .from('products')
-      .select(`id, title, base_price, product_variants(id, option1_value, option2_value, option3_value, price, sku, inventory_quantity)`)
-      .eq('published', true)
-      .is('deleted_at', null)
-      .order('title')
-    const freshProducts = (data ?? []).map((p: any) => ({
-      id: p.id,
-      title: p.title,
-      base_price: p.base_price,
-      variants: p.product_variants ?? [],
-    }))
+    const [{ data }, allocations] = await Promise.all([
+      supabase
+        .from('products')
+        .select(`id, title, base_price, product_variants(id, option1_value, option2_value, option3_value, price, sku)`)
+        .eq('published', true)
+        .is('deleted_at', null)
+        .order('title'),
+      fetchMyAllocations(),
+    ])
+
+    // Allies sell consignment stock — only offer variants they have on hand,
+    // using their on-hand quantity (not central inventory).
+    const onHandByVariant = new Map(allocations.map((a) => [a.variantId, a.onHand]))
+
+    const freshProducts: Product[] = (data ?? [])
+      .map((p: any) => ({
+        id: p.id,
+        title: p.title,
+        base_price: p.base_price,
+        variants: (p.product_variants ?? [])
+          .filter((v: any) => (onHandByVariant.get(v.id) ?? 0) > 0)
+          .map((v: any) => ({
+            id: v.id,
+            option1_value: v.option1_value,
+            option2_value: v.option2_value,
+            option3_value: v.option3_value,
+            price: v.price,
+            sku: v.sku,
+            onHand: onHandByVariant.get(v.id) ?? 0,
+          })),
+      }))
+      .filter((p: Product) => p.variants.length > 0)
+
     setProducts(freshProducts)
     setLineItems((prev) =>
-      prev.map((item) => {
-        const product = freshProducts.find((p) => p.id === item.productId)
-        if (!product) return item
-        const variant = product.variants.find((v: Variant) => v.id === item.variantId)
-        if (!variant) return item
-        return { ...item, unitPrice: resolvePrice(variant.price, product.base_price) }
-      })
+      prev
+        .map((item) => {
+          const product = freshProducts.find((p) => p.id === item.productId)
+          const variant = product?.variants.find((v) => v.id === item.variantId)
+          if (!product || !variant) return null // variant no longer on hand — drop it
+          return {
+            ...item,
+            unitPrice: resolvePrice(variant.price, product.base_price),
+            onHand: variant.onHand,
+            quantity: Math.min(item.quantity, variant.onHand),
+          }
+        })
+        .filter((item): item is LineItem => item !== null),
     )
     setLastRefreshedAt(new Date())
     setIsRefreshing(false)
@@ -205,11 +233,13 @@ export default function SalesPage() {
 
   function addProduct(product: Product) {
     const variant = product.variants[0]
-    if (!variant) return
+    if (!variant || variant.onHand <= 0) return
     setLineItems((prev) => {
       const existingIndex = prev.findIndex((item) => item.variantId === variant.id)
       if (existingIndex !== -1) {
-        return prev.map((item, i) => i === existingIndex ? { ...item, quantity: item.quantity + 1 } : item)
+        return prev.map((item, i) =>
+          i === existingIndex ? { ...item, quantity: Math.min(item.onHand, item.quantity + 1) } : item
+        )
       }
       return [...prev, {
         variantId: variant.id,
@@ -218,6 +248,7 @@ export default function SalesPage() {
         variantTitle: getVariantLabel(variant),
         unitPrice: resolvePrice(variant.price, product.base_price),
         quantity: 1,
+        onHand: variant.onHand,
       }]
     })
   }
@@ -228,7 +259,14 @@ export default function SalesPage() {
     setLineItems((prev) =>
       prev.map((item, i) =>
         i === index
-          ? { ...item, variantId: variant.id, variantTitle: getVariantLabel(variant), unitPrice: resolvePrice(variant.price, product.base_price) }
+          ? {
+              ...item,
+              variantId: variant.id,
+              variantTitle: getVariantLabel(variant),
+              unitPrice: resolvePrice(variant.price, product.base_price),
+              onHand: variant.onHand,
+              quantity: Math.min(item.quantity, variant.onHand),
+            }
           : item
       )
     )
@@ -236,7 +274,9 @@ export default function SalesPage() {
 
   function updateQty(index: number, delta: number) {
     setLineItems((prev) =>
-      prev.map((item, i) => i === index ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item)
+      prev.map((item, i) =>
+        i === index ? { ...item, quantity: Math.max(1, Math.min(item.onHand, item.quantity + delta)) } : item
+      )
     )
   }
 
@@ -406,6 +446,7 @@ export default function SalesPage() {
       lineItems.map((item) => ({
         sale_id: sale.id,
         product_id: item.productId,
+        variant_id: item.variantId,
         product_name: item.productName,
         variant_title: item.variantTitle,
         unit_price: item.unitPrice,
@@ -684,15 +725,21 @@ export default function SalesPage() {
                 className="w-full pl-10 pr-4 py-2.5 rounded-md border border-slate-200 dark:border-neutral-800 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white" />
             </div>
             <div className="space-y-2 max-h-56 overflow-y-auto">
-              {filteredProducts.map((p) => (
-                <button key={p.id} onClick={() => addProduct(p)}
-                  className="w-full px-4 py-3 rounded-md border border-slate-200 dark:border-neutral-800 hover:bg-slate-50 dark:hover:bg-neutral-800 text-left transition-colors flex justify-between items-center">
-                  <span className="text-sm font-medium">{p.title}</span>
-                  <span className="text-sm text-neutral-500 ml-2 shrink-0">{formatCurrency(p.base_price ?? 0)}</span>
-                </button>
-              ))}
+              {filteredProducts.map((p) => {
+                const totalOnHand = p.variants.reduce((s, v) => s + v.onHand, 0)
+                return (
+                  <button key={p.id} onClick={() => addProduct(p)}
+                    className="w-full px-4 py-3 rounded-md border border-slate-200 dark:border-neutral-800 hover:bg-slate-50 dark:hover:bg-neutral-800 text-left transition-colors flex justify-between items-center">
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium truncate">{p.title}</span>
+                      <span className="block text-[11px] text-neutral-400">{totalOnHand} in stock</span>
+                    </span>
+                    <span className="text-sm text-neutral-500 ml-2 shrink-0">{formatCurrency(p.base_price ?? 0)}</span>
+                  </button>
+                )
+              })}
               {filteredProducts.length === 0 && (
-                <p className="text-sm text-neutral-400 text-center py-4">No products found</p>
+                <p className="text-sm text-neutral-400 text-center py-4">No stock allocated to you yet</p>
               )}
             </div>
           </div>
@@ -720,8 +767,13 @@ export default function SalesPage() {
                           <div className="flex items-center border border-neutral-200 dark:border-neutral-800">
                             <button onClick={() => updateQty(index, -1)} className="px-2 py-1 hover:bg-neutral-50 dark:hover:bg-neutral-800"><Minus className="w-3 h-3" /></button>
                             <span className="px-3 text-sm">{item.quantity}</span>
-                            <button onClick={() => updateQty(index, 1)} className="px-2 py-1 hover:bg-neutral-50 dark:hover:bg-neutral-800"><Plus className="w-3 h-3" /></button>
+                            <button
+                              onClick={() => updateQty(index, 1)}
+                              disabled={item.quantity >= item.onHand}
+                              className="px-2 py-1 hover:bg-neutral-50 dark:hover:bg-neutral-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                            ><Plus className="w-3 h-3" /></button>
                           </div>
+                          <span className="text-[11px] text-neutral-400 self-center">{item.onHand} on hand</span>
                         </div>
                       </div>
                       <div className="text-right shrink-0">

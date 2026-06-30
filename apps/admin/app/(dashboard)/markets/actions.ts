@@ -116,6 +116,37 @@ export async function fetchAllies() {
   return { allies: allyRows ?? [], sales: sales ?? [], error: null }
 }
 
+export async function fetchAlly(id: string) {
+  const supabase = getAdminClient()
+  const { data: ally, error } = await supabase.from('allies').select('*').eq('id', id).single()
+  if (error || !ally) return { ally: null, error: error?.message ?? 'Ally not found' }
+
+  const [{ data: sales }, { data: lastLoginRow }] = await Promise.all([
+    supabase.from('ally_sales').select('total, commission_amount').eq('ally_id', id),
+    supabase
+      .from('ally_logins')
+      .select('logged_in_at')
+      .eq('ally_id', id)
+      .order('logged_in_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  const totalSales = (sales ?? []).reduce((s, r: any) => s + Number(r.total), 0)
+  const totalEarnings = (sales ?? []).reduce((s, r: any) => s + Number(r.commission_amount), 0)
+
+  return {
+    ally: {
+      ...ally,
+      totalSales,
+      totalOrders: sales?.length ?? 0,
+      totalEarnings,
+      lastLogin: lastLoginRow?.logged_in_at ?? null,
+    },
+    error: null,
+  }
+}
+
 export async function updateAlly(input: UpdateAllyInput) {
   const supabase = getAdminClient()
   const { id, commission_rate, commission_quota, ...rest } = input

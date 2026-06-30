@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { UserPlus, Pencil, Activity } from 'lucide-react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { UserPlus, Pencil, ArrowRight } from 'lucide-react'
 import { fetchAllies } from './actions'
 import { Avatar } from '../../components/Avatar'
 import { InviteAllyModal } from './components/InviteAllyModal'
 import { EditAllyDrawer } from './components/EditAllyDrawer'
-import { AllyActivityDrawer } from './components/AllyActivityDrawer'
 import { CommissionSettingsCard } from './components/CommissionSettingsCard'
 
 type Ally = {
@@ -27,11 +28,11 @@ type Ally = {
 }
 
 export default function MarketsPage() {
+  const router = useRouter()
   const [allies, setAllies] = useState<Ally[]>([])
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
   const [editingAlly, setEditingAlly] = useState<Ally | null>(null)
-  const [activityAlly, setActivityAlly] = useState<Ally | null>(null)
 
   async function loadAllies() {
     const { allies: allyRows, sales } = await fetchAllies()
@@ -117,7 +118,11 @@ export default function MarketsPage() {
                 <tr><td colSpan={8} className="px-6 py-8 text-sm text-slate-400 text-center">No allies yet — invite your first partner.</td></tr>
               ) : (
                 allies.map((ally, i) => (
-                  <tr key={ally.id} className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${i === allies.length - 1 ? 'border-b-0' : ''}`}>
+                  <tr
+                    key={ally.id}
+                    onClick={() => router.push(`/markets/${ally.id}`)}
+                    className={`cursor-pointer border-b border-slate-100 hover:bg-slate-50 transition-colors ${i === allies.length - 1 ? 'border-b-0' : ''}`}
+                  >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <Avatar url={ally.avatar_url} name={ally.full_name} size={32} />
@@ -143,17 +148,20 @@ export default function MarketsPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <button
-                        onClick={() => setActivityAlly(ally)}
+                      <Link
+                        href={`/markets/${ally.id}`}
                         className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors"
                       >
-                        <Activity className="h-3 w-3" />
-                        Activity
-                      </button>
+                        View
+                        <ArrowRight className="h-3 w-3" />
+                      </Link>
                     </td>
                     <td className="px-3 py-4">
                       <button
-                        onClick={() => setEditingAlly(ally)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setEditingAlly(ally)
+                        }}
                         className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors"
                       >
                         <Pencil className="h-3 w-3" />
@@ -174,14 +182,6 @@ export default function MarketsPage() {
 
       {editingAlly && (
         <EditAllyDrawer ally={editingAlly} onClose={() => setEditingAlly(null)} onSuccess={loadAllies} />
-      )}
-
-      {activityAlly && (
-        <AllyActivityDrawer
-          allyId={activityAlly.id}
-          allyName={activityAlly.full_name}
-          onClose={() => setActivityAlly(null)}
-        />
       )}
     </section>
   )
