@@ -4336,3 +4336,32 @@ Under the hood we moved the shared size logic into one place so the shop page an
 3. Pick a size — it should show a brief spinner, then a ✓, and that size should appear in your bag above. Confirm a crossed-out (sold-out) size can't be selected.
 4. On a single-size product, tap **＋** and confirm it adds immediately.
 5. If you can, take the recommender service offline — the row should still show a few catalogue products instead of disappearing.
+
+---
+
+## Colour Swatches on Cart Suggestions (+ faster image loads) (July 2026)
+
+**The "Others Also Bought" suggestions in the cart drawer now have colour swatches**, the same little colour dots you see under products on the main shop pages. Tap a swatch and the suggestion's photo switches to that colour — so a shopper can eyeball the colour they want right there in their bag, without opening the product.
+
+Two nice touches:
+
+- **Colour carries into the bag.** When you quick-add a suggestion after picking a colour, the item lands in your bag labelled with that colour (and size, if it has sizes) — e.g. "Navy · M" — and shows the matching photo.
+- **The colour photos load faster.** As soon as you hover over (or, on a phone, touch) a colour dot, we quietly start loading that colour's picture in the background. So by the time you actually tap it, the image is usually already there — no waiting for it to pop in. This mirrors the same trick the main shop pages already use.
+
+Behind the scenes we also moved the shared colour logic (the colour-name-to-swatch table and the "which photo goes with which colour" lookup) into one common file, so the shop pages and the cart drawer stay perfectly in sync and we're not maintaining two copies.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/frontend/lib/products/colors.ts` | **New** — one shared home for the colour swatch palette and the colour→photo lookup, pulled out of the product card so the cart drawer can reuse the exact same logic. |
+| `apps/frontend/app/(shop)/components/ProductCard.tsx` | Now uses the shared colour helpers instead of its own private copies (no behaviour change). |
+| `apps/frontend/app/(shop)/components/CartDrawer.tsx` | Added colour swatches to the "Others Also Bought" suggestions, made the chosen colour flow into the bag, and wired up the hover/touch image pre-loading. |
+| `apps/frontend/hooks/useImagePrefetch.ts` | Added a small helper to pre-load a plain image URL (the suggestion cards use regular `<img>`s, so the existing optimised-image pre-loader didn't apply to them). |
+
+### How to test
+
+1. Run the storefront (`npm run dev` in `apps/frontend`) and add something to your bag so the drawer opens.
+2. In **Others Also Bought**, find a product with more than one colour — you should see colour dots under it. Tap one and confirm the photo swaps to that colour.
+3. Quick-add that product (via **＋** / size picker) and confirm the bag entry shows the colour you picked and the right photo.
+4. Hover over a colour dot for a beat before clicking — the colour's image should appear instantly (it was pre-loaded), rather than flashing in after a delay.
