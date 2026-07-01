@@ -4236,3 +4236,39 @@ A small visual cleanup pass on the storefront's footer and newsletter sign-up.
 1. Scroll to the bottom of any storefront page and check the footer reads cleanly in both light and dark mode.
 2. Click each footer link — they should all land on a real page (no 404s). Hover the social icons and confirm they open the right 1NRI profiles.
 3. Look at the newsletter sign-up section — it should now be the opposite shade from before, with the Subscribe button flipped to match.
+
+---
+
+## Slide-in Cart Drawer + Add-to-Cart Animation (June 2026)
+
+**Adding something to your bag now pops open a cart panel from the right** — no more jumping to a separate cart page just to see what you added. It's the quick "mini-cart" pattern you see on most big stores (think Everlane, Represent).
+
+What happens now when you add an item:
+
+- The little number on the **bag icon** in the header gives a quick bounce, and the bag nudges — a small bit of feedback so it's obvious something landed in your cart.
+- A **panel slides in from the right** showing your bag. It opens automatically on every add, and you can also open it any time by clicking the bag icon (it used to send you to the full `/cart` page).
+
+Inside the drawer:
+
+- **Your items** — photo, name, size/colour, price, a quantity stepper (+ / −), and a Remove button.
+- **"You might also like"** — a small row of recommended products (pulled from our existing recommender, the same engine behind "Picked for you"). Each has a one-tap **quick-add (＋)** button that drops it straight into the bag and shows a ✓; anything already in your bag is filtered out so it won't suggest duplicates.
+- A **sticky checkout footer** with the subtotal and a "Checkout" button, plus an empty-bag state if there's nothing in it yet.
+
+The full `/cart` page is untouched and still works — the drawer is just a faster way in. (We briefly had a "free shipping progress" bar at the top of the drawer but removed it per request, so the header just reads "Your Bag".)
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/frontend/app/(shop)/components/CartDrawer.tsx` | **New** — the whole right-side cart panel: backdrop, item list with quantity/remove controls, the "You might also like" recommendation row with quick-add, and the sticky subtotal/checkout footer. |
+| `apps/frontend/lib/cart/cart-context.tsx` | Added open/close state for the drawer so it can pop open from anywhere, and made every "add to cart" open it automatically. Also exposes a `hydrated` flag so the bag animation doesn't falsely fire on page load. |
+| `apps/frontend/app/(shop)/layout.tsx` | Mounted the drawer site-wide; the header bag icon now opens it instead of navigating to `/cart`. Added the bag-bump/nudge animation on the count. |
+| `apps/frontend/app/globals.css` | Added the small bounce/nudge keyframe animations (and respects "reduce motion" accessibility settings). |
+
+### How to test
+
+1. Run the storefront (`npm run dev` in `apps/frontend`) and open any product.
+2. Add it to the cart (or use a product card's Quick Add) — the bag count should bounce and the cart panel should slide in from the right.
+3. In the drawer: change quantities, remove an item, and confirm the subtotal updates.
+4. Scroll to **"You might also like"** and tap a ＋ — that product should drop into the bag (showing a ✓) and disappear from the suggestions.
+5. Click the **bag icon** in the header — it should open the same drawer. Press **Esc** or click the dark backdrop to close.
