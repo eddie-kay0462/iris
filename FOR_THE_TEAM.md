@@ -4272,3 +4272,67 @@ The full `/cart` page is untouched and still works — the drawer is just a fast
 3. In the drawer: change quantities, remove an item, and confirm the subtotal updates.
 4. Scroll to **"You might also like"** and tap a ＋ — that product should drop into the bag (showing a ✓) and disappear from the suggestions.
 5. Click the **bag icon** in the header — it should open the same drawer. Press **Esc** or click the dark backdrop to close.
+
+---
+
+## Saved Items Drawer (June 2026)
+
+**Your wishlist now slides in from the right too**, just like the cart drawer — tapping the **heart icon** in the header pops open a panel instead of sending you off to a separate page. It's the same quick, stay-where-you-are pattern, so checking what you've saved no longer interrupts your browsing.
+
+What's in the panel:
+
+- **A header** reading "Saved Items (n)" with a close button.
+- **Your saved products** — photo, name, price, a **View product** link, and a **Remove** button. Removing is instant (the item disappears right away, even before the server confirms).
+- **Smart empty states**: if you're not signed in it shows a "Sign in to view saved items" prompt; if you're signed in but haven't saved anything yet it nudges you to tap the heart on a product; and it shows loading placeholders while your list is fetching.
+
+The full `/favourites` page is untouched and still works — links like "Saved Items" in the main menu still open it — so the drawer is just the faster way in, mirroring how the cart icon and `/cart` page coexist.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/frontend/app/(shop)/components/FavouritesDrawer.tsx` | **New** — the right-side saved-items panel: backdrop, item list with View/Remove, plus signed-out / empty / loading states. Reuses the existing favourites data and the same save/remove logic the heart buttons already use. |
+| `apps/frontend/lib/favourites-drawer.tsx` | **New** — a tiny shared on/off switch so the header heart and the drawer stay in sync (open it from anywhere). |
+| `apps/frontend/app/(shop)/layout.tsx` | Mounted the drawer site-wide and made the header **heart** open it instead of navigating to `/favourites`. |
+
+### How to test
+
+1. Run the storefront (`npm run dev` in `apps/frontend`) and sign in.
+2. Save a few products (tap the heart on product cards or product pages).
+3. Click the **heart icon** in the header — the Saved Items panel should slide in from the right. Press **Esc** or click the dark backdrop to close.
+4. Hit **Remove** on an item and confirm it vanishes immediately; click **View product** and confirm it lands on the right page.
+5. Sign out and open it again — you should see the "Sign in to view saved items" prompt.
+
+---
+
+## "Others Also Bought" — Quick-Add With Size Picker (June 2026)
+
+**The cart drawer now suggests extra items you can add without leaving your bag** — and adding them works exactly like it does on the main shop page, where you pick a size first.
+
+When you open your bag, there's an **"Others Also Bought"** row of suggested products under your items. Tapping the **＋** on one of them now:
+
+- **For products with sizes** — pops up a little size strip (XS, S, M, L…) right on the card. Pick a size and it drops *that specific size* into your bag with a quick loading tick, then a ✓. Sold-out sizes are crossed out and can't be picked. This is the same behaviour as the "Quick Add" on product cards everywhere else, so it feels consistent.
+- **For one-size / single-option products** — the ＋ just adds it straight away.
+
+Two smaller things worth noting:
+
+- **It always shows something now.** Before, if our recommendation engine was offline or had nothing for you, the whole row vanished. It now falls back to showing a few products from the catalogue so the row still appears. (When the recommender is up, those smarter picks take over automatically.)
+- **No more guessing the size.** Previously a quick-add from this row silently grabbed whatever the "first available" size was — which could be the wrong one. Now you choose.
+
+Under the hood we moved the shared size logic into one place so the shop page and the cart drawer can't drift apart.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/frontend/lib/products/variants.ts` | **New** — one shared home for the "which option is the size / list the sizes / find the variant for a size" logic, so the product grid and the cart drawer use the exact same rules. |
+| `apps/frontend/app/(shop)/components/ProductCard.tsx` | Now uses the shared size helpers instead of its own private copies (no behaviour change here). |
+| `apps/frontend/app/(shop)/components/CartDrawer.tsx` | "Others Also Bought" quick-add rewritten to use the size-picker flow; added the catalogue fallback so the row shows even when the recommender is down. |
+
+### How to test
+
+1. Run the storefront (`npm run dev` in `apps/frontend`) and add something to your bag so the drawer opens.
+2. Scroll to **Others Also Bought**. On a product that has sizes, tap **＋** — a size strip should appear on the card.
+3. Pick a size — it should show a brief spinner, then a ✓, and that size should appear in your bag above. Confirm a crossed-out (sold-out) size can't be selected.
+4. On a single-size product, tap **＋** and confirm it adds immediately.
+5. If you can, take the recommender service offline — the row should still show a few catalogue products instead of disappearing.

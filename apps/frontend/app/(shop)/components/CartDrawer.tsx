@@ -2,11 +2,19 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Minus, Plus, X, Check, ShoppingBag } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Minus, Plus, X, Check, ShoppingBag, Loader2 } from "lucide-react";
 import { useCart } from "@/lib/cart";
 import { useLocale } from "@/lib/locale/locale-provider";
 import { usePersonalisedProducts } from "@/lib/api/recommendations";
-import type { Product, ProductVariant } from "@/lib/api/products";
+import { apiClient } from "@/lib/api/client";
+import { extractSizes, findVariantBySize } from "@/lib/products/variants";
+import {
+  colorToHex,
+  extractColorsFromTags,
+  findImageIndexByTag,
+} from "@/lib/products/colors";
+import type { Product, ProductVariant, PaginatedResponse } from "@/lib/api/products";
 
 /** First in-stock variant, falling back to the first preorderable one. */
 function defaultVariant(product: Product): ProductVariant | null {
@@ -239,11 +247,30 @@ function RecommendationsStrip() {
   const { data, isLoading } = usePersonalisedProducts(8);
   const { items } = useCart();
 
+  const personalised = data ?? [];
+  const recsEmpty = !isLoading && personalised.length === 0;
+
+  // Fallback: if the recommender is offline (or has nothing for this user/guest),
+  // show a few catalogue products so the cross-sell strip still appears. Only
+  // fetched once we know the personalised list came back empty.
+  const { data: fallback, isLoading: fallbackLoading } = useQuery({
+    queryKey: ["cart-drawer-fallback-products"],
+    queryFn: () =>
+      apiClient<PaginatedResponse<Product>>("/products?limit=12").catch(
+        () => ({ data: [], total: 0, page: 1, limit: 12, totalPages: 0 }),
+      ),
+    enabled: recsEmpty,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
   // Hide anything already in the bag so we never suggest a duplicate.
   const inCart = new Set(items.map((i) => i.productId));
-  const recs = (data ?? []).filter((p) => !inCart.has(p.id)).slice(0, 8);
+  const source =
+    personalised.length > 0 ? personalised : fallback?.data ?? [];
+  const recs = source.filter((p) => !inCart.has(p.id)).slice(0, 8);
 
-  if (isLoading) {
+  if (isLoading || (recsEmpty && fallbackLoading)) {
     return (
       <div className="mt-2 border-t border-[#f0f0f0] px-5 py-4 dark:border-neutral-900">
         <div className="mb-3 h-3 w-32 animate-pulse rounded bg-[#f0f0f0] dark:bg-neutral-800" />
@@ -263,8 +290,8 @@ function RecommendationsStrip() {
 
   return (
     <div className="mt-2 border-t border-[#f0f0f0] px-5 py-4 dark:border-neutral-900">
-      <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#111] dark:text-[#ededed]">
-        You might also like
+      <h3 className="mb-3 inline-block border-b-2 border-[#111] pb-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#111] dark:border-[#ededed] dark:text-[#ededed]">
+        Others Also Bought
       </h3>
       <div className="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {recs.map((product) => (
@@ -278,36 +305,89 @@ function RecommendationsStrip() {
 function RecCard({ product }: { product: Product }) {
   const { addItem } = useCart();
   const { formatPrice } = useLocale();
-  const [added, setAdded] = useState(false);
 
-  const variant = defaultVariant(product);
-  const image = product.product_images?.[0]?.src ?? null;
-  const price = variant?.price ?? product.base_price ?? 0;
-  const compareAt = variant?.compare_at_price ?? null;
+  const variants = product.product_variants ?? [];
+  const images = product.product_images ?? [];
+  const sizes = extractSizes(variants);
+  const hasSizes = sizes.length > 0;
+  const colors = extractColorsFromTags(images);
+  const fallback = defaultVariant(product);
+
+  const price = fallback?.price ?? product.base_price ?? 0;
+  const compareAt = fallback?.compare_at_price ?? null;
   const isOnSale = compareAt != null && compareAt > price;
 
-  const soldOut =
-    !variant ||
-    (variant.inventory_quantity <= 0 &&
-      variant.available === false &&
-      variant.preorder_enabled !== true);
+  const inStockVariants = variants.filter(
+    (v) => v.inventory_quantity > 0 && v.available !== false,
+  );
+  const allOutOfStock = variants.length > 0 && inStockVariants.length === 0;
+  const hasPreorder =
+    allOutOfStock && variants.some((v) => v.preorder_enabled === true);
+  const soldOut = (allOutOfStock && !hasPreorder) || !fallback;
 
-  function quickAdd() {
-    if (!variant || soldOut || added) return;
+  // Mirrors ProductCard's quick-add flow: pick a size, brief spinner, then ✓.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [addingSize, setAddingSize] = useState<string | null>(null);
+  const [successSize, setSuccessSize] = useState<string | null>(null);
+  const [addedFlash, setAddedFlash] = useState(false);
+  // Colour swatches swap the previewed image, just like on the shop page.
+  const [selectedColor, setSelectedColor] = useState(colors[0] ?? "");
+  const [imgIndex, setImgIndex] = useState(() =>
+    findImageIndexByTag(images, colors[0] ?? ""),
+  );
+
+  const image = images[imgIndex]?.src ?? images[0]?.src ?? null;
+
+  function add(variant: ProductVariant, sizeLabel: string | null) {
     addItem({
       variantId: variant.id,
       productId: product.id,
       productTitle: product.title,
-      variantTitle: variantLabel(variant),
+      variantTitle: [selectedColor || null, sizeLabel ?? variantLabel(variant)]
+        .filter(Boolean)
+        .join(" · ") || null,
       price: variant.price ?? product.base_price ?? 0,
       image,
     });
-    setAdded(true);
-    setTimeout(() => setAdded(false), 1400);
+  }
+
+  function handlePickSize(size: string) {
+    const variant = findVariantBySize(variants, size);
+    if (!variant) return;
+    const inStock =
+      variant.inventory_quantity > 0 && variant.available !== false;
+    if (!inStock && !variant.preorder_enabled) return;
+    setAddingSize(size);
+    setTimeout(() => {
+      add(variant, size);
+      setAddingSize(null);
+      setSuccessSize(size);
+      setTimeout(() => {
+        setSuccessSize(null);
+        setPickerOpen(false);
+      }, 800);
+    }, 400);
+  }
+
+  function handlePlus(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (soldOut) return;
+    // Sizeable products open the size picker; single-variant ones add directly.
+    if (hasSizes) {
+      setPickerOpen((o) => !o);
+    } else if (fallback) {
+      add(fallback, null);
+      setAddedFlash(true);
+      setTimeout(() => setAddedFlash(false), 1400);
+    }
   }
 
   return (
-    <div className="w-[112px] shrink-0">
+    <div
+      className="w-[112px] shrink-0"
+      onMouseLeave={() => !addingSize && setPickerOpen(false)}
+    >
       <Link href={`/product/${product.handle || product.id}`}>
         <div className="relative aspect-[3/4] overflow-hidden bg-[#f4f4f4] dark:bg-neutral-900">
           {image ? (
@@ -323,29 +403,89 @@ function RecCard({ product }: { product: Product }) {
             </div>
           )}
 
-          {/* Quick-add button */}
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              quickAdd();
-            }}
-            disabled={soldOut}
-            aria-label={soldOut ? "Sold out" : `Quick add ${product.title}`}
-            className={`absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full shadow-sm transition-all duration-200 ${
-              soldOut
-                ? "cursor-not-allowed bg-white/70 text-[#ccc] dark:bg-black/60"
-                : added
-                  ? "bg-[#111] text-white dark:bg-[#ededed] dark:text-[#0a0a0a]"
-                  : "bg-white text-[#111] hover:bg-[#111] hover:text-white dark:bg-[#1a1a1a] dark:text-[#ededed] dark:hover:bg-[#ededed] dark:hover:text-[#0a0a0a]"
-            }`}
-          >
-            {added ? (
-              <Check className="h-3.5 w-3.5" strokeWidth={2.2} />
-            ) : (
-              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-            )}
-          </button>
+          {/* Sale badge */}
+          {isOnSale && (
+            <span className="absolute left-1.5 top-1.5 bg-white/95 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.12em] text-[#111] dark:bg-black/80 dark:text-[#ededed]">
+              Sale
+            </span>
+          )}
+
+          {/* Size picker — slides over the bottom of the image */}
+          {hasSizes && pickerOpen && (
+            <div
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              className="absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-center gap-0.5 bg-white/95 p-1.5 dark:bg-black/90"
+            >
+              {sizes.map((size) => {
+                const v = findVariantBySize(variants, size);
+                const inStock =
+                  !!v && v.inventory_quantity > 0 && v.available !== false;
+                const canPreorder = !inStock && v?.preorder_enabled === true;
+                const unavailable = !inStock && !canPreorder;
+                return (
+                  <button
+                    key={size}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (!addingSize && successSize !== size && !unavailable)
+                        handlePickSize(size);
+                    }}
+                    disabled={!!addingSize || unavailable}
+                    aria-disabled={unavailable}
+                    className={`flex h-6 min-w-[22px] items-center justify-center px-1 text-[9px] font-semibold uppercase tracking-wide transition-colors duration-150 ${
+                      unavailable
+                        ? "cursor-not-allowed text-gray-300 line-through dark:text-gray-700"
+                        : addingSize === size
+                          ? "bg-gray-100 text-gray-400 dark:bg-gray-800"
+                          : successSize === size
+                            ? "bg-[#111] text-white dark:bg-[#ededed] dark:text-[#0a0a0a]"
+                            : "text-[#111] hover:bg-gray-100 dark:text-[#ededed] dark:hover:bg-gray-800"
+                    }`}
+                  >
+                    {addingSize === size ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : successSize === size ? (
+                      <Check className="h-3 w-3" strokeWidth={2.2} />
+                    ) : (
+                      size
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Quick-add button (hidden while the size picker is open) */}
+          {!(hasSizes && pickerOpen) && (
+            <button
+              onClick={handlePlus}
+              disabled={soldOut}
+              aria-label={
+                soldOut
+                  ? "Sold out"
+                  : hasSizes
+                    ? `Choose a size for ${product.title}`
+                    : `Quick add ${product.title}`
+              }
+              className={`absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full shadow-sm transition-all duration-200 ${
+                soldOut
+                  ? "cursor-not-allowed bg-white/70 text-[#ccc] dark:bg-black/60"
+                  : addedFlash
+                    ? "bg-[#111] text-white dark:bg-[#ededed] dark:text-[#0a0a0a]"
+                    : "bg-white text-[#111] hover:bg-[#111] hover:text-white dark:bg-[#1a1a1a] dark:text-[#ededed] dark:hover:bg-[#ededed] dark:hover:text-[#0a0a0a]"
+              }`}
+            >
+              {addedFlash ? (
+                <Check className="h-3.5 w-3.5" strokeWidth={2.2} />
+              ) : (
+                <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              )}
+            </button>
+          )}
         </div>
       </Link>
 
@@ -370,6 +510,31 @@ function RecCard({ product }: { product: Product }) {
           </span>
         )}
       </div>
+
+      {/* Colour swatches — swap the previewed image, like the shop page */}
+      {colors.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {colors.map((color) => (
+            <button
+              key={color}
+              title={color}
+              aria-label={color}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setSelectedColor(color);
+                setImgIndex(findImageIndexByTag(images, color));
+              }}
+              className={`h-3.5 w-3.5 rounded-full transition-transform duration-150 hover:scale-110 focus:outline-none ${
+                selectedColor.toLowerCase() === color.toLowerCase()
+                  ? "ring-1 ring-gray-900 ring-offset-1 dark:ring-white"
+                  : "ring-1 ring-gray-200 dark:ring-gray-700"
+              }`}
+              style={{ backgroundColor: colorToHex(color) }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
