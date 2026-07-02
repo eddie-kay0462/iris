@@ -31,6 +31,16 @@ export function prefetchImage(src: string, width: number, quality = 75): void {
 }
 
 /**
+ * Warm the browser cache for a raw image URL — for the places that render a plain
+ * `<img src>` (not next/image), where the optimised URL wouldn't be a cache hit.
+ */
+export function prefetchRawImage(src: string): void {
+  if (typeof window === "undefined" || !src) return;
+  const img = new window.Image();
+  img.src = src;
+}
+
+/**
  * PDP-only: idle-prefetch the optimised URLs for the current colour's image set
  * (capped). Replaces the previous behaviour that eagerly loaded every raw original.
  */

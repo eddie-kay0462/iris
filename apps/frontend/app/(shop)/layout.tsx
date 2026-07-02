@@ -499,7 +499,7 @@ function ShopHeader() {
         >
           <Image
             src="/homepage_img/no-bg-1NRI.png"
-            alt="1NRI"
+            alt="1NRI Worldwide logo"
             width={120}
             height={48}
             className={`h-8 w-auto min-w-[60px] transition-all duration-300 ${
