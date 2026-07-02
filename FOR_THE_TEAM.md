@@ -4392,3 +4392,54 @@ The edit view for each variant has a new row with the same **Allow pre-orders** 
 2. Click **Edit** on a variant — you should now see an **Allow pre-orders** switch below the edit fields.
 3. Turn it on (optionally set a limit), then **Save**.
 4. Set that variant's stock to 0 and check the storefront — the product page should show **Pre-order Now** instead of **Sold Out**.
+
+---
+
+## Search Engine Optimization (SEO) Overhaul (July 2026)
+
+**The storefront can now actually be found on Google.** An SEO audit found that basically zero pages were getting indexed — Google either couldn't discover our pages, or when it did visit a product page it hit a server error and saw nothing. This pass fixes the whole chain: telling Google what pages exist, giving every page a proper title/description, feeding the rich "product cards" that show up in search results, and — the big one — making product pages actually load for Google's crawler instead of crashing.
+
+In plain terms: before, if you searched "1NRI streetwear" we were invisible. This lays the groundwork to change that. (SEO still takes weeks for Google to catch up after a site deploys — this is the foundation, not an instant switch.)
+
+### What changed, plainly
+
+- **A sitemap** (`/sitemap.xml`) — an auto-updating list of every page and every published product, handed straight to Google so nothing gets missed. New products show up in it automatically within the hour.
+- **A robots file** (`/robots.txt`) — tells search engines "index the shop, but skip the cart, checkout, login and account pages" (those have no business in search results).
+- **Real titles & descriptions on every page** — the homepage, About, the product grid, and each individual product now have their own tailored title and blurb (what shows up as the clickable headline + grey text in Google results), instead of every tab just saying "1NRI".
+- **Share previews** — links pasted into WhatsApp, Instagram, X, etc. now show a proper image, title and description.
+- **"Rich results" data** — behind-the-scenes structured data so Google can show our product name, price, and in-stock status right in the results, plus the Home › Products › [item] breadcrumb trail and our brand/social profiles.
+- **The critical fix: product pages no longer crash for Google.** The pre-order payment widget was loading in a way that errored out whenever a non-browser (like Google's crawler) tried to open a product page. We isolated it so the page loads cleanly server-side; the pre-order popup still works exactly the same for shoppers.
+- **Faster, correctly-sized hero image** and descriptive alt text on all the main images (also helps accessibility and image search).
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/frontend/app/sitemap.ts` | **New** — auto-generated sitemap of static pages + every published product. |
+| `apps/frontend/app/robots.ts` | **New** — allows search engines on the shop, blocks cart/checkout/account/auth pages. |
+| `apps/frontend/app/layout.tsx` | Full site-wide title/description/share-preview defaults, plus brand + website structured data. |
+| `apps/frontend/app/(shop)/page.tsx` | **New** thin wrapper that gives the homepage its own title/description (the homepage design moved untouched into `RoadToHQClient.tsx`). |
+| `apps/frontend/app/(shop)/RoadToHQClient.tsx` | The existing homepage, unchanged except image alt text + hero image quality. |
+| `apps/frontend/app/(shop)/about/layout.tsx` | **New** — About page title/description/share preview. |
+| `apps/frontend/app/(shop)/products/layout.tsx` | **New** — products page title/description + a server-rendered product list Google can read. |
+| `apps/frontend/app/(shop)/product/[id]/layout.tsx` | **New** — per-product title/description/share preview + product & breadcrumb rich-results data. |
+| `apps/frontend/app/(shop)/product/[id]/PreorderModal.tsx` | **New** — the pre-order popup, split out so the payment library only loads in the browser (this is the crawler-crash fix). |
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | Loads the pre-order popup lazily (browser-only); image alt tweak. No visible change. |
+| `apps/frontend/app/(shop)/about/page.tsx` | Descriptive alt text on editorial images. |
+| `apps/frontend/app/(shop)/layout.tsx` | Logo alt text ("1NRI Worldwide logo"). |
+| `apps/frontend/lib/seo/site.ts` | **New** — one shared source of truth for the public site URL. |
+| `apps/frontend/lib/api/products.server.ts` | **New** — safe server-side product fetching used by the sitemap and product pages. |
+| `apps/frontend/next.config.ts` | Allow the hero image's higher quality setting. |
+
+### Heads-up / action required
+
+> **One manual step left:** Google Search Console verification. Once someone sets up the storefront in Google Search Console, they'll get a verification code — paste it into the `verification.google` slot in `apps/frontend/app/layout.tsx` (there's a commented placeholder waiting) and submit `https://storefront.1nri.store/sitemap.xml` there. That's what actually kicks off Google indexing.
+>
+> Note the footer social links were already correct, so those didn't need changing.
+
+### How to test
+
+1. Build and run the storefront (`npm run build && npm run start` in `apps/frontend`) with the backend running.
+2. Visit `/sitemap.xml` and `/robots.txt` — both should load; the sitemap should list your products.
+3. Open a few pages and check the browser tab titles differ (Home vs About vs a product).
+4. Open a product page — it should load normally (no error), and viewing page source should show the product name, price and description in the HTML.
