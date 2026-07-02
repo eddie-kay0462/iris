@@ -1,0 +1,134 @@
+{
+  "generatedAt": "2026-07-02T19:47:03.302Z",
+  "mode": "commit",
+  "csv": "/Users/kirkkudoto/Downloads/School/Ashesi Year Four/Semester Two/Entrepreneurship II/Building Iris/iris/New Customers - Untitled.csv",
+  "counts": {
+    "exists-phone": 586,
+    "create": 1,
+    "exists-email": 7,
+    "skip": 9
+  },
+  "mergedInCsv": [
+    {
+      "kept": 17,
+      "dropped": 19,
+      "key": "p:+233593763163"
+    },
+    {
+      "kept": 18,
+      "dropped": 20,
+      "key": "p:+233256245275"
+    },
+    {
+      "kept": 367,
+      "dropped": 368,
+      "key": "p:+233531155406"
+    },
+    {
+      "kept": 370,
+      "dropped": 234,
+      "key": "p:+13023100101"
+    },
+    {
+      "kept": 549,
+      "dropped": 188,
+      "key": "p:+233540392680"
+    },
+    {
+      "kept": 563,
+      "dropped": 567,
+      "key": "p:+233265173910"
+    },
+    {
+      "kept": 564,
+      "dropped": 568,
+      "key": "p:+233538974974"
+    },
+    {
+      "kept": 565,
+      "dropped": 569,
+      "key": "p:+233554502530"
+    },
+    {
+      "kept": 340,
+      "dropped": 582,
+      "key": "p:+233530260905"
+    }
+  ],
+  "creates": [
+    {
+      "row": 23,
+      "name": "ADOTEY",
+      "phone": "+233243144367",
+      "country": "GH",
+      "email": null
+    }
+  ],
+  "backfills": [],
+  "skipped": [
+    {
+      "row": 8,
+      "name": "VALERIE ACKON",
+      "rawPhone": "054 881 749",
+      "email": null,
+      "reason": "RESOLVED — same person as \"valerie a.\" (row 2, +233548851749), already imported; broken number 054 881 749 dropped",
+      "resolved": true
+    },
+    {
+      "row": 48,
+      "name": "JERRY AMEGASHIE",
+      "rawPhone": null,
+      "email": null,
+      "reason": "no phone and no email"
+    },
+    {
+      "row": 73,
+      "name": "Aranaa💛",
+      "rawPhone": null,
+      "email": null,
+      "reason": "no phone and no email"
+    },
+    {
+      "row": 189,
+      "name": "Deborah",
+      "rawPhone": "+233233248261396",
+      "email": null,
+      "reason": "unusable number \"+233233248261396\" and no email"
+    },
+    {
+      "row": 213,
+      "name": "nk. 🅴",
+      "rawPhone": null,
+      "email": null,
+      "reason": "no phone and no email"
+    },
+    {
+      "row": 240,
+      "name": "FRANK ENNIN",
+      "rawPhone": null,
+      "email": null,
+      "reason": "no phone and no email"
+    },
+    {
+      "row": 326,
+      "name": "Barima Jones",
+      "rawPhone": "+233233543542394",
+      "email": null,
+      "reason": "unusable number \"+233233543542394\" and no email"
+    },
+    {
+      "row": 433,
+      "name": "Muzzu",
+      "rawPhone": "02031481148",
+      "email": null,
+      "reason": "unusable number \"02031481148\" and no email"
+    },
+    {
+      "row": 566,
+      "name": "𝕍𝕒𝕟𝕥𝕒𝕖✟",
+      "rawPhone": null,
+      "email": null,
+      "reason": "no phone and no email"
+    }
+  ]
+}

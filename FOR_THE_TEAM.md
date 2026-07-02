@@ -4485,3 +4485,36 @@ We're moving off the old Shopify site and running live operations here. This rou
 1. Place a test checkout → the new order should be **IRD-001001**.
 2. Create a pre-order, then go to `/track`, enter the `PRE-…` number + email → you should see its progress.
 3. Load the homepage → the Road to HQ counter should read **475** and tick up as real orders come in.
+
+## Customer Contact Import (July 2026)
+
+We had a phone-contact list of ~610 people (names, a few emails, phone numbers in every format imaginable) and pulled them into the real customer database — cleaning up the numbers and avoiding duplicates along the way.
+
+**What changed, in plain language:**
+
+- **Everyone's phone number is now stored properly** in the standard international format with the right country code (e.g. `+233…` for Ghana, `+1…`, `+44…`, `+254…`, etc.). Not everyone was Ghanaian, so the tool figured out the correct country per number instead of assuming Ghana.
+- **We matched to existing customers first** so we didn't create duplicate accounts. 586 contacts were already in the system (matched by phone or email) — for those we only *filled in blanks* (a missing name, email, or phone), never overwriting anything already there.
+- **530 brand-new customer accounts were created** from the list, each tagged as an imported contact so we can always find or undo them later. No texts or emails were sent to anyone.
+- **8 contacts were skipped** and need a human eye: 1 had a broken phone number (Muzzu) and 5 had no phone *and* no email, plus 2 with typo'd numbers whose good entries came through anyway (Deborah, Barima Jones). (VALERIE ACKON was also skipped but is the *same person* as "valerie a.", who's already in — so she's covered.)
+
+**Why:** a cleaner, richer customer database — consistent phone numbers we can actually use for order lookups and outreach, without junk duplicates.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/frontend/scripts/import-contacts.ts` | **New** — the import tool. Normalizes phone numbers (country-aware), matches to existing customers (phone → email → safe name), backfills without overwriting, and creates new accounts for the rest. Safe to re-run. |
+| `apps/frontend/scripts/contact-import-report.json` | **New** — the full record of what happened: every create, backfill, and skip (with reasons). Handy for the manual follow-ups. |
+| `apps/frontend/package.json` | Added the `libphonenumber-js` library for phone parsing/validation. |
+
+### Heads-up / action required
+
+> **This was run on the staging database.** If we want these contacts in production too, the same script needs running there (dry-run first, then commit).
+>
+> **9 contacts still need manual fixing** — see the "skipped" list in `contact-import-report.json`. Correct their numbers in a CSV and re-run the script; it only adds what's missing, so it won't duplicate anyone.
+
+### How to test
+
+1. Search the customer list for a known imported name/number (e.g. **ADOTEY** / `+233243144367`) → they should be there with a clean `+…` number.
+2. Filter/query profiles tagged `migrated_from = 'contact-import-2026-07'` → should be **530** rows.
+3. Re-run `node --no-warnings scripts/import-contacts.ts` (dry-run) → it should report almost everyone as "already exists" and create nothing new.
