@@ -4433,7 +4433,7 @@ In plain terms: before, if you searched "1NRI streetwear" we were invisible. Thi
 
 ### Heads-up / action required
 
-> **One manual step left:** Google Search Console verification. Once someone sets up the storefront in Google Search Console, they'll get a verification code — paste it into the `verification.google` slot in `apps/frontend/app/layout.tsx` (there's a commented placeholder waiting) and submit `https://storefront.1nri.store/sitemap.xml` there. That's what actually kicks off Google indexing.
+> **One manual step left:** Google Search Console verification. Once someone sets up the storefront in Google Search Console, they'll get a verification code — paste it into the `verification.google` slot in `apps/frontend/app/layout.tsx` (there's a commented placeholder waiting) and submit `https://1nri.store/sitemap.xml` there. That's what actually kicks off Google indexing.
 >
 > Note the footer social links were already correct, so those didn't need changing.
 

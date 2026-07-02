@@ -23,7 +23,7 @@ import { listReports, REPORTS } from './reports/report-registry';
 import { ReportPayload } from './reports/report-types';
 
 // Shopify standard: a checkout counts as abandoned after 10 min of inactivity.
-const ABANDON_AFTER_MS = 1 * 60 * 1000;
+const ABANDON_AFTER_MS = 10 * 60 * 1000;
 // But the recovery email only goes out once the checkout has been idle for an
 // hour — long enough to be confident the customer has actually walked away.
 const REMINDER_AFTER_MS = 60 * 60 * 1000;
