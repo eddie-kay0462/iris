@@ -4365,3 +4365,30 @@ Behind the scenes we also moved the shared colour logic (the colour-name-to-swat
 2. In **Others Also Bought**, find a product with more than one colour — you should see colour dots under it. Tap one and confirm the photo swaps to that colour.
 3. Quick-add that product (via **＋** / size picker) and confirm the bag entry shows the colour you picked and the right photo.
 4. Hover over a colour dot for a beat before clicking — the colour's image should appear instantly (it was pre-loaded), rather than flashing in after a delay.
+
+---
+
+## Turning On Pre-orders for Existing Products (July 2026)
+
+**You can now switch pre-orders on for a product you've already created.** Before this, the "Allow Pre-orders" toggle only showed up when you were adding a *brand-new* variant. If you opened an existing product and clicked **Edit** on one of its variants, there was no pre-order control anywhere — so there was simply no way to enable pre-orders after the fact. That's why it looked like certain products "couldn't" have pre-orders.
+
+To be clear: this was never about stock levels. Setting a product's stock to 0 didn't make a hidden toggle appear — the toggle just wasn't in the edit screen at all. Now it is.
+
+The edit view for each variant has a new row with the same **Allow pre-orders** switch (and optional limit) that the add-new-variant form already had. Flip it on, save, and that variant will offer "Pre-order Now" on the storefront as soon as it sells out.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/admin/app/components/products/VariantsEditor.tsx` | Added the pre-order toggle (and optional order limit) to the **Edit** view of an existing variant — previously it only appeared when adding a new one. The save/load wiring was already in place, so it now sticks correctly. |
+
+### Heads-up / action required
+
+> Any product you tried to enable pre-orders on *before* this fix almost certainly didn't save — the toggle was unreachable, so it's still off in the database. Just re-open that product, **Edit** the variant, turn **Allow pre-orders** on, and save again.
+
+### How to test
+
+1. In the admin, open an existing product and scroll to **Variants**.
+2. Click **Edit** on a variant — you should now see an **Allow pre-orders** switch below the edit fields.
+3. Turn it on (optionally set a limit), then **Save**.
+4. Set that variant's stock to 0 and check the storefront — the product page should show **Pre-order Now** instead of **Sold Out**.

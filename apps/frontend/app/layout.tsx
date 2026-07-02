@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "1NRI",
-  description: "Premium lifestyle e-commerce",
+  title: "1NRI"
+  // description: "Premium Streetwear",
 };
 
 export default function RootLayout({
