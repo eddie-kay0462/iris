@@ -444,7 +444,7 @@ function ShopHeader() {
 
   return (
     <header
-      className={`fixed top-0 z-50 w-full transition-all duration-300 ${
+      className={`fixed top-0 z-50 w-full transition-all duration-150 ${
         isTransparent
           ? "border-b border-transparent bg-transparent"
           : "border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950"
@@ -508,7 +508,7 @@ function ShopHeader() {
             alt="1NRI Worldwide logo"
             width={120}
             height={48}
-            className={`h-8 w-auto min-w-[60px] transition-all duration-300 ${
+            className={`h-8 w-auto min-w-[60px] transition-all duration-150 ${
               isTransparentWhite ? "brightness-0 invert" : "dark:brightness-0 dark:invert"
             }`}
             priority
