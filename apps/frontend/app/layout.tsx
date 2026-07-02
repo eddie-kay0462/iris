@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "1NRI — Contemporary Streetwear Made in Accra, Ghana",
+    default: "1NRI - Contemporary Streetwear Made in Accra, Ghana",
     template: "%s | 1NRI",
   },
   description:
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
     locale: "en_GB",
     url: SITE_URL,
     siteName: "1NRI",
-    title: "1NRI — Contemporary Streetwear Made in Accra, Ghana",
+    title: "1NRI - Contemporary Streetwear Made in Accra, Ghana",
     description:
       "1NRI Worldwide is a Ghana-based streetwear and fashion manufacturing brand. Designed in Accra, built for durability, shipped worldwide.",
     images: [
@@ -52,13 +52,13 @@ export const metadata: Metadata = {
         url: "/homepage/7.jpg",
         width: 1200,
         height: 630,
-        alt: "1NRI Worldwide — streetwear made in Accra, Ghana",
+        alt: "1NRI Worldwide - streetwear made in Accra, Ghana",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "1NRI — Contemporary Streetwear Made in Accra, Ghana",
+    title: "1NRI - Contemporary Streetwear Made in Accra, Ghana",
     description:
       "Ghana-based streetwear brand. Designed in Accra, built for durability, shipped worldwide.",
     images: ["/homepage/7.jpg"],

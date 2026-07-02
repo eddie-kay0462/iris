@@ -234,6 +234,71 @@ export class SettingsService {
     if (error) throw error;
     return text.trim();
   }
+
+  // ─── Order numbering ───────────────────────────────────────────────────────
+  // The sequential number the first real order should start at. Set to a clean
+  // high value (e.g. 1001) so order numbers don't read as "order #1" and don't
+  // leak volume. Order numbers stay zero-padded and sortable.
+
+  private async getNumberSetting(key: string, fallback: number): Promise<number> {
+    const db = this.supabase.getAdminClient();
+    const { data } = await db
+      .from('store_settings')
+      .select('value')
+      .eq('key', key)
+      .single();
+    if (data?.value === undefined || data?.value === null) return fallback;
+    const n = Number(data.value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  private async updateNumberSetting(key: string, value: number, min: number): Promise<number> {
+    if (!Number.isFinite(value) || value < min) {
+      throw new BadRequestException(`${key} must be a number >= ${min}`);
+    }
+    const db = this.supabase.getAdminClient();
+    const { error } = await db
+      .from('store_settings')
+      .upsert({ key, value, updated_at: new Date().toISOString() });
+    if (error) throw error;
+    return value;
+  }
+
+  getOrderNumberStart(): Promise<number> {
+    return this.getNumberSetting('order_number_start', DEFAULT_ORDER_NUMBER_START);
+  }
+
+  updateOrderNumberStart(value: number): Promise<number> {
+    return this.updateNumberSetting('order_number_start', value, 1);
+  }
+
+  getPreorderNumberStart(): Promise<number> {
+    return this.getNumberSetting('preorder_number_start', DEFAULT_ORDER_NUMBER_START);
+  }
+
+  updatePreorderNumberStart(value: number): Promise<number> {
+    return this.updateNumberSetting('preorder_number_start', value, 1);
+  }
+
+  // ─── Road to HQ ────────────────────────────────────────────────────────────
+  // Baseline lets us fold in historical (e.g. Shopify) units not stored in this
+  // system; target is the goal shown on the homepage progress ring.
+
+  getRoadToHqBaseline(): Promise<number> {
+    return this.getNumberSetting('road_to_hq_baseline', DEFAULT_ROAD_TO_HQ_BASELINE);
+  }
+
+  updateRoadToHqBaseline(value: number): Promise<number> {
+    return this.updateNumberSetting('road_to_hq_baseline', value, 0);
+  }
+
+  getRoadToHqTarget(): Promise<number> {
+    return this.getNumberSetting('road_to_hq_target', DEFAULT_ROAD_TO_HQ_TARGET);
+  }
+
+  updateRoadToHqTarget(value: number): Promise<number> {
+    return this.updateNumberSetting('road_to_hq_target', value, 1);
+  }
 }
 
 export interface ShippingOption {
@@ -249,6 +314,11 @@ const DEFAULT_SHIPPING_OPTIONS: ShippingOption[] = [
 ];
 
 const DEFAULT_STOCK_HOLD_MINUTES = 10;
+
+const DEFAULT_ORDER_NUMBER_START = 1001;
+
+const DEFAULT_ROAD_TO_HQ_BASELINE = 0;
+const DEFAULT_ROAD_TO_HQ_TARGET = 6000;
 
 const DEFAULT_PREORDER_ETA_TEXT = '2-3 weeks';
 

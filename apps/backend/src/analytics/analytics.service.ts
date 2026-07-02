@@ -10,7 +10,14 @@ import {
 } from './dto/query-analytics.dto';
 import { TrackEventsDto } from './dto/track-events.dto';
 import { CheckoutSnapshotDto } from './dto/checkout-snapshot.dto';
-import { Granularity, ONLINE_REVENUE_STATUSES, round2 } from './analytics.constants';
+import {
+  Granularity,
+  ONLINE_REVENUE_STATUSES,
+  POPUP_REVENUE_STATUSES,
+  ALLY_REVENUE_STATUSES,
+  round2,
+} from './analytics.constants';
+import { SettingsService } from '../settings/settings.service';
 import {
   aggregateSessions,
   num,
@@ -23,7 +30,7 @@ import { listReports, REPORTS } from './reports/report-registry';
 import { ReportPayload } from './reports/report-types';
 
 // Shopify standard: a checkout counts as abandoned after 10 min of inactivity.
-const ABANDON_AFTER_MS = 1 * 60 * 1000;
+const ABANDON_AFTER_MS = 10 * 60 * 1000;
 // But the recovery email only goes out once the checkout has been idle for an
 // hour — long enough to be confident the customer has actually walked away.
 const REMINDER_AFTER_MS = 60 * 60 * 1000;
@@ -38,7 +45,51 @@ export class AnalyticsService {
     private supabase: SupabaseService,
     private email: EmailService,
     private config: ConfigService,
+    private settings: SettingsService,
   ) {}
+
+  // ─── Road to HQ ────────────────────────────────────────────────────────────
+
+  /**
+   * Total units sold toward the HQ goal: online + popup + ally line-item
+   * quantities (revenue statuses only) plus a manual baseline for historical
+   * (Shopify) units not stored in this system. Public — powers the storefront
+   * homepage.
+   */
+  async getRoadToHq(): Promise<{
+    units: number;
+    online: number;
+    popup: number;
+    allies: number;
+    baseline: number;
+    target: number;
+  }> {
+    const db = this.supabase.getAdminClient();
+
+    const [onlineRes, popupRes, allyRes, baseline, target] = await Promise.all([
+      db
+        .from('order_items')
+        .select('quantity, orders!inner(status, deleted_at)')
+        .in('orders.status', ONLINE_REVENUE_STATUSES)
+        .is('orders.deleted_at', null),
+      db
+        .from('popup_order_items')
+        .select('quantity, popup_orders!inner(status)')
+        .in('popup_orders.status', POPUP_REVENUE_STATUSES),
+      db
+        .from('ally_sale_items')
+        .select('quantity, ally_sales!inner(status)')
+        .in('ally_sales.status', ALLY_REVENUE_STATUSES),
+      this.settings.getRoadToHqBaseline(),
+      this.settings.getRoadToHqTarget(),
+    ]);
+
+    const online = (onlineRes.data ?? []).reduce((sum, r: any) => sum + (r.quantity ?? 0), 0);
+    const popup = (popupRes.data ?? []).reduce((sum, r: any) => sum + (r.quantity ?? 0), 0);
+    const allies = (allyRes.data ?? []).reduce((sum, r: any) => sum + (r.quantity ?? 0), 0);
+
+    return { units: online + popup + allies + baseline, online, popup, allies, baseline, target };
+  }
 
   // ─── Date Helpers ──────────────────────────────────────────────────────────
 

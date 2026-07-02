@@ -4433,7 +4433,7 @@ In plain terms: before, if you searched "1NRI streetwear" we were invisible. Thi
 
 ### Heads-up / action required
 
-> **One manual step left:** Google Search Console verification. Once someone sets up the storefront in Google Search Console, they'll get a verification code — paste it into the `verification.google` slot in `apps/frontend/app/layout.tsx` (there's a commented placeholder waiting) and submit `https://storefront.1nri.store/sitemap.xml` there. That's what actually kicks off Google indexing.
+> **One manual step left:** Google Search Console verification. Once someone sets up the storefront in Google Search Console, they'll get a verification code — paste it into the `verification.google` slot in `apps/frontend/app/layout.tsx` (there's a commented placeholder waiting) and submit `https://1nri.store/sitemap.xml` there. That's what actually kicks off Google indexing.
 >
 > Note the footer social links were already correct, so those didn't need changing.
 
@@ -4443,3 +4443,45 @@ In plain terms: before, if you searched "1NRI streetwear" we were invisible. Thi
 2. Visit `/sitemap.xml` and `/robots.txt` — both should load; the sitemap should list your products.
 3. Open a few pages and check the browser tab titles differ (Home vs About vs a product).
 4. Open a product page — it should load normally (no error), and viewing page source should show the product name, price and description in the HTML.
+
+---
+
+## Go-Live Migration Prep (July 2026)
+
+We're moving off the old Shopify site and running live operations here. This round cleared out all the leftover test data and hardened four things so the store is ready for real customers.
+
+**What changed, in plain language:**
+
+- **Cleared the test data.** Deleted the four `@iris.test` staff/test logins, all the seeded test orders, all 30 of the test ally's sales, and two throwaway pop-up events (Black Saturday, Spring Launch) with their orders. Kept everything real: all 873 customer accounts, the Last Dance pop-up and its 78 orders, and the test ally *account* (still handy for demos — just its fake sales are gone).
+- **Order numbers now start at a clean, professional number.** The first real order will be **IRD-001001** instead of "order #1" — so it doesn't look like we just opened, and it doesn't leak how many orders we've done. Numbers still count up in order, so they're easy to sort.
+- **Pre-orders can now be tracked publicly.** Before, the "Track your order" page only knew about normal orders. Now a customer can punch in a `PRE-…` number + their email and see their pre-order status (Reserved → Stock Held → Fulfilled). Staff also got a **"Mark Fulfilled"** button so a pre-order can be closed out once it's handed over.
+- **The "Road to HQ" units counter is now real.** It used to be a hardcoded 475. Now it adds up actual units sold across the website, pop-up sales, **and ally sales** (only counting real, paid/completed sales — not cancelled or unpaid ones), plus an adjustable "baseline" number for history. We set the baseline to **402**, so the counter currently reads **475** — same as before, but now it moves on its own as real sales come in.
+
+**Why:** so nothing fake is mixed into real sales, revenue and reporting, and the storefront looks established from day one.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/backend/src/settings/settings.service.ts` + `settings.controller.ts` | New saved settings: order-number start, pre-order-number start, Road-to-HQ baseline & target. |
+| `apps/backend/src/orders/orders.service.ts` | Order numbers now start at the configured number (IRD-001001); "Track order" now also finds pre-orders. |
+| `apps/backend/src/preorders/preorders.service.ts` + `preorders.controller.ts` | Pre-order numbers start clean too; new "mark fulfilled" action. |
+| `apps/backend/src/analytics/analytics.service.ts` + `analytics.constants.ts` + `analytics.controller.ts` + `analytics.module.ts` | New public "Road to HQ" figure = website + pop-up + ally units + baseline. |
+| `apps/frontend/app/(shop)/track/page.tsx` + `lib/api/orders.ts` | Track page shows pre-order progress as well as normal orders. |
+| `apps/frontend/app/(shop)/page.tsx` + `RoadToHQClient.tsx` + `lib/api/road-to-hq.server.ts` | Homepage counter now pulls the live number instead of the hardcoded 475. |
+| `apps/admin/app/(dashboard)/preorders/page.tsx` + `apps/admin/lib/api/preorders.ts` | "Mark Fulfilled" button for pre-orders. |
+| `apps/frontend/scripts/cleanup-test-accounts.ts` | **New** — safely delete listed test accounts (dry-run first, skips real/Shopify customers). |
+| `apps/frontend/scripts/cleanup-test-orders.ts` | **New** — safely delete listed test orders/pre-orders (dry-run first, never touches pop-up data). |
+| `apps/frontend/scripts/cleanup-test-ally-sales.ts` | **New** — safely delete a test ally's sales (dry-run first). |
+
+### Heads-up / action required
+
+> **The data cleanup above was run on the staging database only.** When we cut over to production, the same steps need repeating there: (1) set the Road-to-HQ **baseline to 402** on production, (2) run the three cleanup scripts against production (dry-run → confirm), and (3) deploy this code. Take a database backup first.
+>
+> The cleanup scripts only ever delete the exact accounts/orders you list them (no wildcards), and always show you the list before deleting.
+
+### How to test
+
+1. Place a test checkout → the new order should be **IRD-001001**.
+2. Create a pre-order, then go to `/track`, enter the `PRE-…` number + email → you should see its progress.
+3. Load the homepage → the Road to HQ counter should read **475** and tick up as real orders come in.

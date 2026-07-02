@@ -15,8 +15,10 @@ import { NewsletterSection } from "@/components/shop/NewsletterSection";
 const caveat = Caveat({ subsets: ["latin"], weight: ["500", "700"] });
 
 /* ── Config ── */
-const TARGET_UNITS = 6000;
-const UNITS_SOLD: number = 475;
+// Fallbacks used only if the live figures can't be fetched (e.g. backend down
+// at request time). Real values come from GET /analytics/road-to-hq via props.
+const DEFAULT_TARGET_UNITS = 6000;
+const DEFAULT_UNITS_SOLD = 0;
 const DEADLINE = "2026-12-26";
 
 /* ── SVG Geometry ── */
@@ -115,7 +117,15 @@ const staggerFast = {
 };
 
 /* ── Page ── */
-export default function RoadToHQPage() {
+export default function RoadToHQPage({
+  unitsSold = DEFAULT_UNITS_SOLD,
+  targetUnits = DEFAULT_TARGET_UNITS,
+}: {
+  unitsSold?: number;
+  targetUnits?: number;
+} = {}) {
+  const UNITS_SOLD = unitsSold;
+  const TARGET_UNITS = targetUnits;
   const [active, setActive] = useState(0);
   const [displayUnits, setDisplayUnits] = useState(0);
   const [daysLeft, setDaysLeft] = useState(0);

@@ -4,7 +4,12 @@ import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Package, Truck, CheckCircle2, Clock, Loader2 } from "lucide-react";
-import { trackOrderByEmail, type TrackingOrder } from "@/lib/api/orders";
+import {
+  trackOrderByEmail,
+  type TrackingResult,
+  type TrackingOrder,
+  type TrackingPreorder,
+} from "@/lib/api/orders";
 
 const STATUS_STEPS: { key: string; label: string }[] = [
   { key: "pending", label: "Order Placed" },
@@ -12,6 +17,13 @@ const STATUS_STEPS: { key: string; label: string }[] = [
   { key: "processing", label: "Processing" },
   { key: "shipped", label: "Shipped" },
   { key: "delivered", label: "Delivered" },
+];
+
+// Preorders have their own status flow: reserved → stock allocated → fulfilled.
+const PREORDER_STEPS: { key: string; label: string }[] = [
+  { key: "pending", label: "Reserved" },
+  { key: "stock_held", label: "Stock Held" },
+  { key: "fulfilled", label: "Fulfilled" },
 ];
 
 function stepIndex(status: string): number {
@@ -25,22 +37,37 @@ function stepIndex(status: string): number {
   return map[status] ?? 0;
 }
 
+function preorderStepIndex(status: string): number {
+  const map: Record<string, number> = {
+    pending: 0,
+    stock_held: 1,
+    fulfilled: 2,
+  };
+  return map[status] ?? 0;
+}
+
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
     delivered: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+    fulfilled: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
     shipped: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+    stock_held: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
     processing: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
     paid: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
     pending: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
     cancelled: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+    refunded: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
   };
   const labels: Record<string, string> = {
     delivered: "Delivered",
+    fulfilled: "Fulfilled",
     shipped: "Shipped",
+    stock_held: "Stock Held",
     processing: "Processing",
     paid: "Paid",
     pending: "Pending",
     cancelled: "Cancelled",
+    refunded: "Refunded",
   };
   return (
     <span
@@ -204,6 +231,126 @@ function OrderResult({ order }: { order: TrackingOrder }) {
   );
 }
 
+function PreorderResult({ preorder }: { preorder: TrackingPreorder }) {
+  const current = preorderStepIndex(preorder.status);
+  const terminal = preorder.status === "cancelled" || preorder.status === "refunded";
+  const placedDate = new Date(preorder.created_at).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Pre-order</p>
+          <p className="text-xl font-bold text-gray-900 dark:text-white">{preorder.order_number}</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Reserved {placedDate}</p>
+        </div>
+        <StatusBadge status={preorder.status} />
+      </div>
+
+      {/* Progress tracker */}
+      {!terminal && (
+        <div className="relative">
+          <div className="flex items-center justify-between">
+            {PREORDER_STEPS.map((step, i) => {
+              const done = i <= current;
+              const active = i === current;
+              return (
+                <div key={step.key} className="flex flex-1 flex-col items-center">
+                  <div
+                    className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors ${
+                      done
+                        ? "border-black bg-black dark:border-white dark:bg-white"
+                        : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900"
+                    }`}
+                  >
+                    {done ? (
+                      <CheckCircle2 className="h-4 w-4 text-white dark:text-black" />
+                    ) : (
+                      <div className="h-2 w-2 rounded-full bg-gray-300 dark:bg-gray-600" />
+                    )}
+                  </div>
+                  <p
+                    className={`mt-2 text-center text-xs ${
+                      active
+                        ? "font-semibold text-gray-900 dark:text-white"
+                        : done
+                        ? "text-gray-600 dark:text-gray-400"
+                        : "text-gray-400 dark:text-gray-600"
+                    }`}
+                  >
+                    {step.label}
+                  </p>
+                  {i < PREORDER_STEPS.length - 1 && (
+                    <div
+                      className={`absolute top-4 h-0.5 transition-colors ${
+                        i < current ? "bg-black dark:bg-white" : "bg-gray-200 dark:bg-gray-700"
+                      }`}
+                      style={{
+                        left: `${(i + 0.5) * (100 / PREORDER_STEPS.length)}%`,
+                        width: `${100 / PREORDER_STEPS.length}%`,
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Status note */}
+      <div className="flex items-start gap-2 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+        <Clock className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" />
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          {preorder.status === "pending" &&
+            "Your pre-order is reserved. We'll allocate stock and notify you the moment it arrives."}
+          {preorder.status === "stock_held" &&
+            "Stock has arrived and is being held for your pre-order. We'll be in touch to complete fulfilment."}
+          {preorder.status === "fulfilled" && "Your pre-order has been fulfilled. Thank you!"}
+          {preorder.status === "cancelled" && "This pre-order has been cancelled."}
+          {preorder.status === "refunded" && "This pre-order has been refunded."}
+        </p>
+      </div>
+
+      {/* Items */}
+      {preorder.items && preorder.items.length > 0 && (
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+            <Package className="h-4 w-4 text-gray-500" />
+            <p className="text-sm font-semibold text-gray-900 dark:text-white">Items</p>
+          </div>
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {preorder.items.map((item, i) => (
+              <div key={i} className="flex justify-between px-4 py-3 text-sm">
+                <span className="text-gray-700 dark:text-gray-300">
+                  {item.product_name}
+                  {item.variant_title ? ` — ${item.variant_title}` : ""}
+                  {item.quantity > 1 ? ` × ${item.quantity}` : ""}
+                </span>
+                <span className="text-gray-900 dark:text-white font-medium">
+                  GH₵ {item.total_price.toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <Link
+        href="/products"
+        className="block text-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+      >
+        Continue shopping
+      </Link>
+    </div>
+  );
+}
+
 function TrackContent() {
   const searchParams = useSearchParams();
   const prefillOrder = searchParams.get("order") ?? "";
@@ -211,7 +358,7 @@ function TrackContent() {
   const [orderNumber, setOrderNumber] = useState(prefillOrder);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [order, setOrder] = useState<TrackingOrder | null>(null);
+  const [result, setResult] = useState<TrackingResult | null>(null);
   const [error, setError] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
@@ -219,10 +366,10 @@ function TrackContent() {
     if (!orderNumber.trim() || !email.trim()) return;
     setLoading(true);
     setError("");
-    setOrder(null);
+    setResult(null);
     try {
-      const result = await trackOrderByEmail(orderNumber.trim(), email.trim());
-      setOrder(result);
+      const found = await trackOrderByEmail(orderNumber.trim(), email.trim());
+      setResult(found);
     } catch {
       setError("We couldn't find an order matching those details. Please check your order number and email address.");
     } finally {
@@ -253,7 +400,7 @@ function TrackContent() {
             type="text"
             value={orderNumber}
             onChange={(e) => setOrderNumber(e.target.value)}
-            placeholder="e.g. IRD-000001"
+            placeholder="e.g. IRD-001001 or PRE-001001"
             className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-black focus:outline-none focus:ring-1 focus:ring-black dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500 dark:focus:border-white dark:focus:ring-white"
             required
           />
@@ -294,9 +441,13 @@ function TrackContent() {
         </button>
       </form>
 
-      {order && (
+      {result && (
         <div className="mt-10 rounded-xl border border-gray-200 p-6 dark:border-gray-700">
-          <OrderResult order={order} />
+          {result.kind === "preorder" ? (
+            <PreorderResult preorder={result} />
+          ) : (
+            <OrderResult order={result} />
+          )}
         </div>
       )}
     </div>

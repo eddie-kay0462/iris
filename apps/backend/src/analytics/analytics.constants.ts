@@ -3,6 +3,7 @@
 // excluded everywhere so every metric compares the same population.
 export const ONLINE_REVENUE_STATUSES = ['paid', 'processing', 'shipped', 'delivered'];
 export const POPUP_REVENUE_STATUSES = ['confirmed', 'completed'];
+export const ALLY_REVENUE_STATUSES = ['completed'];
 
 // Ghana is UTC+0, so UTC day bucketing matches local business days.
 export const dayOf = (iso: string): string => iso.slice(0, 10);

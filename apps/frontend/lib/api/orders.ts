@@ -218,7 +218,10 @@ export function useGuestOrderByNumber(orderNumber: string, guestToken: string | 
   });
 }
 
+type TrackingItem = Pick<OrderItem, "product_name" | "variant_title" | "quantity" | "total_price">;
+
 export interface TrackingOrder {
+  kind: "order";
   order_number: string;
   status: string;
   payment_status: string | null;
@@ -228,11 +231,23 @@ export interface TrackingOrder {
   delivered_at: string | null;
   created_at: string;
   shipping_address: Order["shipping_address"];
-  order_items?: Pick<OrderItem, "product_name" | "variant_title" | "quantity" | "total_price">[];
+  order_items?: TrackingItem[];
 }
 
-export async function trackOrderByEmail(orderNumber: string, email: string): Promise<TrackingOrder> {
-  return apiClient<TrackingOrder>(
+export interface TrackingPreorder {
+  kind: "preorder";
+  order_number: string;
+  status: string;
+  payment_status: string | null;
+  created_at: string;
+  notified_at: string | null;
+  items: TrackingItem[];
+}
+
+export type TrackingResult = TrackingOrder | TrackingPreorder;
+
+export async function trackOrderByEmail(orderNumber: string, email: string): Promise<TrackingResult> {
+  return apiClient<TrackingResult>(
     `/orders/track?orderNumber=${encodeURIComponent(orderNumber)}&email=${encodeURIComponent(email)}`,
   );
 }

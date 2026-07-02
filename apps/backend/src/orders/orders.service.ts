@@ -85,6 +85,11 @@ export class OrdersService {
       if (match) next = parseInt(match[1], 10) + 1;
     }
 
+    // Floor at the configured start so the first real order reads as a clean
+    // high number (e.g. IRD-001001) rather than "order #1".
+    const start = await this.settingsService.getOrderNumberStart();
+    next = Math.max(next, start);
+
     return `IRD-${String(next).padStart(6, '0')}`;
   }
 
@@ -1349,16 +1354,50 @@ export class OrdersService {
   async trackOrderByEmail(orderNumber: string, email: string) {
     if (!orderNumber || !email) throw new NotFoundException('Order not found');
     const db = this.supabase.getAdminClient();
+    const normalized = orderNumber.trim().toUpperCase();
+
+    // Preorders live in a separate table with their own status flow. Route
+    // PRE- numbers there so customers can track paid preorders publicly too.
+    if (normalized.startsWith('PRE-')) {
+      const { data, error } = await db
+        .from('preorders')
+        .select('order_number, status, payment_status, product_name, variant_title, quantity, unit_price, created_at, updated_at, notified_at')
+        .eq('order_number', normalized)
+        .ilike('customer_email', email.trim())
+        .single();
+
+      if (error || !data) throw new NotFoundException('Order not found');
+
+      // Shape it like the order tracking payload so the frontend can share the
+      // item list rendering.
+      return {
+        kind: 'preorder' as const,
+        order_number: data.order_number,
+        status: data.status,
+        payment_status: data.payment_status,
+        created_at: data.created_at,
+        notified_at: data.notified_at,
+        items: [
+          {
+            product_name: data.product_name,
+            variant_title: data.variant_title,
+            quantity: data.quantity,
+            total_price: Number(data.unit_price) * data.quantity,
+          },
+        ],
+      };
+    }
+
     const { data, error } = await db
       .from('orders')
       .select('order_number, status, payment_status, tracking_number, carrier, shipped_at, delivered_at, created_at, shipping_address, order_items(product_name, variant_title, quantity, total_price)')
-      .eq('order_number', orderNumber.toUpperCase())
+      .eq('order_number', normalized)
       .ilike('email', email.trim())
       .is('deleted_at', null)
       .single();
 
     if (error || !data) throw new NotFoundException('Order not found');
-    return data;
+    return { kind: 'order' as const, ...data };
   }
 
   /**

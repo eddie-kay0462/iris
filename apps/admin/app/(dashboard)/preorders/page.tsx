@@ -7,6 +7,7 @@ import {
   usePreorderStats,
   usePreorders,
   useCancelPreorder,
+  useFulfillPreorder,
   useRestockPreorder,
   useRefundPreorder,
   useSendPreorderConfirmation,
@@ -309,8 +310,10 @@ function ActionsMenu({
 }) {
   const [open, setOpen] = useState(false);
   const cancel = useCancelPreorder();
+  const fulfill = useFulfillPreorder();
   const canCancel = ["pending", "stock_held"].includes(preorder.status);
   const canRefund = ["pending", "stock_held"].includes(preorder.status);
+  const canFulfill = preorder.status === "stock_held";
 
   return (
     <div className="relative">
@@ -336,6 +339,24 @@ function ActionsMenu({
             >
               Resend Confirmation
             </button>
+            {canFulfill && (
+              <button
+                onClick={async () => {
+                  setOpen(false);
+                  if (confirm(`Mark preorder ${preorder.order_number} as fulfilled?`)) {
+                    try {
+                      await fulfill.mutateAsync(preorder.id);
+                      toast.success("Pre-order marked fulfilled.");
+                    } catch {
+                      toast.error("Failed to mark pre-order fulfilled.", { duration: 6000 });
+                    }
+                  }
+                }}
+                className="w-full px-3 py-2 text-left text-sm text-green-700 hover:bg-green-50"
+              >
+                Mark Fulfilled
+              </button>
+            )}
             {canRefund && (
               <button
                 onClick={() => { setOpen(false); onRefund(); }}
