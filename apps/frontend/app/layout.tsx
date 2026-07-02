@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/lib/query/providers";
 import { ClientToaster } from "@/components/ClientToaster";
+import { Analytics } from "@vercel/analytics/next";
 import { SITE_URL } from "@/lib/seo/site";
 
 const geistSans = Geist({
@@ -119,6 +120,7 @@ export default function RootLayout({
       >
         <QueryProvider>{children}</QueryProvider>
         <ClientToaster />
+        <Analytics />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
