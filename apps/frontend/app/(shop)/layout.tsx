@@ -414,11 +414,17 @@ function ShopHeader() {
   const isTransparentWhite = isHome && !scrolled;
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 10);
+    // On the home page the hero is a full-screen dark section, so keep the
+    // header transparent until we've scrolled (almost) past it — otherwise it
+    // flips to a solid white bar while the dark hero is still on screen.
+    const handleScroll = () => {
+      const threshold = isHome ? window.innerHeight - 80 : 10;
+      setScrolled(window.scrollY > threshold);
+    };
     window.addEventListener("scroll", handleScroll, { passive: true });
     handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [isHome]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
