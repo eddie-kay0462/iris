@@ -14,6 +14,7 @@ import {
   extractColorsFromTags,
   findImageIndexByTag,
 } from "@/lib/products/colors";
+import { prefetchRawImage } from "@/hooks/useImagePrefetch";
 import type { Product, ProductVariant, PaginatedResponse } from "@/lib/api/products";
 
 /** First in-stock variant, falling back to the first preorderable one. */
@@ -383,6 +384,13 @@ function RecCard({ product }: { product: Product }) {
     }
   }
 
+  // Warm a colour's image on intent (hover / focus / touch-down) so selecting
+  // that swatch swaps instantly instead of waiting on a fresh network load.
+  function prefetchColor(color: string) {
+    const src = images[findImageIndexByTag(images, color)]?.src;
+    if (src) prefetchRawImage(src);
+  }
+
   return (
     <div
       className="w-[112px] shrink-0"
@@ -519,6 +527,9 @@ function RecCard({ product }: { product: Product }) {
               key={color}
               title={color}
               aria-label={color}
+              onMouseEnter={() => prefetchColor(color)}
+              onFocus={() => prefetchColor(color)}
+              onTouchStart={() => prefetchColor(color)}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();

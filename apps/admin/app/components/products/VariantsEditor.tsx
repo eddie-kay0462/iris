@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import type { ProductVariant, ProductImage } from "@/lib/api/products";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -432,7 +432,8 @@ export function VariantsEditor({
               const image = productImages.find(i => i.id === v.image_id);
 
               return editing === v.id ? (
-                <tr key={v.id} className="border-b border-slate-100 bg-slate-50">
+                <Fragment key={v.id}>
+                <tr className="border-slate-100 bg-slate-50">
                   <td className="py-2 pr-2" colSpan={2}>
                     <input
                       value={form.option1_value}
@@ -488,6 +489,38 @@ export function VariantsEditor({
                     </button>
                   </td>
                 </tr>
+                <tr className="border-b border-slate-100 bg-slate-50">
+                  <td colSpan={7} className="pb-3 px-2">
+                    <div className="flex flex-wrap items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setForm((f) => ({ ...f, preorder_enabled: !f.preorder_enabled, preorder_limit: "" }))}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${form.preorder_enabled ? "bg-slate-900" : "bg-slate-200"}`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${form.preorder_enabled ? "translate-x-4" : "translate-x-0.5"}`} />
+                        </button>
+                        <span className="text-xs font-medium text-slate-700">
+                          {form.preorder_enabled ? "Pre-orders enabled (shows when out of stock)" : "Allow pre-orders"}
+                        </span>
+                      </div>
+                      {form.preorder_enabled && (
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-slate-500">Limit</label>
+                          <input
+                            type="number"
+                            min={1}
+                            placeholder="No limit"
+                            value={form.preorder_limit}
+                            onChange={(e) => setForm({ ...form, preorder_limit: e.target.value })}
+                            className="w-24 rounded border border-slate-200 px-2 py-1 text-sm"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+                </Fragment>
               ) : (
                 <tr key={v.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="py-2">
