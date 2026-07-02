@@ -32,9 +32,9 @@ export const metadata: Metadata = {
     "Ghana fashion",
     "contemporary African fashion",
   ],
-  authors: [{ name: "1NRI Worldwide" }],
-  creator: "1NRI Worldwide",
-  publisher: "1NRI Worldwide",
+  authors: [{ name: "1NRI Worldwide LTD" }],
+  creator: "1NRI Worldwide LTD",
+  publisher: "1NRI Worldwide LTD",
   alternates: {
     canonical: "/",
   },
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_GB",
     url: SITE_URL,
-    siteName: "1NRI Worldwide",
+    siteName: "1NRI",
     title: "1NRI — Contemporary Streetwear Made in Accra, Ghana",
     description:
       "1NRI Worldwide is a Ghana-based streetwear and fashion manufacturing brand. Designed in Accra, built for durability, shipped worldwide.",
@@ -125,7 +125,7 @@ export default function RootLayout({
             __html: JSON.stringify({
               "@context": "https://schema.org",
               "@type": "Organization",
-              name: "1NRI Worldwide",
+              name: "1NRI Worldwide LTD",
               url: SITE_URL,
               logo: `${SITE_URL}/homepage_img/no-bg-1NRI.png`,
               description:

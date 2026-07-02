@@ -7,7 +7,7 @@
  * host if ever needed.
  */
 export const SITE_URL =
-  process.env.SITE_URL?.replace(/\/$/, "") || "https://storefront.1nri.store";
+  process.env.SITE_URL?.replace(/\/$/, "") || "https://1nri.store";
 
 /** Absolute URL helper for a path on the storefront. */
 export function absoluteUrl(path = "/"): string {
