@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import RoadToHQPage from "./RoadToHQClient";
+import { getRoadToHQ } from "@/lib/api/road-to-hq.server";
 
 export const metadata: Metadata = {
   title: "Road to HQ - Shop the Drop",
@@ -18,6 +19,12 @@ export const metadata: Metadata = {
   },
 };
 
-export default function Page() {
-  return <RoadToHQPage />;
+export default async function Page() {
+  const roadToHQ = await getRoadToHQ();
+  return (
+    <RoadToHQPage
+      unitsSold={roadToHQ?.units ?? 0}
+      targetUnits={roadToHQ?.target ?? 6000}
+    />
+  );
 }

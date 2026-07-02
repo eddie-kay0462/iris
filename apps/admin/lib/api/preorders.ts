@@ -128,6 +128,18 @@ export function useCancelPreorder() {
   });
 }
 
+export function useFulfillPreorder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient<Preorder>(`/admin/preorders/${id}/fulfill`, { method: "PATCH" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["preorders"] });
+      qc.invalidateQueries({ queryKey: ["preorder-stats"] });
+    },
+  });
+}
+
 export function useRestockPreorder() {
   const qc = useQueryClient();
   return useMutation({

@@ -60,6 +60,12 @@ export class PreordersController {
     return this.preordersService.cancel(id);
   }
 
+  @Patch('admin/preorders/:id/fulfill')
+  @RequirePermission('orders:update')
+  fulfill(@Param('id') id: string) {
+    return this.preordersService.fulfill(id);
+  }
+
   @Post('admin/preorders/restock/:variantId')
   @RequirePermission('inventory:update')
   restock(@Param('variantId') variantId: string, @Body() dto: RestockPreorderDto) {

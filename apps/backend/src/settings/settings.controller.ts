@@ -92,4 +92,56 @@ export class SettingsController {
   updatePreorderEtaText(@Body() body: { text: string }) {
     return this.settingsService.updatePreorderEtaText(body.text);
   }
+
+  @Get('order-number-start')
+  @RequirePermission('settings:read')
+  getOrderNumberStart() {
+    return this.settingsService.getOrderNumberStart();
+  }
+
+  @Put('order-number-start')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings:update')
+  updateOrderNumberStart(@Body() body: { value: number }) {
+    return this.settingsService.updateOrderNumberStart(body.value);
+  }
+
+  @Get('preorder-number-start')
+  @RequirePermission('settings:read')
+  getPreorderNumberStart() {
+    return this.settingsService.getPreorderNumberStart();
+  }
+
+  @Put('preorder-number-start')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings:update')
+  updatePreorderNumberStart(@Body() body: { value: number }) {
+    return this.settingsService.updatePreorderNumberStart(body.value);
+  }
+
+  @Get('road-to-hq-baseline')
+  @RequirePermission('settings:read')
+  getRoadToHqBaseline() {
+    return this.settingsService.getRoadToHqBaseline();
+  }
+
+  @Put('road-to-hq-baseline')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings:update')
+  updateRoadToHqBaseline(@Body() body: { value: number }) {
+    return this.settingsService.updateRoadToHqBaseline(body.value);
+  }
+
+  @Get('road-to-hq-target')
+  @RequirePermission('settings:read')
+  getRoadToHqTarget() {
+    return this.settingsService.getRoadToHqTarget();
+  }
+
+  @Put('road-to-hq-target')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings:update')
+  updateRoadToHqTarget(@Body() body: { value: number }) {
+    return this.settingsService.updateRoadToHqTarget(body.value);
+  }
 }

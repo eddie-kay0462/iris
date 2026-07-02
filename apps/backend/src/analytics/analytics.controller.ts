@@ -18,6 +18,19 @@ import { Public } from '../common/decorators/public.decorator';
 export class AnalyticsController {
   constructor(private analyticsService: AnalyticsService) {}
 
+  // ─── Road to HQ (public) ──────────────────────────────────────────────────
+
+  /**
+   * GET /analytics/road-to-hq
+   * Public. Total units sold toward the HQ goal (online + popup + baseline)
+   * and the configured target. Powers the storefront homepage progress ring.
+   */
+  @Public()
+  @Get('road-to-hq')
+  getRoadToHq() {
+    return this.analyticsService.getRoadToHq();
+  }
+
   // ─── Dashboard / Overview ─────────────────────────────────────────────────
 
   /**

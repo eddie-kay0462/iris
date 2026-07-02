@@ -37,6 +37,10 @@ export class PreordersService {
       const match = data[0].order_number.match(/PRE-(\d+)/);
       if (match) next = parseInt(match[1], 10) + 1;
     }
+    // Floor at the configured start so preorder numbers match the clean
+    // high-number scheme used for online orders.
+    const start = await this.settingsService.getPreorderNumberStart();
+    next = Math.max(next, start);
     return `PRE-${String(next).padStart(6, '0')}`;
   }
 
@@ -386,6 +390,22 @@ export class PreordersService {
     await db
       .from('preorders')
       .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('id', id);
+    return this.findOne(id);
+  }
+
+  async fulfill(id: string) {
+    const db = this.supabase.getAdminClient();
+    const { data: preorder, error } = await db.from('preorders').select('*').eq('id', id).single();
+    if (error || !preorder) throw new NotFoundException('Preorder not found');
+    if (preorder.status !== 'stock_held') {
+      throw new BadRequestException(
+        `Only stock-held preorders can be fulfilled (current status "${preorder.status}")`,
+      );
+    }
+    await db
+      .from('preorders')
+      .update({ status: 'fulfilled', updated_at: new Date().toISOString() })
       .eq('id', id);
     return this.findOne(id);
   }
