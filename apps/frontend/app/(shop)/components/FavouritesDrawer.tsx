@@ -67,8 +67,8 @@ export default function FavouritesDrawer() {
         {/* Body */}
         {!loggedIn ? (
           <EmptyState
-            title="Sign in to view saved items"
-            body="Your wishlist follows you once you're signed in."
+            title="Sign in to save favourites"
+            body="You need to be signed in to save products to your favourites."
             ctaLabel="Sign in"
             ctaHref="/login"
             onClose={closeDrawer}
