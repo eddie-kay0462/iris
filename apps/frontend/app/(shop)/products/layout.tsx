@@ -5,14 +5,14 @@ import { getPublishedProducts, productPath } from "@/lib/api/products.server";
 export const metadata: Metadata = {
   title: "Shop All Products",
   description:
-    "Browse the full 1NRI collection — contemporary streetwear designed in Accra and made in Ghana. Hoodies, tees, quarter-zips and more, shipped worldwide.",
+    "Browse the full 1NRI collection - contemporary streetwear designed in Accra and made in Ghana. Hoodies, tees, quarter-zips and more, shipped worldwide.",
   // Collapse tag/category/search filter variants (?tag=, ?category=, ?search=)
   // onto the single canonical products URL so they don't compete in search.
   alternates: {
     canonical: "/products",
   },
   openGraph: {
-    title: "Shop 1NRI — Ghana-Made Streetwear",
+    title: "Shop 1NRI - Ghana-Made Streetwear",
     description:
       "Contemporary streetwear designed in Accra, made in Ghana. Browse the full 1NRI collection and shop now.",
   },
@@ -34,7 +34,7 @@ export default async function ProductsLayout({
   const itemList = {
     "@context": "https://schema.org",
     "@type": "ItemList",
-    name: "1NRI — All Products",
+    name: "1NRI - All Products",
     url: `${SITE_URL}/products`,
     numberOfItems: products.length,
     itemListElement: products.map((product, i) => ({

@@ -91,7 +91,7 @@ export function InfiniteProductGrid({
                 </p>
                 <p className="mt-2 max-w-xs text-[12px] leading-relaxed tracking-[0.04em] text-gray-400 dark:text-neutral-600">
                     Either it all sold out or the drop hasn&apos;t landed yet.
-                    Being this early is basically a flex — check back soon.
+                    Being this early is basically a flex - check back soon.
                 </p>
             </div>
         );

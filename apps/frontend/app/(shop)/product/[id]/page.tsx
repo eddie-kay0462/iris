@@ -616,7 +616,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
                       ? `Only ${active!.inventory_quantity} left`
                       : "In stock"
                     : canPreorder
-                      ? "Pre-order — ships when restocked"
+                      ? "Pre-order - ships when restocked"
                       : "Out of stock"}
                 </span>
               </>
@@ -722,7 +722,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
                   : added
                     ? "Added to Cart"
                     : displayPrice != null
-                      ? `Add to Cart — ${formatPrice(displayPrice)}`
+                      ? `Add to Cart - ${formatPrice(displayPrice)}`
                       : "Add to Cart"}
               </button>
             )}

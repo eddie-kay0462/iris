@@ -50,7 +50,7 @@ function StockHoldTimer({ expiresAt }: { expiresAt: string }) {
 
   return (
     <p className="mt-3 text-xs font-medium text-amber-600 dark:text-amber-400">
-      Items reserved for {minutes}:{seconds.toString().padStart(2, "0")} — complete payment before your hold expires.
+      Items reserved for {minutes}:{seconds.toString().padStart(2, "0")} - complete payment before your hold expires.
     </p>
   );
 }
@@ -291,7 +291,7 @@ export default function CheckoutClient() {
           Nothing to check out
         </p>
         <p className="mt-2 max-w-xs text-[12px] leading-relaxed tracking-[0.04em] text-gray-400 dark:text-neutral-600">
-          Can&apos;t check out an empty cart — that&apos;s just window shopping.
+          Can&apos;t check out an empty cart - that&apos;s just window shopping.
           Add something first.
         </p>
         <Link
@@ -776,7 +776,7 @@ export default function CheckoutClient() {
             {appliedPromo ? (
               <div className="flex items-center justify-between rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm dark:bg-green-950 dark:border-green-800">
                 <span className="text-green-700 dark:text-green-400">
-                  <strong>{appliedPromo.code}</strong> applied — GH₵{" "}
+                  <strong>{appliedPromo.code}</strong> applied - GH₵{" "}
                   {appliedPromo.discountAmount.toLocaleString()} off
                 </span>
                 <button

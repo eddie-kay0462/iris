@@ -138,7 +138,7 @@ export default function MyPreordersPage() {
                     {isReady && (
                       <div className="mt-2 flex items-center gap-1.5 text-sm font-medium text-blue-700 dark:text-blue-300">
                         <span>✓</span>
-                        <span>Your item is ready — our team will contact you soon.</span>
+                        <span>Your item is ready - our team will contact you soon.</span>
                       </div>
                     )}
                   </div>

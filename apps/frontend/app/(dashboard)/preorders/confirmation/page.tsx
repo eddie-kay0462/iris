@@ -93,7 +93,7 @@ function PreorderConfirmationContent() {
           <div className="flex justify-between text-sm text-[#3B414A]">
             <span>
               {preorder.product_name}
-              {preorder.variant_title ? ` — ${preorder.variant_title}` : ""}
+              {preorder.variant_title ? ` - ${preorder.variant_title}` : ""}
               {preorder.quantity > 1 ? ` × ${preorder.quantity}` : ""}
             </span>
             <span>{fmt(Number(preorder.unit_price) * preorder.quantity)}</span>
