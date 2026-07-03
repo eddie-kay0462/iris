@@ -12,6 +12,10 @@ import {
   useUpdateStockHoldMinutes,
   usePreorderEtaText,
   useUpdatePreorderEtaText,
+  useRoadToHqBaseline,
+  useUpdateRoadToHqBaseline,
+  useRoadToHqTarget,
+  useUpdateRoadToHqTarget,
 } from "@/lib/api/settings";
 import { toast } from "sonner";
 
@@ -90,6 +94,48 @@ export default function GeneralSettingsPage() {
       onSuccess: () => {
         toast.success("Pre-order ETA text updated.");
       },
+    });
+  }
+
+  const { data: roadBaseline, isLoading: loadingRoadBaseline } = useRoadToHqBaseline();
+  const { mutate: saveRoadBaseline, isPending: savingRoadBaseline } = useUpdateRoadToHqBaseline();
+  const [draftRoadBaseline, setDraftRoadBaseline] = useState<string>("");
+
+  useEffect(() => {
+    if (roadBaseline !== undefined && roadBaseline !== null) {
+      setDraftRoadBaseline(String(roadBaseline));
+    }
+  }, [roadBaseline]);
+
+  const { data: roadTarget, isLoading: loadingRoadTarget } = useRoadToHqTarget();
+  const { mutate: saveRoadTarget, isPending: savingRoadTarget } = useUpdateRoadToHqTarget();
+  const [draftRoadTarget, setDraftRoadTarget] = useState<string>("");
+
+  useEffect(() => {
+    if (roadTarget !== undefined && roadTarget !== null) {
+      setDraftRoadTarget(String(roadTarget));
+    }
+  }, [roadTarget]);
+
+  function handleSaveRoadBaseline() {
+    const value = parseInt(draftRoadBaseline.replace(/,/g, ""), 10);
+    if (isNaN(value) || value < 0) {
+      toast.error("Baseline must be a whole number of 0 or more.");
+      return;
+    }
+    saveRoadBaseline(value, {
+      onSuccess: () => toast.success("Road to HQ baseline updated."),
+    });
+  }
+
+  function handleSaveRoadTarget() {
+    const value = parseInt(draftRoadTarget.replace(/,/g, ""), 10);
+    if (isNaN(value) || value < 1) {
+      toast.error("Target must be a whole number of 1 or more.");
+      return;
+    }
+    saveRoadTarget(value, {
+      onSuccess: () => toast.success("Road to HQ target updated."),
     });
   }
 
@@ -273,6 +319,79 @@ export default function GeneralSettingsPage() {
               <Save className="h-4 w-4" />
               {savingPreorderEta ? "Saving…" : "Save ETA text"}
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Road to HQ */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="p-6">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-slate-900">Road to HQ</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              The homepage counter shows units sold toward the HQ goal. The <strong>baseline</strong>{" "}
+              folds in historical units not tracked in this system (e.g. old Shopify / pop-up sales);
+              live online, pop-up and ally sales are added on top of it automatically. The{" "}
+              <strong>target</strong> is the goal shown on the progress ring.
+            </p>
+          </div>
+
+          {loadingRoadBaseline || loadingRoadTarget ? (
+            <p className="text-sm text-slate-400">Loading…</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-lg">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  Baseline (units)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={draftRoadBaseline}
+                  onChange={(e) => setDraftRoadBaseline(e.target.value)}
+                  placeholder="e.g. 450"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  Target (units)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={draftRoadTarget}
+                  onChange={(e) => setDraftRoadTarget(e.target.value)}
+                  placeholder="e.g. 6000"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={handleSaveRoadBaseline}
+                disabled={savingRoadBaseline || loadingRoadBaseline}
+                className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" />
+                {savingRoadBaseline ? "Saving…" : "Save baseline"}
+              </button>
+              <button
+                onClick={handleSaveRoadTarget}
+                disabled={savingRoadTarget || loadingRoadTarget}
+                className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-50 disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" />
+                {savingRoadTarget ? "Saving…" : "Save target"}
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+              <AlertCircle className="h-3.5 w-3.5" />
+              <span>The homepage counter is cached and can take up to ~5 minutes to update.</span>
+            </div>
           </div>
         </div>
       </div>

@@ -157,3 +157,45 @@ export function useUpdatePreorderEtaText() {
     },
   });
 }
+
+export function useRoadToHqBaseline() {
+  return useQuery({
+    queryKey: ["road-to-hq-baseline"],
+    queryFn: () => apiClient<number>("/settings/road-to-hq-baseline"),
+  });
+}
+
+export function useUpdateRoadToHqBaseline() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (value: number) =>
+      apiClient<number>("/settings/road-to-hq-baseline", {
+        method: "PUT",
+        body: { value },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["road-to-hq-baseline"] });
+    },
+  });
+}
+
+export function useRoadToHqTarget() {
+  return useQuery({
+    queryKey: ["road-to-hq-target"],
+    queryFn: () => apiClient<number>("/settings/road-to-hq-target"),
+  });
+}
+
+export function useUpdateRoadToHqTarget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (value: number) =>
+      apiClient<number>("/settings/road-to-hq-target", {
+        method: "PUT",
+        body: { value },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["road-to-hq-target"] });
+    },
+  });
+}
