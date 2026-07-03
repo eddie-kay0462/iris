@@ -513,8 +513,12 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
   // Resolve the active variant regardless of stock so OOS variants surface the
   // correct "Sold Out" / preorder state on the CTA.
   const active = sizeSelected ? (activeVariant || variants[0] || null) : null;
-  const displayPrice = active?.price ?? product.base_price;
-  const comparePrice = active?.compare_at_price ?? null;
+  // Price display should reflect the product's pricing even before a size is
+  // picked (mirrors ProductCard, which reads from the first variant). Stock and
+  // CTA state still key off `active`, so an unselected size can't be purchased.
+  const priceVariant = active ?? activeVariant ?? variants[0] ?? null;
+  const displayPrice = priceVariant?.price ?? product.base_price;
+  const comparePrice = priceVariant?.compare_at_price ?? null;
   const inStock = active ? active.inventory_quantity > 0 : false;
   const lowStock = active && active.inventory_quantity > 0 && active.inventory_quantity <= 3;
   const canPreorder = active ? (!inStock && (active.preorder_enabled ?? false)) : false;
@@ -576,14 +580,14 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
           </h1>
 
           {/* Price */}
-          <div className="flex items-baseline gap-3">
+          <div className="flex flex-nowrap items-center gap-3 whitespace-nowrap">
             {displayPrice != null && (
               <span className="text-[22px] font-light">{formatPrice(displayPrice)}</span>
             )}
             {comparePrice != null && comparePrice > (displayPrice || 0) && (
               <>
                 <span className="text-base text-[#59626E] dark:text-neutral-500 line-through">{formatPrice(comparePrice)}</span>
-                <span className="text-[10px] tracking-[0.18em] uppercase px-2 py-[3px] bg-black text-[#F4F3F1]">
+                <span className="text-[10px] tracking-[0.18em] uppercase px-2 py-[3px] bg-black text-[#F4F3F1] flex-shrink-0">
                   −{Math.round((1 - (displayPrice || 0) / comparePrice) * 100)}%
                 </span>
               </>
