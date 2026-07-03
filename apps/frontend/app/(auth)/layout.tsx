@@ -30,7 +30,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         {children}
       </div>
       <p className="mt-8 text-xs text-gray-400">
-        &copy; {new Date().getFullYear()} 1NRI. All rights reserved.
+        &copy; {new Date().getFullYear()} 1NRI Worldwide LTD. All rights reserved.
       </p>
     </div>
   );

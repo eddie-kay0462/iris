@@ -668,7 +668,7 @@ function ShopFooter() {
 
         <div className="mt-10 flex items-center justify-between border-t border-[#e5e5e5] pt-6 dark:border-neutral-800">
           <p className="text-[11px] uppercase tracking-[0.12em] text-[#999] dark:text-neutral-500">
-            &copy; {new Date().getFullYear()} 1NRI. All rights reserved.
+            &copy; {new Date().getFullYear()} 1NRI Worldwide LTD. All rights reserved.
           </p>
           <ThemeToggle />
         </div>
