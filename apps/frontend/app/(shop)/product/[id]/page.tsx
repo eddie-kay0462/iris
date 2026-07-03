@@ -10,6 +10,7 @@ import {
   findMatchingVariant,
   type OptionSlot,
 } from "../../components/VariantSelector";
+import { sortSizes } from "@/lib/products/variants";
 import { useSimilarProducts } from "@/lib/api/recommendations";
 import { addRecentlyViewed, useRecentlyViewed } from "@/lib/recently-viewed";
 import { ProductCard } from "../../components/ProductCard";
@@ -55,7 +56,10 @@ function extractOptionGroups(variants: ProductVariant[]): OptionGroup[] {
       const val = v[valueKey];
       if (val && !seen.has(val)) { seen.add(val); values.push(val); }
     }
-    if (values.length > 0) groups.push({ name, values, slot });
+    if (values.length > 0) {
+      const isSize = name.toLowerCase() === "size";
+      groups.push({ name, values: isSize ? sortSizes(values) : values, slot });
+    }
   }
   return groups;
 }

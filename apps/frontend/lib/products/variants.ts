@@ -22,7 +22,42 @@ export function getSizeSlot(variants: ProductVariant[]): OptionSlotKey | null {
   return null;
 }
 
-/** Unique size values, in order of first appearance. */
+/**
+ * Canonical apparel size order. Values are matched case-insensitively and with
+ * surrounding whitespace trimmed; anything not listed (e.g. numeric sizes or
+ * one-off labels) sorts after the known letter sizes, alphabetically.
+ */
+const SIZE_ORDER = [
+  "XXXS",
+  "XXS",
+  "XS",
+  "S",
+  "M",
+  "L",
+  "XL",
+  "XXL",
+  "XXXL",
+  "4XL",
+  "5XL",
+];
+
+function sizeRank(size: string): number {
+  const key = size.trim().toUpperCase();
+  const idx = SIZE_ORDER.indexOf(key);
+  return idx === -1 ? SIZE_ORDER.length : idx;
+}
+
+/** Sort size labels into canonical apparel order (XXS, XS, S, M, L, …). */
+export function sortSizes(sizes: string[]): string[] {
+  return [...sizes].sort((a, b) => {
+    const ra = sizeRank(a);
+    const rb = sizeRank(b);
+    if (ra !== rb) return ra - rb;
+    return a.localeCompare(b, undefined, { numeric: true });
+  });
+}
+
+/** Unique size values, ordered canonically (XXS, XS, S, M, L, …). */
 export function extractSizes(variants: ProductVariant[]): string[] {
   const slot = getSizeSlot(variants);
   if (!slot) return [];
@@ -35,7 +70,7 @@ export function extractSizes(variants: ProductVariant[]): string[] {
       sizes.push(val);
     }
   }
-  return sizes;
+  return sortSizes(sizes);
 }
 
 /** The variant matching a given size value, if any. */
