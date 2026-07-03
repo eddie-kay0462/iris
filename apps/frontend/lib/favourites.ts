@@ -1,9 +1,9 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { getToken } from "./api/client";
 import { getMyFavourites, addFavourite, removeFavourite } from "./api/favourites";
+import { useFavouritesDrawer } from "./favourites-drawer";
 
 export function useFavourites() {
   return useQuery({
@@ -15,7 +15,7 @@ export function useFavourites() {
 }
 
 export function useToggleFavourite(productId: string) {
-  const router = useRouter();
+  const { openDrawer } = useFavouritesDrawer();
   const qc = useQueryClient();
   const { data: favourites } = useFavourites();
 
@@ -43,7 +43,10 @@ export function useToggleFavourite(productId: string) {
 
   function toggle() {
     if (!getToken()) {
-      router.push("/login");
+      // Signed-out users can't save favourites — open the drawer, whose
+      // empty state explains they need to sign in, instead of yanking them
+      // off the page to /login.
+      openDrawer();
       return;
     }
     mutation.mutate();

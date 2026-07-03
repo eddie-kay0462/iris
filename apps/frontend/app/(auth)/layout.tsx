@@ -1,10 +1,18 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Home } from "lucide-react";
 import type { ReactNode } from "react";
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-black text-white">
+    <div className="relative min-h-screen flex flex-col items-center justify-center px-4 bg-black text-white">
+      <Link
+        href="/"
+        aria-label="Back to homepage"
+        className="absolute top-5 right-5 text-gray-400 transition-colors hover:text-white"
+      >
+        <Home className="h-5 w-5" />
+      </Link>
       <div className="w-full max-w-sm space-y-10">
         <div className="flex justify-center">
           <Link href="/">

@@ -640,7 +640,7 @@ function ShopFooter() {
               </a>
               {/* X / Twitter */}
               <a
-                href="https://x.com/1nriworldwide"
+                href="https://x.com/1nriiworldwide"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="X (Twitter)"

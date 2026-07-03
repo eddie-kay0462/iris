@@ -50,10 +50,13 @@ export default function UpdatePasswordPage() {
     }
   };
 
+  const inputClass =
+    "w-full border-b border-gray-700 bg-transparent py-3 text-sm placeholder:text-gray-600 focus:border-white focus:outline-none transition-colors";
+
   // Loading state while we check for a session
   if (sessionReady === null) {
     return (
-      <div className="w-full text-center text-sm text-gray-500">
+      <div className="w-full text-center text-xs uppercase tracking-[0.25em] text-gray-500">
         Verifying reset link…
       </div>
     );
@@ -62,12 +65,17 @@ export default function UpdatePasswordPage() {
   // No active Supabase session — link expired or already used
   if (!sessionReady) {
     return (
-      <div className="w-full space-y-4 text-center">
-        <h2 className="text-2xl font-semibold">Link expired</h2>
-        <p className="text-sm text-gray-400">
-          This password reset link has expired or has already been used.
-        </p>
-        <Link href="/reset-password" className="block text-white underline text-sm">
+      <div className="w-full space-y-8 text-center">
+        <div className="space-y-2">
+          <h2 className="text-xl font-medium uppercase tracking-[0.25em]">Link expired</h2>
+          <p className="text-xs text-gray-500 tracking-wide">
+            This password reset link has expired or has already been used.
+          </p>
+        </div>
+        <Link
+          href="/reset-password"
+          className="block text-xs uppercase tracking-[0.25em] text-white underline underline-offset-4 font-medium"
+        >
           Request a new reset link
         </Link>
       </div>
@@ -75,42 +83,42 @@ export default function UpdatePasswordPage() {
   }
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-8">
       <div className="space-y-2 text-center">
-        <h2 className="text-2xl font-semibold">Set new password</h2>
-        <p className="text-sm text-gray-500">
+        <h2 className="text-xl font-medium uppercase tracking-[0.25em]">Set new password</h2>
+        <p className="text-xs text-gray-500 tracking-wide">
           Choose a strong password for your account.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-5">
         <PasswordInput
           placeholder="New password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
           minLength={8}
-          className="w-full border border-gray-300 p-2 rounded bg-transparent text-white focus:outline-none focus:ring-1 focus:ring-white"
+          className={inputClass}
         />
         <PasswordInput
           placeholder="Confirm new password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
           required
-          className="w-full border border-gray-300 p-2 rounded bg-transparent text-white focus:outline-none focus:ring-1 focus:ring-white"
+          className={inputClass}
         />
 
         <button
           type="submit"
           disabled={!password || !confirmPassword || loading}
-          className="w-full bg-white text-black px-4 py-2 rounded disabled:opacity-50"
+          className="w-full bg-white text-black px-4 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] transition hover:bg-white/85 disabled:opacity-40"
         >
           {loading ? "Updating…" : "Update password"}
         </button>
       </form>
 
-      <div className="text-center text-sm text-gray-500">
-        <Link href="/login" className="text-white underline">
+      <div className="text-center text-xs text-gray-500 tracking-wide">
+        <Link href="/login" className="text-white underline underline-offset-2 font-medium">
           Back to login
         </Link>
       </div>

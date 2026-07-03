@@ -283,13 +283,23 @@ export default function CheckoutClient() {
 
   if (items.length === 0) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center px-4">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          Your cart is empty
-        </h1>
-        <p className="mt-2 text-gray-500 dark:text-gray-400">
-          Add items to your cart before checking out.
+      <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
+        <p className="select-none text-[64px] font-semibold leading-none tracking-tight text-gray-100 dark:text-neutral-800 sm:text-[96px]">
+          0/1NRI
         </p>
+        <p className="mt-6 text-[13px] uppercase tracking-[0.2em] text-[#59626E] dark:text-neutral-300">
+          Nothing to check out
+        </p>
+        <p className="mt-2 max-w-xs text-[12px] leading-relaxed tracking-[0.04em] text-gray-400 dark:text-neutral-600">
+          Can&apos;t check out an empty cart — that&apos;s just window shopping.
+          Add something first.
+        </p>
+        <Link
+          href="/products"
+          className="mt-8 border border-black px-8 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-black transition hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+        >
+          Start shopping
+        </Link>
       </div>
     );
   }
