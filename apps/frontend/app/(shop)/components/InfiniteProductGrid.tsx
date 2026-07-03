@@ -64,8 +64,16 @@ export function InfiniteProductGrid({
 
     if (isError) {
         return (
-            <div className="py-16 text-center text-sm text-red-500">
-                Error loading products. Please try again.
+            <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+                <p className="text-[13px] uppercase tracking-[0.14em] text-[#59626E] dark:text-neutral-400">
+                    Something went wrong loading products.
+                </p>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="border border-black px-6 py-2.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-black transition hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+                >
+                    Try again
+                </button>
             </div>
         );
     }
@@ -74,8 +82,17 @@ export function InfiniteProductGrid({
 
     if (products.length === 0) {
         return (
-            <div className="py-16 text-center text-sm text-gray-400 dark:text-gray-500">
-                No products found.
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+                <p className="select-none text-[64px] font-semibold leading-none tracking-tight text-gray-100 dark:text-neutral-800 sm:text-[96px]">
+                    0/1NRI
+                </p>
+                <p className="mt-6 text-[13px] uppercase tracking-[0.2em] text-[#59626E] dark:text-neutral-300">
+                    Nothing here. You&apos;re just early.
+                </p>
+                <p className="mt-2 max-w-xs text-[12px] leading-relaxed tracking-[0.04em] text-gray-400 dark:text-neutral-600">
+                    Either it all sold out or the drop hasn&apos;t landed yet.
+                    Being this early is basically a flex — check back soon.
+                </p>
             </div>
         );
     }

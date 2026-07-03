@@ -34,49 +34,48 @@ export default function ResetPasswordPage() {
     }
   };
 
+  const inputClass =
+    "w-full border-b border-gray-700 bg-transparent py-3 text-sm placeholder:text-gray-600 focus:border-white focus:outline-none transition-colors";
+
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-8">
       <div className="space-y-2 text-center">
-        <h2 className="text-2xl font-semibold">Reset password</h2>
-        <p className="text-sm text-gray-500">
+        <h2 className="text-xl font-medium uppercase tracking-[0.25em]">Reset password</h2>
+        <p className="text-xs text-gray-500 tracking-wide">
           Enter your email and we&apos;ll send you a reset link.
         </p>
       </div>
 
       {submitted ? (
-        <div className="rounded border border-green-300 bg-green-50 p-4 text-sm text-green-800 text-center space-y-2">
-          <p>
-            If an account exists for that email, a password reset link has been
-            sent. Please check your inbox.
-          </p>
+        <div className="border border-gray-700 p-5 text-center text-xs leading-relaxed text-gray-400 tracking-wide">
+          If an account exists for that email, a password reset link has been
+          sent. Please check your inbox.
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <input
             type="email"
             placeholder="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full border border-gray-300 p-2 rounded focus:outline-none focus:ring-1 focus:ring-black"
+            className={inputClass}
           />
 
           <button
             type="submit"
             disabled={!email || loading}
-            className="w-full bg-black text-white px-4 py-2 rounded disabled:opacity-50"
+            className="w-full bg-white text-black px-4 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] transition hover:bg-white/85 disabled:opacity-40"
           >
             {loading ? "Sending..." : "Send reset link"}
           </button>
         </form>
       )}
 
-      <div className="text-center text-sm text-gray-500">
-        <p>
-          <Link href="/login" className="text-black underline">
-            Back to login
-          </Link>
-        </p>
+      <div className="text-center text-xs text-gray-500 tracking-wide">
+        <Link href="/login" className="text-white underline underline-offset-2 font-medium">
+          Back to login
+        </Link>
       </div>
     </div>
   );
