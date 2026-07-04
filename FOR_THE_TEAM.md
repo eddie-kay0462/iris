@@ -4518,3 +4518,34 @@ We had a phone-contact list of ~610 people (names, a few emails, phone numbers i
 1. Search the customer list for a known imported name/number (e.g. **ADOTEY** / `+233243144367`) → they should be there with a clean `+…` number.
 2. Filter/query profiles tagged `migrated_from = 'contact-import-2026-07'` → should be **530** rows.
 3. Re-run `node --no-warnings scripts/import-contacts.ts` (dry-run) → it should report almost everyone as "already exists" and create nothing new.
+
+---
+
+## Product Image Upload — Loading Modals & Instant Updates (July 2026)
+
+Fixed a cluster of annoying bugs on the admin **product page** around adding, removing, and tagging product photos — and added the clear "please wait" popup we were missing.
+
+**What changed, in plain language:**
+
+- **You now get a loading popup while a photo uploads or is deleted.** It says "Uploading image…" / "Deleting image…" and closes on its own the moment the photo finishes — no more wondering whether anything is happening.
+- **Uploaded photos show up immediately.** Before, a new photo would seem to vanish until you manually refreshed the page — now it appears right away.
+- **Colour tagging works instantly.** Assigning a colour variant to a photo (so the right image shows for the right colour on the store) used to need a manual refresh to take effect. Fixed.
+- **The half-white-screen glitch is gone.** After uploading, part of the screen used to turn white until you refreshed — that was a browser rendering quirk in the old upload overlay, now removed.
+- **Deleting a photo updates the grid right away** instead of leaving the deleted photo sitting there until refresh.
+- **Behind the scenes:** the background job that tracks abandoned checkouts now quietly retries when it hits a brief network hiccup to the database, instead of logging a scary "fetch failed" error each time. No behaviour change for customers — just less noise and a self-healing job.
+
+**Why:** uploading and organising product photos was confusing and looked broken (things not appearing, needing constant refreshes). It now behaves the way you'd expect, with clear feedback.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/admin/app/components/products/ImagesEditor.tsx` | Added the centered "Uploading / Deleting image…" loading modal (auto-closes when done); removed the overlay effect that caused the half-white screen. |
+| `apps/admin/app/components/products/ProductForm.tsx` | Made the page refresh itself after a photo is added, deleted, colour-tagged, or reordered — so changes show instantly instead of after a manual refresh. |
+| `apps/backend/src/analytics/analytics.service.ts` | Added automatic retry-on-network-hiccup for the abandoned-checkout background job; errors now include the underlying cause for easier debugging. |
+
+### How to test
+
+1. Open a product in the admin at **Products → (any product)**. Add a photo → a "Uploading image…" popup appears, then closes on its own and the photo shows up **without refreshing**.
+2. On a photo, open **▼ colours** and toggle a colour → the colour badge updates **immediately**.
+3. Delete a photo → a "Deleting image…" popup shows, then closes and the photo disappears. No white screen anywhere in the process.
