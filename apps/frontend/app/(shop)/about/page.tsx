@@ -89,7 +89,7 @@ export default function AboutPage() {
         <motion.div className="absolute inset-0 scale-110" style={{ y: imgY }}>
           <Image
             src="/homepage/1.jpeg"
-            alt="1NRI editorial shot — FW '25, Accra, Ghana"
+            alt="1NRI editorial shot - FW '25, Accra, Ghana"
             fill
             sizes="100vw"
             className="object-cover object-[center_0%]"

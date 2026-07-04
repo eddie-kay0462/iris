@@ -58,7 +58,7 @@ function RecoverContent() {
             } removed.`,
           );
         }
-        toast.success("Welcome back — your cart is ready.");
+        toast.success("Welcome back - your cart is ready.");
         router.replace("/checkout");
       } catch (err) {
         setError(

@@ -51,40 +51,40 @@ const MS_POSITIONS_DEG = Array.from({ length: 6 }, (_, i) =>
 const MILESTONES = [
   {
     units: 1000, kicker: "Promise", title: "A day out with a customer",
-    body: "When we hit our first thousand units, we're showing up — in person — for one customer who's been with us. A whole day, on us. Coffee, the city, the wardrobe edit they didn't know they needed.",
+    body: "When we hit our first thousand units, we're showing up - in person - for one customer who's been with us. A whole day, on us. Coffee, the city, the wardrobe edit they didn't know they needed.",
     window: "Q2 · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/1nri-quarter-zip/black__shot-3__1770027218488.jpg",
     objectPos: "object-[center_30%]",
   },
   {
     units: 2000, kicker: "Promise", title: "Climb Mount Afadjato",
-    body: "Two thousand deep. The team climbs Mount Afadjato — Ghana's highest peak, 885 m. Full 1NRI kit, filmed start to summit. If we're asking you to back us, we should be willing to suffer a little too.",
+    body: "Two thousand deep. The team climbs Mount Afadjato - Ghana's highest peak, 885 m. Full 1NRI kit, filmed start to summit. If we're asking you to back us, we should be willing to suffer a little too.",
     window: "Q2 · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/genesis-basic-top/product__main__1774011630200.jpg",
   },
   {
-    units: 3000, kicker: "Promise", title: "Wildcard — a customer decides",
-    body: "Halfway there, we hand the wheel over. One customer gets to pick the milestone — whatever they want us to do, build, or attempt. No veto, no committee. Their call, our commitment. (Nothing too crazy tho🫠)",
+    units: 3000, kicker: "Promise", title: "Wildcard - a customer decides",
+    body: "Halfway there, we hand the wheel over. One customer gets to pick the milestone - whatever they want us to do, build, or attempt. No veto, no committee. Their call, our commitment. (Nothing too crazy tho🫠)",
     window: "Q3 · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/intercessory-dept-hoodie-real-tree/product__shot-4__1774018322078.jpg",
   },
   {
     units: 4000, kicker: "Promise", title: "Charity Donation",
-    body: "Four thousand units moved. We make a meaningful donation to a cause close to the community we're building in — chosen transparently, receipts shared. The road isn't just about us.",
+    body: "Four thousand units moved. We make a meaningful donation to a cause close to the community we're building in - chosen transparently, receipts shared. The road isn't just about us.",
     window: "Q3 · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/olive-grove/product__shot-4__1779112535448.jpg",
     objectPos: "object-[center_15%]",
   },
   {
     units: 5000, kicker: "Promise", title: "Street Interviews About Our Brand",
-    body: "Five thousand in and we go to the streets — camera rolling, no script. We ask real people what they think of 1NRI: the clothes, the price, the name, all of it. Uncut, unfiltered, published raw.",
+    body: "Five thousand in and we go to the streets - camera rolling, no script. We ask real people what they think of 1NRI: the clothes, the price, the name, all of it. Uncut, unfiltered, published raw.",
     window: "Q4 · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/sackcloth/product__shot-2__1774014162916.jpg",
     objectPos: "object-[center_10%]",
   },
   {
     units: 6000, kicker: "Goal", title: "HQ Tour & Party",
-    body: "We close the road and open the doors. The new Accra headquarters, live and in person. A tour of the studio, the fitting room, the lounge — then a party for every customer who helped us get here.",
+    body: "We close the road and open the doors. The new Accra headquarters, live and in person. A tour of the studio, the fitting room, the lounge - then a party for every customer who helped us get here.",
     window: "Dec · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/dusk-before-dawn-button-up/beige__main__1770027225978.jpg",
     objectPos: "object-[center_20%]",
@@ -374,7 +374,7 @@ export default function RoadToHQPage({
           <motion.div variants={staggerFast} className="mt-12 grid grid-cols-3 gap-6 text-center">
             {[
               { value: "6,000", label: "Units to sell" },
-              { value: daysLeft > 0 ? daysLeft.toLocaleString() : "—", label: "Days remaining", border: true },
+              { value: daysLeft > 0 ? daysLeft.toLocaleString() : "-", label: "Days remaining", border: true },
               { value: "06", label: "Milestones" },
             ].map((stat) => (
               <motion.div key={stat.label} variants={fadeUp} className={stat.border ? "border-x border-neutral-200 dark:border-neutral-800" : ""}>
@@ -416,7 +416,7 @@ export default function RoadToHQPage({
             transition={{ duration: 0.7, ease }}
             viewport={{ once: true, margin: "-40px" }}
           >
-            <svg viewBox="-60 0 920 820" className="w-full max-w-[760px] mx-auto block overflow-visible" aria-label="Road to HQ — milestone circle">
+            <svg viewBox="-60 0 920 820" className="w-full max-w-[760px] mx-auto block overflow-visible" aria-label="Road to HQ - milestone circle">
               <defs>
                 <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
                   <stop offset="0%" stopColor="currentColor" stopOpacity="0.06" />
@@ -658,7 +658,7 @@ export default function RoadToHQPage({
       {/* ── 6. CLOSING CTA ── */}
       <section ref={ctaRef} className="relative h-[80vh] min-h-[560px] overflow-hidden">
         <motion.div className="absolute inset-0 will-change-transform" style={{ y: ctaImageY }}>
-          <Image src="/homepage/2.jpeg" alt="1NRI clothing collection — shop the drop" fill sizes="100vw" quality={85} className="object-cover object-top scale-110" />
+          <Image src="/homepage/2.jpeg" alt="1NRI clothing collection - shop the drop" fill sizes="100vw" quality={85} className="object-cover object-top scale-110" />
         </motion.div>
         <div className="absolute inset-0 bg-black/55" />
         <motion.div

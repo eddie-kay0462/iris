@@ -118,7 +118,7 @@ export function VariantSelector({
             {group.name}
             {selected[group.name] && (
               <span className="ml-2 font-normal text-gray-500 dark:text-gray-400">
-                — {selected[group.name]}
+                - {selected[group.name]}
               </span>
             )}
           </h3>

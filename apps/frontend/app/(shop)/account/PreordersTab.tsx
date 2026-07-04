@@ -84,7 +84,7 @@ export default function PreordersTab() {
                   </div>
                   {isReady && (
                     <div className="mt-2.5 px-3 py-2.5 bg-[#f5f5f5] dark:bg-[#111] text-[12px] text-[#666] dark:text-neutral-400 border-l-2 border-[#111] dark:border-[#ededed] leading-[1.5]">
-                      Your item is ready — our team will reach out to arrange delivery.
+                      Your item is ready - our team will reach out to arrange delivery.
                     </div>
                   )}
                 </div>

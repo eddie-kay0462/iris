@@ -156,7 +156,7 @@ function ConfirmationContent() {
               >
                 <span>
                   {item.product_name}
-                  {item.variant_title ? ` — ${item.variant_title}` : ""}
+                  {item.variant_title ? ` - ${item.variant_title}` : ""}
                   {item.quantity > 1 ? ` × ${item.quantity}` : ""}
                 </span>
                 <span>GH₵ {item.total_price.toLocaleString()}</span>

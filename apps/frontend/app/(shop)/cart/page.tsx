@@ -20,7 +20,7 @@ export default function CartPage() {
           Your cart is running on empty
         </p>
         <p className="mt-2 max-w-xs text-[12px] leading-relaxed tracking-[0.04em] text-gray-400 dark:text-neutral-600">
-          Nothing in here yet. The fit doesn&apos;t build itself — go find
+          Nothing in here yet. The fit doesn&apos;t build itself - go find
           something worth carrying.
         </p>
         <Link

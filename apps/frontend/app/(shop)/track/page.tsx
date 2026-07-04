@@ -197,7 +197,7 @@ function OrderResult({ order }: { order: TrackingOrder }) {
               <div key={i} className="flex justify-between px-4 py-3 text-sm">
                 <span className="text-gray-700 dark:text-gray-300">
                   {item.product_name}
-                  {item.variant_title ? ` — ${item.variant_title}` : ""}
+                  {item.variant_title ? ` - ${item.variant_title}` : ""}
                   {item.quantity > 1 ? ` × ${item.quantity}` : ""}
                 </span>
                 <span className="text-gray-900 dark:text-white font-medium">
@@ -329,7 +329,7 @@ function PreorderResult({ preorder }: { preorder: TrackingPreorder }) {
               <div key={i} className="flex justify-between px-4 py-3 text-sm">
                 <span className="text-gray-700 dark:text-gray-300">
                   {item.product_name}
-                  {item.variant_title ? ` — ${item.variant_title}` : ""}
+                  {item.variant_title ? ` - ${item.variant_title}` : ""}
                   {item.quantity > 1 ? ` × ${item.quantity}` : ""}
                 </span>
                 <span className="text-gray-900 dark:text-white font-medium">

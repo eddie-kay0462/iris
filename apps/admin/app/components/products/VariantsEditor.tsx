@@ -56,6 +56,14 @@ const COLOR_OPTIONS = [
   "Tangerine", "Mustard", "Yellow",
 ];
 
+/**
+ * Normalise a colour value for display: case-insensitive input, but always
+ * shown with the first letter of each word capitalised (e.g. "off-white" → "Off-White").
+ */
+function titleCaseColor(value: string) {
+  return value.trim().toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function VariantsEditor({
@@ -139,7 +147,7 @@ export function VariantsEditor({
     if (!form.option1_value && !form.option2_value) return;
     onAdd({
       option1_name: form.option1_value ? form.option1_name : undefined,
-      option1_value: form.option1_value || undefined,
+      option1_value: form.option1_value ? titleCaseColor(form.option1_value) : undefined,
       option2_name: form.option2_value ? form.option2_name : undefined,
       option2_value: form.option2_value || undefined,
       price: form.price ? Number(form.price) : undefined,
@@ -175,7 +183,7 @@ export function VariantsEditor({
   function handleUpdate(variantId: string) {
     onUpdate?.(variantId, {
       option1_name: form.option1_value ? form.option1_name : undefined,
-      option1_value: form.option1_value || undefined,
+      option1_value: form.option1_value ? titleCaseColor(form.option1_value) : undefined,
       option2_name: form.option2_value ? form.option2_name : undefined,
       option2_value: form.option2_value || undefined,
       price: form.price ? Number(form.price) : undefined,
@@ -218,10 +226,10 @@ export function VariantsEditor({
                   <button
                     key={c}
                     type="button"
-                    onClick={() => setForm({ ...form, option1_value: form.option1_value === c ? "" : c })}
+                    onClick={() => setForm({ ...form, option1_value: form.option1_value.toLowerCase() === c.toLowerCase() ? "" : c })}
                     className={[
                       "rounded border px-2 py-0.5 text-xs transition-colors",
-                      form.option1_value === c
+                      form.option1_value.toLowerCase() === c.toLowerCase()
                         ? "border-slate-900 bg-slate-900 text-white"
                         : "border-slate-200 text-slate-600 hover:border-slate-400",
                     ].join(" ")}
@@ -232,7 +240,7 @@ export function VariantsEditor({
                 {/* Custom color input */}
                 <input
                   placeholder="Other…"
-                  value={COLOR_OPTIONS.includes(form.option1_value) ? "" : form.option1_value}
+                  value={COLOR_OPTIONS.some((c) => c.toLowerCase() === form.option1_value.toLowerCase()) ? "" : form.option1_value}
                   onChange={(e) => setForm({ ...form, option1_value: e.target.value })}
                   className="rounded border border-slate-200 px-2 py-0.5 text-xs w-20"
                 />
@@ -408,7 +416,7 @@ export function VariantsEditor({
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                   </div>
                 </td>
-                <td className="py-2 text-slate-600">{v.option1_value || "—"}</td>
+                <td className="py-2 text-slate-600">{v.option1_value ? titleCaseColor(v.option1_value) : "—"}</td>
                 <td className="py-2 text-slate-600">{v.option2_value || "—"}</td>
                 <td className="py-2 text-slate-400 text-xs">{v.sku || "—"}</td>
                 <td className="py-2">{v.price != null ? `GH₵${v.price}` : "—"}</td>
@@ -533,7 +541,7 @@ export function VariantsEditor({
                       </div>
                     )}
                   </td>
-                  <td className="py-2">{v.option1_value || "—"}</td>
+                  <td className="py-2">{v.option1_value ? titleCaseColor(v.option1_value) : "—"}</td>
                   <td className="py-2">{v.option2_value || "—"}</td>
                   <td className="py-2 text-xs text-slate-400">{v.sku || "—"}</td>
                   <td className="py-2">

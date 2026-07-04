@@ -616,7 +616,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
                       ? `Only ${active!.inventory_quantity} left`
                       : "In stock"
                     : canPreorder
-                      ? "Pre-order — ships when restocked"
+                      ? "Pre-order - ships when restocked"
                       : "Out of stock"}
                 </span>
               </>
@@ -722,7 +722,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
                   : added
                     ? "Added to Cart"
                     : displayPrice != null
-                      ? `Add to Cart — ${formatPrice(displayPrice)}`
+                      ? `Add to Cart - ${formatPrice(displayPrice)}`
                       : "Add to Cart"}
               </button>
             )}
@@ -770,8 +770,8 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
             >
               <p>
                 {/* Free standard shipping on orders over GH₵500.  */}
-                Accra &amp; Tema delivery in 1–2
-                working days; rest of Ghana 3–5 days; international 7–14 days via DHL. 30-day
+                Accra &amp; Tema delivery in 1-5
+                business days; rest of Ghana 3-5 days; international 7-14 days via DHL. 30-day
                 returns on unworn, tagged items.
               </p>
             </AccordionItem>

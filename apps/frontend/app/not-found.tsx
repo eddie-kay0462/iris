@@ -10,7 +10,7 @@ export default function NotFound() {
         This page went off-grid.
       </p>
       <p className="mt-2 max-w-xs text-[12px] leading-relaxed tracking-[0.04em] text-gray-400 dark:text-neutral-600">
-        The link is broken or the page never existed. No drama — let&apos;s get
+        The link is broken or the page never existed. No drama - let&apos;s get
         you back to the good stuff.
       </p>
       <Link

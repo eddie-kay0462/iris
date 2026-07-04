@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: LayoutParams): Promise<Metada
   const description =
     product.seo_description ||
     product.description ||
-    `Shop ${product.title} by 1NRI — Ghana-made contemporary streetwear, designed in Accra and built to last.`;
+    `Shop ${product.title} by 1NRI - Ghana-made contemporary streetwear, designed in Accra and built to last.`;
   const image = product.product_images?.[0]?.src;
 
   return {

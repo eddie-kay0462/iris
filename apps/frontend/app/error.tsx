@@ -23,7 +23,7 @@ export default function Error({
         Something came apart at the seams.
       </p>
       <p className="mt-2 max-w-xs text-[12px] leading-relaxed tracking-[0.04em] text-gray-400 dark:text-neutral-600">
-        An unexpected error stitched itself into the page. Give it another go —
+        An unexpected error stitched itself into the page. Give it another go -
         it&apos;s usually a one-off.
       </p>
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
