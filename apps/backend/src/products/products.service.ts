@@ -344,7 +344,66 @@ export class ProductsService {
     if (!data || data.length === 0) {
       throw new NotFoundException('Variant not found');
     }
+
+    // Clean up any image metadata that was auto-seeded from this variant, so the
+    // deleted colour stops appearing on the storefront (colour swatches are derived
+    // from image color_tags, not directly from variants).
+    await this.cleanupImagesAfterVariantDelete(
+      productId,
+      variantId,
+      (data[0].option1_value as string | null) ?? null,
+    );
+
     return { message: 'Variant deleted' };
+  }
+
+  /**
+   * Remove references to a just-deleted variant from its product's images.
+   * The linked variant_id is always cleared. The variant's colour is only stripped
+   * from color_tags / option1_value when no remaining variant of the product still
+   * uses that colour (colours are shared across size variants).
+   */
+  private async cleanupImagesAfterVariantDelete(
+    productId: string,
+    variantId: string,
+    color: string | null,
+  ) {
+    const db = this.supabase.getAdminClient();
+
+    let colorStillUsed = false;
+    if (color) {
+      const { data: remaining } = await db
+        .from('product_variants')
+        .select('option1_value')
+        .eq('product_id', productId);
+      const lc = color.toLowerCase();
+      colorStillUsed = (remaining ?? []).some(
+        (v) => (v.option1_value ?? '').toLowerCase() === lc,
+      );
+    }
+
+    const { data: images } = await db
+      .from('product_images')
+      .select('id, color_tags, option1_value, variant_id')
+      .eq('product_id', productId);
+
+    const lc = color?.toLowerCase() ?? null;
+    for (const img of images ?? []) {
+      const patch: Record<string, unknown> = {};
+
+      if (img.variant_id === variantId) patch.variant_id = null;
+
+      if (lc && !colorStillUsed) {
+        const tags: string[] = img.color_tags ?? [];
+        const nextTags = tags.filter((t) => t.toLowerCase() !== lc);
+        if (nextTags.length !== tags.length) patch.color_tags = nextTags;
+        if ((img.option1_value ?? '').toLowerCase() === lc) patch.option1_value = null;
+      }
+
+      if (Object.keys(patch).length > 0) {
+        await db.from('product_images').update(patch).eq('id', img.id);
+      }
+    }
   }
 
   // --- Images ---

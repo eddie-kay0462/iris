@@ -56,7 +56,7 @@ interface ImagesEditorProps {
   onUpdateImage?: (imageId: string, update: ImageUpdate) => void;
   /** @deprecated use onUpdateImage */
   onUpdateImageType?: (imageId: string, imageType: string, variantId: string | null) => void;
-  onDelete: (imageId: string) => void;
+  onDelete: (imageId: string) => void | Promise<void>;
   onReorder: (imageIds: string[]) => void;
   productId?: string;
   onStagedFile?: (file: File, localId: string) => void;
@@ -258,7 +258,21 @@ export function ImagesEditor({
   );
   const [pending, setPending] = useState<PendingImage[]>([]);
   const [isDropping, setIsDropping] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Wrap the parent delete so we can show a blocking modal until it resolves.
+  const handleDelete = useCallback(
+    async (imageId: string) => {
+      setDeleting(true);
+      try {
+        await onDelete(imageId);
+      } finally {
+        setDeleting(false);
+      }
+    },
+    [onDelete],
+  );
 
   const baseSorted = [...images].sort((a, b) => a.position - b.position);
 
@@ -384,8 +398,26 @@ export function ImagesEditor({
 
   const hasImages = sorted.length > 0 || pending.length > 0;
 
+  // Blocking modal: shown while an image is uploading or a delete is in flight.
+  // Derived from state, so it closes automatically when the operation finishes.
+  const isUploading = pending.some((p) => p.status === "uploading");
+  const busyLabel = deleting ? "Deleting image…" : "Uploading image…";
+
   return (
     <div className="space-y-3">
+      {(isUploading || deleting) && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex flex-col items-center gap-3 rounded-lg bg-white px-8 py-6 shadow-xl">
+            <SpinnerIcon />
+            <p className="text-sm font-medium text-slate-700">{busyLabel}</p>
+            <p className="text-xs text-slate-400">Please don&apos;t close this page.</p>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium text-slate-700">Images</h3>
         <button
@@ -424,7 +456,7 @@ export function ImagesEditor({
                   availableColors={availableColors}
                   canEdit={!!(onUpdateImage || onUpdateImageType)}
                   onUpdate={(update) => handleUpdate(img.id, update)}
-                  onDelete={() => onDelete(img.id)}
+                  onDelete={() => handleDelete(img.id)}
                 />
               ))}
 
@@ -454,7 +486,7 @@ export function ImagesEditor({
 
               {/* Uploading / done / error: blocking overlay */}
               {p.status !== "staged" && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/70 backdrop-blur-sm">
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/85">
                   {p.status === "uploading" && (
                     <>
                       <SpinnerIcon />

@@ -48,6 +48,39 @@ export class AnalyticsService {
     private settings: SettingsService,
   ) {}
 
+  /**
+   * Run a Supabase query (`{ data, error }` thenable) with a few retries on
+   * transient network failures — undici's `fetch failed` / ECONNRESET / DNS
+   * blips that Postgrest surfaces in `error` (or, occasionally, throws). The
+   * builder is re-created via `run()` on each attempt with a short linear
+   * backoff. Deterministic Postgrest errors (bad query, RLS) return immediately.
+   */
+  private async withRetry<T>(
+    label: string,
+    run: () => PromiseLike<{ data: T; error: any }>,
+    attempts = 3,
+  ): Promise<{ data: T | null; error: any }> {
+    let result: { data: T | null; error: any } = { data: null, error: null };
+    for (let i = 0; i < attempts; i++) {
+      try {
+        result = await run();
+      } catch (err: any) {
+        result = { data: null, error: err };
+      }
+      if (!result.error) return result;
+      const cause = (result.error as any)?.cause;
+      const haystack = `${result.error?.message ?? result.error} ${cause?.code ?? cause ?? ''}`;
+      const transient =
+        /fetch failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|UND_ERR/i.test(haystack);
+      if (!transient || i === attempts - 1) return result;
+      this.logger.warn(
+        `${label} transient failure (attempt ${i + 1}/${attempts}): ${result.error?.message ?? result.error} — retrying`,
+      );
+      await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+    }
+    return result;
+  }
+
   // ─── Road to HQ ────────────────────────────────────────────────────────────
 
   /**
@@ -1498,15 +1531,20 @@ export class AnalyticsService {
    */
   private async reconcileRecoveries(): Promise<number> {
     const db = this.supabase.getAdminClient();
-    const { data: rows, error } = await db
-      .from('checkout_sessions')
-      .select('id, user_id, email, reminder_sent_at')
-      .eq('status', 'open')
-      .not('reminder_sent_at', 'is', null)
-      .is('recovered_at', null);
+    const { data: rows, error } = await this.withRetry('reconcileRecoveries', () =>
+      db
+        .from('checkout_sessions')
+        .select('id, user_id, email, reminder_sent_at')
+        .eq('status', 'open')
+        .not('reminder_sent_at', 'is', null)
+        .is('recovered_at', null),
+    );
 
     if (error) {
-      this.logger.error(`reconcileRecoveries query failed: ${error.message}`);
+      const cause = (error as any)?.cause;
+      this.logger.error(
+        `reconcileRecoveries query failed: ${error.message}${cause ? ` (cause: ${cause.code ?? cause})` : ''}`,
+      );
       return 0;
     }
     if (!rows?.length) return 0;
@@ -1560,19 +1598,24 @@ export class AnalyticsService {
     const ageCutoff = new Date(now - MAX_REMINDER_AGE_MS).toISOString();
     const frontendUrl = this.config.get<string>('FRONTEND_URL', 'https://storefront.1nri.store');
 
-    const { data: rows, error } = await db
-      .from('checkout_sessions')
-      .select('id, recovery_token, email, customer_name, items, subtotal, status, updated_at')
-      .eq('status', 'open')
-      .is('reminder_sent_at', null)
-      .not('email', 'is', null)
-      .lt('updated_at', idleCutoff)
-      .gt('created_at', ageCutoff)
-      .order('updated_at', { ascending: true })
-      .limit(100);
+    const { data: rows, error } = await this.withRetry('sendAbandonedCheckoutReminders', () =>
+      db
+        .from('checkout_sessions')
+        .select('id, recovery_token, email, customer_name, items, subtotal, status, updated_at')
+        .eq('status', 'open')
+        .is('reminder_sent_at', null)
+        .not('email', 'is', null)
+        .lt('updated_at', idleCutoff)
+        .gt('created_at', ageCutoff)
+        .order('updated_at', { ascending: true })
+        .limit(100),
+    );
 
     if (error) {
-      this.logger.error(`sendAbandonedCheckoutReminders query failed: ${error.message}`);
+      const cause = (error as any)?.cause;
+      this.logger.error(
+        `sendAbandonedCheckoutReminders query failed: ${error.message}${cause ? ` (cause: ${cause.code ?? cause})` : ''}`,
+      );
       return 0;
     }
     if (!rows?.length) return 0;
