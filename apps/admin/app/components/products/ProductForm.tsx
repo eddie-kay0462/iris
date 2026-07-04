@@ -359,19 +359,31 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
                 productId={product.id}
                 productHandle={product.handle}
                 productVariants={product.product_variants || []}
-                onAdd={(src, altText) => addImage.mutate({ src, alt_text: altText })}
-                onUpdateImage={(imageId, update) =>
-                  updateImage.mutate({
-                    imageId,
-                    data: {
-                      ...(update.imageType !== undefined && { image_type: update.imageType }),
-                      ...(update.variantId !== undefined && { variant_id: update.variantId }),
-                      ...(update.colorTags !== undefined && { color_tags: update.colorTags }),
-                    },
-                  })
+                onAdd={(src, altText) =>
+                  addImage.mutate(
+                    { src, alt_text: altText },
+                    { onSuccess: onRefresh, onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to add image", { duration: 6000 }) },
+                  )
                 }
-                onDelete={(imageId) => deleteImage.mutate(imageId)}
-                onReorder={(imageIds) => reorderImages.mutate(imageIds)}
+                onUpdateImage={(imageId, update) =>
+                  updateImage.mutate(
+                    {
+                      imageId,
+                      data: {
+                        ...(update.imageType !== undefined && { image_type: update.imageType }),
+                        ...(update.variantId !== undefined && { variant_id: update.variantId }),
+                        ...(update.colorTags !== undefined && { color_tags: update.colorTags }),
+                      },
+                    },
+                    { onSuccess: onRefresh, onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update image", { duration: 6000 }) },
+                  )
+                }
+                onDelete={(imageId) =>
+                  deleteImage
+                    .mutateAsync(imageId, { onSuccess: onRefresh })
+                    .catch((err) => toast.error(err instanceof Error ? err.message : "Failed to delete image", { duration: 6000 }))
+                }
+                onReorder={(imageIds) => reorderImages.mutate(imageIds, { onSuccess: onRefresh, onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to reorder images", { duration: 6000 }) })}
               />
             ) : (
               <ImagesEditor
