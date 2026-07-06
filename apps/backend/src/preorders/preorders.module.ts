@@ -9,5 +9,6 @@ import { SettingsModule } from '../settings/settings.module';
   imports: [SupabaseModule, LetsfishModule, SettingsModule],
   controllers: [PreordersController],
   providers: [PreordersService],
+  exports: [PreordersService],
 })
 export class PreordersModule {}

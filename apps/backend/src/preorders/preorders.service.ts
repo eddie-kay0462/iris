@@ -5,6 +5,7 @@ import { LetsfishService } from '../letsfish/letsfish.service';
 import { EmailService } from '../email/email.service';
 import { SettingsService } from '../settings/settings.service';
 import { SMS_TEMPLATES } from '../sms/sms.service';
+import { toE164 } from '../common/utils/phone';
 import { CreatePreorderDto, PreorderItemDto } from './dto/create-preorder.dto';
 import { CreatePopupPreorderDto } from './dto/create-popup-preorder.dto';
 import { QueryPreordersDto } from './dto/query-preorders.dto';
@@ -46,7 +47,7 @@ export class PreordersService {
 
   private async checkEligibility(
     item: PreorderItemDto,
-    userId: string,
+    customer: { userId: string | null; email: string | null },
   ): Promise<{ variant: any; expectedPrice: number }> {
     const db = this.supabase.getAdminClient();
 
@@ -75,28 +76,143 @@ export class PreordersService {
       }
     }
 
-    const { count: customerCount } = await db
-      .from('preorders')
-      .select('*', { count: 'exact', head: true })
-      .eq('variant_id', item.variantId)
-      .eq('user_id', userId)
-      .in('status', ['pending', 'stock_held']);
-    if ((customerCount ?? 0) > 0) {
-      throw new BadRequestException('You already have an active pre-order for this item.');
+    // One active pre-order per customer per variant. Keyed on user_id for
+    // signed-in shoppers, else on customer_email so guest pre-orders are
+    // still de-duplicated.
+    if (customer.userId || customer.email) {
+      let q = db
+        .from('preorders')
+        .select('*', { count: 'exact', head: true })
+        .eq('variant_id', item.variantId)
+        .in('status', ['pending', 'stock_held']);
+      q = customer.userId
+        ? q.eq('user_id', customer.userId)
+        : q.ilike('customer_email', customer.email!);
+      const { count: customerCount } = await q;
+      if ((customerCount ?? 0) > 0) {
+        throw new BadRequestException('You already have an active pre-order for this item.');
+      }
     }
 
     return { variant, expectedPrice };
   }
 
   async checkEligibilityPublic(item: PreorderItemDto, userId: string): Promise<{ eligible: true }> {
-    await this.checkEligibility(item, userId);
+    await this.checkEligibility(item, { userId, email: null });
     return { eligible: true };
+  }
+
+  /**
+   * Validate a batch of pre-order lines coming through the normal checkout flow
+   * (out-of-stock-but-preorderable items). Runs the same eligibility rules as a
+   * standalone pre-order — enforcing limits, price match, and the one-active-per
+   * -customer guard — WITHOUT inserting anything, so the caller can validate up
+   * front and avoid creating an orphan order if a line is ineligible.
+   */
+  async validatePreorderItems(
+    items: { variantId: string; productTitle?: string; variantTitle?: string | null; quantity: number; price: number }[],
+    customer: { userId: string | null; email: string | null },
+  ): Promise<
+    { variantId: string; productName: string; variantTitle: string | null; quantity: number; unitPrice: number }[]
+  > {
+    const validated: { variantId: string; productName: string; variantTitle: string | null; quantity: number; unitPrice: number }[] = [];
+    for (const item of items) {
+      const { variant, expectedPrice } = await this.checkEligibility(
+        {
+          variantId: item.variantId,
+          quantity: item.quantity,
+          price: item.price,
+          productTitle: item.productTitle,
+          variantTitle: item.variantTitle ?? undefined,
+        } as PreorderItemDto,
+        customer,
+      );
+      validated.push({
+        variantId: item.variantId,
+        productName: (variant.products as any)?.title ?? item.productTitle ?? 'Item',
+        variantTitle: item.variantTitle ?? null,
+        quantity: item.quantity,
+        unitPrice: expectedPrice,
+      });
+    }
+    return validated;
+  }
+
+  /**
+   * Insert pre-order rows for the pre-order portion of a checkout, linked back to
+   * the paid order that acts as their payment + shipping container. Customer name
+   * and phone are copied from the order's shipping address so the restock →
+   * allocate SMS flow can reach the shopper (works for guests too).
+   */
+  async insertPreordersForOrder(
+    order: { id: string; payment_reference: string | null; email: string; user_id: string | null; shipping_address: any },
+    lines: { variantId: string; productName: string; variantTitle: string | null; quantity: number; unitPrice: number }[],
+  ): Promise<any[]> {
+    const db = this.supabase.getAdminClient();
+    const addr = (order.shipping_address as any) || {};
+    const customerName = addr.fullName ?? null;
+    const customerPhone = addr.phone ? (toE164(addr.phone) ?? addr.phone) : null;
+
+    const created: any[] = [];
+    for (const line of lines) {
+      const orderNumber = await this.generateOrderNumber();
+      const { data: preorder, error } = await db
+        .from('preorders')
+        .insert({
+          order_number: orderNumber,
+          source: 'online',
+          order_id: order.id,
+          user_id: order.user_id,
+          customer_email: order.email,
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          variant_id: line.variantId,
+          product_name: line.productName,
+          variant_title: line.variantTitle,
+          quantity: line.quantity,
+          unit_price: line.unitPrice,
+          payment_method: 'paystack',
+          payment_reference: order.payment_reference,
+          // 'awaiting' until the shared payment is confirmed. The preorders
+          // payment_status CHECK constraint only allows awaiting/paid/refunded.
+          payment_status: 'awaiting',
+          status: 'pending',
+        })
+        .select()
+        .single();
+      if (error || !preorder) throw new InternalServerErrorException('Failed to record pre-order');
+      created.push(preorder);
+    }
+    return created;
+  }
+
+  /**
+   * Mark this order's linked pre-orders as paid and fire their confirmation
+   * notifications. Called from OrdersService.confirmPayment once the shared
+   * payment is confirmed. Only flips rows still `pending` so it's idempotent
+   * across the frontend success callback + Paystack webhook.
+   */
+  async markOrderPreordersPaid(orderId: string): Promise<void> {
+    const db = this.supabase.getAdminClient();
+    const { data: linked } = await db
+      .from('preorders')
+      .select('*')
+      .eq('order_id', orderId)
+      .eq('payment_status', 'awaiting');
+
+    for (const preorder of linked || []) {
+      await db
+        .from('preorders')
+        .update({ payment_status: 'paid', updated_at: new Date().toISOString() })
+        .eq('id', preorder.id);
+      this.sendPreorderNotifications({ ...preorder, payment_status: 'paid' }).catch(() => {});
+    }
   }
 
   async create(dto: CreatePreorderDto, userId: string, email: string) {
     const db = this.supabase.getAdminClient();
 
-    const { variant, expectedPrice } = await this.checkEligibility(dto.item, userId);
+    const { variant, expectedPrice } = await this.checkEligibility(dto.item, { userId, email });
 
     const { data: existingRef } = await db
       .from('preorders')
@@ -136,7 +252,7 @@ export class PreordersService {
     return preorder;
   }
 
-  private async sendPreorderNotifications(
+  async sendPreorderNotifications(
     preorder: { id: string; order_number: string; customer_email: string | null; user_id: string | null; product_name: string; variant_title: string | null; quantity: number; unit_price: number; payment_method: string; payment_status: string },
     notify?: { email?: boolean; sms?: boolean },
   ): Promise<void> {

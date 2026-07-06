@@ -165,6 +165,12 @@ export default function CartDrawer() {
                       </p>
                     )}
 
+                    {item.isPreorder && (
+                      <span className="mt-1 inline-flex w-fit items-center gap-1 border border-[#111] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#111] dark:border-[#ededed] dark:text-[#ededed]">
+                        Pre-order · ships when restocked
+                      </span>
+                    )}
+
                     <div className="mt-auto flex items-center justify-between pt-3">
                       {/* Quantity stepper */}
                       <div className="flex items-center border border-[#e0e0e0] dark:border-neutral-700">
@@ -340,6 +346,9 @@ function RecCard({ product }: { product: Product }) {
   const image = images[imgIndex]?.src ?? images[0]?.src ?? null;
 
   function add(variant: ProductVariant, sizeLabel: string | null) {
+    const isPreorder =
+      !(variant.inventory_quantity > 0 && variant.available !== false) &&
+      variant.preorder_enabled === true;
     addItem({
       variantId: variant.id,
       productId: product.id,
@@ -349,6 +358,8 @@ function RecCard({ product }: { product: Product }) {
         .join(" · ") || null,
       price: variant.price ?? product.base_price ?? 0,
       image,
+      isPreorder,
+      preorderLimit: isPreorder ? variant.preorder_limit : null,
     });
   }
 

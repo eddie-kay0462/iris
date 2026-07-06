@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { ProductVariant } from "@/lib/api/products";
+import { isVariantInStock } from "@/lib/products/variants";
 
 /** An option group like "Color" with its unique values ["Red", "Blue"] */
 interface OptionGroup {
@@ -98,7 +99,7 @@ function isValueAvailable(
   );
 
   if (matching.length === 0) return { available: false, inStock: false };
-  return { available: true, inStock: matching.some((v) => v.inventory_quantity > 0) };
+  return { available: true, inStock: matching.some(isVariantInStock) };
 }
 
 export function VariantSelector({

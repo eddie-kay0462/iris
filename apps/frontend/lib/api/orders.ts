@@ -17,6 +17,18 @@ export interface OrderItem {
   created_at: string;
 }
 
+export interface PreorderLine {
+  id: string;
+  order_id: string | null;
+  order_number: string;
+  product_name: string;
+  variant_title: string | null;
+  quantity: number;
+  unit_price: number;
+  status: string;
+  payment_status: string | null;
+}
+
 export interface OrderStatusHistory {
   id: string;
   order_id: string;
@@ -66,6 +78,9 @@ export interface Order {
   updated_at: string;
   order_items?: OrderItem[];
   order_status_history?: OrderStatusHistory[];
+  /** Pre-order lines paid through this order (out-of-stock-but-preorderable
+   *  items). Recorded in the preorders table, linked back via order_id. */
+  preorders?: PreorderLine[];
 }
 
 export interface PaginatedOrders {
@@ -96,6 +111,33 @@ export async function confirmPaymentByReference(reference: string): Promise<Orde
   } catch {
     return null;
   }
+}
+
+export type FulfillmentStatus = "in_stock" | "preorder" | "unavailable";
+
+/**
+ * Live check of how each cart line would be fulfilled right now. A line comes
+ * back as "preorder" when it's out of stock but the variant allows pre-orders —
+ * i.e. checkout will auto-convert it — so the UI can badge it even if the shopper
+ * added it while it was in stock.
+ */
+export function usePreviewFulfillment(
+  items: { variantId: string; quantity: number }[],
+) {
+  const key = items
+    .map((i) => `${i.variantId}:${i.quantity}`)
+    .sort()
+    .join(",");
+  return useQuery({
+    queryKey: ["preview-fulfillment", key],
+    queryFn: () =>
+      apiClient<Record<string, FulfillmentStatus>>("/orders/preview-fulfillment", {
+        method: "POST",
+        body: { items },
+      }),
+    enabled: items.length > 0,
+    staleTime: 30_000,
+  });
 }
 
 /** Silently releases a pending order's stock hold (e.g. on Paystack modal close). */

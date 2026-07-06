@@ -1,7 +1,6 @@
 "use client";
 
 import { use, useState, useMemo, useCallback, useEffect, useRef, Suspense } from "react";
-import dynamic from "next/dynamic";
 import { useProduct, useProducts, type ProductVariant } from "@/lib/api/products";
 import { useCart } from "@/lib/cart";
 import { motion } from "framer-motion";
@@ -10,7 +9,7 @@ import {
   findMatchingVariant,
   type OptionSlot,
 } from "../../components/VariantSelector";
-import { sortSizes } from "@/lib/products/variants";
+import { sortSizes, isVariantInStock } from "@/lib/products/variants";
 import { useSimilarProducts } from "@/lib/api/recommendations";
 import { addRecentlyViewed, useRecentlyViewed } from "@/lib/recently-viewed";
 import { ProductCard } from "../../components/ProductCard";
@@ -27,11 +26,6 @@ import {
   Truck,
   RotateCcw,
 } from "lucide-react";
-
-// The pre-order flow pulls in `react-paystack`, which touches `window`/`document`
-// at module scope and cannot be evaluated on the server. Load it client-only so
-// the product page itself renders server-side (SEO/crawlers).
-const PreorderModal = dynamic(() => import("./PreorderModal"), { ssr: false });
 
 // ─── Option group helpers ─────────────────────────────────────────────────────
 interface OptionGroup {
@@ -81,7 +75,7 @@ function isValueInStock(
       return v[key] === val;
     }),
   );
-  return matching.some((v) => v.inventory_quantity > 0 && v.available !== false);
+  return matching.some(isVariantInStock);
 }
 
 function isValuePreorderable(
@@ -452,7 +446,6 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [initialized, setInitialized] = useState(false);
   const [added, setAdded] = useState(false);
-  const [showPreorderModal, setShowPreorderModal] = useState(false);
   const [openAccordion, setOpenAccordion] = useState<string | null>("details");
 
   const variants = product?.product_variants || [];
@@ -466,7 +459,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
     if (initialized || variants.length === 0) return;
     const groups = extractOptionGroups(variants);
     if (groups.length === 0) { setInitialized(true); return; }
-    const firstInStock = variants.find((v) => v.inventory_quantity > 0) ?? variants[0]!;
+    const firstInStock = variants.find(isVariantInStock) ?? variants[0]!;
     const sel: Record<string, string> = {};
     for (const g of groups) {
       if (g.name.toLowerCase() === "size") continue;
@@ -523,16 +516,14 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
   const priceVariant = active ?? activeVariant ?? variants[0] ?? null;
   const displayPrice = priceVariant?.price ?? product.base_price;
   const comparePrice = priceVariant?.compare_at_price ?? null;
-  const inStock = active ? active.inventory_quantity > 0 : false;
-  const lowStock = active && active.inventory_quantity > 0 && active.inventory_quantity <= 3;
+  const inStock = active ? isVariantInStock(active) : false;
+  const lowStock = active && inStock && active.inventory_quantity <= 3;
   const canPreorder = active ? (!inStock && (active.preorder_enabled ?? false)) : false;
 
-  const variantTitle = active
-    ? [active.option1_value, active.option2_value, active.option3_value].filter(Boolean).join(" / ") || null
-    : null;
-
   function handleAddToCart() {
-    if (!active || !inStock || !product) return;
+    // Allow adding when either in stock or pre-orderable; block only genuine
+    // out-of-stock (not pre-orderable) variants.
+    if (!active || !product || (!inStock && !canPreorder)) return;
     const image = product.product_images?.[0]?.src ?? null;
     const variantParts = [active.option1_value, active.option2_value, active.option3_value].filter(Boolean);
     addItem({
@@ -542,6 +533,8 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
       variantTitle: variantParts.length > 0 ? variantParts.join(" / ") : null,
       price: active.price ?? product.base_price ?? 0,
       image,
+      isPreorder: canPreorder,
+      preorderLimit: canPreorder ? active.preorder_limit : null,
     });
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
@@ -704,11 +697,11 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
               </button>
             ) : canPreorder ? (
               <button
-                onClick={() => setShowPreorderModal(true)}
+                onClick={handleAddToCart}
                 className="w-full h-[54px] bg-black dark:bg-white text-[#F4F3F1] dark:text-black text-[13px] tracking-[0.18em] uppercase transition-transform duration-[140ms] active:scale-[0.99]"
                 style={{ fontFamily: "Inter, sans-serif", fontWeight: 700 }}
               >
-                Pre-order Now
+                {added ? "Added to Cart" : "Pre-order - Add to Cart"}
               </button>
             ) : (
               <button
@@ -829,18 +822,6 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
             ))}
           </div>
         </section>
-      )}
-
-      {/* Pre-order modal */}
-      {showPreorderModal && active && displayPrice != null && (
-        <PreorderModal
-          productTitle={product.title}
-          variantTitle={variantTitle}
-          variantId={active.id}
-          price={displayPrice}
-          preorderLimit={active.preorder_limit}
-          onClose={() => setShowPreorderModal(false)}
-        />
       )}
     </div>
   );

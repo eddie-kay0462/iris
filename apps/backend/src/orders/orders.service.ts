@@ -11,6 +11,7 @@ import { EmailService } from '../email/email.service';
 import { SmsService, SMS_TEMPLATES } from '../sms/sms.service';
 import { PromosService } from '../promos/promos.service';
 import { SettingsService } from '../settings/settings.service';
+import { PreordersService } from '../preorders/preorders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { toE164 } from '../common/utils/phone';
 import { QueryOrdersDto } from './dto/query-orders.dto';
@@ -30,6 +31,7 @@ export class OrdersService {
     private smsService: SmsService,
     private promosService: PromosService,
     private settingsService: SettingsService,
+    private preordersService: PreordersService,
     private configService: ConfigService,
   ) {
     this.frontendUrl = this.configService.get<string>('FRONTEND_URL', 'https://storefront.1nri.store');
@@ -69,6 +71,45 @@ export class OrdersService {
       available.set(v.id, v.inventory_quantity - (heldByVariant.get(v.id) ?? 0));
     }
     return available;
+  }
+
+  /**
+   * Live fulfillment preview for a set of cart lines, using the SAME rule as
+   * create(): a line is 'in_stock' when enough is available (inventory minus
+   * active holds), 'preorder' when it's short but the variant is preorder_enabled,
+   * or 'unavailable' otherwise. Lets the checkout badge/label a line that will be
+   * auto-converted to a pre-order — even if the shopper added it while in stock.
+   */
+  async previewFulfillment(
+    items: { variantId: string; quantity: number }[],
+  ): Promise<Record<string, 'in_stock' | 'preorder' | 'unavailable'>> {
+    const db = this.supabase.getAdminClient();
+    const variantIds = items.map((i) => i.variantId).filter(Boolean);
+    if (variantIds.length === 0) return {};
+
+    const available = await this.getAvailableQuantities(db, variantIds);
+    const { data: variantMeta } = await db
+      .from('product_variants')
+      .select('id, preorder_enabled')
+      .in('id', variantIds);
+    const preorderEnabled = new Map(
+      (variantMeta || []).map((v) => [v.id, v.preorder_enabled === true]),
+    );
+
+    const result: Record<string, 'in_stock' | 'preorder' | 'unavailable'> = {};
+    for (const item of items) {
+      const availableQty = available.get(item.variantId);
+      if (availableQty === undefined) {
+        result[item.variantId] = 'unavailable';
+      } else if (availableQty >= item.quantity) {
+        result[item.variantId] = 'in_stock';
+      } else if (preorderEnabled.get(item.variantId)) {
+        result[item.variantId] = 'preorder';
+      } else {
+        result[item.variantId] = 'unavailable';
+      }
+    }
+    return result;
   }
 
   private async generateOrderNumber(): Promise<string> {
@@ -145,11 +186,24 @@ export class OrdersService {
     }
 
     // 1. Validate stock for all items against availability (inventory minus
-    // quantities held by other still-active pending orders)
+    // quantities held by other still-active pending orders). Items that are out
+    // of stock but flagged preorder_enabled are auto-routed to the pre-order flow
+    // instead of being rejected, so the customer is never told "out of stock".
     const available = await this.getAvailableQuantities(
       db,
       dto.items.map((i) => i.variantId),
     );
+
+    const { data: variantMeta } = await db
+      .from('product_variants')
+      .select('id, preorder_enabled')
+      .in('id', dto.items.map((i) => i.variantId));
+    const preorderEnabled = new Map(
+      (variantMeta || []).map((v) => [v.id, v.preorder_enabled === true]),
+    );
+
+    const inStockItems: typeof dto.items = [];
+    const preorderItems: typeof dto.items = [];
 
     for (const item of dto.items) {
       const availableQty = available.get(item.variantId);
@@ -157,12 +211,34 @@ export class OrdersService {
         throw new BadRequestException(`Variant ${item.variantId} not found`);
       }
 
-      if (availableQty < item.quantity) {
+      if (availableQty >= item.quantity) {
+        inStockItems.push(item);
+      } else if (preorderEnabled.get(item.variantId)) {
+        // Fully or partially short on stock, but pre-orderable → record the
+        // whole line as a pre-order.
+        preorderItems.push(item);
+      } else {
         throw new BadRequestException(
           `Insufficient stock for "${item.productTitle}". Available: ${availableQty}`,
         );
       }
     }
+
+    // 1b. Validate pre-order eligibility BEFORE inserting anything, so an
+    // ineligible line (limit reached, duplicate, price mismatch) doesn't leave an
+    // orphaned order behind.
+    const validatedPreorders = preorderItems.length
+      ? await this.preordersService.validatePreorderItems(
+          preorderItems.map((i) => ({
+            variantId: i.variantId,
+            productTitle: i.productTitle,
+            variantTitle: i.variantTitle,
+            quantity: i.quantity,
+            price: i.price,
+          })),
+          { userId, email: resolvedEmail },
+        )
+      : [];
 
     // 2. Calculate totals
     const subtotal = dto.items.reduce(
@@ -200,8 +276,13 @@ export class OrdersService {
     const orderNumber = await this.generateOrderNumber();
 
     const guestToken = !userId ? crypto.randomUUID() : null;
+    // A stock hold only matters when there's in-stock inventory to reserve. For an
+    // all-pre-order checkout the order is just a payment/shipping container, so we
+    // leave the hold null (and the checkout hold timer stays hidden).
     const holdMinutes = await this.settingsService.getStockHoldMinutes();
-    const holdExpiresAt = new Date(Date.now() + holdMinutes * 60_000).toISOString();
+    const holdExpiresAt = inStockItems.length > 0
+      ? new Date(Date.now() + holdMinutes * 60_000).toISOString()
+      : null;
 
     // 4. Insert order
     const { data: order, error: orderError } = await db
@@ -230,27 +311,45 @@ export class OrdersService {
 
     if (orderError) throw orderError;
 
-    // 5. Insert order items
-    const orderItems = dto.items.map((item) => ({
-      order_id: order.id,
-      product_id: item.productId,
-      variant_id: item.variantId,
-      product_name: item.productTitle,
-      variant_title: item.variantTitle || null,
-      quantity: item.quantity,
-      unit_price: item.price,
-      total_price: item.price * item.quantity,
-    }));
+    // 5. Insert order items — only the in-stock lines. Pre-order lines are
+    // recorded separately in the preorders table below.
+    if (inStockItems.length > 0) {
+      const orderItems = inStockItems.map((item) => ({
+        order_id: order.id,
+        product_id: item.productId,
+        variant_id: item.variantId,
+        product_name: item.productTitle,
+        variant_title: item.variantTitle || null,
+        quantity: item.quantity,
+        unit_price: item.price,
+        total_price: item.price * item.quantity,
+      }));
 
-    const { error: itemsError } = await db
-      .from('order_items')
-      .insert(orderItems);
+      const { error: itemsError } = await db
+        .from('order_items')
+        .insert(orderItems);
 
-    if (itemsError) throw itemsError;
+      if (itemsError) throw itemsError;
+    }
 
-    // Inventory is not deducted here — the order items above are held as a
-    // temporary reservation (see getAvailableQuantities) until confirmPayment()
+    // Inventory is not deducted here — the in-stock order items above are held as
+    // a temporary reservation (see getAvailableQuantities) until confirmPayment()
     // converts the hold into a real, permanent deduction.
+
+    // 6. Record the pre-order portion, linked to this order and sharing its
+    // payment reference. They flip to paid alongside the order in confirmPayment().
+    if (validatedPreorders.length > 0) {
+      await this.preordersService.insertPreordersForOrder(
+        {
+          id: order.id,
+          payment_reference: dto.paymentReference,
+          email: resolvedEmail,
+          user_id: userId,
+          shipping_address: dto.shippingAddress,
+        },
+        validatedPreorders,
+      );
+    }
 
     const result = await this.findOne(order.id);
     return { ...result, guest_token: guestToken };
@@ -278,7 +377,7 @@ export class OrdersService {
     const db = this.supabase.getAdminClient();
     const { data, error } = await db
       .from('orders')
-      .select('*, order_items(*, product:products(vendor)), order_status_history(*)')
+      .select('*, order_items(*, product:products(vendor)), order_status_history(*), preorders(*)')
       .eq('id', id)
       .single();
 
@@ -334,7 +433,7 @@ export class OrdersService {
     const db = this.supabase.getAdminClient();
     const { data, error } = await db
       .from('orders')
-      .select('*, order_items(*)')
+      .select('*, order_items(*), preorders(*)')
       .eq('order_number', orderNumber)
       .eq('user_id', userId)
       .is('deleted_at', null)
@@ -1341,7 +1440,7 @@ export class OrdersService {
     const db = this.supabase.getAdminClient();
     const { data, error } = await db
       .from('orders')
-      .select('*, order_items(*)')
+      .select('*, order_items(*), preorders(*)')
       .eq('order_number', orderNumber)
       .eq('guest_token', token)
       .is('deleted_at', null)
@@ -1476,6 +1575,17 @@ export class OrdersService {
       );
     }
 
+    // Mark any pre-order lines paid through this same payment and fire their
+    // confirmation notifications. Idempotent (only flips rows still pending).
+    try {
+      await this.preordersService.markOrderPreordersPaid(order.id);
+    } catch (preorderError) {
+      console.error(
+        `Marking pre-orders paid failed for order ${order.order_number}:`,
+        preorderError,
+      );
+    }
+
     // Increment promo used_count now that payment is confirmed
     if (order.applied_promo_code_id) {
       this.promosService.applyToOrder(order.applied_promo_code_id).catch((err) => {
@@ -1498,6 +1608,11 @@ export class OrdersService {
         ? 'Unlikely Alliances'
         : '1NRI';
 
+      // An all-pre-order checkout has no in-stock order items — it's just a
+      // payment/shipping container. Skip the generic "your order" emails/SMS in
+      // that case; the pre-order confirmations already went out via
+      // markOrderPreordersPaid above.
+      if ((fullOrder.order_items || []).length > 0) {
       // Email receipt — fire and forget
       this.emailService
         .sendOrderConfirmation({
@@ -1534,6 +1649,7 @@ export class OrdersService {
         this.smsService
           .sendSMS(phone, SMS_TEMPLATES.orderConfirmation(fullOrder.order_number, `${this.frontendUrl}/track?order=${fullOrder.order_number}`))
           .catch(() => null);
+      }
       }
     } catch (notifyErr: any) {
       // Notification failures must never block payment confirmation

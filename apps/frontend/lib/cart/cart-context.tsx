@@ -21,6 +21,12 @@ export interface CartItem {
   price: number;
   image: string | null;
   quantity: number;
+  /** True when this line is out of stock but pre-orderable — drives the
+   *  "Pre-order" badge in the cart/checkout. The backend re-derives pre-order
+   *  status from live stock at order creation, so this is a UI hint only. */
+  isPreorder?: boolean;
+  /** Max quantity allowed for this pre-order variant (null = unlimited). */
+  preorderLimit?: number | null;
 }
 
 interface CartState {
