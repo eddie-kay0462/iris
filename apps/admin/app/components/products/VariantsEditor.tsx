@@ -145,6 +145,7 @@ export function VariantsEditor({
 
   function handleAdd() {
     if (!form.option1_value && !form.option2_value) return;
+    if (!form.price) return;
     onAdd({
       option1_name: form.option1_value ? form.option1_name : undefined,
       option1_value: form.option1_value ? titleCaseColor(form.option1_value) : undefined,
@@ -373,11 +374,11 @@ export function VariantsEditor({
             </div>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleAdd}
-              disabled={!form.option1_value && !form.option2_value}
+              disabled={(!form.option1_value && !form.option2_value) || !form.price}
               className="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
             >
               Add variant
@@ -389,6 +390,9 @@ export function VariantsEditor({
             >
               Close
             </button>
+            {!form.price && (form.option1_value || form.option2_value) && (
+              <span className="text-xs text-amber-600">Price required</span>
+            )}
           </div>
         </div>
       )}

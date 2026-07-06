@@ -4549,3 +4549,35 @@ Fixed a cluster of annoying bugs on the admin **product page** around adding, re
 1. Open a product in the admin at **Products → (any product)**. Add a photo → a "Uploading image…" popup appears, then closes on its own and the photo shows up **without refreshing**.
 2. On a photo, open **▼ colours** and toggle a colour → the colour badge updates **immediately**.
 3. Delete a photo → a "Deleting image…" popup shows, then closes and the photo disappears. No white screen anywhere in the process.
+
+---
+
+## Product Variants — Fixed the "can't add more variants" cap (July 2026)
+
+Fixed a bug on the admin **product page** where adding variants (a colour/size combo like "Black / M") would sometimes just stop working — it looked like there was a hidden limit on how many variants a product could have. There was no real limit; two separate things were quietly failing and both showed the same unhelpful "something went wrong" error.
+
+**What changed, in plain language:**
+
+- **The real "cap" was a duplicate-code clash.** Every variant gets an auto-generated product code (SKU) built from the product's initials + colour + size — e.g. a Mustard variant on a product might become `SP-MUS`. That code had to be unique across the **entire** store, so two differently-named products that happened to produce the same code would block each other. The second one would refuse to save, which felt like hitting a limit. Now codes only need to be unique **within a single product**, so those clashes are gone. (This matches how Shopify works.)
+- **Adding a variant with no price used to fail silently.** The system requires a price on every variant, but the form let you try to add one without typing a price (when there was no base price to fall back on). It would error out with a generic message. Now the **"Add variant" button stays disabled until you enter a price**, with a small "Price required" note so it's obvious.
+- **Errors now actually tell you what's wrong.** If a variant ever genuinely can't be saved, you'll see a clear message ("A variant with SKU X already exists…" or "Variant price is required") instead of a mysterious failure.
+
+**Why:** merchants were hitting an invisible wall when building out product options and had no idea why. This removes the wall and, where a real problem exists, explains it plainly.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `supabase/migrations/20260705000000_scope_variant_sku_per_product.sql` | **New** — database change: product codes (SKUs) now only need to be unique *within a product* instead of across the whole store. |
+| `apps/admin/app/components/products/VariantsEditor.tsx` | "Add variant" is now blocked until a price is entered, with a "Price required" hint. |
+| `apps/backend/src/products/products.service.ts` | Turned the two silent database errors (duplicate code, missing price) into clear, readable messages instead of a generic failure. |
+
+### Heads-up / action required
+
+> **The database migration has been applied.** No further action needed for existing environments where it's already run; just make sure it runs anywhere the database gets rebuilt from scratch.
+
+### How to test
+
+1. Open a product in the admin at **Products → (any product)** and add several colour/size variants in a row → no cap, they all save.
+2. On a product with **no base price**, open **+ Add variant**, pick a colour but leave price blank → the **Add variant** button is disabled and shows "Price required". Type a price → it saves.
+3. Try adding the **same colour + size twice** to one product → you get a clear "SKU already exists" message instead of a silent error.
