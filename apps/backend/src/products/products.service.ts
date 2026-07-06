@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  InternalServerErrorException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../common/supabase/supabase.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -297,6 +303,31 @@ export class ProductsService {
 
   // --- Variants ---
 
+  /**
+   * Translate raw Postgres/Supabase errors from variant writes into clear HTTP
+   * errors, so the admin UI shows a useful message instead of a generic 500.
+   */
+  private throwVariantError(error: {
+    code?: string;
+    message?: string;
+    details?: string;
+  }): never {
+    // 23505 = unique_violation (duplicate SKU on the same product)
+    if (error.code === '23505') {
+      const sku = error.details?.match(/\(sku\)=\(([^)]*)\)/)?.[1];
+      throw new ConflictException(
+        sku
+          ? `A variant with SKU "${sku}" already exists for this product. Choose a different SKU.`
+          : 'A variant with this SKU already exists for this product.',
+      );
+    }
+    // 23502 = not_null_violation (price is required)
+    if (error.code === '23502' && /price/.test(error.message ?? '')) {
+      throw new BadRequestException('Variant price is required.');
+    }
+    throw error;
+  }
+
   async addVariant(productId: string, dto: CreateVariantDto) {
     const db = this.supabase.getAdminClient();
     await this.findOneAdmin(productId);
@@ -307,7 +338,7 @@ export class ProductsService {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) this.throwVariantError(error);
     return data;
   }
 
@@ -327,7 +358,8 @@ export class ProductsService {
       .select()
       .single();
 
-    if (error || !data) throw new NotFoundException('Variant not found');
+    if (error) this.throwVariantError(error);
+    if (!data) throw new NotFoundException('Variant not found');
     return data;
   }
 
