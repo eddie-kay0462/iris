@@ -1,5 +1,10 @@
 import type { ProductVariant } from "@/lib/api/products";
 
+/** True when a variant can be sold right now (has stock and isn't switched off). */
+export function isVariantInStock(v: ProductVariant): boolean {
+  return v.inventory_quantity > 0 && v.available !== false;
+}
+
 /** The variant option slot that holds the size value. */
 export type OptionSlotKey =
   | "option1_value"

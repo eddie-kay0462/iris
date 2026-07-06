@@ -4581,3 +4581,79 @@ Fixed a bug on the admin **product page** where adding variants (a colour/size c
 1. Open a product in the admin at **Products → (any product)** and add several colour/size variants in a row → no cap, they all save.
 2. On a product with **no base price**, open **+ Add variant**, pick a colour but leave price blank → the **Add variant** button is disabled and shows "Price required". Type a price → it saves.
 3. Try adding the **same colour + size twice** to one product → you get a clear "SKU already exists" message instead of a silent error.
+
+---
+
+## Storefront — "Sold Out on the grid, in stock on the page" fix (July 2026)
+
+Fixed a confusing mismatch on the **customer-facing store**: an item that had been switched off (marked unavailable/"cancelled") could show as **Sold Out** on the product grid, but then look **in stock** — sometimes even "Only 2 left" with an active **Add to Cart** — once you clicked into the product page.
+
+**What changed, in plain language:**
+
+- Every variant (a colour/size combo) has an on/off switch separate from its stock count. The store's rule for "can you buy this right now?" is: **it has stock AND it's switched on.** Most of the site already followed that rule — but the **product page's main buy button and stock badge** were only checking the stock count and ignoring the on/off switch. So a switched-off item with leftover stock looked buyable there.
+- Now the product page follows the same rule as everywhere else: a switched-off variant shows **Sold Out** and its Add to Cart is disabled (or shows the **Pre-order** button instead, if pre-orders are enabled for it).
+- We also moved this "can you buy it?" rule into **one shared place** so the product page, the product grid, and the quick-add popup can't drift apart again in future.
+
+**Why:** customers (and us) were seeing an item as sold out in one place and available in another. Now it's consistent across the whole store.
+
+**Note:** this only fixes what the store *displays*. It doesn't change how an item gets switched off in the first place — that's still a manual/data setting. If we later want things like "auto-switch-off when stock hits zero," that's a separate follow-up.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/frontend/lib/products/variants.ts` | Added one shared "can this variant be sold right now?" check (has stock **and** switched on), so every part of the store uses the same rule. |
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | The product page's stock badge, "Only N left" note, buy button, and default colour/size pick now respect the on/off switch — not just the stock count. |
+| `apps/frontend/app/(shop)/components/ProductCard.tsx` | Swapped its (already-correct) inline checks for the shared rule so it can't drift. |
+| `apps/frontend/app/(shop)/components/VariantSelector.tsx` | Fixed the same blind spot in an unused selector component, in case it's ever put to use. |
+
+### How to test
+
+1. Pick any product variant and switch it **off** (set it unavailable) while it still has stock.
+2. On the shop grid, that variant shows **Sold Out** (unchanged).
+3. Click into the product and select that colour/size → it now shows **Sold Out** with **Add to Cart disabled** (previously it wrongly showed in stock). If that variant has pre-orders enabled, you'll see the **Pre-order** button instead.
+4. A normal in-stock, switched-on variant still works exactly as before (buyable, with the "Only N left" note under 3).
+
+---
+
+## Pre-orders now go through the normal checkout (July 2026)
+
+We merged **pre-orders into the regular cart-and-checkout flow.** Before, pre-ordering was a totally separate path: a sold-out-but-preorderable item showed a **"Pre-order Now"** button that popped open its own little window and ran its own separate payment. That also meant you had to be **logged in** to pre-order at all.
+
+Now it's one unified experience:
+
+- A sold-out item that's enabled for pre-order shows **"Pre-order – Add to Cart"** and drops straight into your bag like anything else. You can mix in-stock and pre-order items in the **same** cart and pay for everything in **one** checkout.
+- Pre-order items are **clearly labelled** the whole way through — a **"Pre-order · ships when restocked"** badge in the cart, on the checkout summary, and a short banner at checkout explaining they're charged today and ship separately once back in stock. The order confirmation page lists them in their own **"Pre-order items"** section.
+- **The checkout is now smart about stock.** If something in your cart sells out between adding it and paying, the system checks whether it's pre-orderable and, if so, **quietly records it as a pre-order instead of telling you "out of stock."** Genuinely unavailable items (not enabled for pre-order) are still blocked, same as before.
+- **You no longer need an account to pre-order.** Guests can pre-order through the normal guest checkout with just an email + shipping details, and still get their confirmation and email/SMS updates.
+
+Behind the scenes, nothing about our existing **pre-orders tooling changed** — the admin Pre-orders page, the "restock & allocate → text the customer" flow, refunds, and pre-order tracking all keep working exactly as they did. Each checkout now creates one regular order (the payment + shipping record) and the pre-ordered lines still land in the pre-orders list, linked back to that order.
+
+**One thing to know:** if a customer's cart is *entirely* pre-order items, the resulting order will have **no in-stock line items on it** — it's acting purely as the payment/shipping record, and the actual items live in the Pre-orders list. So an "empty-looking" order with pre-orders attached is expected, not a bug.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `supabase/migrations/20260706000000_link_preorders_to_orders.sql` | **New migration** — links each pre-order back to the order it was paid through. |
+| `apps/backend/src/orders/orders.service.ts` | Checkout now splits a cart into in-stock lines (kept on the order) and sold-out-but-preorderable lines (recorded as pre-orders); confirming payment also marks those pre-orders paid and sends their confirmations. |
+| `apps/backend/src/preorders/preorders.service.ts` | Added guest-friendly pre-order creation/validation used by the checkout, and made the "one active pre-order per item" rule work by email for guests. |
+| `apps/backend/src/orders/orders.module.ts`, `apps/backend/src/preorders/preorders.module.ts` | Wired the two areas together so the order flow can create pre-orders. |
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | "Pre-order Now" button replaced with "Pre-order – Add to Cart"; removed the old pop-up window (and its login requirement). |
+| `apps/frontend/app/(shop)/product/[id]/PreorderModal.tsx` | **Deleted** — the separate pre-order pop-up/payment is gone. |
+| `apps/frontend/lib/cart/cart-context.tsx` | Cart items can now remember they're a pre-order. |
+| `apps/frontend/app/(shop)/components/CartDrawer.tsx`, `apps/frontend/app/(shop)/components/ProductCard.tsx`, `apps/frontend/app/(shop)/cart/page.tsx` | Show the "Pre-order" badge and mark quick-added sold-out items as pre-orders. |
+| `apps/frontend/app/(shop)/checkout/CheckoutClient.tsx` | Pre-order badge on the summary + an explainer banner when the cart has pre-order items. |
+| `apps/frontend/app/(shop)/checkout/confirmation/page.tsx` | New "Pre-order items" section on the confirmation page. |
+| `apps/frontend/lib/api/orders.ts` | Order data now carries its linked pre-order lines. |
+
+> **Heads-up / action required:** the new database migration (`20260706000000_link_preorders_to_orders.sql`) **has not been applied yet** — it needs to run against the database before this works in any environment (and anywhere the database is rebuilt from scratch).
+
+### How to test
+
+1. Find (or set up) a product variant that's **sold out but has pre-orders enabled**. On its product page you'll see **"Pre-order – Add to Cart"** → add it.
+2. Also add a **normal in-stock** item, so the cart is mixed. Notice the **"Pre-order"** badge on the pre-order line in the bag and at checkout, plus the banner.
+3. Check out and pay **once**. On the confirmation page you'll see your normal items *and* a separate **"Pre-order items"** section.
+4. In the admin **Pre-orders** page, the pre-ordered line shows up (source: online) and can be restocked/allocated exactly as before.
+5. **Guest test:** repeat while **logged out** — you should never be asked to log in; enter an email + shipping and it goes through, with the pre-order recorded against that email.
+6. **Out-of-stock, not preorderable:** a sold-out item that's *not* enabled for pre-order is still blocked at checkout with an out-of-stock message.

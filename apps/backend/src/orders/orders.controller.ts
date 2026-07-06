@@ -110,6 +110,19 @@ export class OrdersController {
    * Open to guests (@Public) — userId and email are null for unauthenticated callers;
    * dto.guestEmail is used as the contact email in that case.
    */
+  /**
+   * Read-only preview of how each cart line would be fulfilled right now
+   * (in_stock / preorder / unavailable). Used by the checkout to badge lines that
+   * will be auto-converted to a pre-order because stock ran out.
+   */
+  @Public()
+  @Post('preview-fulfillment')
+  previewFulfillment(
+    @Body() body: { items: { variantId: string; quantity: number }[] },
+  ) {
+    return this.ordersService.previewFulfillment(body?.items ?? []);
+  }
+
   @Public()
   @Post('create-pending')
   createPending(@Body() dto: CreateOrderDto, @OptionalCurrentUser() user: any) {

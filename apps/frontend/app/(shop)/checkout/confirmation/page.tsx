@@ -109,6 +109,7 @@ function ConfirmationContent() {
   const subtotal = order.subtotal ?? 0;
   const shippingCost = order.shipping_cost ?? 0;
   const total = order.total ?? 0;
+  const preorders = order.preorders ?? [];
 
   return (
     <div className="mx-auto max-w-lg px-4 py-16 text-center">
@@ -142,6 +143,49 @@ function ConfirmationContent() {
       <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
         Thank you for your purchase. You can track your order status below.
       </p>
+
+      {preorders.length > 0 && (
+        <div className="mt-8 rounded-lg border border-black/15 p-4 text-left dark:border-white/20">
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-[0.12em] text-gray-900 dark:text-white">
+            Pre-order items
+          </h2>
+          <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+            These aren&apos;t in stock yet — they ship separately once restocked. We&apos;ll notify
+            you when they&apos;re on the way.
+          </p>
+          <div className="space-y-2">
+            {preorders.map((pre) => (
+              <div
+                key={pre.id}
+                className="flex justify-between text-sm text-gray-700 dark:text-gray-300"
+              >
+                <span>
+                  {pre.product_name}
+                  {pre.variant_title ? ` - ${pre.variant_title}` : ""}
+                  {pre.quantity > 1 ? ` × ${pre.quantity}` : ""}
+                </span>
+                <span>GH₵ {(pre.unit_price * pre.quantity).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+          {(!order.order_items || order.order_items.length === 0) && (
+            <div className="mt-3 space-y-1 border-t border-gray-200 pt-3 dark:border-gray-700">
+              <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                <span>Subtotal</span>
+                <span>GH₵ {subtotal.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                <span>Shipping</span>
+                <span>GH₵ {shippingCost.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm font-semibold text-gray-900 dark:text-white">
+                <span>Paid today</span>
+                <span>GH₵ {total.toLocaleString()}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {order.order_items && order.order_items.length > 0 && (
         <div className="mt-8 rounded-lg border border-gray-200 p-4 text-left dark:border-gray-700">

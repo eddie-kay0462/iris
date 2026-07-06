@@ -6,7 +6,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { usePaystackPayment } from "react-paystack";
 import { useCart } from "@/lib/cart";
-import { useCreateOrder, confirmPaymentByReference, releaseStockHold } from "@/lib/api/orders";
+import { useCreateOrder, confirmPaymentByReference, releaseStockHold, usePreviewFulfillment } from "@/lib/api/orders";
 import PhoneInput from "@/components/PhoneInput";
 import { useProfile, parseDefaultAddress } from "@/lib/api/profile";
 import { apiClient, hasToken, getToken } from "@/lib/api/client";
@@ -202,6 +202,17 @@ export default function CheckoutClient() {
     shippingOptions.find((o) => o.id === shippingOption)?.price ?? shippingOptions[0]?.price ?? 40;
   const discountAmount = appliedPromo?.discountAmount ?? 0;
   const total = Math.max(0, subtotal + shippingCost - discountAmount);
+
+  // Live fulfillment check: an item added while in stock can sell out before
+  // payment, in which case checkout auto-converts it to a pre-order. Flag those
+  // here so the badge/notice reflect what will actually happen — not just what
+  // was marked at add-to-cart time.
+  const { data: fulfillment } = usePreviewFulfillment(
+    items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
+  );
+  const isItemPreorder = (item: { variantId: string; isPreorder?: boolean }) =>
+    fulfillment?.[item.variantId] === "preorder" || (!fulfillment && !!item.isPreorder);
+  const hasPreorderItems = items.some(isItemPreorder);
 
   // One checkout_started event per checkout visit
   useEffect(() => {
@@ -732,6 +743,16 @@ export default function CheckoutClient() {
             Order Summary
           </h2>
 
+          {hasPreorderItems && (
+            <div className="mb-6 border border-black/15 bg-white px-4 py-3 text-xs leading-relaxed text-gray-700 dark:border-white/20 dark:bg-gray-900 dark:text-gray-300">
+              <p className="mb-1 font-semibold uppercase tracking-[0.12em] text-gray-900 dark:text-white">
+                Your order includes pre-order items
+              </p>
+              Items marked <strong>Pre-order</strong> aren&apos;t in stock yet. You&apos;re charged
+              today and they ship separately once restocked — the rest of your order ships as usual.
+            </div>
+          )}
+
           {/* Product list */}
           <div className="space-y-4">
             {items.map((item) => (
@@ -756,6 +777,11 @@ export default function CheckoutClient() {
                       <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                         {item.variantTitle}
                       </p>
+                    )}
+                    {isItemPreorder(item) && (
+                      <span className="mt-1 inline-flex w-fit items-center border border-black px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-black dark:border-white dark:text-white">
+                        Pre-order
+                      </span>
                     )}
                     {item.quantity > 1 && (
                       <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
