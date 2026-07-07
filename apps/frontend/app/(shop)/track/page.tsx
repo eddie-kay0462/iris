@@ -392,7 +392,7 @@ function TrackContent() {
 
           <Link
             href="/products"
-            className="block w-full border border-[#111] bg-white px-6 py-3.5 text-center text-xs font-semibold uppercase tracking-[0.25em] text-black transition hover:bg-[#111] hover:text-white dark:border-white dark:bg-[#0a0a0a] dark:text-white dark:hover:bg-white dark:hover:text-black"
+            className="block w-full bg-white px-6 py-3.5 text-center text-xs font-semibold uppercase tracking-[0.25em] text-black transition hover:bg-white/85"
           >
             Continue shopping
           </Link>
