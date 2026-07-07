@@ -4657,3 +4657,33 @@ Behind the scenes, nothing about our existing **pre-orders tooling changed** —
 4. In the admin **Pre-orders** page, the pre-ordered line shows up (source: online) and can be restocked/allocated exactly as before.
 5. **Guest test:** repeat while **logged out** — you should never be asked to log in; enter an email + shipping and it goes through, with the pre-order recorded against that email.
 6. **Out-of-stock, not preorderable:** a sold-out item that's *not* enabled for pre-order is still blocked at checkout with an out-of-stock message.
+
+---
+
+## Abandoned-cart emails — fixed duplicate sends & the localhost link (July 2026)
+
+Two problems with the **abandoned-cart recovery email** (the "you left something in your bag" reminder we automatically send ~30 min after someone abandons checkout):
+
+1. **The link pointed to `localhost`.** A customer got a reminder whose "return to your cart" button went to `http://localhost:3000` — a developer address that only works on our own machines, not something a real customer can open. It now points to the live store, **`https://1nri.store`**. (This came from a backend setting, `FRONTEND_URL`, that was still set to the local dev address; that setting is also what a bunch of other customer links use — order tracking, password reset — so this fixes all of them at once.)
+
+2. **Some customers got the reminder twice.** One shopper received two copies of the same email — one with the localhost link, one with the live link. The cause: more than one copy of the backend was running at the same time, and the "have we already emailed this cart?" check wasn't airtight — both copies looked, both saw "not yet," and both sent. We reworked it so a cart is **claimed** the instant before sending (a single database flip that only one sender can win), so even if several backends run at once, each cart gets **at most one** reminder. If a send genuinely fails, the claim is released so it can be retried later.
+
+**Why it matters:** customers were getting broken links and, worse, duplicate emails — both make us look sloppy and hurt the recovery flow that's meant to win back sales.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/backend/src/analytics/analytics.service.ts` | Reminder now **claims each cart atomically** before emailing, so duplicate/parallel backends can't double-send; releases the claim if the send fails. |
+| `apps/backend/src/main.ts` | Kept the local dev address in the allow-list so pointing the main setting at the live store doesn't break local development. |
+| `apps/backend/.env` *(not in git)* | `FRONTEND_URL` changed from `http://localhost:3000` → `https://1nri.store` so customer email/SMS links point at the live store. |
+
+> **Heads-up / action required:**
+> - The production backend should have `FRONTEND_URL=https://1nri.store` in its environment (it likely already does — the localhost value was only on a local machine that had been sending real emails).
+> - Only run **one** backend instance. The duplicate-send fix makes extra copies harmless, but running several at once is still wasteful and was the original trigger here.
+
+### How to test
+
+1. Start a checkout (enter your email), then abandon it and wait for the reminder cycle.
+2. The email's "return to cart" button should open **`https://1nri.store/checkout/recover?...`**, not localhost.
+3. You should receive **exactly one** reminder for that cart, even if the recovery job runs several times.

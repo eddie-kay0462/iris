@@ -1625,14 +1625,23 @@ export class AnalyticsService {
       const items: any[] = Array.isArray(r.items) ? r.items : [];
       if (items.length === 0) continue;
 
-      // Re-check the row is still open right before sending — guards against a
-      // checkout that completed between the batch read and now.
-      const { data: fresh } = await db
+      // Atomically CLAIM the row before sending: flip reminder_sent_at from NULL
+      // to now() only if it's still open and unclaimed. This is the single source
+      // of truth for "who gets to email this cart" — the WHERE ... reminder_sent_at
+      // IS NULL makes it a row-level compare-and-set, so if two cron ticks or two
+      // backend instances race, exactly one wins the claim and the others match
+      // zero rows and skip. (Replaces the old read-then-send-then-update, whose
+      // check-and-act gap let duplicate instances send the same cart twice.)
+      const claimedAt = new Date().toISOString();
+      const { data: claimed } = await db
         .from('checkout_sessions')
-        .select('status, reminder_sent_at')
+        .update({ reminder_sent_at: claimedAt })
         .eq('id', r.id)
+        .eq('status', 'open')
+        .is('reminder_sent_at', null)
+        .select('id')
         .maybeSingle();
-      if (!fresh || fresh.status !== 'open' || fresh.reminder_sent_at) continue;
+      if (!claimed) continue; // already claimed/converted elsewhere
 
       try {
         await this.email.sendAbandonedCheckoutReminder({
@@ -1649,13 +1658,16 @@ export class AnalyticsService {
             image_url: i.imageUrl ?? null,
           })),
         });
-        await db
-          .from('checkout_sessions')
-          .update({ reminder_sent_at: new Date().toISOString() })
-          .eq('id', r.id);
         sent += 1;
       } catch (err: any) {
         this.logger.error(`Abandoned-checkout reminder failed for ${r.id}: ${err.message}`);
+        // Release the claim so a later tick can retry this cart. Safe against
+        // races: only the instance that holds the claim resets it.
+        await db
+          .from('checkout_sessions')
+          .update({ reminder_sent_at: null })
+          .eq('id', r.id)
+          .eq('reminder_sent_at', claimedAt);
       }
     }
     return sent;

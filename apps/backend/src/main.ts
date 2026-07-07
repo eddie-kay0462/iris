@@ -11,8 +11,11 @@ async function bootstrap() {
   // CORS for frontend + admin
   app.enableCors({
     origin: [
+      // FRONTEND_URL points at the production storefront (used for email/SMS
+      // links), so keep the local dev origins listed explicitly here.
       process.env.FRONTEND_URL || 'http://localhost:3000',
       process.env.ADMIN_URL || 'http://localhost:3001',
+      'http://localhost:3000',
       'http://localhost:3002',
       'http://localhost:3003',
       'https://1nri.store',
