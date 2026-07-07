@@ -4767,3 +4767,54 @@ In the **admin**, the confusing "Published" checkbox is gone. Every product row 
 2. Set it to **Active** (via the product page dropdown or the row "⋯" menu) → it now shows on the site and can be added to cart and bought.
 3. Set it to **Archived** (or back to Draft) → it disappears from the store, and trying to check out with it still in an old cart is **refused**.
 4. Confirm the product list tabs **All / Active / Draft / Archived** filter correctly, and there's no "Published" checkbox anywhere.
+
+---
+
+## Pre-orders live inside the Orders page now (July 2026)
+
+Pre-orders used to sit on their **own separate page**, and it caused two real headaches:
+
+- An online order that was *actually a pre-order* showed up in Orders with **no products** — because the pre-ordered items were stored in a different place than normal order items, so the order looked empty.
+- **Pop-up pre-orders** (taken in person, paid by cash/MoMo) never appeared in Orders at all — they only lived on the separate pre-orders page.
+
+We've folded everything into **one unified Orders page**. The standalone Pre-orders page (and its sidebar link) is **gone** — you manage everything from Orders now.
+
+**What you'll see:**
+
+- Orders that contain pre-ordered items get a **"Pre-order" badge**, and pop-up pre-orders show a **"Pop-up" badge**. Pop-up pre-orders now appear in the orders list as their own orders, with all their items grouped together (even though behind the scenes each item was recorded separately).
+- A new **"Pre-orders" filter button** shows only orders that contain pre-orders.
+- Opening an order now shows the pre-ordered items **right in the items list**, each with its own status (Pending / Stock Held / Fulfilled) — so an order that used to look empty now shows what was actually bought.
+- Every pre-order action lives on the order page: **Restock & Allocate, Mark Fulfilled, Refund, Cancel, and Resend Confirmation** — no more jumping to a separate screen.
+- The cards at the top of Orders got a new **"Pre-orders Pending"** figure — the total value of pre-orders still waiting to be fulfilled, including pop-up money that was previously invisible on this page.
+
+**On the customer side:** when a shopper tracks an order that includes pre-ordered items, those items now show up neatly in a **"Pre-order Items"** section with a note explaining they ship separately once restocked. Tracking a pop-up pre-order number that had several items now correctly shows **all** of them (before, it could error or show just one).
+
+**Why it matters:** one place to see and manage every order, pre-orders included; no more "empty" orders; pop-up sales are finally visible alongside online ones; and the money-pending numbers actually account for pre-orders.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/backend/src/orders/orders.service.ts` | Orders list now merges real orders with **pop-up pre-order groups**; order detail can open a pop-up group by its PRE- number; the public order-tracking lookup now returns pre-order items (and handles multi-item pop-up numbers). |
+| `apps/backend/src/orders/dto/query-orders.dto.ts` | Added the "only orders with pre-orders" filter option. |
+| `apps/backend/src/payments/payments.service.ts` | The stats behind the top cards now include a **Pre-orders Pending** total (online + pop-up). |
+| `apps/admin/app/(dashboard)/orders/page.tsx` | Pre-order / Pop-up badges, the new Pre-orders filter button, and the Pre-orders Pending card. |
+| `apps/admin/app/(dashboard)/orders/[id]/page.tsx` | Pre-ordered items now show in the order's item list with per-item status and a full actions menu. |
+| `apps/admin/app/components/preorders/PreorderControls.tsx` | **New** shared pieces (badges, action menu, and the Restock / Refund / Resend modals) reused on the order page. |
+| `apps/admin/app/(dashboard)/preorders/page.tsx` | **Deleted** — the standalone pre-orders page is gone. |
+| `apps/admin/app/components/Sidebar.tsx` | Removed the Preorders sidebar link. |
+| `apps/admin/lib/api/preorders.ts`, `lib/api/orders.ts`, `lib/api/payments.ts` | Pre-order actions now refresh the Orders views and cards; supporting type updates. |
+| `apps/frontend/app/(shop)/track/page.tsx`, `lib/api/orders.ts` | Customer track page shows a "Pre-order Items" section for orders that include pre-orders. |
+
+> **Heads-up:**
+> - The **Pop-up Sales** page is unchanged — you still record pop-up pre-orders there; they now *also* show up in Orders automatically.
+> - The **CSV export** of orders doesn't yet include the pop-up pre-order groups — separate change if we want that.
+> - Not yet done: this hasn't been driven end-to-end on a live server with real data — that click-through check still needs doing.
+
+### How to test
+
+1. In admin, open **Orders** — confirm the new **Pre-orders Pending** card shows a value, and click the **Pre-orders** filter to see only orders containing pre-orders.
+2. Open an **online order that was a pre-order** (used to look empty) → its pre-ordered items now appear with status badges.
+3. Open a **pop-up pre-order** (order number starts with `PRE-`) → all its items are grouped in one view, with the pre-order actions available.
+4. From an order, try **Restock & Allocate**, **Mark Fulfilled**, **Refund**, **Cancel**, and **Resend Confirmation** — and confirm the order and the top cards update afterward.
+5. On the storefront **/track** page, look up an order that includes pre-ordered items (and a `PRE-` pop-up number with several items) → confirm the pre-order items all show up neatly.

@@ -17,6 +17,11 @@ export class QueryOrdersDto {
   @IsString()
   to_date?: string;
 
+  // "true" → only orders (or synthetic popup groups) that contain pre-order lines
+  @IsOptional()
+  @IsString()
+  has_preorders?: string;
+
   @IsOptional()
   @IsString()
   page?: string;

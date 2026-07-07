@@ -262,6 +262,14 @@ export function useGuestOrderByNumber(orderNumber: string, guestToken: string | 
 
 type TrackingItem = Pick<OrderItem, "product_name" | "variant_title" | "quantity" | "total_price">;
 
+export interface TrackingPreorderLine {
+  product_name: string;
+  variant_title: string | null;
+  quantity: number;
+  unit_price: number;
+  status: string;
+}
+
 export interface TrackingOrder {
   kind: "order";
   order_number: string;
@@ -274,6 +282,7 @@ export interface TrackingOrder {
   created_at: string;
   shipping_address: Order["shipping_address"];
   order_items?: TrackingItem[];
+  preorders?: TrackingPreorderLine[];
 }
 
 export interface TrackingPreorder {

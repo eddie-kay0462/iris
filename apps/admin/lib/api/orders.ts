@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "./client";
+import type { Preorder } from "./preorders";
 
 // --- Types ---
 
@@ -62,6 +63,12 @@ export interface Order {
   updated_at: string;
   order_items?: OrderItem[];
   order_status_history?: OrderStatusHistory[];
+  // Pre-order integration:
+  preorders?: Preorder[];
+  contains_preorders?: boolean;
+  is_popup_preorder?: boolean;
+  customer_name?: string | null;
+  payment_method?: string | null;
 }
 
 export interface PaginatedOrders {
@@ -77,6 +84,7 @@ export interface OrderQueryParams {
   search?: string;
   from_date?: string;
   to_date?: string;
+  has_preorders?: string;
   page?: number;
   limit?: number;
 }

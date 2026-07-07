@@ -1,5 +1,17 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { apiClient } from "./client";
+
+/**
+ * Pre-orders are now managed from the unified Orders page, so any pre-order
+ * mutation must also refresh the order list/detail and the payment stat cards.
+ */
+function invalidatePreorderViews(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ["preorders"] });
+  qc.invalidateQueries({ queryKey: ["preorder-stats"] });
+  qc.invalidateQueries({ queryKey: ["admin-orders"] });
+  qc.invalidateQueries({ queryKey: ["admin-order"] });
+  qc.invalidateQueries({ queryKey: ["payment-stats"] });
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -9,6 +21,7 @@ export type PreorderSource = "online" | "popup";
 export interface Preorder {
   id: string;
   order_number: string;
+  order_id: string | null;
   source: PreorderSource;
   user_id: string | null;
   customer_name: string | null;
@@ -121,10 +134,7 @@ export function useCancelPreorder() {
   return useMutation({
     mutationFn: (id: string) =>
       apiClient<Preorder>(`/admin/preorders/${id}/cancel`, { method: "PATCH" }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["preorders"] });
-      qc.invalidateQueries({ queryKey: ["preorder-stats"] });
-    },
+    onSuccess: () => invalidatePreorderViews(qc),
   });
 }
 
@@ -133,10 +143,7 @@ export function useFulfillPreorder() {
   return useMutation({
     mutationFn: (id: string) =>
       apiClient<Preorder>(`/admin/preorders/${id}/fulfill`, { method: "PATCH" }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["preorders"] });
-      qc.invalidateQueries({ queryKey: ["preorder-stats"] });
-    },
+    onSuccess: () => invalidatePreorderViews(qc),
   });
 }
 
@@ -148,10 +155,7 @@ export function useRestockPreorder() {
         method: "POST",
         body: { quantity },
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["preorders"] });
-      qc.invalidateQueries({ queryKey: ["preorder-stats"] });
-    },
+    onSuccess: () => invalidatePreorderViews(qc),
   });
 }
 
@@ -163,10 +167,7 @@ export function useRefundPreorder() {
         method: "POST",
         body: { amount, reason },
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["preorders"] });
-      qc.invalidateQueries({ queryKey: ["preorder-stats"] });
-    },
+    onSuccess: () => invalidatePreorderViews(qc),
   });
 }
 
@@ -178,9 +179,7 @@ export function useSendPreorderConfirmation() {
         method: "POST",
         body: { channels },
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["preorders"] });
-    },
+    onSuccess: () => invalidatePreorderViews(qc),
   });
 }
 
@@ -189,9 +188,6 @@ export function useCreatePopupPreorder() {
   return useMutation({
     mutationFn: (dto: CreatePopupPreorderInput) =>
       apiClient<Preorder[]>("/admin/preorders/popup", { method: "POST", body: dto }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["preorders"] });
-      qc.invalidateQueries({ queryKey: ["preorder-stats"] });
-    },
+    onSuccess: () => invalidatePreorderViews(qc),
   });
 }

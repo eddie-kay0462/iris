@@ -417,14 +417,43 @@ export class OrdersService {
 
   async findOne(id: string) {
     const db = this.supabase.getAdminClient();
-    const { data, error } = await db
-      .from('orders')
-      .select('*, order_items(*, product:products(vendor)), order_status_history(*), preorders(*)')
-      .eq('id', id)
-      .single();
 
-    if (error || !data) throw new NotFoundException('Order not found');
-    return data;
+    // A real orders.id is a UUID. Popup pre-order groups are addressed by their
+    // shared order_number (e.g. PRE-001234) since they have no orders row.
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+    if (isUuid) {
+      const { data, error } = await db
+        .from('orders')
+        .select('*, order_items(*, product:products(vendor)), order_status_history(*), preorders(*)')
+        .eq('id', id)
+        .single();
+
+      if (!error && data) {
+        return {
+          ...data,
+          contains_preorders: (data.preorders?.length ?? 0) > 0,
+          is_popup_preorder: false,
+        };
+      }
+    }
+
+    // Fall back to a synthetic popup pre-order group keyed by order_number.
+    const { data: popupRows, error: popupError } = await db
+      .from('preorders')
+      .select('*')
+      .eq('order_number', id)
+      .eq('source', 'popup');
+
+    if (!popupError && popupRows && popupRows.length > 0) {
+      return {
+        ...this.buildPopupOrderGroup(popupRows),
+        order_status_history: [],
+      };
+    }
+
+    throw new NotFoundException('Order not found');
   }
 
   async findMyOrders(userId: string, query: QueryOrdersDto) {
@@ -485,44 +514,157 @@ export class OrdersService {
     return data;
   }
 
+  /**
+   * Collapses a group of pre-order rows (all sharing one order_number) into a
+   * single status, so a multi-line pre-order reads as one thing.
+   *   - every line refunded  → refunded
+   *   - every line cancelled → cancelled
+   *   - every line fulfilled → fulfilled
+   *   - any line pending     → pending
+   *   - otherwise            → stock_held
+   */
+  private derivePreorderGroupStatus(rows: any[]): string {
+    const statuses = rows.map((r) => r.status);
+    if (statuses.every((s) => s === 'refunded')) return 'refunded';
+    if (statuses.every((s) => s === 'cancelled')) return 'cancelled';
+    if (statuses.every((s) => s === 'fulfilled')) return 'fulfilled';
+    if (statuses.some((s) => s === 'pending')) return 'pending';
+    return 'stock_held';
+  }
+
+  /**
+   * Builds an order-shaped object from a set of pre-order rows that share an
+   * order_number. Popup pre-orders have no real `orders` row, so the admin UI
+   * treats these synthetic groups as first-class orders (id === order_number).
+   */
+  private buildPopupOrderGroup(rows: any[]): any {
+    const first = rows[0];
+    const total = rows.reduce(
+      (sum, r) => sum + Number(r.unit_price) * r.quantity,
+      0,
+    );
+    const createdAt = rows
+      .map((r) => r.created_at)
+      .sort()[0];
+    return {
+      id: first.order_number,
+      order_number: first.order_number,
+      user_id: first.user_id ?? null,
+      email: first.customer_email ?? null,
+      customer_name: first.customer_name ?? null,
+      status: this.derivePreorderGroupStatus(rows),
+      subtotal: total,
+      discount: 0,
+      shipping_cost: 0,
+      tax: 0,
+      total,
+      currency: 'GHS',
+      shipping_address: null,
+      billing_address: null,
+      tracking_number: null,
+      carrier: null,
+      payment_provider: null,
+      payment_reference: first.payment_reference ?? null,
+      payment_status: first.payment_status ?? null,
+      payment_method: first.payment_method ?? null,
+      created_at: createdAt,
+      updated_at: first.updated_at ?? createdAt,
+      is_popup_preorder: true,
+      contains_preorders: true,
+      order_items: [],
+      preorders: rows,
+    };
+  }
+
   async findAdmin(query: QueryOrdersDto) {
     const db = this.supabase.getAdminClient();
     const page = parseInt(query.page || '1', 10);
     const limit = parseInt(query.limit || '20', 10);
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
+    const hasPreordersOnly = query.has_preorders === 'true';
 
+    // 1. Real orders (may carry linked online pre-order lines). Fetch the full
+    // filtered set — the merge with popup groups below is sorted + paginated in
+    // JS, so we can't rely on a DB-level range here. Order volume is modest at
+    // this stage; revisit if the dataset grows large.
     let q = db
       .from('orders')
-      .select('*, order_items(*)', { count: 'exact' })
+      .select(
+        '*, order_items(*), preorders(id, status, quantity, unit_price, source, product_name, variant_title)',
+      )
       .is('deleted_at', null);
 
-    if (query.status) {
-      q = q.eq('status', query.status);
-    }
+    if (query.status) q = q.eq('status', query.status);
     if (query.search) {
       q = q.or(
         `order_number.ilike.%${query.search}%,email.ilike.%${query.search}%`,
       );
     }
-    if (query.from_date) {
-      q = q.gte('created_at', query.from_date);
-    }
-    if (query.to_date) {
-      q = q.lte('created_at', query.to_date);
-    }
+    if (query.from_date) q = q.gte('created_at', query.from_date);
+    if (query.to_date) q = q.lte('created_at', query.to_date);
 
-    q = q.order('created_at', { ascending: false }).range(from, to);
-
-    const { data, count, error } = await q;
+    const { data: orderRows, error } = await q;
     if (error) throw error;
 
+    let orders = (orderRows || []).map((o: any) => ({
+      ...o,
+      contains_preorders: (o.preorders?.length ?? 0) > 0,
+      is_popup_preorder: false,
+    }));
+
+    if (hasPreordersOnly) {
+      orders = orders.filter((o: any) => o.contains_preorders);
+    }
+
+    // 2. Synthetic popup pre-order groups (no real orders row).
+    let popupGroups: any[] = [];
+    let popupQ = db
+      .from('preorders')
+      .select('*')
+      .eq('source', 'popup')
+      .is('order_id', null);
+    if (query.search) {
+      popupQ = popupQ.or(
+        `order_number.ilike.%${query.search}%,customer_email.ilike.%${query.search}%`,
+      );
+    }
+    if (query.from_date) popupQ = popupQ.gte('created_at', query.from_date);
+    if (query.to_date) popupQ = popupQ.lte('created_at', query.to_date);
+
+    const { data: popupRows, error: popupError } = await popupQ;
+    if (popupError) throw popupError;
+
+    const byNumber = new Map<string, any[]>();
+    for (const row of popupRows || []) {
+      const list = byNumber.get(row.order_number) || [];
+      list.push(row);
+      byNumber.set(row.order_number, list);
+    }
+    popupGroups = Array.from(byNumber.values()).map((rows) =>
+      this.buildPopupOrderGroup(rows),
+    );
+
+    // Popup groups are entirely pre-orders, so the has_preorders filter keeps
+    // them all. Apply the status filter (against the derived group status).
+    if (query.status) {
+      popupGroups = popupGroups.filter((g) => g.status === query.status);
+    }
+
+    // 3. Merge, sort by date desc, paginate in JS.
+    const merged = [...orders, ...popupGroups].sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+
+    const total = merged.length;
+    const start = (page - 1) * limit;
+    const data = merged.slice(start, start + limit);
+
     return {
-      data: data || [],
-      total: count || 0,
+      data,
+      total,
       page,
       limit,
-      totalPages: Math.ceil((count || 0) / limit),
+      totalPages: Math.ceil(total / limit),
     };
   }
 
@@ -1505,38 +1647,40 @@ export class OrdersService {
     // Preorders live in a separate table with their own status flow. Route
     // PRE- numbers there so customers can track paid preorders publicly too.
     if (normalized.startsWith('PRE-')) {
-      const { data, error } = await db
+      // A single PRE- number can span multiple pre-order rows (a popup order
+      // with several lines), so fetch them all and present one grouped result.
+      const { data: rows, error } = await db
         .from('preorders')
         .select('order_number, status, payment_status, product_name, variant_title, quantity, unit_price, created_at, updated_at, notified_at')
         .eq('order_number', normalized)
         .ilike('customer_email', email.trim())
-        .single();
+        .order('created_at', { ascending: true });
 
-      if (error || !data) throw new NotFoundException('Order not found');
+      if (error || !rows || rows.length === 0)
+        throw new NotFoundException('Order not found');
 
+      const first = rows[0];
       // Shape it like the order tracking payload so the frontend can share the
       // item list rendering.
       return {
         kind: 'preorder' as const,
-        order_number: data.order_number,
-        status: data.status,
-        payment_status: data.payment_status,
-        created_at: data.created_at,
-        notified_at: data.notified_at,
-        items: [
-          {
-            product_name: data.product_name,
-            variant_title: data.variant_title,
-            quantity: data.quantity,
-            total_price: Number(data.unit_price) * data.quantity,
-          },
-        ],
+        order_number: first.order_number,
+        status: this.derivePreorderGroupStatus(rows),
+        payment_status: first.payment_status,
+        created_at: first.created_at,
+        notified_at: rows.map((r) => r.notified_at).find(Boolean) ?? null,
+        items: rows.map((r) => ({
+          product_name: r.product_name,
+          variant_title: r.variant_title,
+          quantity: r.quantity,
+          total_price: Number(r.unit_price) * r.quantity,
+        })),
       };
     }
 
     const { data, error } = await db
       .from('orders')
-      .select('order_number, status, payment_status, tracking_number, carrier, shipped_at, delivered_at, created_at, shipping_address, order_items(product_name, variant_title, quantity, total_price)')
+      .select('order_number, status, payment_status, tracking_number, carrier, shipped_at, delivered_at, created_at, shipping_address, order_items(product_name, variant_title, quantity, total_price), preorders(product_name, variant_title, quantity, unit_price, status)')
       .eq('order_number', normalized)
       .ilike('email', email.trim())
       .is('deleted_at', null)
