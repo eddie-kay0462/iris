@@ -218,8 +218,11 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
                 option2_name: v.option2_value ? v.option2_name : undefined,
                 option2_value: v.option2_value || undefined,
                 price: v.price,
+                compare_at_price: v.compare_at_price ?? undefined,
                 sku: v.sku,
                 inventory_quantity: v.inventory_quantity,
+                preorder_enabled: v.preorder_enabled ?? false,
+                preorder_limit: v.preorder_enabled ? v.preorder_limit ?? null : null,
               },
             });
           } catch { /* best effort */ }
@@ -313,22 +316,22 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
               <VariantsEditor
                 productTitle={watch("title")}
                 basePrice={watch("base_price")}
+                category={watchedCategory}
                 variants={product.product_variants || []}
-                productImages={product.product_images || []}
                 onAdd={(data) => addVariant.mutate(data, { onSuccess: onRefresh, onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to add variant", { duration: 6000 }) })}
                 onUpdate={(variantId, data) => updateVariant.mutate({ variantId, data }, { onSuccess: onRefresh, onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update variant", { duration: 6000 }) })}
-                onDelete={(variantId) => {
-                  if (!confirm("Delete this variant?")) return;
+                onDelete={(variantId) =>
                   deleteVariant.mutate(variantId, {
                     onSuccess: onRefresh,
                     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to delete variant", { duration: 6000 }),
-                  });
-                }}
+                  })
+                }
               />
             ) : (
               <VariantsEditor
                 productTitle={watch("title")}
                 basePrice={watch("base_price")}
+                category={watchedCategory}
                 variants={[]}
                 localVariants={localVariants}
                 onAdd={(data) => {
@@ -339,11 +342,26 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
                     option2_name: data.option2_name as string | undefined,
                     option2_value: data.option2_value as string | undefined,
                     price: data.price as number | undefined,
+                    compare_at_price: (data.compare_at_price as number | null) ?? null,
                     sku: data.sku as string | undefined,
                     inventory_quantity: (data.inventory_quantity as number) || 0,
+                    preorder_enabled: (data.preorder_enabled as boolean) ?? false,
+                    preorder_limit: (data.preorder_limit as number | null) ?? null,
                   };
                   setLocalVariants((prev) => [...prev, draft]);
                 }}
+                onUpdateLocal={(localId, data) =>
+                  setLocalVariants((prev) =>
+                    prev.map((v) =>
+                      v.localId === localId
+                        ? {
+                            ...v,
+                            ...(data as Partial<LocalVariantDraft>),
+                          }
+                        : v,
+                    ),
+                  )
+                }
                 onDeleteLocal={(localId) =>
                   setLocalVariants((prev) => prev.filter((v) => v.localId !== localId))
                 }
