@@ -1,25 +1,25 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Package, Truck, CheckCircle2, Clock, Loader2 } from "lucide-react";
 import {
   trackOrderByEmail,
   type TrackingResult,
   type TrackingOrder,
   type TrackingPreorder,
 } from "@/lib/api/orders";
+import { StatusPip, EndLabel, fmt, fmtDate } from "../account/atoms";
 
 const STATUS_STEPS: { key: string; label: string }[] = [
-  { key: "pending", label: "Order Placed" },
-  { key: "paid", label: "Payment Confirmed" },
+  { key: "pending", label: "Placed" },
+  { key: "paid", label: "Paid" },
   { key: "processing", label: "Processing" },
   { key: "shipped", label: "Shipped" },
   { key: "delivered", label: "Delivered" },
 ];
 
-// Preorders have their own status flow: reserved → stock allocated → fulfilled.
+// Preorders have their own status flow: reserved → stock held → fulfilled.
 const PREORDER_STEPS: { key: string; label: string }[] = [
   { key: "pending", label: "Reserved" },
   { key: "stock_held", label: "Stock Held" },
@@ -46,187 +46,190 @@ function preorderStepIndex(status: string): number {
   return map[status] ?? 0;
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    delivered: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-    fulfilled: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-    shipped: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-    stock_held: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-    processing: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-    paid: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-    pending: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-    cancelled: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-    refunded: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-  };
-  const labels: Record<string, string> = {
-    delivered: "Delivered",
-    fulfilled: "Fulfilled",
-    shipped: "Shipped",
-    stock_held: "Stock Held",
-    processing: "Processing",
-    paid: "Paid",
-    pending: "Pending",
-    cancelled: "Cancelled",
-    refunded: "Refunded",
-  };
+const sectionLabelCls =
+  "text-[10px] font-semibold uppercase tracking-[0.16em] text-[#999] dark:text-neutral-500 font-mono";
+
+/* ---------- Editorial monochrome progress stepper ---------- */
+function Stepper({
+  steps,
+  current,
+}: {
+  steps: { key: string; label: string }[];
+  current: number;
+}) {
+  const n = steps.length;
+  const inset = 50 / n; // % — half a column; aligns line ends to first/last node centers
+  const seg = 100 / n; // % — distance between adjacent node centers
+  const progressW = Math.max(0, Math.min(current, n - 1)) * seg;
+
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${styles[status] ?? styles.pending}`}
-    >
-      {labels[status] ?? status}
-    </span>
+    <div className="relative">
+      {/* Base track — continuous light line linking every milestone */}
+      <div
+        className="pointer-events-none absolute top-1.5 h-px -translate-y-1/2 bg-[#d4d4d4] dark:bg-neutral-700"
+        style={{ left: `${inset}%`, right: `${inset}%` }}
+      />
+      {/* Progress overlay — solid up to the current milestone */}
+      <div
+        className="pointer-events-none absolute top-1.5 h-px -translate-y-1/2 bg-[#111] dark:bg-[#ededed]"
+        style={{ left: `${inset}%`, width: `${progressW}%` }}
+      />
+
+      {/* Nodes + labels */}
+      <div className="relative flex">
+        {steps.map((step, i) => {
+          const done = i <= current;
+          const active = i === current;
+          return (
+            <div key={step.key} className="flex flex-1 flex-col items-center">
+              <div
+                className={`relative z-10 flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-full border transition-colors ${
+                  done
+                    ? "border-[#111] bg-[#111] dark:border-[#ededed] dark:bg-[#ededed]"
+                    : "border-[#ddd] bg-white dark:border-neutral-700 dark:bg-[#0a0a0a]"
+                } ${active ? "ring-2 ring-[#111]/15 dark:ring-white/20" : ""}`}
+              />
+              <p
+                className={`mt-2.5 text-center text-[9px] font-medium uppercase tracking-[0.1em] font-mono ${
+                  active
+                    ? "text-[#111] dark:text-[#ededed]"
+                    : done
+                    ? "text-[#999] dark:text-neutral-500"
+                    : "text-[#ccc] dark:text-neutral-700"
+                }`}
+              >
+                {step.label}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Shared item rows ---------- */
+function ItemRows({
+  items,
+}: {
+  items: { product_name: string; variant_title: string | null; quantity: number; total_price: number }[];
+}) {
+  return (
+    <div>
+      <div className={`${sectionLabelCls} mb-3`}>Items</div>
+      <div className="border-t border-[#e5e5e5] dark:border-neutral-800">
+        {items.map((item, i) => (
+          <div
+            key={i}
+            className="flex items-center justify-between gap-4 border-b border-[#f0f0f0] dark:border-neutral-900 py-3"
+          >
+            <div className="min-w-0">
+              <div className="text-[12px] font-medium uppercase tracking-[0.04em] text-[#111] dark:text-[#ededed] truncate">
+                {item.product_name}
+              </div>
+              <div className="mt-0.5 text-[11px] text-[#999] dark:text-neutral-500">
+                {item.variant_title ? `${item.variant_title} · ` : ""}Qty {item.quantity}
+              </div>
+            </div>
+            <div className="text-[12px] font-medium text-[#111] dark:text-[#ededed] whitespace-nowrap">
+              {fmt(item.total_price)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
 function OrderResult({ order }: { order: TrackingOrder }) {
   const current = stepIndex(order.status);
-  const shippedDate = order.shipped_at
-    ? new Date(order.shipped_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-    : null;
-  const deliveredDate = order.delivered_at
-    ? new Date(order.delivered_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-    : null;
-  const placedDate = new Date(order.created_at).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  const cancelled = order.status === "cancelled";
+  const shippedDate = order.shipped_at ? fmtDate(order.shipped_at) : null;
+  const deliveredDate = order.delivered_at ? fmtDate(order.delivered_at) : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-9">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Order</p>
-          <p className="text-xl font-bold text-gray-900 dark:text-white">{order.order_number}</p>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Placed {placedDate}</p>
+          <div className={sectionLabelCls}>Order</div>
+          <div className="mt-1.5 text-[20px] font-bold uppercase tracking-[-0.01em] text-[#111] dark:text-[#ededed] leading-none">
+            {order.order_number}
+          </div>
+          <div className="mt-2 text-[11px] text-[#999] dark:text-neutral-500 font-mono">
+            Placed {fmtDate(order.created_at)}
+          </div>
         </div>
-        <StatusBadge status={order.status} />
+        <StatusPip status={order.status} />
       </div>
 
       {/* Progress tracker */}
-      {order.status !== "cancelled" && (
-        <div className="relative">
-          <div className="flex items-center justify-between">
-            {STATUS_STEPS.map((step, i) => {
-              const done = i <= current;
-              const active = i === current;
-              return (
-                <div key={step.key} className="flex flex-1 flex-col items-center">
-                  <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors ${
-                      done
-                        ? "border-black bg-black dark:border-white dark:bg-white"
-                        : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900"
-                    }`}
-                  >
-                    {done ? (
-                      <CheckCircle2 className="h-4 w-4 text-white dark:text-black" />
-                    ) : (
-                      <div className="h-2 w-2 rounded-full bg-gray-300 dark:bg-gray-600" />
-                    )}
-                  </div>
-                  <p
-                    className={`mt-2 text-center text-xs ${
-                      active
-                        ? "font-semibold text-gray-900 dark:text-white"
-                        : done
-                        ? "text-gray-600 dark:text-gray-400"
-                        : "text-gray-400 dark:text-gray-600"
-                    }`}
-                  >
-                    {step.label}
-                  </p>
-                  {i < STATUS_STEPS.length - 1 && (
-                    <div
-                      className={`absolute top-4 h-0.5 transition-colors ${
-                        i < current ? "bg-black dark:bg-white" : "bg-gray-200 dark:bg-gray-700"
-                      }`}
-                      style={{
-                        left: `${(i + 0.5) * (100 / STATUS_STEPS.length)}%`,
-                        width: `${100 / STATUS_STEPS.length}%`,
-                      }}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
+      {!cancelled && (
+        <div className="py-6">
+          <Stepper steps={STATUS_STEPS} current={current} />
         </div>
       )}
 
       {/* Shipping info */}
-      {(order.tracking_number || order.carrier) && (
-        <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-          <div className="flex items-center gap-2 mb-2">
-            <Truck className="h-4 w-4 text-gray-500" />
-            <p className="text-sm font-semibold text-gray-900 dark:text-white">Shipping Details</p>
+      {(order.tracking_number || order.carrier || shippedDate || deliveredDate) && (
+        <div>
+          <div className={`${sectionLabelCls} mb-3`}>Shipping</div>
+          <div className="border-t border-[#e5e5e5] dark:border-neutral-800">
+            {order.carrier && (
+              <DetailRow label="Carrier" value={order.carrier} />
+            )}
+            {order.tracking_number && (
+              <DetailRow label="Tracking" value={order.tracking_number} mono />
+            )}
+            {shippedDate && <DetailRow label="Shipped" value={shippedDate} />}
+            {deliveredDate && <DetailRow label="Delivered" value={deliveredDate} />}
           </div>
-          {order.carrier && (
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Carrier: <span className="font-medium text-gray-900 dark:text-white">{order.carrier}</span>
-            </p>
-          )}
-          {order.tracking_number && (
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Tracking: <span className="font-medium text-gray-900 dark:text-white">{order.tracking_number}</span>
-            </p>
-          )}
-          {shippedDate && (
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Shipped: <span className="font-medium text-gray-900 dark:text-white">{shippedDate}</span>
-            </p>
-          )}
-          {deliveredDate && (
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Delivered: <span className="font-medium text-gray-900 dark:text-white">{deliveredDate}</span>
-            </p>
-          )}
         </div>
       )}
 
       {/* Items */}
       {order.order_items && order.order_items.length > 0 && (
-        <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-            <Package className="h-4 w-4 text-gray-500" />
-            <p className="text-sm font-semibold text-gray-900 dark:text-white">Items</p>
-          </div>
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
-            {order.order_items.map((item, i) => (
-              <div key={i} className="flex justify-between px-4 py-3 text-sm">
-                <span className="text-gray-700 dark:text-gray-300">
-                  {item.product_name}
-                  {item.variant_title ? ` - ${item.variant_title}` : ""}
-                  {item.quantity > 1 ? ` × ${item.quantity}` : ""}
-                </span>
-                <span className="text-gray-900 dark:text-white font-medium">
-                  GH₵ {item.total_price.toLocaleString()}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <ItemRows items={order.order_items} />
       )}
-
+      <br/>
       {/* Shipping address */}
       {order.shipping_address && (
         <div>
-          <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Shipping to</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-            {order.shipping_address.fullName}<br />
-            {order.shipping_address.address}<br />
+          <div className={`${sectionLabelCls} mb-3`}>Shipping to</div>
+          <p className="text-[13px] text-[#666] dark:text-neutral-400 leading-relaxed">
+            {order.shipping_address.fullName}
+            <br />
+            {order.shipping_address.address}
+            <br />
             {order.shipping_address.city}, {order.shipping_address.region}
           </p>
         </div>
       )}
+    </div>
+  );
+}
 
-      <Link
-        href="/products"
-        className="block text-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+function DetailRow({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-[#f0f0f0] dark:border-neutral-900 py-2.5">
+      <span className="text-[11px] uppercase tracking-[0.1em] text-[#999] dark:text-neutral-500 font-mono">
+        {label}
+      </span>
+      <span
+        className={`text-[12px] font-medium text-[#111] dark:text-[#ededed] ${
+          mono ? "font-mono tracking-[0.02em]" : ""
+        }`}
       >
-        Continue shopping
-      </Link>
+        {value}
+      </span>
     </div>
   );
 }
@@ -234,119 +237,54 @@ function OrderResult({ order }: { order: TrackingOrder }) {
 function PreorderResult({ preorder }: { preorder: TrackingPreorder }) {
   const current = preorderStepIndex(preorder.status);
   const terminal = preorder.status === "cancelled" || preorder.status === "refunded";
-  const placedDate = new Date(preorder.created_at).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+
+  const note: string | null =
+    preorder.status === "pending"
+      ? "Your pre-order is reserved. We'll allocate stock and notify you the moment it arrives."
+      : preorder.status === "stock_held"
+      ? "Stock has arrived and is being held for your pre-order. Our team will reach out to arrange delivery."
+      : preorder.status === "fulfilled"
+      ? "Your pre-order has been fulfilled. Thank you."
+      : preorder.status === "cancelled"
+      ? "This pre-order has been cancelled."
+      : preorder.status === "refunded"
+      ? "This pre-order has been refunded."
+      : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-9">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Pre-order</p>
-          <p className="text-xl font-bold text-gray-900 dark:text-white">{preorder.order_number}</p>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Reserved {placedDate}</p>
+          <div className={sectionLabelCls}>Pre-order</div>
+          <div className="mt-1.5 text-[20px] font-bold uppercase tracking-[-0.01em] text-[#111] dark:text-[#ededed] leading-none">
+            {preorder.order_number}
+          </div>
+          <div className="mt-2 text-[11px] text-[#999] dark:text-neutral-500 font-mono">
+            Reserved {fmtDate(preorder.created_at)}
+          </div>
         </div>
-        <StatusBadge status={preorder.status} />
+        <StatusPip status={preorder.status} />
       </div>
 
       {/* Progress tracker */}
       {!terminal && (
-        <div className="relative">
-          <div className="flex items-center justify-between">
-            {PREORDER_STEPS.map((step, i) => {
-              const done = i <= current;
-              const active = i === current;
-              return (
-                <div key={step.key} className="flex flex-1 flex-col items-center">
-                  <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors ${
-                      done
-                        ? "border-black bg-black dark:border-white dark:bg-white"
-                        : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900"
-                    }`}
-                  >
-                    {done ? (
-                      <CheckCircle2 className="h-4 w-4 text-white dark:text-black" />
-                    ) : (
-                      <div className="h-2 w-2 rounded-full bg-gray-300 dark:bg-gray-600" />
-                    )}
-                  </div>
-                  <p
-                    className={`mt-2 text-center text-xs ${
-                      active
-                        ? "font-semibold text-gray-900 dark:text-white"
-                        : done
-                        ? "text-gray-600 dark:text-gray-400"
-                        : "text-gray-400 dark:text-gray-600"
-                    }`}
-                  >
-                    {step.label}
-                  </p>
-                  {i < PREORDER_STEPS.length - 1 && (
-                    <div
-                      className={`absolute top-4 h-0.5 transition-colors ${
-                        i < current ? "bg-black dark:bg-white" : "bg-gray-200 dark:bg-gray-700"
-                      }`}
-                      style={{
-                        left: `${(i + 0.5) * (100 / PREORDER_STEPS.length)}%`,
-                        width: `${100 / PREORDER_STEPS.length}%`,
-                      }}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
+        <div className="py-5">
+          <Stepper steps={PREORDER_STEPS} current={current} />
         </div>
       )}
 
       {/* Status note */}
-      <div className="flex items-start gap-2 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-        <Clock className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" />
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          {preorder.status === "pending" &&
-            "Your pre-order is reserved. We'll allocate stock and notify you the moment it arrives."}
-          {preorder.status === "stock_held" &&
-            "Stock has arrived and is being held for your pre-order. We'll be in touch to complete fulfilment."}
-          {preorder.status === "fulfilled" && "Your pre-order has been fulfilled. Thank you!"}
-          {preorder.status === "cancelled" && "This pre-order has been cancelled."}
-          {preorder.status === "refunded" && "This pre-order has been refunded."}
-        </p>
-      </div>
-
-      {/* Items */}
-      {preorder.items && preorder.items.length > 0 && (
-        <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-            <Package className="h-4 w-4 text-gray-500" />
-            <p className="text-sm font-semibold text-gray-900 dark:text-white">Items</p>
-          </div>
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
-            {preorder.items.map((item, i) => (
-              <div key={i} className="flex justify-between px-4 py-3 text-sm">
-                <span className="text-gray-700 dark:text-gray-300">
-                  {item.product_name}
-                  {item.variant_title ? ` - ${item.variant_title}` : ""}
-                  {item.quantity > 1 ? ` × ${item.quantity}` : ""}
-                </span>
-                <span className="text-gray-900 dark:text-white font-medium">
-                  GH₵ {item.total_price.toLocaleString()}
-                </span>
-              </div>
-            ))}
-          </div>
+      {note && (
+        <div className="border-l-2 border-[#111] dark:border-[#ededed] bg-[#f5f5f5] dark:bg-[#111] px-4 py-3 text-[12px] leading-[1.5] text-[#666] dark:text-neutral-400">
+          {note}
         </div>
       )}
 
-      <Link
-        href="/products"
-        className="block text-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-      >
-        Continue shopping
-      </Link>
+      {/* Items */}
+      {preorder.items && preorder.items.length > 0 && (
+        <ItemRows items={preorder.items} />
+      )}
     </div>
   );
 }
@@ -371,83 +309,93 @@ function TrackContent() {
       const found = await trackOrderByEmail(orderNumber.trim(), email.trim());
       setResult(found);
     } catch {
-      setError("We couldn't find an order matching those details. Please check your order number and email address.");
+      setError(
+        "We couldn't find an order matching those details. Please check your order number and email address.",
+      );
     } finally {
       setLoading(false);
     }
   }
 
+  const inputCls =
+    "w-full px-3 py-2.5 border border-[#ddd] dark:border-neutral-700 bg-white dark:bg-[#111] text-[13px] text-[#111] dark:text-[#ededed] outline-none transition-colors duration-200 focus:border-[#111] dark:focus:border-white placeholder:text-[#ccc] dark:placeholder:text-neutral-600 box-border rounded-none";
+  const labelCls =
+    "block text-[11px] font-medium text-[#666] dark:text-neutral-400 mb-1.5 tracking-[0.02em]";
+
   return (
-    <div className="mx-auto max-w-lg px-4 py-16">
-      <div className="mb-8 text-center">
-        <div className="mb-4 flex justify-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
-            <Package className="h-7 w-7 text-gray-700 dark:text-gray-300" />
-          </div>
-        </div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Track Your Order</h1>
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+    <div className="mx-auto max-w-xl px-4 py-16 sm:py-20">
+      {/* Header */}
+      <div className="mb-10">
+        <div className={sectionLabelCls}>Order Tracking</div>
+        <h1 className="mt-2 text-[28px] font-bold uppercase tracking-[-0.01em] text-[#111] dark:text-[#ededed] leading-none">
+          Track Your Order
+        </h1>
+        <p className="mt-3 text-[13px] text-[#999] dark:text-neutral-500 leading-relaxed">
           Enter your order number and the email you used at checkout.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+          <label htmlFor="orderNumber" className={labelCls}>
             Order number
           </label>
           <input
+            id="orderNumber"
             type="text"
             value={orderNumber}
             onChange={(e) => setOrderNumber(e.target.value)}
             placeholder="e.g. IRD-001001 or PRE-001001"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-black focus:outline-none focus:ring-1 focus:ring-black dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500 dark:focus:border-white dark:focus:ring-white"
+            className={inputCls}
             required
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+          <label htmlFor="email" className={labelCls}>
             Email address
           </label>
           <input
+            id="email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-black focus:outline-none focus:ring-1 focus:ring-black dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500 dark:focus:border-white dark:focus:ring-white"
+            className={inputCls}
             required
           />
         </div>
 
         {error && (
-          <p className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-400">
+          <div className="border-l-2 border-[#c00] dark:border-[#ff5f5f] bg-[#fdf2f2] dark:bg-[#2a0f0f] px-4 py-3 text-[12px] leading-[1.5] text-[#c00] dark:text-[#ff8f8f]">
             {error}
-          </p>
+          </div>
         )}
 
         <button
           type="submit"
           disabled={loading}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-black px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-80 disabled:opacity-50 dark:bg-white dark:text-black"
+          className="w-full h-11 bg-[#111] dark:bg-white text-white dark:text-[#0a0a0a] text-[11px] font-semibold uppercase tracking-[0.16em] cursor-pointer transition-colors duration-200 hover:bg-[#333] dark:hover:bg-neutral-200 disabled:bg-[#555] dark:disabled:bg-neutral-700 disabled:cursor-not-allowed border-none rounded-none"
         >
-          {loading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Looking up order…
-            </>
-          ) : (
-            "Track order"
-          )}
+          {loading ? "Looking up order…" : "Track order"}
         </button>
       </form>
 
       {result && (
-        <div className="mt-10 rounded-xl border border-gray-200 p-6 dark:border-gray-700">
+        <div className="mt-14 border-t border-[#e5e5e5] dark:border-neutral-800 pt-10">
           {result.kind === "preorder" ? (
             <PreorderResult preorder={result} />
           ) : (
             <OrderResult order={result} />
           )}
+
+          <EndLabel>End of {result.kind === "preorder" ? "pre-order" : "order"}</EndLabel>
+
+          <Link
+            href="/products"
+            className="block w-full border border-[#111] bg-white px-6 py-3.5 text-center text-xs font-semibold uppercase tracking-[0.25em] text-black transition hover:bg-[#111] hover:text-white dark:border-white dark:bg-[#0a0a0a] dark:text-white dark:hover:bg-white dark:hover:text-black"
+          >
+            Continue shopping
+          </Link>
         </div>
       )}
     </div>
@@ -458,7 +406,7 @@ export default function TrackPage() {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto max-w-lg px-4 py-16 text-center text-gray-500 dark:text-gray-400">
+        <div className="mx-auto max-w-xl px-4 py-16 text-center text-[13px] text-[#999] dark:text-neutral-500 font-mono uppercase tracking-[0.1em]">
           Loading…
         </div>
       }
