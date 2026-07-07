@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -16,6 +16,12 @@ import AnalyticsBeacon from "@/components/AnalyticsBeacon";
 import NavDrawer from "./components/NavDrawer";
 import CartDrawer from "./components/CartDrawer";
 import FavouritesDrawer from "./components/FavouritesDrawer";
+
+// Runs synchronously before the browser paints on the client (so scroll-derived
+// header state is applied without a visible flash), while falling back to a
+// no-op useEffect on the server to avoid the SSR useLayoutEffect warning.
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 function ThemeToggle({ isTransparent = false }: { isTransparent?: boolean }) {
   const { theme, toggleTheme } = useTheme();
@@ -413,7 +419,12 @@ function ShopHeader() {
   const isTransparent = !scrolled;
   const isTransparentWhite = isHome && !scrolled;
 
-  useEffect(() => {
+  // Layout effect (not useEffect) so the scroll-derived state is applied before
+  // paint. The header lives in the persistent (shop) layout and does not remount
+  // on client-side navigation, so `scrolled` carries over between pages — e.g.
+  // navigating to home from a scrolled inner page would otherwise paint a white
+  // bar over the dark hero for one frame before this correction lands.
+  useIsomorphicLayoutEffect(() => {
     // On the home page the hero is a full-screen dark section, so keep the
     // header transparent until we've scrolled (almost) past it — otherwise it
     // flips to a solid white bar while the dark hero is still on screen.
