@@ -85,12 +85,6 @@ export class ProductsController {
     return this.productsService.softDelete(id);
   }
 
-  @Patch(':id/publish')
-  @RequirePermission('products:publish')
-  togglePublish(@Param('id') id: string) {
-    return this.productsService.togglePublish(id);
-  }
-
   // --- Variants ---
 
   @Post(':id/variants')

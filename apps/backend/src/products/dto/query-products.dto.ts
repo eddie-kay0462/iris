@@ -14,10 +14,6 @@ export class QueryProductsDto {
   gender?: string;
 
   @IsOptional()
-  @IsEnum(['true', 'false'])
-  published?: string;
-
-  @IsOptional()
   @IsString()
   vendor?: string;
 

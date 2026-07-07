@@ -38,7 +38,6 @@ function toProduct(fav: NonNullable<ReturnType<typeof useFavourites>["data"]>[nu
     category: null,
     vendor: null,
     tags: null,
-    published: true,
     gsm: null,
     seo_title: null,
     seo_description: null,

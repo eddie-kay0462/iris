@@ -488,7 +488,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
   }, []);
 
   const { data: similarProducts } = useSimilarProducts(product?.handle ?? "", 6);
-  const { data: allProducts } = useProducts({ published: "true", limit: 8, sort_by: "created_at", sort_order: "desc" });
+  const { data: allProducts } = useProducts({ limit: 8, sort_by: "created_at", sort_order: "desc" });
   const { items: recentlyViewed } = useRecentlyViewed(product?.id);
 
   useEffect(() => {

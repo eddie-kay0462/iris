@@ -99,7 +99,7 @@ export default function InventoryPage() {
           .select(`id, title, status, vendor, tags, base_price, description, category, product_type,
             product_variants(id, option1_value, option2_value, option3_value, price, sku),
             product_images(id, src, alt_text, position, variant_id, image_type)`)
-          .eq('published', true)
+          .eq('status', 'active')
           .is('deleted_at', null)
           .order('title'),
         fetchMyAllocations(),

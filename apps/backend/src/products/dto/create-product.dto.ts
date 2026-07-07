@@ -113,10 +113,6 @@ export class CreateProductDto {
   tags?: string[];
 
   @IsOptional()
-  @IsBoolean()
-  published?: boolean;
-
-  @IsOptional()
   @IsNumber()
   @Min(100)
   @Max(500)

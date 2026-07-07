@@ -53,11 +53,15 @@ export class PreordersService {
 
     const { data: variant, error: varErr } = await db
       .from('product_variants')
-      .select('id, inventory_quantity, preorder_enabled, preorder_limit, sku, price, products(title)')
+      .select('id, inventory_quantity, preorder_enabled, preorder_limit, sku, price, products(title, status, deleted_at)')
       .eq('id', item.variantId)
       .single();
 
     if (varErr || !variant) throw new BadRequestException('Variant not found');
+    const product = (variant.products as any) || {};
+    if (product.status !== 'active' || product.deleted_at) {
+      throw new BadRequestException('This item is no longer available');
+    }
     if (!variant.preorder_enabled) throw new BadRequestException('Pre-orders are not enabled for this item');
 
     const expectedPrice = Number(variant.price);

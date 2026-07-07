@@ -154,7 +154,7 @@ export default function SalesPage() {
       supabase
         .from('products')
         .select(`id, title, base_price, product_variants(id, option1_value, option2_value, option3_value, price, sku)`)
-        .eq('published', true)
+        .eq('status', 'active')
         .is('deleted_at', null)
         .order('title'),
       fetchMyAllocations(),

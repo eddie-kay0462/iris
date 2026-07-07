@@ -30,14 +30,14 @@ export const getProductServer = cache(
 );
 
 /**
- * Fetch every published product for the sitemap and listing structured data.
- * Returns an empty array if the backend is unavailable.
+ * Fetch every active (live) product for the sitemap and listing structured
+ * data. Returns an empty array if the backend is unavailable.
  */
 export const getPublishedProducts = cache(
   async (limit = 1000): Promise<Product[]> => {
     try {
       const res = await fetch(
-        `${API_BASE_URL}/products?published=true&limit=${limit}&sort_by=created_at&sort_order=desc`,
+        `${API_BASE_URL}/products?limit=${limit}&sort_by=created_at&sort_order=desc`,
         { next: { revalidate: 3600 } },
       );
       if (!res.ok) return [];
