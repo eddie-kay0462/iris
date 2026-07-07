@@ -378,10 +378,10 @@ export default function AboutPage() {
                 For partnerships &amp; manufacturing
               </div>
               <a
-                href="mailto:info@1nri.store"
+                href="mailto:hello@1nri.store"
                 className="mt-2 inline-block text-lg sm:text-xl font-medium underline underline-offset-4 hover:opacity-60"
               >
-                info@1nri.store
+                hello@1nri.store
               </a>
             </motion.div>
             <motion.div variants={fadeUp}>
