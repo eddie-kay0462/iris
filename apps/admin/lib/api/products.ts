@@ -49,7 +49,6 @@ export interface Product {
   category: string | null;
   vendor: string | null;
   tags: string[] | null;
-  published: boolean;
   gsm: number | null;
   seo_title: string | null;
   seo_description: string | null;
@@ -77,7 +76,6 @@ export interface ProductQueryParams {
   search?: string;
   status?: string;
   gender?: string;
-  published?: string;
   vendor?: string;
   category?: string;
   product_type?: string;
@@ -168,12 +166,21 @@ export function useDeleteProduct() {
   });
 }
 
-export function usePublishProduct() {
+export function useSetProductStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      apiClient<Product>(`/products/${id}/publish`, { method: "PATCH" }),
-    onSuccess: (_, id) => {
+    mutationFn: ({
+      id,
+      status,
+    }: {
+      id: string;
+      status: "draft" | "active" | "archived";
+    }) =>
+      apiClient<Product>(`/products/${id}`, {
+        method: "PUT",
+        body: { status },
+      }),
+    onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: ["admin-products"] });
       qc.invalidateQueries({ queryKey: ["admin-product", id] });
     },

@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, ChevronDown, Download } from "lucide-react";
+import { ChevronRight, ChevronDown, Download, MoreHorizontal, Loader2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import { toast } from "sonner";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Pagination } from "../../components/Pagination";
 import { SearchInput } from "../../components/SearchInput";
@@ -14,9 +15,74 @@ import { AdjustStockModal } from "../../components/inventory/AdjustStockModal";
 import { MovementHistory } from "../../components/inventory/MovementHistory";
 import {
   useAdminProducts,
+  useSetProductStatus,
   type Product,
   type ProductVariant,
 } from "@/lib/api/products";
+
+type ProductStatus = "draft" | "active" | "archived";
+
+const STATUS_ACTIONS: { value: ProductStatus; label: string; hint: string }[] = [
+  { value: "active", label: "Active", hint: "Live on the site" },
+  { value: "draft", label: "Draft", hint: "Hidden from the site" },
+  { value: "archived", label: "Archived", hint: "Discontinued, hidden" },
+];
+
+/** Per-row menu to quickly move a product between draft / active / archived. */
+function RowStatusMenu({ product }: { product: Product }) {
+  const [open, setOpen] = useState(false);
+  const setStatus = useSetProductStatus();
+
+  async function change(status: ProductStatus) {
+    setOpen(false);
+    if (status === product.status) return;
+    try {
+      await setStatus.mutateAsync({ id: product.id, status });
+      const action = STATUS_ACTIONS.find((s) => s.value === status)!;
+      toast.success(`"${product.title}" → ${action.label} (${action.hint.toLowerCase()})`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update status", { duration: 6000 });
+    }
+  }
+
+  return (
+    <div className="relative inline-block text-left" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={setStatus.isPending}
+        aria-label="Change status"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+      >
+        {setStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg">
+            <p className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-400">Set status</p>
+            {STATUS_ACTIONS.map((s) => (
+              <button
+                key={s.value}
+                type="button"
+                onClick={() => change(s.value)}
+                className={`flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-slate-50 ${
+                  s.value === product.status ? "bg-slate-50" : ""
+                }`}
+              >
+                <span className="font-medium text-slate-800">
+                  {s.label}
+                  {s.value === product.status && <span className="ml-1 text-xs text-slate-400">(current)</span>}
+                </span>
+                <span className="text-xs text-slate-400">{s.hint}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 import {
   useInventoryStats,
   type InventoryItem,
@@ -55,7 +121,7 @@ export default function AdminProductsPage() {
   const qc = useQueryClient();
 
   const [search, setSearch] = useState("");
-  const [statusTab, setStatusTab] = useState<"all" | "active" | "draft" | "unpublished">("all");
+  const [statusTab, setStatusTab] = useState<"all" | "active" | "draft" | "archived">("all");
   const [gender, setGender] = useState("");
   const [brand, setBrand] = useState<"" | "Unlikely Alliances" | "1NRI">("");
   const [category, setCategory] = useState("");
@@ -65,10 +131,7 @@ export default function AdminProductsPage() {
   const [adjustItem, setAdjustItem] = useState<InventoryItem | null>(null);
   const [showMovements, setShowMovements] = useState(false);
 
-  const statusParam = statusTab === "active" ? "active"
-    : statusTab === "draft" ? "draft"
-    : undefined;
-  const publishedParam = statusTab === "unpublished" ? "false" : undefined;
+  const statusParam = statusTab === "all" ? undefined : statusTab;
 
   const SUBCATEGORY_MAP: Record<string, string[]> = {
     Tops: ["T-Shirts", "Shirts", "Sweatshirts & Tracksuits"],
@@ -80,7 +143,6 @@ export default function AdminProductsPage() {
   const { data, isLoading } = useAdminProducts({
     search,
     status: statusParam,
-    published: publishedParam,
     gender: gender || undefined,
     vendor: brand || undefined,
     category: category || undefined,
@@ -269,7 +331,7 @@ export default function AdminProductsPage() {
 
       {/* Status tab bar */}
       <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 w-fit">
-        {(["all", "active", "draft", "unpublished"] as const).map((tab) => (
+        {(["all", "active", "draft", "archived"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => { setStatusTab(tab); setPage(1); }}
@@ -406,7 +468,9 @@ export default function AdminProductsPage() {
                           {totalStock}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right" />
+                      <td className="px-4 py-3 text-right">
+                        <RowStatusMenu product={product} />
+                      </td>
                     </tr>
 
                     {/* Variant sub-rows — animated accordion */}

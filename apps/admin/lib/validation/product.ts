@@ -37,7 +37,6 @@ export const productSchema = z.object({
   product_type: z.string().optional(),
   vendor: z.string().optional(),
   tags: z.array(z.string()).optional(),
-  published: z.boolean().optional(),
   gsm: z.preprocess(
     (val) => (val === "" || val === null || val === undefined ? undefined : Number(val)),
     z.number().int().min(100, "Min 100gsm").max(500, "Max 500gsm").optional()

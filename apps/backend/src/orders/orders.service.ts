@@ -74,6 +74,36 @@ export class OrdersService {
   }
 
   /**
+   * Guard: every ordered variant must belong to an active, non-deleted product.
+   * The storefront only ever surfaces active products, but a stale cart or a
+   * direct API call could still reference a draft/archived/deleted product —
+   * those must not be purchasable. Throws if any variant fails the check.
+   */
+  private async assertProductsPurchasable(
+    db: ReturnType<SupabaseService['getAdminClient']>,
+    variantIds: string[],
+  ): Promise<void> {
+    const ids = variantIds.filter(Boolean);
+    if (ids.length === 0) return;
+
+    const { data: rows, error } = await db
+      .from('product_variants')
+      .select('id, products!inner(status, deleted_at)')
+      .in('id', ids);
+
+    if (error) throw error;
+
+    for (const row of rows || []) {
+      const product = (row as any).products;
+      if (!product || product.status !== 'active' || product.deleted_at) {
+        throw new BadRequestException(
+          'One or more items are no longer available',
+        );
+      }
+    }
+  }
+
+  /**
    * Live fulfillment preview for a set of cart lines, using the SAME rule as
    * create(): a line is 'in_stock' when enough is available (inventory minus
    * active holds), 'preorder' when it's short but the variant is preorder_enabled,
@@ -90,16 +120,22 @@ export class OrdersService {
     const available = await this.getAvailableQuantities(db, variantIds);
     const { data: variantMeta } = await db
       .from('product_variants')
-      .select('id, preorder_enabled')
+      .select('id, preorder_enabled, products!inner(status, deleted_at)')
       .in('id', variantIds);
     const preorderEnabled = new Map(
       (variantMeta || []).map((v) => [v.id, v.preorder_enabled === true]),
+    );
+    const purchasable = new Map(
+      (variantMeta || []).map((v) => {
+        const product = (v as any).products;
+        return [v.id, product?.status === 'active' && !product?.deleted_at];
+      }),
     );
 
     const result: Record<string, 'in_stock' | 'preorder' | 'unavailable'> = {};
     for (const item of items) {
       const availableQty = available.get(item.variantId);
-      if (availableQty === undefined) {
+      if (availableQty === undefined || !purchasable.get(item.variantId)) {
         result[item.variantId] = 'unavailable';
       } else if (availableQty >= item.quantity) {
         result[item.variantId] = 'in_stock';
@@ -185,10 +221,16 @@ export class OrdersService {
       return refreshed;
     }
 
-    // 1. Validate stock for all items against availability (inventory minus
-    // quantities held by other still-active pending orders). Items that are out
-    // of stock but flagged preorder_enabled are auto-routed to the pre-order flow
-    // instead of being rejected, so the customer is never told "out of stock".
+    // 1. Reject items whose product is no longer purchasable (draft/archived/
+    // deleted), then validate stock for the rest against availability (inventory
+    // minus quantities held by other still-active pending orders). Items that are
+    // out of stock but flagged preorder_enabled are auto-routed to the pre-order
+    // flow instead of being rejected, so the customer is never told "out of stock".
+    await this.assertProductsPurchasable(
+      db,
+      dto.items.map((i) => i.variantId),
+    );
+
     const available = await this.getAvailableQuantities(
       db,
       dto.items.map((i) => i.variantId),
@@ -1335,7 +1377,12 @@ export class OrdersService {
       .maybeSingle();
     if (existing) return existing;
 
-    // 1. Validate stock for all items
+    // 1. Reject items whose product is no longer purchasable, then validate stock.
+    await this.assertProductsPurchasable(
+      db,
+      dto.items.map((i) => i.variantId),
+    );
+
     for (const item of dto.items) {
       const { data: variant, error } = await db
         .from('product_variants')

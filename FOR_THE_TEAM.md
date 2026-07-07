@@ -4687,3 +4687,83 @@ Two problems with the **abandoned-cart recovery email** (the "you left something
 1. Start a checkout (enter your email), then abandon it and wait for the reminder cycle.
 2. The email's "return to cart" button should open **`https://1nri.store/checkout/recover?...`**, not localhost.
 3. You should receive **exactly one** reminder for that cart, even if the recovery job runs several times.
+
+---
+
+## Simpler variant setup — pick a colour, then its sizes (July 2026)
+
+Adding variants to a product used to mean building **one colour-and-size combo at a time**: for every single row you'd re-pick the colour, re-pick the size, and retype the price, SKU and stock. A product in 3 colours × 6 sizes was 18 near-identical passes through the same little form, and footwear (sizes 38–45) turned into a very long list.
+
+The **Add/Edit product → Variants** section now works the way you actually think about stock:
+
+1. **Add a colour** (from the swatch list or type your own).
+2. Open that colour and **tick the sizes it comes in**, typing the number of **units in stock** for each right there.
+3. Set **price, "compare-at" price and pre-orders once on the colour** — they apply to every size under it. Need an exception? You can still override any single size.
+
+**Sizes are smart about the product type.** Clothing shows `XXS → 3XL` (plus `One Size`); if the product's **Category is Footwear**, it switches to **numbered sizes 38–45**, with a **"+ Add 46"** button at the end so you can extend the range as far as you need without a giant pre-made list.
+
+**Pre-orders got clearer too.** Each colour has a pre-order switch; flipping it on turns pre-orders on for *all* its sizes at once. Under the hood each size still has its own switch, so you can turn one specific size back off (e.g. allow pre-orders on every size except the one you'll never restock). When a colour's sizes disagree, its switch shows a neutral "mixed" state so you can tell at a glance.
+
+**A quiet bug got fixed:** when setting up a **brand-new product**, any pre-order settings or "compare-at" prices you entered on a variant *before* hitting "Create product" were being silently thrown away. They now save correctly the first time.
+
+Nothing changed about how variants are stored or how the storefront shows them — this is purely a nicer way to enter the same information.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/admin/app/components/products/VariantsEditor.tsx` | Rebuilt the variants section as a **colour-first** editor: colour cards you expand to tick sizes + type stock, colour-level price/compare/pre-order that cascade to every size (with per-size overrides), category-aware size sets (apparel vs footwear 38–45), and a "+ Add next size" button for footwear. |
+| `apps/admin/app/components/products/ProductForm.tsx` | Feeds the product's Category into the editor (so it knows to show footwear sizes), lets you edit variants while still creating a product, and **fixes the create-mode bug** that dropped pre-order/compare-at settings on brand-new products. |
+
+### How to test
+
+1. **New clothing product:** set a base price and Category = *Tops*. Under Variants, **Add colour → Black**, open it, tick **S / M / L**, and type stock for each. Notice the price auto-fills from the base price.
+2. Flip the colour's **Pre-order** switch on → all its sizes turn on. Turn **L** back off individually → only L is off, and the colour switch now reads "mixed".
+3. **Add a second colour** (e.g. Cream), tick a couple of sizes, then **Create product**. Reopen the saved product and confirm every colour/size, its stock, and the pre-order flags all persisted (this is the bug that used to lose settings).
+4. **Footwear:** on a product with Category = *Footwear*, the sizes become **38–45**; use **"+ Add 46"** to go higher, tick the sizes you stock, and save.
+5. **Existing products:** open one you already have — its variants show grouped by colour, and editing a colour's price updates all its sizes at once.
+
+---
+
+## One clear product status: Active / Draft / Archived (July 2026)
+
+Products used to have **two overlapping switches** that both sort-of controlled whether a product was live: a "Published" checkbox **and** a separate Status field (Active/Draft/Archived). Only the checkbox actually did anything — the Status was mostly decoration — so it was easy to be confused about what a customer could actually see. We collapsed this into **one honest setting: Status.**
+
+- **Active** = live on the site and buyable. (This is what "Published" used to mean.)
+- **Draft** = a work-in-progress. Hidden from the site, can't be bought. **New products now start as Draft**, so nothing goes live by accident — you flip it to Active when it's ready.
+- **Archived** = discontinued. Hidden from the site, can't be bought, but kept in your records.
+
+We also closed a real hole: previously a Draft or Archived product could **still be purchased** if someone had it sitting in an old cart or hit the store's behind-the-scenes address directly — the checkout never actually re-checked whether the product was allowed to be sold. Now the checkout (and pre-orders) **refuse to sell anything that isn't Active**, so hidden products are genuinely un-buyable, not just hard to find.
+
+In the **admin**, the confusing "Published" checkbox is gone. Every product row now has a quick **status menu** (the "⋯" on the right) to move it between Active / Draft / Archived without opening it, and the product page has a matching dropdown. The product list's filter tabs are now **All / Active / Draft / Archived** (the old "Unpublished" tab is gone).
+
+**Why it matters:** one obvious control instead of two contradictory ones; new products can't leak onto the site before they're ready; and discontinued/draft items truly can't be sold.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `supabase/migrations/20260707000000_product_status_visibility.sql` | **New migration.** Sets each existing product's Status from its old Published value (so nothing visible disappears and nothing hidden appears), makes new products default to **Draft**, switches the store's visibility rules to key off Status, and removes the old Published column. |
+| `remote_schema.sql`, `apps/backend/db/iris_new_schema.sql` | Database reference snapshots updated to match the migration. |
+| `apps/backend/src/products/products.service.ts` | Storefront now shows only **Active** products; removed the old publish toggle. |
+| `apps/backend/src/products/products.controller.ts`, `dto/create-product.dto.ts`, `dto/query-products.dto.ts` | Removed the publish endpoint and the leftover "published" fields. |
+| `apps/backend/src/orders/orders.service.ts` | **Checkout now rejects any item whose product isn't Active** (draft/archived/deleted) — the gap that let hidden products be bought via stale carts or direct calls. |
+| `apps/backend/src/preorders/preorders.service.ts` | Pre-orders apply the same "must be Active" check. |
+| `apps/admin/app/(dashboard)/products/page.tsx` | New per-row status menu; filter tabs are now All / Active / Draft / Archived. |
+| `apps/admin/app/(dashboard)/products/[id]/page.tsx` | "Publish" button replaced with an Active/Draft/Archived status selector. |
+| `apps/admin/app/components/products/ProductForm.tsx` | Removed the Published checkbox; Status is the single control, with a note explaining what each state does. |
+| `apps/admin/lib/api/products.ts`, `apps/admin/lib/validation/product.ts`, `apps/admin/types/database.types.ts` | Dropped "published"; added a set-status action. |
+| `apps/frontend/lib/api/products.server.ts`, `lib/api/products.ts`, `lib/validation/product.ts`, `types/database.types.ts`, `app/(shop)/product/[id]/page.tsx`, `app/(shop)/favourites/page.tsx` | Storefront no longer references the old "published" field. |
+| `apps/allies/app/(dashboard)/inventory/page.tsx`, `app/(dashboard)/sales/page.tsx` | Ally screens now list only **Active** products. |
+
+> **Heads-up / action required:**
+> - **The database migration must be run** (`supabase/migrations/20260707000000_...`) before this goes out — it converts existing products and removes the old column. It's written to preserve exactly what's visible today: currently-live products become Active, currently-hidden ones become Draft.
+> - After it runs, **new products start as Draft** — remember to set them to **Active** when they're ready to sell. (Anyone used to new products being live immediately should know this changed.)
+> - Not yet done: the migration hasn't been applied to any database, and the flows haven't been driven end-to-end on a live server — that verification still needs doing.
+
+### How to test
+
+1. In admin, **create a new product** → it starts as **Draft** and does **not** appear on the store.
+2. Set it to **Active** (via the product page dropdown or the row "⋯" menu) → it now shows on the site and can be added to cart and bought.
+3. Set it to **Archived** (or back to Draft) → it disappears from the store, and trying to check out with it still in an old cart is **refused**.
+4. Confirm the product list tabs **All / Active / Draft / Archived** filter correctly, and there's no "Published" checkbox anywhere.

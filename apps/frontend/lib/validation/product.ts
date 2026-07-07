@@ -30,7 +30,6 @@ export const productSchema = z.object({
   product_type: z.string().optional(),
   vendor: z.string().optional(),
   tags: z.array(z.string()).optional(),
-  published: z.boolean().optional(),
 });
 
 export const stockAdjustmentSchema = z.object({

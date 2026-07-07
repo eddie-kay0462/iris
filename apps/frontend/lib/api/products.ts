@@ -55,7 +55,6 @@ export interface Product {
   category: string | null;
   vendor: string | null;
   tags: string[] | null;
-  published: boolean;
   gsm: number | null;
   seo_title: string | null;
   seo_description: string | null;
@@ -83,7 +82,6 @@ export interface ProductQueryParams {
   search?: string;
   status?: string;
   gender?: string;
-  published?: string;
   category?: string;
   product_type?: string;
   sort_by?: string;
@@ -195,17 +193,6 @@ export function useDeleteProduct() {
   return useMutation({
     mutationFn: (id: string) =>
       apiClient(`/products/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin-products"] });
-    },
-  });
-}
-
-export function usePublishProduct() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      apiClient<Product>(`/products/${id}/publish`, { method: "PATCH" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-products"] });
     },

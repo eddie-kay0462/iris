@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { ProductForm } from "../../../components/products/ProductForm";
-import { type Product, fetchAdminProduct, useDeleteProduct, usePublishProduct } from "@/lib/api/products";
+import { type Product, fetchAdminProduct, useDeleteProduct, useSetProductStatus } from "@/lib/api/products";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Loader2 } from "lucide-react";
@@ -21,10 +21,10 @@ export default function AdminProductDetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [publishing, setPublishing] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const deleteMutation = useDeleteProduct();
-  const publishMutation = usePublishProduct();
+  const setStatusMutation = useSetProductStatus();
 
   useEffect(() => {
     fetchAdminProduct(id)
@@ -70,32 +70,35 @@ export default function AdminProductDetailPage({
           </p>
           <h1 className="text-2xl font-semibold">{product.title}</h1>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={async () => {
-              if (product.status === "archived") {
-                toast.error("Archived products cannot be published. Change the status to Active first.", { duration: 6000 });
-                return;
-              }
-              setPublishing(true);
-              try {
-                await publishMutation.mutateAsync(product.id);
-                const updated = await fetchAdminProduct(id);
-                setProduct(updated);
-                toast.success(updated.published ? "Product published" : "Product unpublished");
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Failed to update publish status", { duration: 6000 });
-              } finally {
-                setPublishing(false);
-              }
-            }}
-            disabled={publishing || product.status === "archived"}
-            title={product.status === "archived" ? "Change status to Active before publishing" : undefined}
-            className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {publishing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {product.published ? "Unpublish" : "Publish"}
-          </button>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex items-center gap-2">
+            {updatingStatus && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
+            <select
+              value={product.status}
+              disabled={updatingStatus}
+              onChange={async (e) => {
+                const status = e.target.value as "draft" | "active" | "archived";
+                if (status === product.status) return;
+                setUpdatingStatus(true);
+                try {
+                  await setStatusMutation.mutateAsync({ id: product.id, status });
+                  const updated = await fetchAdminProduct(id);
+                  setProduct(updated);
+                  const label = status === "active" ? "Active — now live on the site" : status === "draft" ? "Draft — hidden from the site" : "Archived — hidden from the site";
+                  toast.success(`Status set to ${label}`);
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Failed to update status", { duration: 6000 });
+                } finally {
+                  setUpdatingStatus(false);
+                }
+              }}
+              className="rounded-md border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="draft">Draft</option>
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
           <button
             onClick={async () => {
               if (confirm("Delete this product?")) {

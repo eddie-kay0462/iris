@@ -103,7 +103,7 @@ BEGIN
   JOIN drops d ON d.id = dp.drop_id
   WHERE d.handle = drop_handle
     AND d.is_active = true
-    AND p.published = true
+    AND p.status = 'active'
     AND p.deleted_at IS NULL
   ORDER BY dp.sort_order, p.created_at DESC;
 END;
@@ -122,7 +122,7 @@ BEGIN
     p.id, p.handle, p.title, p.base_price, p.gender, p.product_type
   FROM products p
   WHERE p.gender = target_gender
-    AND p.published = true
+    AND p.status = 'active'
     AND p.deleted_at IS NULL
   ORDER BY p.created_at DESC;
 END;
@@ -864,11 +864,10 @@ CREATE TABLE IF NOT EXISTS "public"."products" (
     "title" "text" NOT NULL,
     "description" "text",
     "base_price" numeric(10,2),
-    "status" "text" DEFAULT 'active'::"text",
+    "status" "text" DEFAULT 'draft'::"text",
     "vendor" "text",
     "product_type" "text",
     "tags" "text"[],
-    "published" boolean DEFAULT true,
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "gender" "text",
@@ -1530,10 +1529,6 @@ CREATE INDEX "idx_products_product_type_idx" ON "public"."products" USING "btree
 
 
 
-CREATE INDEX "idx_products_published" ON "public"."products" USING "btree" ("published");
-
-
-
 CREATE INDEX "idx_products_status" ON "public"."products" USING "btree" ("status");
 
 
@@ -2004,17 +1999,17 @@ CREATE POLICY "Public collections are viewable by everyone" ON "public"."collect
 
 CREATE POLICY "Public images are viewable by everyone" ON "public"."product_images" FOR SELECT USING ((EXISTS ( SELECT 1
    FROM "public"."products"
-  WHERE (("products"."id" = "product_images"."product_id") AND ("products"."published" = true)))));
+  WHERE (("products"."id" = "product_images"."product_id") AND ("products"."status" = 'active')))));
 
 
 
-CREATE POLICY "Public products are viewable by everyone" ON "public"."products" FOR SELECT USING (("published" = true));
+CREATE POLICY "Public products are viewable by everyone" ON "public"."products" FOR SELECT USING (("status" = 'active'));
 
 
 
 CREATE POLICY "Public variants are viewable by everyone" ON "public"."product_variants" FOR SELECT USING ((EXISTS ( SELECT 1
    FROM "public"."products"
-  WHERE (("products"."id" = "product_variants"."product_id") AND ("products"."published" = true)))));
+  WHERE (("products"."id" = "product_variants"."product_id") AND ("products"."status" = 'active')))));
 
 
 

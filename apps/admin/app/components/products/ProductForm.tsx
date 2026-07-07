@@ -105,7 +105,6 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
       product_type: product?.product_type || "",
       vendor: product?.vendor || "",
       tags: product?.tags || [],
-      published: product?.published ?? false,
       gsm: (product?.gsm ?? "") as unknown as number,
       seo_title: product?.seo_title || "",
       seo_description: product?.seo_description || "",
@@ -433,10 +432,10 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
               <option value="active">Active</option>
               <option value="archived">Archived</option>
             </select>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" {...register("published")} />
-              Published
-            </label>
+            <p className="text-xs text-slate-500">
+              Only <span className="font-medium">Active</span> products appear on the site and can be purchased.
+              Draft and archived products are hidden.
+            </p>
           </div>
 
           {/* Organization */}

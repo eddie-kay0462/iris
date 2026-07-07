@@ -84,7 +84,7 @@ export class ProductsService {
         '*, product_variants(*), product_images(*)',
         { count: 'exact' },
       )
-      .eq('published', true)
+      .eq('status', 'active')
       .is('deleted_at', null);
 
     if (query.search) {
@@ -126,7 +126,7 @@ export class ProductsService {
     let q = db
       .from('products')
       .select('*, product_variants(*), product_images(*)')
-      .eq('published', true)
+      .eq('status', 'active')
       .is('deleted_at', null);
 
     if (isUuid) {
@@ -163,11 +163,6 @@ export class ProductsService {
     }
     if (query.gender) {
       q = q.eq('gender', query.gender);
-    }
-    if (query.published === 'true') {
-      q = q.eq('published', true);
-    } else if (query.published === 'false') {
-      q = q.eq('published', false);
     }
     if (query.vendor) {
       q = q.eq('vendor', query.vendor);
@@ -283,22 +278,6 @@ export class ProductsService {
 
     if (error) throw error;
     return { message: 'Product deleted' };
-  }
-
-  async togglePublish(id: string) {
-    const db = this.supabase.getAdminClient();
-    const product = await this.findOneAdmin(id);
-
-    const { error } = await db
-      .from('products')
-      .update({
-        published: !product.published,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id);
-
-    if (error) throw error;
-    return this.findOneAdmin(id);
   }
 
   // --- Variants ---
