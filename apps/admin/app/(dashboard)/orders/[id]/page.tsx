@@ -7,9 +7,18 @@ import {
   useUpdateOrderStatus,
   type OrderStatusHistory,
 } from "@/lib/api/orders";
+import type { Preorder } from "@/lib/api/preorders";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { StatusBadge } from "../../../components/StatusBadge";
+import {
+  PreorderStatusBadge,
+  PreorderSourceBadge,
+  RestockModal,
+  RefundModal,
+  ResendConfirmationModal,
+  PreorderActionsMenu,
+} from "../../../components/preorders/PreorderControls";
 
 const STATUS_OPTIONS = [
   "pending",
@@ -34,6 +43,9 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
   const [notes, setNotes] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
   const [carrier, setCarrier] = useState("");
+  const [restockTarget, setRestockTarget] = useState<Preorder | null>(null);
+  const [refundTarget, setRefundTarget] = useState<Preorder | null>(null);
+  const [resendTarget, setResendTarget] = useState<Preorder | null>(null);
 
   if (isLoading) {
     return (
@@ -68,6 +80,8 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
   }
 
   const shipping = order.shipping_address;
+  const preorders = order.preorders || [];
+  const isPopup = order.is_popup_preorder === true;
   const timeline = (order.order_status_history || []).sort(
     (a: OrderStatusHistory, b: OrderStatusHistory) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
@@ -81,8 +95,26 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{order.order_number}</h1>
-          <div className="mt-1 flex items-center gap-3">
-            <StatusBadge status={order.status} />
+          <div className="mt-1 flex flex-wrap items-center gap-3">
+            {isPopup ? (
+              <PreorderStatusBadge status={order.status as Preorder["status"]} />
+            ) : (
+              <StatusBadge status={order.status} />
+            )}
+            {isPopup ? (
+              <span className="inline-flex items-center gap-1.5">
+                <PreorderSourceBadge source="popup" />
+                <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                  Pre-order
+                </span>
+              </span>
+            ) : (
+              order.contains_preorders && (
+                <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                  Contains pre-orders
+                </span>
+              )
+            )}
             <span className="text-sm text-slate-500">
               {new Date(order.created_at).toLocaleString()}
             </span>
@@ -95,6 +127,13 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
         <div className="lg:col-span-2 space-y-6">
           <div className="rounded-lg border border-slate-200 p-4">
             <h2 className="mb-3 font-semibold">Items</h2>
+            {preorders.length > 0 && (
+              <p className="mb-3 rounded-md border-l-2 border-purple-300 bg-purple-50 px-3 py-2 text-xs text-purple-800">
+                This order includes pre-order items — not yet in stock. They ship
+                separately once restocked. Use the row menu to allocate stock,
+                fulfill, refund, or notify the customer.
+              </p>
+            )}
             <table className="w-full text-sm">
               <thead className="text-left text-slate-500">
                 <tr>
@@ -102,6 +141,7 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
                   <th className="pb-2">Qty</th>
                   <th className="pb-2 text-right">Unit Price</th>
                   <th className="pb-2 text-right">Total</th>
+                  {preorders.length > 0 && <th className="pb-2" />}
                 </tr>
               </thead>
               <tbody>
@@ -123,6 +163,36 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
                     <td className="py-2 text-right">
                       GH₵{Number(item.total_price).toLocaleString()}
                     </td>
+                    {preorders.length > 0 && <td />}
+                  </tr>
+                ))}
+                {preorders.map((pre) => (
+                  <tr key={pre.id} className="border-t border-slate-100 bg-purple-50/40">
+                    <td className="py-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>{pre.product_name}</span>
+                        {pre.variant_title && (
+                          <span className="text-slate-400">({pre.variant_title})</span>
+                        )}
+                        <PreorderStatusBadge status={pre.status} />
+                        <PreorderSourceBadge source={pre.source} />
+                      </div>
+                    </td>
+                    <td className="py-2">{pre.quantity}</td>
+                    <td className="py-2 text-right">
+                      GH₵{Number(pre.unit_price).toLocaleString()}
+                    </td>
+                    <td className="py-2 text-right">
+                      GH₵{(Number(pre.unit_price) * pre.quantity).toLocaleString()}
+                    </td>
+                    <td className="py-2 text-right">
+                      <PreorderActionsMenu
+                        preorder={pre}
+                        onRestock={() => setRestockTarget(pre)}
+                        onRefund={() => setRefundTarget(pre)}
+                        onResendConfirmation={() => setResendTarget(pre)}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -134,12 +204,14 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
                   <td className="py-2 text-right">
                     GH₵{Number(order.total).toLocaleString()}
                   </td>
+                  {preorders.length > 0 && <td />}
                 </tr>
               </tfoot>
             </table>
           </div>
 
-          {/* Status update */}
+          {/* Status update — only for real orders (popup groups have no orders row) */}
+          {!isPopup && (
           <div className="rounded-lg border border-slate-200 p-4">
             <h2 className="mb-3 font-semibold">Update Status</h2>
             <div className="space-y-3">
@@ -193,6 +265,7 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
               />
             </div>
           </div>
+          )}
 
           {/* Status timeline */}
           {timeline.length > 0 && (
@@ -262,7 +335,13 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
           {/* Customer */}
           <div className="rounded-lg border border-slate-200 p-4">
             <h2 className="mb-3 font-semibold">Customer</h2>
-            <p className="text-sm">{order.email}</p>
+            {order.customer_name && (
+              <p className="text-sm font-medium">{order.customer_name}</p>
+            )}
+            {order.email && <p className="text-sm">{order.email}</p>}
+            {isPopup && preorders[0]?.customer_phone && (
+              <p className="text-sm text-slate-600">{preorders[0].customer_phone}</p>
+            )}
             {order.payment_reference && (
               <p className="mt-1 text-xs text-slate-400">
                 Ref: {order.payment_reference}
@@ -301,6 +380,17 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
           )}
         </div>
       </div>
+
+      {/* Pre-order action modals */}
+      {restockTarget && (
+        <RestockModal preorder={restockTarget} onClose={() => setRestockTarget(null)} />
+      )}
+      {refundTarget && (
+        <RefundModal preorder={refundTarget} onClose={() => setRefundTarget(null)} />
+      )}
+      {resendTarget && (
+        <ResendConfirmationModal preorder={resendTarget} onClose={() => setResendTarget(null)} />
+      )}
     </section>
   );
 }

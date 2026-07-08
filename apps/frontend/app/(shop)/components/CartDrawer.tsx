@@ -167,7 +167,7 @@ export default function CartDrawer() {
 
                     {item.isPreorder && (
                       <span className="mt-1 inline-flex w-fit items-center gap-1 border border-[#111] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#111] dark:border-[#ededed] dark:text-[#ededed]">
-                        Pre-order · ships when restocked
+                        Pre-order · ships in 10-15 working days
                       </span>
                     )}
 

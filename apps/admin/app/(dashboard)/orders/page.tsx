@@ -10,8 +10,13 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { SearchInput } from "../../components/SearchInput";
 import { Pagination } from "../../components/Pagination";
 import { StatsCard } from "../../components/StatsCard";
-import { Download, DollarSign, Clock, RotateCcw, CreditCard } from "lucide-react";
+import { Download, DollarSign, Clock, RotateCcw, CreditCard, Package } from "lucide-react";
 import { getToken } from "@/lib/api/client";
+import {
+  PreorderStatusBadge,
+  PreorderSourceBadge,
+} from "../../components/preorders/PreorderControls";
+import type { PreorderStatus } from "@/lib/api/preorders";
 
 function fmt(n: number) {
   return `GH₵${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -72,9 +77,15 @@ export default function AdminOrdersPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [preordersOnly, setPreordersOnly] = useState(false);
   const [page, setPage] = useState(1);
 
-  const { data, isLoading } = useAdminOrders({ search, status, page });
+  const { data, isLoading } = useAdminOrders({
+    search,
+    status,
+    has_preorders: preordersOnly ? "true" : undefined,
+    page,
+  });
   const updateStatus = useUpdateOrderStatus();
   const { data: payStats } = usePaymentStats();
 
@@ -83,14 +94,38 @@ export default function AdminOrdersPage() {
   }
 
   const columns: Column<Order>[] = [
-    { key: "order_number", header: "Order" },
-    { key: "email", header: "Customer" },
+    {
+      key: "order_number",
+      header: "Order",
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{row.order_number}</span>
+          {row.is_popup_preorder ? (
+            <PreorderSourceBadge source="popup" />
+          ) : (
+            row.contains_preorders && (
+              <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                Pre-order
+              </span>
+            )
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "email",
+      header: "Customer",
+      render: (row) => row.email || row.customer_name || "—",
+    },
     {
       key: "status",
       header: "Status",
-      render: (row) => (
-        <StatusDropdown order={row} onUpdate={handleStatusUpdate} />
-      ),
+      render: (row) =>
+        row.is_popup_preorder ? (
+          <PreorderStatusBadge status={row.status as PreorderStatus} />
+        ) : (
+          <StatusDropdown order={row} onUpdate={handleStatusUpdate} />
+        ),
     },
     {
       key: "total",
@@ -136,7 +171,7 @@ export default function AdminOrdersPage() {
       </header>
 
       {payStats && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatsCard
             label="Total Collected"
             value={fmt(payStats.totalCollected)}
@@ -148,6 +183,12 @@ export default function AdminOrdersPage() {
             value={fmt(payStats.totalPending)}
             icon={Clock}
             helperText="Awaiting confirmation"
+          />
+          <StatsCard
+            label="Pre-orders Pending"
+            value={fmt(payStats.preordersPending)}
+            icon={Package}
+            helperText="Awaiting fulfillment"
           />
           <StatsCard
             label="Refunded"
@@ -189,6 +230,21 @@ export default function AdminOrdersPage() {
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          onClick={() => {
+            setPreordersOnly((v) => !v);
+            setPage(1);
+          }}
+          className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+            preordersOnly
+              ? "border-purple-300 bg-purple-50 text-purple-700"
+              : "border-slate-200 text-slate-700 hover:bg-slate-50"
+          }`}
+        >
+          <Package className="h-4 w-4" />
+          Pre-orders
+        </button>
       </div>
 
       <DataTable

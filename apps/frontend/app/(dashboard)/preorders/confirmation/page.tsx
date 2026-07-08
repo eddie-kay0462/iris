@@ -83,7 +83,7 @@ function PreorderConfirmationContent() {
       </p>
 
       <p className="mt-4 text-sm text-[#59626E] leading-relaxed">
-        We&apos;ll notify you as soon as your item is ready. Thank you for pre-ordering with 1NRI.
+        We expect to reach out within 10-15 working days once your item is ready. Thank you for pre-ordering with 1NRI.
       </p>
 
       <div className="mt-8 border border-black/10 p-5 text-left">

@@ -26,6 +26,8 @@ export interface PaymentStats {
   totalCollected: number;
   totalPending: number;
   totalRefunded: number;
+  /** Value of pre-orders still awaiting fulfillment (pending + stock_held). */
+  preordersPending: number;
   transactionCount: number;
 }
 

@@ -197,10 +197,22 @@ export class PaymentsService {
       .filter((r) => r.payment_status === 'refunded')
       .reduce((sum, r) => sum + Number(r.total), 0);
 
+    // Value of pre-orders still awaiting fulfillment (both online and popup).
+    // This is money owed to the customer as product — surfaced as its own card
+    // so the pending picture isn't limited to unpaid order balances.
+    const { data: preorders } = await db
+      .from('preorders')
+      .select('status, unit_price, quantity');
+
+    const preordersPending = (preorders || [])
+      .filter((r) => r.status === 'pending' || r.status === 'stock_held')
+      .reduce((sum, r) => sum + Number(r.unit_price) * r.quantity, 0);
+
     return {
       totalCollected,
       totalPending,
       totalRefunded,
+      preordersPending,
       transactionCount: rows.length,
     };
   }

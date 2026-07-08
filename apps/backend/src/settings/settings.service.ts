@@ -320,7 +320,7 @@ const DEFAULT_ORDER_NUMBER_START = 1001;
 const DEFAULT_ROAD_TO_HQ_BASELINE = 0;
 const DEFAULT_ROAD_TO_HQ_TARGET = 6000;
 
-const DEFAULT_PREORDER_ETA_TEXT = '2-3 weeks';
+const DEFAULT_PREORDER_ETA_TEXT = '10-15 working days';
 
 const ROLE_DESCRIPTIONS: Record<string, string> = {
   admin: 'Full access to all settings, users, and data.',

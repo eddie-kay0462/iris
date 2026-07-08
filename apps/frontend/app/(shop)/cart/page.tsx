@@ -74,7 +74,7 @@ export default function CartPage() {
                 )}
                 {item.isPreorder && (
                   <span className="mt-1 inline-flex w-fit items-center border border-black px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-black dark:border-white dark:text-white">
-                    Pre-order · ships when restocked
+                    Pre-order · ships in 10-15 working days
                   </span>
                 )}
               </div>

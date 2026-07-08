@@ -44,7 +44,7 @@ export class EmailService {
       total_price: number;
     }[];
   }): Promise<void> {
-    const subject = `Order Confirmed — ${order.order_number}`;
+    const subject = `Order Confirmed - ${order.order_number}`;
     const html = this.buildOrderConfirmationHtml(order);
     await this.send(order.email, subject, html, order.order_number);
   }
@@ -74,7 +74,7 @@ export class EmailService {
   }): Promise<void> {
     const staffEmail = this.configService.get<string>('STAFF_FULFILLMENT_EMAIL', '');
     if (!staffEmail) return;
-    const subject = `New Order — ${order.order_number}`;
+    const subject = `New Order - ${order.order_number}`;
     const html = this.buildStaffOrderHtml(order);
     await this.send(staffEmail, subject, html, order.order_number);
   }
@@ -94,7 +94,7 @@ export class EmailService {
       total_price: number;
     }[];
   }): Promise<void> {
-    const subject = `Purchase Confirmed — ${sale.order_number}`;
+    const subject = `Purchase Confirmed - ${sale.order_number}`;
     const html = this.buildAllySaleConfirmationHtml(sale);
     await this.send(sale.email, subject, html, sale.order_number);
   }
@@ -125,7 +125,7 @@ export class EmailService {
     payment_method?: string | null;
     brand?: string;
   }): Promise<void> {
-    const subject = `Pop-up Order — ${order.order_number}`;
+    const subject = `Pop-up Order - ${order.order_number}`;
     const html = this.buildPopupOrderSummaryHtml(order);
     await this.send(order.email, subject, html, order.order_number);
   }
@@ -140,7 +140,7 @@ export class EmailService {
     etaText: string;
     brand?: string;
   }): Promise<void> {
-    const subject = `Pre-order Confirmed — ${order.order_number}`;
+    const subject = `Pre-order Confirmed - ${order.order_number}`;
     const html = this.buildPreorderConfirmationHtml(order);
     await this.send(order.email, subject, html, order.order_number);
   }
@@ -155,7 +155,7 @@ export class EmailService {
     etaText: string;
     brand?: string;
   }): Promise<void> {
-    const subject = `Pre-order Confirmed — ${order.order_number}`;
+    const subject = `Pre-order Confirmed - ${order.order_number}`;
     const html = this.buildPreorderConfirmationHtml(order);
     await this.send(order.email, subject, html, order.order_number);
   }
@@ -189,7 +189,7 @@ export class EmailService {
   ): Promise<void> {
     if (!this.isConfigured()) {
       this.logger.warn(
-        `RESEND_API_KEY not set — skipping email for order ${orderId}`,
+        `RESEND_API_KEY not set - skipping email for order ${orderId}`,
       );
       return;
     }
@@ -277,7 +277,7 @@ export class EmailService {
         (item) => `
         <tr>
           <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;">
-            ${item.product_name}${item.variant_title ? ` — ${item.variant_title}` : ''}${item.quantity > 1 ? ` × ${item.quantity}` : ''}
+            ${item.product_name}${item.variant_title ? ` - ${item.variant_title}` : ''}${item.quantity > 1 ? ` × ${item.quantity}` : ''}
           </td>
           <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;text-align:right;white-space:nowrap;">
             ${symbol} ${item.total_price.toLocaleString()}
@@ -298,7 +298,7 @@ export class EmailService {
         </td></tr>
         <tr><td style="padding:32px;">
           <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111;">Order Confirmed!</h1>
-          <p style="margin:0 0 24px;font-size:14px;color:#666;">Order <strong>${order.order_number}</strong> — Thank you for your purchase.</p>
+          <p style="margin:0 0 24px;font-size:14px;color:#666;">Order <strong>${order.order_number}</strong> - Thank you for your purchase.</p>
 
           <table width="100%" cellpadding="0" cellspacing="0">
             ${itemRows}
@@ -372,7 +372,7 @@ export class EmailService {
         (item) => `
         <tr>
           <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#111;">
-            ${item.product_name}${item.variant_title ? ` — ${item.variant_title}` : ''}
+            ${item.product_name}${item.variant_title ? ` - ${item.variant_title}` : ''}
           </td>
           <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#111;text-align:center;">
             ${item.quantity}
@@ -403,13 +403,13 @@ export class EmailService {
             <tr>
               <td width="50%" style="vertical-align:top;padding-right:16px;">
                 <p style="margin:0 0 6px;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#999;">Customer</p>
-                <p style="margin:0;font-size:14px;color:#111;">${addr.fullName || '—'}</p>
+                <p style="margin:0;font-size:14px;color:#111;">${addr.fullName || '-'}</p>
                 <p style="margin:2px 0 0;font-size:14px;color:#555;">${order.email}</p>
                 ${addr.phone ? `<p style="margin:2px 0 0;font-size:14px;color:#555;">${addr.phone}</p>` : ''}
               </td>
               <td width="50%" style="vertical-align:top;">
                 <p style="margin:0 0 6px;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#999;">Ship to</p>
-                <p style="margin:0;font-size:14px;color:#111;line-height:1.5;">${addressLines || '—'}</p>
+                <p style="margin:0;font-size:14px;color:#111;line-height:1.5;">${addressLines || '-'}</p>
               </td>
             </tr>
           </table>
@@ -473,7 +473,7 @@ export class EmailService {
         (item) => `
         <tr>
           <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;">
-            ${item.product_name}${item.variant_title ? ` — ${item.variant_title}` : ''}${item.quantity > 1 ? ` × ${item.quantity}` : ''}
+            ${item.product_name}${item.variant_title ? ` - ${item.variant_title}` : ''}${item.quantity > 1 ? ` × ${item.quantity}` : ''}
           </td>
           <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;text-align:right;white-space:nowrap;">
             ${symbol} ${item.total_price.toLocaleString()}
@@ -495,7 +495,7 @@ export class EmailService {
         <tr><td style="padding:32px;">
           <p style="margin:0 0 4px;font-size:14px;color:#666;">${greeting}</p>
           <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111;">Thank you for your purchase!</h1>
-          <p style="margin:0 0 24px;font-size:14px;color:#666;">Order <strong>${sale.order_number}</strong> — your payment has been received.</p>
+          <p style="margin:0 0 24px;font-size:14px;color:#666;">Order <strong>${sale.order_number}</strong> - your payment has been received.</p>
 
           <table width="100%" cellpadding="0" cellspacing="0">
             ${itemRows}
@@ -586,7 +586,7 @@ export class EmailService {
     const itemRows = order.items.map((item) => `
       <tr>
         <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;">
-          ${item.product_name}${item.variant_title ? ` — ${item.variant_title}` : ''}${item.quantity > 1 ? ` × ${item.quantity}` : ''}
+          ${item.product_name}${item.variant_title ? ` - ${item.variant_title}` : ''}${item.quantity > 1 ? ` × ${item.quantity}` : ''}
         </td>
         <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;text-align:right;white-space:nowrap;">
           GH₵ ${item.total_price.toFixed(2)}
@@ -609,7 +609,7 @@ export class EmailService {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Pop-up Order — ${order.order_number}</title>
+  <title>Pop-up Order - ${order.order_number}</title>
 </head>
 <body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f4f4f5;padding:32px 0;">
@@ -685,7 +685,7 @@ export class EmailService {
     const itemRows = order.items.map((item) => `
       <tr>
         <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;">
-          ${item.product_name}${item.variant_title ? ` — ${item.variant_title}` : ''}
+          ${item.product_name}${item.variant_title ? ` - ${item.variant_title}` : ''}
         </td>
         <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;text-align:right;white-space:nowrap;">
           × ${item.quantity}
@@ -697,7 +697,7 @@ export class EmailService {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Pre-order Confirmed — ${order.order_number}</title>
+  <title>Pre-order Confirmed - ${order.order_number}</title>
 </head>
 <body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f4f4f5;padding:32px 0;">
@@ -737,7 +737,7 @@ export class EmailService {
             <tr>
               <td style="background:#f9fafb;border-radius:8px;padding:16px;">
                 <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#111;">What happens next?</p>
-                <p style="margin:0;font-size:13px;color:#666;line-height:1.6;">We expect to reach out within ${order.etaText} once your item is ready for collection or dispatch. Keep an eye on your phone — we'll send you a message when your order is confirmed.</p>
+                <p style="margin:0;font-size:13px;color:#666;line-height:1.6;">We expect to reach out within ${order.etaText} once your item is ready for collection or dispatch. Keep an eye on your phone - we'll send you a message when your order is confirmed.</p>
               </td>
             </tr>
           </table>
@@ -788,7 +788,7 @@ export class EmailService {
         <tr>
           <td width="56" style="padding:12px 0;vertical-align:top;">${thumb}</td>
           <td style="padding:12px 0 12px 14px;vertical-align:top;font-size:14px;color:#333;">
-            ${item.product_name}${item.variant_title ? ` — ${item.variant_title}` : ''}
+            ${item.product_name}${item.variant_title ? ` - ${item.variant_title}` : ''}
             <span style="color:#999;">× ${item.quantity}</span>
           </td>
           <td style="padding:12px 0;vertical-align:top;font-size:14px;color:#333;text-align:right;white-space:nowrap;">

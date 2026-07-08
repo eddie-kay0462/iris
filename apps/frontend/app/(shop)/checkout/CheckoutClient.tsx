@@ -749,7 +749,7 @@ export default function CheckoutClient() {
                 Your order includes pre-order items
               </p>
               Items marked <strong>Pre-order</strong> aren&apos;t in stock yet. You&apos;re charged
-              today and they ship separately once restocked — the rest of your order ships as usual.
+              today and they ship separately within 10-15 working days, the rest of your order ships as usual.
             </div>
           )}
 
@@ -862,7 +862,7 @@ export default function CheckoutClient() {
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500 dark:text-gray-400">Taxes</span>
-              <span className="text-gray-900 dark:text-white">Included</span>
+              <span className="text-gray-900 dark:text-white">Prices are VAT Inclusive</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500 dark:text-gray-400">
