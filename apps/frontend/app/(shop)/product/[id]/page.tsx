@@ -609,7 +609,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
                       ? `Only ${active!.inventory_quantity} left`
                       : "In stock"
                     : canPreorder
-                      ? "Pre-order - ships when restocked"
+                      ? "Pre-order - ships in 10-15 working days"
                       : "Out of stock"}
                 </span>
               </>

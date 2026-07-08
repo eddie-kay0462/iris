@@ -245,8 +245,8 @@ function ConfirmationContent() {
         <div className="mt-12">
           <div className={`${sectionLabelCls} mb-3`}>Pre-order Items</div>
           <div className="mb-1 border-l-2 border-[#111] bg-[#f5f5f5] px-4 py-3 text-[12px] leading-[1.5] text-[#666] dark:border-[#ededed] dark:bg-[#111] dark:text-neutral-400">
-            These aren&apos;t in stock yet - they ship separately once restocked. We&apos;ll notify
-            you when they&apos;re on the way.
+            These aren&apos;t in stock yet - they ship separately within 10-15 working days. We&apos;ll
+            notify you when they&apos;re on the way.
           </div>
           <div className="border-t border-[#e5e5e5] dark:border-neutral-800">
             {preorders.map((pre) => (

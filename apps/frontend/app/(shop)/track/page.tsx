@@ -197,7 +197,7 @@ function OrderResult({ order }: { order: TrackingOrder }) {
         <div className={order.order_items && order.order_items.length > 0 ? "mt-8" : ""}>
           <div className={`${sectionLabelCls} mb-3`}>Pre-order Items</div>
           <div className="mb-3 border-l-2 border-[#111] dark:border-[#ededed] bg-[#f5f5f5] dark:bg-[#111] px-4 py-3 text-[12px] leading-[1.5] text-[#666] dark:text-neutral-400">
-            These aren&apos;t in stock yet — they ship separately once restocked.
+            These aren&apos;t in stock yet - they ship separately within 10-15 working days.
             We&apos;ll notify you when they&apos;re on the way.
           </div>
           <div className="border-t border-[#e5e5e5] dark:border-neutral-800">
@@ -274,7 +274,7 @@ function PreorderResult({ preorder }: { preorder: TrackingPreorder }) {
 
   const note: string | null =
     preorder.status === "pending"
-      ? "Your pre-order is reserved. We'll allocate stock and notify you the moment it arrives."
+      ? "Your pre-order is reserved. We expect to reach out within 10-15 working days once your item is ready."
       : preorder.status === "stock_held"
       ? "Stock has arrived and is being held for your pre-order. Our team will reach out to arrange delivery."
       : preorder.status === "fulfilled"
