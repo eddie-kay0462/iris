@@ -50,6 +50,7 @@ export interface Order {
   discount: number;
   shipping_cost: number;
   tax: number;
+  processing_fee: number;
   total: number;
   currency: string;
   shipping_address: {

@@ -44,10 +44,12 @@ function ItemRow({
 function Totals({
   subtotal,
   shippingCost,
+  processingFee,
   total,
 }: {
   subtotal: number;
   shippingCost: number;
+  processingFee: number;
   total: number;
 }) {
   const line =
@@ -61,6 +63,10 @@ function Totals({
       <div className={line}>
         <span className="font-mono uppercase tracking-[0.1em]">Shipping</span>
         <span className="tabular-nums">{fmt(shippingCost)}</span>
+      </div>
+      <div className={line}>
+        <span className="font-mono uppercase tracking-[0.1em]">Fees (1.95%)</span>
+        <span className="tabular-nums">{fmt(processingFee)}</span>
       </div>
       <div className="flex items-center justify-between border-t border-[#e5e5e5] dark:border-neutral-800 pt-3 text-[13px] font-semibold text-[#111] dark:text-[#ededed]">
         <span className="uppercase tracking-[0.04em]">Total</span>
@@ -202,6 +208,7 @@ function ConfirmationContent() {
 
   const subtotal = order.subtotal ?? 0;
   const shippingCost = order.shipping_cost ?? 0;
+  const processingFee = order.processing_fee ?? 0;
   const total = order.total ?? 0;
   const preorders = order.preorders ?? [];
   const items = order.order_items ?? [];
@@ -260,7 +267,7 @@ function ConfirmationContent() {
             ))}
           </div>
           {onlyPreorders && (
-            <Totals subtotal={subtotal} shippingCost={shippingCost} total={total} />
+            <Totals subtotal={subtotal} shippingCost={shippingCost} processingFee={processingFee} total={total} />
           )}
         </div>
       )}
@@ -280,7 +287,7 @@ function ConfirmationContent() {
               />
             ))}
           </div>
-          <Totals subtotal={subtotal} shippingCost={shippingCost} total={total} />
+          <Totals subtotal={subtotal} shippingCost={shippingCost} processingFee={processingFee} total={total} />
         </div>
       )}
 

@@ -56,6 +56,11 @@ function StockHoldTimer({ expiresAt }: { expiresAt: string }) {
 }
 
 
+// Payment processing fee charged on top of the order amount. Kept in sync with the
+// backend (apps/backend/src/orders/orders.service.ts PROCESSING_FEE_RATE) so the
+// amount charged via Paystack matches the stored order total.
+const PROCESSING_FEE_RATE = 0.0195;
+
 const COUNTRY_OPTIONS = [
   { code: "GH", label: "Ghana", enabled: true },
   { code: "US", label: "United States", enabled: false },
@@ -201,7 +206,9 @@ export default function CheckoutClient() {
   const shippingCost =
     shippingOptions.find((o) => o.id === shippingOption)?.price ?? shippingOptions[0]?.price ?? 40;
   const discountAmount = appliedPromo?.discountAmount ?? 0;
-  const total = Math.max(0, subtotal + shippingCost - discountAmount);
+  const amountBeforeFees = Math.max(0, subtotal + shippingCost - discountAmount);
+  const fees = Math.round(amountBeforeFees * PROCESSING_FEE_RATE * 100) / 100;
+  const total = amountBeforeFees + fees;
 
   // Live fulfillment check: an item added while in stock can sell out before
   // payment, in which case checkout auto-converts it to a pre-order. Flag those
@@ -267,6 +274,15 @@ export default function CheckoutClient() {
     }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile]);
+
+  // Express shipping isn't offered for pre-orders (pre-ordered lines ship
+  // separately once restocked). If the cart becomes a pre-order while Express is
+  // selected, fall back to Standard so the choice stays valid.
+  useEffect(() => {
+    if (hasPreorderItems && shippingOption === "express") {
+      setShippingOption("standard");
+    }
+  }, [hasPreorderItems, shippingOption]);
 
   // Re-validate free_shipping discount when the shipping tier changes
   useEffect(() => {
@@ -860,10 +876,10 @@ export default function CheckoutClient() {
                 GH₵ {subtotal.toLocaleString()}
               </span>
             </div>
-            <div className="flex justify-between text-sm">
+            {/* <div className="flex justify-between text-sm">
               <span className="text-gray-500 dark:text-gray-400">Taxes</span>
-              <span className="text-gray-900 dark:text-white">Prices are VAT Inclusive</span>
-            </div>
+              <span className="text-gray-900 dark:text-white">Included</span>
+            </div> */}
             <div className="flex justify-between text-sm">
               <span className="text-gray-500 dark:text-gray-400">
                 Shipping/Delivery
@@ -882,15 +898,26 @@ export default function CheckoutClient() {
                 </span>
               </div>
             )}
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500 dark:text-gray-400">
+                Fees (1.95%)
+              </span>
+              <span className="text-gray-900 dark:text-white">
+                GH₵ {fees.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
             <div className="flex justify-between border-t border-gray-200 pt-3 text-sm font-semibold dark:border-gray-700">
               <span className="text-gray-900 dark:text-white">Total</span>
               <span className="text-gray-900 dark:text-white">
-                GH₵ {total.toLocaleString()}
+                GH₵ {total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              All prices are VAT inclusive.
+            </p>
             {currency !== "GHS" && rates[currency] && (
               <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
-                Exchange rate: 1 {currency} = {(1 / rates[currency]).toFixed(2)} GH₵ · You will be charged GH₵ {total.toLocaleString()}
+                Exchange rate: 1 {currency} = {(1 / rates[currency]).toFixed(2)} GH₵ · You will be charged GH₵ {total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             )}
           </div>
@@ -901,13 +928,19 @@ export default function CheckoutClient() {
               Delivery is estimated for
             </p>
             <div className="space-y-3">
-              {shippingOptions.map((option) => (
+              {shippingOptions.map((option) => {
+                // Express is unavailable when the order contains pre-order items —
+                // those lines ship separately once restocked, so it can't be honoured.
+                const disabled = option.id === "express" && hasPreorderItems;
+                return (
                 <label
                   key={option.id}
-                  className={`flex cursor-pointer items-center justify-between rounded-lg border p-4 transition ${
-                    shippingOption === option.id
-                      ? "border-gray-900 bg-white dark:border-white dark:bg-gray-800"
-                      : "border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600"
+                  className={`flex items-center justify-between rounded-lg border p-4 transition ${
+                    disabled
+                      ? "cursor-not-allowed border-gray-200 bg-gray-50 opacity-60 dark:border-gray-700 dark:bg-gray-900"
+                      : shippingOption === option.id
+                      ? "cursor-pointer border-gray-900 bg-white dark:border-white dark:bg-gray-800"
+                      : "cursor-pointer border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600"
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -916,15 +949,18 @@ export default function CheckoutClient() {
                       name="shipping"
                       value={option.id}
                       checked={shippingOption === option.id}
+                      disabled={disabled}
                       onChange={() => setShippingOption(option.id as "standard" | "express" | "pickup")}
-                      className="h-4 w-4 accent-gray-900 dark:accent-white"
+                      className="h-4 w-4 accent-gray-900 disabled:cursor-not-allowed dark:accent-white"
                     />
                     <div>
                       <p className="text-sm font-medium text-gray-900 dark:text-white">
                         {option.label}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Estimated delivery, {option.estimate}
+                        {disabled
+                          ? "Not available for pre-order items"
+                          : `Estimated delivery, ${option.estimate}`}
                       </p>
                     </div>
                   </div>
@@ -932,7 +968,8 @@ export default function CheckoutClient() {
                     GH₵ {option.price.toLocaleString()}
                   </span>
                 </label>
-              ))}
+                );
+              })}
             </div>
             {holdExpiresAt && <StockHoldTimer expiresAt={holdExpiresAt} />}
           </div>

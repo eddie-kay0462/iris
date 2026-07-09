@@ -325,6 +325,12 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
                   <dd>GH₵{Number(order.shipping_cost).toLocaleString()}</dd>
                 </div>
               )}
+              {Number(order.processing_fee) > 0 && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Fees (1.95%)</dt>
+                  <dd>GH₵{Number(order.processing_fee).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</dd>
+                </div>
+              )}
               <div className="flex justify-between border-t border-slate-100 pt-2 font-semibold">
                 <dt>Total</dt>
                 <dd>GH₵{Number(order.total).toLocaleString()}</dd>

@@ -4818,3 +4818,42 @@ We've folded everything into **one unified Orders page**. The standalone Pre-ord
 3. Open a **pop-up pre-order** (order number starts with `PRE-`) → all its items are grouped in one view, with the pre-order actions available.
 4. From an order, try **Restock & Allocate**, **Mark Fulfilled**, **Refund**, **Cancel**, and **Resend Confirmation** — and confirm the order and the top cards update afterward.
 5. On the storefront **/track** page, look up an order that includes pre-ordered items (and a `PRE-` pop-up number with several items) → confirm the pre-order items all show up neatly.
+
+---
+
+## Checkout now adds a 1.95% fee (and records it properly) (July 2026)
+
+Checkout now charges a small **1.95% fee** on top of each order (this covers the payment-processing cost). Shoppers already saw a **"Fees (1.95%)"** line at checkout, but there was a gap: the customer was *charged* the fee, yet the order we saved in our system recorded the total **without** it. That meant our order records and revenue numbers were coming out about 1.95% lower than what actually landed in the Paystack account.
+
+We've closed that gap. The saved order total now matches exactly what the customer pays, and the fee amount is stored on its own so we can always separate it back out later (e.g. if we want to see "net" revenue without the fee).
+
+**What you'll see:**
+
+- The **"Fees (1.95%)"** line now shows up everywhere an order breakdown appears — the checkout summary, the order confirmation page, the confirmation email to the customer, the staff notification email, and the admin order detail page.
+- **Revenue reporting now reflects gross** — i.e. the full amount collected including the fee. Because the fee is stored separately, we can still calculate revenue without it whenever we want.
+
+**Why it matters:** what we charge, what we record, and what Paystack collects are finally the same number — no more silent ~2% mismatch between the till and the books.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `supabase/migrations/20260709000000_add_order_processing_fee.sql` | **New** — adds a `processing_fee` column to the orders table so the fee is stored per order. |
+| `apps/backend/src/orders/orders.service.ts` | Order total is now calculated **including** the 1.95% fee, and the fee is saved on the order (both online and pending-order paths). |
+| `apps/backend/src/email/email.service.ts` | Confirmation and staff emails now show a "Fees (1.95%)" line in the totals. |
+| `apps/frontend/app/(shop)/checkout/CheckoutClient.tsx` | Tidied the fee logic to use a shared rate, and fixed a totals figure that wasn't showing decimals. |
+| `apps/frontend/app/(shop)/checkout/confirmation/page.tsx` | Order confirmation page now shows the fee line. |
+| `apps/frontend/lib/api/orders.ts`, `apps/admin/lib/api/orders.ts` | Order data now carries the `processing_fee` amount. |
+| `apps/admin/app/(dashboard)/orders/[id]/page.tsx` | Admin order detail shows the fee line in the breakdown. |
+
+> **Heads-up / action required:**
+> - The **database migration must be run before this goes live.** Until the new `processing_fee` column exists, saving a new order will fail. It hasn't been applied to any database yet.
+> - **Revenue figures will tick up ~1.95%** once this is live, because totals now include the fee. That's expected — it's gross revenue. The fee is stored separately if we ever want the "without fee" view.
+> - Not yet driven end-to-end on a live server with a real payment — that click-through check still needs doing.
+
+### How to test
+
+1. Add something to cart and go to **checkout** → confirm the **Fees (1.95%)** line and that the **Total** equals subtotal + shipping − any discount + the fee.
+2. Complete a test order → on the **confirmation page** and in the **confirmation email**, confirm the fee line appears and the total matches what was charged.
+3. In **admin → Orders → open the order** → confirm the breakdown shows the **Fees (1.95%)** line and the total matches.
+4. Sanity-check that the amount charged in **Paystack** equals the order **Total** we recorded (they should now be identical).
