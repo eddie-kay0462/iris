@@ -13,6 +13,7 @@ export interface RoadToHQ {
   online: number;
   popup: number;
   allies: number;
+  preorders: number;
   baseline: number;
   target: number;
 }

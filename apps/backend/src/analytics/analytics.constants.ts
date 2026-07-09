@@ -5,6 +5,11 @@ export const ONLINE_REVENUE_STATUSES = ['paid', 'processing', 'shipped', 'delive
 export const POPUP_REVENUE_STATUSES = ['confirmed', 'completed'];
 export const ALLY_REVENUE_STATUSES = ['completed'];
 
+// Pre-orders count toward the goal as soon as they're placed (paid), not only once
+// fulfilled — so every not-yet-cancelled/refunded status counts. Paired with a
+// payment_status = 'paid' filter so unpaid (awaiting) pre-orders are excluded.
+export const PREORDER_COUNTED_STATUSES = ['pending', 'stock_held', 'fulfilled'];
+
 // Ghana is UTC+0, so UTC day bucketing matches local business days.
 export const dayOf = (iso: string): string => iso.slice(0, 10);
 

@@ -4857,3 +4857,36 @@ We've closed that gap. The saved order total now matches exactly what the custom
 2. Complete a test order → on the **confirmation page** and in the **confirmation email**, confirm the fee line appears and the total matches what was charged.
 3. In **admin → Orders → open the order** → confirm the breakdown shows the **Fees (1.95%)** line and the total matches.
 4. Sanity-check that the amount charged in **Paystack** equals the order **Total** we recorded (they should now be identical).
+
+---
+
+## Road to HQ counts pre-orders the moment they're placed (July 2026)
+
+The **Road to HQ** unit counter on the homepage adds up every unit sold toward the goal — website orders, pop-up sales, and ally sales — plus a baseline for historical units. But **pre-orders weren't being counted at all**: a pre-ordered item lives in its own place (not as a normal order line), so it never made it into the tally, and it wouldn't have shown up until much later — if ever.
+
+Now **a pre-order counts as soon as it's placed and paid**, not when it's eventually fulfilled and shipped. So the moment a customer pays for a pre-order, the homepage counter moves.
+
+**What counts, exactly:** any **paid** pre-order that hasn't been **cancelled or refunded** — whether it's still waiting, has stock held for it, or is already fulfilled. Unpaid pre-orders (e.g. a pop-up pre-order recorded with payment still pending) don't count until they're paid, and cancelled/refunded ones drop back out. This matches how the rest of the counter already works — only real, paid sales count.
+
+**Why it matters:** the counter now reflects genuine committed demand in real time. Pre-orders are money in and a firm sale; waiting until fulfillment to count them undercounted the road to HQ.
+
+No double-counting: in-stock items and pre-order items are stored separately, so an order that mixes both has each part counted once.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/backend/src/analytics/analytics.service.ts` | The Road to HQ figure now also adds up **paid pre-order** quantities, alongside website / pop-up / ally units and the baseline. |
+| `apps/backend/src/analytics/analytics.constants.ts` | Added the list of pre-order statuses that count (pending, stock-held, fulfilled) as the single source of truth. |
+| `apps/frontend/lib/api/road-to-hq.server.ts` | The homepage data now includes a `preorders` breakdown number for consistency. |
+
+> **Heads-up:**
+> - The homepage counter refreshes a few times an hour (not instantly), so expect a short delay before a new pre-order shows up in the number.
+> - No database change needed — this only changes how the number is *calculated*.
+
+### How to test
+
+1. Note the current **Road to HQ** number on the homepage.
+2. Place (and pay for) a **pre-order** on the storefront.
+3. After the homepage refreshes (within a few minutes), the counter should go **up by the quantity ordered** — without needing to fulfil the pre-order first.
+4. **Cancel or refund** that pre-order → after the next refresh, the counter drops back down.
