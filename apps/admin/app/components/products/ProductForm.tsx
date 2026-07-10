@@ -106,6 +106,7 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
       vendor: product?.vendor || "",
       tags: product?.tags || [],
       gsm: (product?.gsm ?? "") as unknown as number,
+      hq_unit_count: product?.hq_unit_count ?? 1,
       seo_title: product?.seo_title || "",
       seo_description: product?.seo_description || "",
       is_new_arrival: product?.is_new_arrival ?? false,
@@ -578,6 +579,39 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
               />
               {errors.gsm && <p className="mt-1 text-xs text-red-500">{errors.gsm.message}</p>}
+            </div>
+            <div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={(watch("hq_unit_count") ?? 1) > 1}
+                  onChange={(e) =>
+                    setValue("hq_unit_count", e.target.checked ? 2 : 1, {
+                      shouldDirty: true,
+                    })
+                  }
+                />
+                Bundle (counts as multiple units)
+              </label>
+              {(watch("hq_unit_count") ?? 1) > 1 && (
+                <div className="mt-2">
+                  <label className="mb-1 block text-xs text-slate-500">
+                    Counts as this many units toward Road to HQ
+                  </label>
+                  <input
+                    type="number"
+                    {...register("hq_unit_count")}
+                    min={2}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                  />
+                </div>
+              )}
+              <p className="mt-1 text-xs text-slate-400">
+                Only affects the Road to HQ counter, not stock or sales reports.
+              </p>
+              {errors.hq_unit_count && (
+                <p className="mt-1 text-xs text-red-500">{errors.hq_unit_count.message}</p>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs text-slate-500">Early access start</label>

@@ -5085,3 +5085,37 @@ While in there we also **centered the 1NRI logo** at the top of every email (it 
 1. Place a **pre-order** through the site checkout. You should see three messages: the customer confirmation email, a "New Pre-order" email at `orders@1nri.store`, and a confirmation **text** to the phone number entered at checkout.
 2. Place a **normal order**. The `orders@1nri.store` "New Order" email should now show the **1NRI logo** (centered, no "IRIS" or orange badge) and match the customer email's look.
 3. Open any of these emails and confirm the logo sits **centered** at the top.
+
+---
+
+## Bundle Products Count Extra Toward Road to HQ (July 2026)
+
+Some products are bundles (like a 2-piece set), and selling one should move the Road to HQ counter by more than one. Until now every item sold counted as exactly 1, so bundles were quietly under-counting our progress.
+
+Now each product has a "counts as N units" setting. Mark a product as a bundle in the admin and choose how many units each sale should add to the goal (2 for a two-piece, 3 for a three-pack, and so on). Regular products stay at 1 and behave exactly as before.
+
+Two things worth knowing:
+
+- This multiplier **only** affects the public Road to HQ counter on the homepage. It does **not** touch stock levels, sales revenue, or any other report, so the numbers the team relies on for money and inventory stay accurate.
+- It applies across every sales channel: online orders, pop-up sales, ally sales, and pre-orders.
+
+To set it: open a product in the admin, find the **Merchandising** section, tick **"Bundle (counts as multiple units)"**, and enter the number.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `supabase/migrations/20260710193914_add_products_hq_unit_count.sql` | New database column `hq_unit_count` on products (defaults to 1) that stores how many units a product counts for. |
+| `apps/backend/src/analytics/analytics.service.ts` | The Road to HQ counter now multiplies each sale by that product's unit count. No other report was changed. |
+| `apps/backend/src/products/dto/create-product.dto.ts` | Lets the admin save the new bundle count when creating/editing a product. |
+| `apps/admin/app/components/products/ProductForm.tsx` | Added the "Bundle" checkbox + number input in the Merchandising section. |
+| `apps/admin/lib/validation/product.ts`, `apps/admin/lib/api/products.ts`, `apps/frontend/types/database.types.ts` | Wiring/validation/type updates so the new field flows through cleanly. |
+
+> **Heads-up / action required:** The database migration must be run before this goes live (it adds the new column the counter reads). If the migration hasn't been applied yet, the Road to HQ figure will error, so deploy the migration and the backend together.
+
+### How to test
+
+1. Apply the migration, then in the admin edit a product, tick **Bundle**, set it to **2**, and save.
+2. Place (or seed) a paid order of quantity 1 for that product.
+3. Check the homepage Road to HQ counter (or `GET /api/analytics/road-to-hq`) - it should go up by **2**, not 1. The counter refreshes a few times an hour, so allow a short delay.
+4. Confirm other reports (e.g. top products) still show the real quantity of 1 for that product - only Road to HQ is weighted.

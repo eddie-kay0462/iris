@@ -163,6 +163,7 @@ export type Database = {
           product_type: string | null
           vendor: string | null
           tags: string[] | null
+          hq_unit_count: number
           created_at: string | null
           updated_at: string | null
           deleted_at: string | null
@@ -180,6 +181,7 @@ export type Database = {
           product_type?: string | null
           vendor?: string | null
           tags?: string[] | null
+          hq_unit_count?: number
           created_at?: string | null
           updated_at?: string | null
           deleted_at?: string | null
@@ -197,6 +199,7 @@ export type Database = {
           product_type?: string | null
           vendor?: string | null
           tags?: string[] | null
+          hq_unit_count?: number
           created_at?: string | null
           updated_at?: string | null
           deleted_at?: string | null

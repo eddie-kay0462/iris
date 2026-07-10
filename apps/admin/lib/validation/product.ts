@@ -41,6 +41,11 @@ export const productSchema = z.object({
     (val) => (val === "" || val === null || val === undefined ? undefined : Number(val)),
     z.number().int().min(100, "Min 100gsm").max(500, "Max 500gsm").optional()
   ),
+  // Units each sold unit counts toward Road to HQ (bundles > 1). Defaults to 1.
+  hq_unit_count: z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? 1 : Number(val)),
+    z.number().int().min(1, "Must be at least 1").optional()
+  ),
   seo_title: z.string().optional(),
   seo_description: z.string().optional(),
   is_new_arrival: z.boolean().optional(),
