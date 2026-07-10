@@ -257,39 +257,68 @@ export class PreordersService {
   }
 
   async sendPreorderNotifications(
-    preorder: { id: string; order_number: string; customer_email: string | null; user_id: string | null; product_name: string; variant_title: string | null; quantity: number; unit_price: number; payment_method: string; payment_status: string },
+    preorder: { id: string; order_number: string; customer_email: string | null; customer_name?: string | null; customer_phone?: string | null; user_id: string | null; product_name: string; variant_title: string | null; quantity: number; unit_price: number; payment_method: string; payment_status: string },
     notify?: { email?: boolean; sms?: boolean },
   ): Promise<void> {
     const etaText = await this.settingsService.getPreorderEtaText();
     const db = this.supabase.getAdminClient();
 
     if (notify?.email !== false && preorder.customer_email) {
+      const items = [
+        {
+          product_name: preorder.product_name,
+          variant_title: preorder.variant_title,
+          quantity: preorder.quantity,
+          price: preorder.unit_price,
+        },
+      ];
       await this.emailService.sendPreorderConfirmation({
         email: preorder.customer_email,
+        customer_name: preorder.customer_name ?? null,
         order_number: preorder.order_number,
-        items: [
-          {
-            product_name: preorder.product_name,
-            variant_title: preorder.variant_title,
-            quantity: preorder.quantity,
-            price: preorder.unit_price,
-          },
-        ],
+        items,
         payment_method: preorder.payment_method,
         payment_status: preorder.payment_status,
         etaText,
       });
+
+      // Fulfilment notification to orders@1nri.store — fire and forget so a
+      // staff-mail failure never blocks the customer confirmation.
+      this.emailService
+        .sendStaffPreorderNotification({
+          order_number: preorder.order_number,
+          email: preorder.customer_email,
+          customer_name: preorder.customer_name ?? null,
+          customer_phone: preorder.customer_phone ?? null,
+          payment_status: preorder.payment_status,
+          etaText,
+          items: [
+            {
+              product_name: preorder.product_name,
+              variant_title: preorder.variant_title,
+              quantity: preorder.quantity,
+              unit_price: preorder.unit_price,
+            },
+          ],
+        })
+        .catch(() => {});
     }
 
-    if (notify?.sms !== false && preorder.user_id) {
-      const { data: profile } = await db
-        .from('profiles')
-        .select('phone_number')
-        .eq('id', preorder.user_id)
-        .single();
-      if (profile?.phone_number) {
+    // Resolve the customer's phone: prefer the number captured at checkout,
+    // then fall back to the account profile (mirrors sendConfirmation).
+    if (notify?.sms !== false) {
+      let phone = preorder.customer_phone ?? null;
+      if (!phone && preorder.user_id) {
+        const { data: profile } = await db
+          .from('profiles')
+          .select('phone_number')
+          .eq('id', preorder.user_id)
+          .single();
+        phone = profile?.phone_number ?? null;
+      }
+      if (phone) {
         await this.letsfish.sendSms(
-          profile.phone_number,
+          phone,
           SMS_TEMPLATES.preorderConfirmation(preorder.order_number, etaText),
         );
       }

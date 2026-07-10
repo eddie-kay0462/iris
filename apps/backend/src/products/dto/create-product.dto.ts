@@ -2,6 +2,7 @@ import {
   IsString,
   IsOptional,
   IsNumber,
+  IsInt,
   IsBoolean,
   IsEnum,
   IsArray,
@@ -117,6 +118,12 @@ export class CreateProductDto {
   @Min(100)
   @Max(500)
   gsm?: number;
+
+  // How many units each sold unit counts toward the Road to HQ goal (bundles > 1).
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  hq_unit_count?: number;
 
   @IsOptional()
   @IsString()

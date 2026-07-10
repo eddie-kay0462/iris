@@ -74,10 +74,38 @@ export class EmailService {
       total_price: number;
     }[];
   }): Promise<void> {
-    const staffEmail = this.configService.get<string>('STAFF_FULFILLMENT_EMAIL', '');
+    const staffEmail = this.configService.get<string>(
+      'STAFF_FULFILLMENT_EMAIL',
+      'orders@1nri.store',
+    );
     if (!staffEmail) return;
     const subject = `New Order - ${order.order_number}`;
     const html = this.buildStaffOrderHtml(order);
+    await this.send(staffEmail, subject, html, order.order_number);
+  }
+
+  async sendStaffPreorderNotification(order: {
+    order_number: string;
+    email: string;
+    customer_name?: string | null;
+    customer_phone?: string | null;
+    payment_status: string;
+    etaText: string;
+    currency?: string;
+    items: {
+      product_name: string;
+      variant_title?: string | null;
+      quantity: number;
+      unit_price: number;
+    }[];
+  }): Promise<void> {
+    const staffEmail = this.configService.get<string>(
+      'STAFF_FULFILLMENT_EMAIL',
+      'orders@1nri.store',
+    );
+    if (!staffEmail) return;
+    const subject = `New Pre-order - ${order.order_number}`;
+    const html = this.buildStaffPreorderHtml(order);
     await this.send(staffEmail, subject, html, order.order_number);
   }
 
@@ -248,9 +276,9 @@ export class EmailService {
 
   private brandHeader(brand: string): string {
     if (brand === 'Unlikely Alliances') {
-      return `<p style="margin:0;font-size:20px;font-weight:700;color:#fff;font-family:Helvetica,Arial,sans-serif;letter-spacing:0.5px;">Unlikely Alliances</p>`;
+      return `<p style="margin:0;font-size:20px;font-weight:700;color:#fff;font-family:Helvetica,Arial,sans-serif;letter-spacing:0.5px;text-align:center;">Unlikely Alliances</p>`;
     }
-    return `<img src="https://storefront.1nri.store/homepage_img/no-bg-1NRI.png" alt="1NRI" width="80" style="display:block;border:0;outline:none;text-decoration:none;" />`;
+    return `<div style="text-align:center;"><img src="https://storefront.1nri.store/homepage_img/no-bg-1NRI.png" alt="1NRI" width="80" style="display:inline-block;border:0;outline:none;text-decoration:none;" /></div>`;
   }
 
   private brandBgColor(brand: string): string {
@@ -399,12 +427,12 @@ export class EmailService {
 <body style="margin:0;padding:0;background:#f9f9f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f9f9;padding:40px 0;">
     <tr><td align="center">
-      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;overflow:hidden;border:1px solid #e8e8e8;max-width:560px;">
-        <tr><td style="background:#000;padding:24px 32px;display:flex;align-items:center;justify-content:space-between;">
-          <p style="margin:0;font-size:22px;font-weight:700;color:#fff;letter-spacing:4px;display:inline;">IRIS</p>
-          <span style="display:inline-block;margin-left:16px;background:#f59e0b;color:#000;font-size:11px;font-weight:700;letter-spacing:0.1em;padding:4px 10px;text-transform:uppercase;">New Order</span>
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;overflow:hidden;border:1px solid #e8e8e8;max-width:560px;">
+        <tr><td style="background:${this.brandBgColor('1NRI')};padding:24px 32px;">
+          ${this.brandHeader('1NRI')}
         </td></tr>
         <tr><td style="padding:32px;">
+          <p style="margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#111;border:1px solid #111;display:inline-block;padding:4px 10px;">New Order</p>
           <h1 style="margin:0 0 4px;font-size:20px;font-weight:700;color:#111;">New order to fulfil</h1>
           <p style="margin:0 0 28px;font-size:14px;color:#666;">Order <strong>${order.order_number}</strong></p>
 
@@ -454,6 +482,101 @@ export class EmailService {
 
           <p style="margin:28px 0 0;font-size:12px;color:#aaa;border-top:1px solid #f0f0f0;padding-top:20px;">
             Log in to the admin dashboard to update this order's status once it's packed and dispatched.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+  }
+
+  private buildStaffPreorderHtml(order: {
+    order_number: string;
+    email: string;
+    customer_name?: string | null;
+    customer_phone?: string | null;
+    payment_status: string;
+    etaText: string;
+    currency?: string;
+    items: {
+      product_name: string;
+      variant_title?: string | null;
+      quantity: number;
+      unit_price: number;
+    }[];
+  }): string {
+    const symbol = (order.currency || 'GHS') === 'GHS' ? 'GH₵' : order.currency;
+    const isPaid = order.payment_status === 'paid';
+    const statusBg = isPaid ? '#dcfce7' : '#fef9c3';
+    const statusColor = isPaid ? '#16a34a' : '#a16207';
+    const statusLabel = isPaid ? 'Payment Received' : 'Awaiting Payment';
+
+    const itemRows = (order.items || [])
+      .map(
+        (item) => `
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#111;">
+            ${item.product_name}${item.variant_title ? ` - ${item.variant_title}` : ''}
+          </td>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#111;text-align:center;">
+            ${item.quantity}
+          </td>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#111;text-align:right;white-space:nowrap;">
+            ${symbol} ${item.unit_price.toLocaleString()}
+          </td>
+        </tr>`,
+      )
+      .join('');
+
+    return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>New Pre-order</title></head>
+<body style="margin:0;padding:0;background:#f9f9f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f9f9;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;overflow:hidden;border:1px solid #e8e8e8;max-width:560px;">
+        <tr><td style="background:${this.brandBgColor('1NRI')};padding:24px 32px;">
+          ${this.brandHeader('1NRI')}
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#111;border:1px solid #111;display:inline-block;padding:4px 10px;">Pre-order</p>
+          <h1 style="margin:0 0 4px;font-size:20px;font-weight:700;color:#111;">New pre-order to hold</h1>
+          <p style="margin:0 0 28px;font-size:14px;color:#666;">Pre-order <strong>${order.order_number}</strong></p>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <tr>
+              <td style="vertical-align:top;">
+                <p style="margin:0 0 6px;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#999;">Customer</p>
+                <p style="margin:0;font-size:14px;color:#111;">${order.customer_name || '-'}</p>
+                <p style="margin:2px 0 0;font-size:14px;color:#555;">${order.email}</p>
+                ${order.customer_phone ? `<p style="margin:2px 0 0;font-size:14px;color:#555;">${order.customer_phone}</p>` : ''}
+              </td>
+            </tr>
+          </table>
+
+          <p style="margin:0 0 10px;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#999;">Items on hold</p>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <th style="text-align:left;font-size:11px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:8px;border-bottom:2px solid #111;">Product</th>
+              <th style="text-align:center;font-size:11px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:8px;border-bottom:2px solid #111;">Qty</th>
+              <th style="text-align:right;font-size:11px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:8px;border-bottom:2px solid #111;">Price</th>
+            </tr>
+            ${itemRows}
+          </table>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px;">
+            <tr>
+              <td>
+                <span style="display:inline-block;padding:5px 12px;border-radius:999px;background:${statusBg};color:${statusColor};font-size:12px;font-weight:600;">
+                  ${statusLabel}
+                </span>
+              </td>
+            </tr>
+          </table>
+
+          <p style="margin:24px 0 0;font-size:13px;color:#666;line-height:1.6;">
+            Stock is not deducted for pre-orders. Expected fulfilment window: <strong>${order.etaText}</strong>. Log in to the admin dashboard to manage this pre-order once stock is ready.
           </p>
         </td></tr>
       </table>
@@ -609,7 +732,7 @@ export class EmailService {
     const discountRow = order.discount_amount && order.discount_amount > 0
       ? `<tr>
            <td style="font-size:13px;color:#22c55e;padding:3px 0;">Discount</td>
-           <td style="font-size:13px;color:#22c55e;text-align:right;">− GH₵ ${order.discount_amount.toFixed(2)}</td>
+           <td style="font-size:13px;color:#22c55e;text-align:right;">- GH₵ ${order.discount_amount.toFixed(2)}</td>
          </tr>`
       : '';
 

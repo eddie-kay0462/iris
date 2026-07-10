@@ -110,30 +110,38 @@ export class AnalyticsService {
     const [onlineRes, popupRes, allyRes, preorderRes, baseline, target] = await Promise.all([
       db
         .from('order_items')
-        .select('quantity, orders!inner(status, deleted_at)')
+        .select('quantity, products(hq_unit_count), orders!inner(status, deleted_at)')
         .in('orders.status', ONLINE_REVENUE_STATUSES)
         .is('orders.deleted_at', null),
       db
         .from('popup_order_items')
-        .select('quantity, popup_orders!inner(status)')
+        .select('quantity, products(hq_unit_count), popup_orders!inner(status)')
         .in('popup_orders.status', POPUP_REVENUE_STATUSES),
       db
         .from('ally_sale_items')
-        .select('quantity, ally_sales!inner(status)')
+        .select('quantity, products(hq_unit_count), ally_sales!inner(status)')
         .in('ally_sales.status', ALLY_REVENUE_STATUSES),
       db
         .from('preorders')
-        .select('quantity, status, payment_status')
+        .select('quantity, status, payment_status, product_variants(products(hq_unit_count))')
         .eq('payment_status', 'paid')
         .in('status', PREORDER_COUNTED_STATUSES),
       this.settings.getRoadToHqBaseline(),
       this.settings.getRoadToHqTarget(),
     ]);
 
-    const online = (onlineRes.data ?? []).reduce((sum, r: any) => sum + (r.quantity ?? 0), 0);
-    const popup = (popupRes.data ?? []).reduce((sum, r: any) => sum + (r.quantity ?? 0), 0);
-    const allies = (allyRes.data ?? []).reduce((sum, r: any) => sum + (r.quantity ?? 0), 0);
-    const preorders = (preorderRes.data ?? []).reduce((sum, r: any) => sum + (r.quantity ?? 0), 0);
+    // Bundle products count for more than one unit toward the goal via their
+    // `hq_unit_count` (default 1). This multiplier applies to Road to HQ only.
+    const weighted = (rows: any[], unitCount: (r: any) => number) =>
+      (rows ?? []).reduce((sum, r) => sum + (r.quantity ?? 0) * (unitCount(r) || 1), 0);
+
+    const online = weighted(onlineRes.data ?? [], (r) => r.products?.hq_unit_count ?? 1);
+    const popup = weighted(popupRes.data ?? [], (r) => r.products?.hq_unit_count ?? 1);
+    const allies = weighted(allyRes.data ?? [], (r) => r.products?.hq_unit_count ?? 1);
+    const preorders = weighted(
+      preorderRes.data ?? [],
+      (r) => r.product_variants?.products?.hq_unit_count ?? 1,
+    );
 
     return {
       units: online + popup + allies + preorders + baseline,

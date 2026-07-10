@@ -5056,3 +5056,66 @@ One intentional change to note: on non-homepage pages (About, product pages, etc
 2. From the homepage, go to another page (About, or a product), then return to Road to HQ — via the logo/"Road to HQ" link **and** via the browser Back button. The navbar should be transparent with **white** text/logo/icons over the hero *immediately*, with no dark/invisible text and no need to scroll. Check both light and dark mode.
 3. Scroll down past the hero → navbar snaps to solid with dark text; scroll back up → transparent + white again.
 4. Visit a non-homepage page (About, Products) → navbar is a solid, readable bar from the top.
+
+---
+
+## Order & Pre-order Emails/SMS — Fulfilment Copies, On-Brand Design, and Reliable Pre-order Texts (July 2026)
+
+We tightened up all the automatic messages that go out when someone buys or pre-orders, so nothing slips through the cracks and every email looks like it actually came from 1NRI.
+
+Three things were off:
+
+- **Pre-orders weren't telling the fulfilment team.** When a customer placed a pre-order on the site, they got their confirmation email, but nobody at `orders@1nri.store` got a heads-up. Normal orders already sent that staff copy; pre-orders now do too.
+- **Pre-order confirmation texts often never sent.** The SMS only went out if the shopper had a phone number saved on their account. Anyone who just typed their number in at checkout got no text. Now it uses the number from checkout first, and falls back to the account number — so the text actually sends.
+- **The staff "New Order" email looked off-brand.** It had a big "IRIS" wordmark and an orange badge that didn't match the site at all. It now uses the 1NRI logo and the same clean black-and-white look as the customer emails.
+
+While in there we also **centered the 1NRI logo** at the top of every email (it was hugging the left edge), added a matching on-brand **"New Pre-order" email** for the fulfilment team, and did a pass to make sure there are **no stray em dashes** in any email or text message.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/backend/src/email/email.service.ts` | Redesigned the staff "New Order" email to use the 1NRI logo + monochrome style; added a new on-brand "New Pre-order" fulfilment email; centered the logo in all email headers; made `orders@1nri.store` the default fulfilment address; cleaned up a stray dash character. |
+| `apps/backend/src/preorders/preorders.service.ts` | Pre-orders now also email the fulfilment team; pre-order confirmation texts now use the checkout phone number (falling back to the account number) so they reliably send. |
+
+> **Heads-up:** Fulfilment emails go to `orders@1nri.store` (set via the `STAFF_FULFILLMENT_EMAIL` setting, which now defaults to that address). No new setup needed if that inbox already exists.
+
+### How to test
+
+1. Place a **pre-order** through the site checkout. You should see three messages: the customer confirmation email, a "New Pre-order" email at `orders@1nri.store`, and a confirmation **text** to the phone number entered at checkout.
+2. Place a **normal order**. The `orders@1nri.store` "New Order" email should now show the **1NRI logo** (centered, no "IRIS" or orange badge) and match the customer email's look.
+3. Open any of these emails and confirm the logo sits **centered** at the top.
+
+---
+
+## Bundle Products Count Extra Toward Road to HQ (July 2026)
+
+Some products are bundles (like a 2-piece set), and selling one should move the Road to HQ counter by more than one. Until now every item sold counted as exactly 1, so bundles were quietly under-counting our progress.
+
+Now each product has a "counts as N units" setting. Mark a product as a bundle in the admin and choose how many units each sale should add to the goal (2 for a two-piece, 3 for a three-pack, and so on). Regular products stay at 1 and behave exactly as before.
+
+Two things worth knowing:
+
+- This multiplier **only** affects the public Road to HQ counter on the homepage. It does **not** touch stock levels, sales revenue, or any other report, so the numbers the team relies on for money and inventory stay accurate.
+- It applies across every sales channel: online orders, pop-up sales, ally sales, and pre-orders.
+
+To set it: open a product in the admin, find the **Merchandising** section, tick **"Bundle (counts as multiple units)"**, and enter the number.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `supabase/migrations/20260710193914_add_products_hq_unit_count.sql` | New database column `hq_unit_count` on products (defaults to 1) that stores how many units a product counts for. |
+| `apps/backend/src/analytics/analytics.service.ts` | The Road to HQ counter now multiplies each sale by that product's unit count. No other report was changed. |
+| `apps/backend/src/products/dto/create-product.dto.ts` | Lets the admin save the new bundle count when creating/editing a product. |
+| `apps/admin/app/components/products/ProductForm.tsx` | Added the "Bundle" checkbox + number input in the Merchandising section. |
+| `apps/admin/lib/validation/product.ts`, `apps/admin/lib/api/products.ts`, `apps/frontend/types/database.types.ts` | Wiring/validation/type updates so the new field flows through cleanly. |
+
+> **Heads-up / action required:** The database migration must be run before this goes live (it adds the new column the counter reads). If the migration hasn't been applied yet, the Road to HQ figure will error, so deploy the migration and the backend together.
+
+### How to test
+
+1. Apply the migration, then in the admin edit a product, tick **Bundle**, set it to **2**, and save.
+2. Place (or seed) a paid order of quantity 1 for that product.
+3. Check the homepage Road to HQ counter (or `GET /api/analytics/road-to-hq`) - it should go up by **2**, not 1. The counter refreshes a few times an hour, so allow a short delay.
+4. Confirm other reports (e.g. top products) still show the real quantity of 1 for that product - only Road to HQ is weighted.

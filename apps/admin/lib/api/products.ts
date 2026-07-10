@@ -50,6 +50,7 @@ export interface Product {
   vendor: string | null;
   tags: string[] | null;
   gsm: number | null;
+  hq_unit_count: number;
   seo_title: string | null;
   seo_description: string | null;
   is_new_arrival: boolean;
