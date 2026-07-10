@@ -5056,3 +5056,32 @@ One intentional change to note: on non-homepage pages (About, product pages, etc
 2. From the homepage, go to another page (About, or a product), then return to Road to HQ — via the logo/"Road to HQ" link **and** via the browser Back button. The navbar should be transparent with **white** text/logo/icons over the hero *immediately*, with no dark/invisible text and no need to scroll. Check both light and dark mode.
 3. Scroll down past the hero → navbar snaps to solid with dark text; scroll back up → transparent + white again.
 4. Visit a non-homepage page (About, Products) → navbar is a solid, readable bar from the top.
+
+---
+
+## Order & Pre-order Emails/SMS — Fulfilment Copies, On-Brand Design, and Reliable Pre-order Texts (July 2026)
+
+We tightened up all the automatic messages that go out when someone buys or pre-orders, so nothing slips through the cracks and every email looks like it actually came from 1NRI.
+
+Three things were off:
+
+- **Pre-orders weren't telling the fulfilment team.** When a customer placed a pre-order on the site, they got their confirmation email, but nobody at `orders@1nri.store` got a heads-up. Normal orders already sent that staff copy; pre-orders now do too.
+- **Pre-order confirmation texts often never sent.** The SMS only went out if the shopper had a phone number saved on their account. Anyone who just typed their number in at checkout got no text. Now it uses the number from checkout first, and falls back to the account number — so the text actually sends.
+- **The staff "New Order" email looked off-brand.** It had a big "IRIS" wordmark and an orange badge that didn't match the site at all. It now uses the 1NRI logo and the same clean black-and-white look as the customer emails.
+
+While in there we also **centered the 1NRI logo** at the top of every email (it was hugging the left edge), added a matching on-brand **"New Pre-order" email** for the fulfilment team, and did a pass to make sure there are **no stray em dashes** in any email or text message.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/backend/src/email/email.service.ts` | Redesigned the staff "New Order" email to use the 1NRI logo + monochrome style; added a new on-brand "New Pre-order" fulfilment email; centered the logo in all email headers; made `orders@1nri.store` the default fulfilment address; cleaned up a stray dash character. |
+| `apps/backend/src/preorders/preorders.service.ts` | Pre-orders now also email the fulfilment team; pre-order confirmation texts now use the checkout phone number (falling back to the account number) so they reliably send. |
+
+> **Heads-up:** Fulfilment emails go to `orders@1nri.store` (set via the `STAFF_FULFILLMENT_EMAIL` setting, which now defaults to that address). No new setup needed if that inbox already exists.
+
+### How to test
+
+1. Place a **pre-order** through the site checkout. You should see three messages: the customer confirmation email, a "New Pre-order" email at `orders@1nri.store`, and a confirmation **text** to the phone number entered at checkout.
+2. Place a **normal order**. The `orders@1nri.store` "New Order" email should now show the **1NRI logo** (centered, no "IRIS" or orange badge) and match the customer email's look.
+3. Open any of these emails and confirm the logo sits **centered** at the top.
