@@ -5030,3 +5030,29 @@ The fix hardens that check so it can't be fooled by a not-yet-measured screen: i
 2. Hard-refresh the homepage while at the very top → the navbar should be **transparent** over the hero (white logo/text), with no solid bar flashing in. Try it in both light and dark mode, and on a narrow phone-width window.
 3. Scroll down past the hero → the navbar snaps to solid white/dark with a bottom border, as before.
 4. Click to another page and back to home → still transparent at the top, same as the first load.
+
+## Homepage Navbar — Fixed the Invisible Dark Text When Returning to Road to HQ (July 2026)
+
+A follow-on to the fix above. On the **live site**, coming *back* to the Road to HQ (home) page — by clicking a link or using the browser's Back button — the navbar background correctly went see-through over the dark hero, but the menu text, logo and icons stayed **dark**, so they nearly vanished against the dark image. It looked broken until you scrolled down and back up, which snapped them back to white. It happened in both light and dark mode and only on the real deployed site, not on a developer's machine.
+
+The root cause was that the navbar made two *separate* decisions from two different signals: one for "should the background be see-through?" and another for "should the text be white?". On the way back to the homepage those two could briefly disagree — see-through background, but dark text — and get stuck that way until the next scroll nudged them back in sync.
+
+The fix makes both decisions come from **one** signal: the navbar now simply watches the actual hero image on the page and asks "am I sitting over it right now?". Background colour and text colour both follow that single answer, so they can no longer drift apart — no more invisible text, and no need to scroll to fix it. As a side effect the guesswork around screen height (the thing behind the earlier bug too) is gone entirely.
+
+One intentional change to note: on non-homepage pages (About, product pages, etc.) the navbar now shows a solid bar right from the top instead of a see-through one over the page content. That's the cleaner, more readable default; flag it if you preferred the old see-through look on those pages.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/frontend/app/(shop)/layout.tsx` | Navbar now derives both its background and its text/logo/icon colour from a single "am I over the hero?" flag, driven by watching the real hero element (an IntersectionObserver) instead of guessing from the page URL + screen height. |
+| `apps/frontend/app/(shop)/RoadToHQClient.tsx` | Tagged the hero section with an id so the navbar can watch it. |
+
+> **Heads-up:** Like the previous navbar fix, this only reproduces on a **production build**, not `npm run dev`. Use a real build (`npm run build` then `npm run start`) or a deploy preview to see it.
+
+### How to test
+
+1. Run a production build of the storefront (`cd apps/frontend && npm run build && npm run start`) or open a deploy preview.
+2. From the homepage, go to another page (About, or a product), then return to Road to HQ — via the logo/"Road to HQ" link **and** via the browser Back button. The navbar should be transparent with **white** text/logo/icons over the hero *immediately*, with no dark/invisible text and no need to scroll. Check both light and dark mode.
+3. Scroll down past the hero → navbar snaps to solid with dark text; scroll back up → transparent + white again.
+4. Visit a non-homepage page (About, Products) → navbar is a solid, readable bar from the top.

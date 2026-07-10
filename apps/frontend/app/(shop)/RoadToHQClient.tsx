@@ -246,7 +246,7 @@ export default function RoadToHQPage({
       `}</style>
 
       {/* ── 1. HERO ── */}
-      <section ref={heroRef} className="relative h-screen min-h-[720px] overflow-hidden bg-neutral-900">
+      <section id="rthq-hero" ref={heroRef} className="relative h-screen min-h-[720px] overflow-hidden bg-neutral-900">
         {/* Parallax image */}
         <motion.div className="absolute inset-0 will-change-transform" style={{ y: heroImageY }}>
           <Image
