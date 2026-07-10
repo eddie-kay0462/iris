@@ -489,44 +489,45 @@ function ShopHeader({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+  // Whether the nav bar is currently sitting over the home page's full-screen
+  // dark hero. This single flag drives BOTH the transparent background and the
+  // white control colour, so they can never desync (the previous pathname +
+  // scroll-threshold approach could leave a transparent bar with dark, invisible
+  // text over the hero when returning to the home page).
+  const [overHero, setOverHero] = useState(false);
   const pathname = usePathname();
 
-  const isHome = pathname === "/";
-  const isTransparent = !scrolled;
-  const isTransparentWhite = isHome && !scrolled;
+  const isTransparent = overHero;
+  const isTransparentWhite = overHero;
 
-  // Layout effect (not useEffect) so the scroll-derived state is applied before
-  // paint. The header lives in the persistent (shop) layout and does not remount
-  // on client-side navigation, so `scrolled` carries over between pages — e.g.
-  // navigating to home from a scrolled inner page would otherwise paint a white
-  // bar over the dark hero for one frame before this correction lands.
+  // Derive "over the dark hero" from the real hero element via an
+  // IntersectionObserver rather than inferring it from pathname + a viewport
+  // threshold. The observer reacts to the actual on-screen DOM — committed
+  // together with the page — so it can't lag behind client-side navigation the
+  // way the router/scroll state could. The hero (`#rthq-hero`) only exists on
+  // the home page; on every other page there's nothing to observe, so the bar
+  // stays solid from the top. Layout effect (not useEffect) + a synchronous
+  // initial read so the first paint is already correct, with no flash.
   useIsomorphicLayoutEffect(() => {
-    // On the home page the hero is a full-screen dark section, so keep the
-    // header transparent until we've scrolled (almost) past it — otherwise it
-    // flips to a solid white bar while the dark hero is still on screen.
-    const handleScroll = () => {
-      // Read the viewport height defensively: on the first (and, in a prod
-      // build, only) run of this effect `window.innerHeight` can still be 0 /
-      // unsettled, which would make the home threshold negative and force the
-      // bar solid at the very top. Fall back to clientHeight and clamp to a
-      // positive floor so scrollY === 0 can never read as "scrolled".
-      const vh = window.innerHeight || document.documentElement.clientHeight || 0;
-      const threshold = isHome ? Math.max(vh - 80, 200) : 10;
-      setScrolled(window.scrollY > threshold);
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("resize", handleScroll, { passive: true });
-    handleScroll();
-    // Re-measure after the first paint so a too-early viewport read on initial
-    // load self-corrects on the same load, not only after a client-side re-nav.
-    const raf = requestAnimationFrame(handleScroll);
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("resize", handleScroll);
-      cancelAnimationFrame(raf);
-    };
-  }, [isHome]);
+    const hero = document.getElementById("rthq-hero");
+    if (!hero) {
+      setOverHero(false);
+      return;
+    }
+    // Flip as the hero's bottom edge passes under the bar. Shrink the observer
+    // root from the top by the bar's real height so the swap lands right as the
+    // hero scrolls out from behind it (accounts for the announcement banner too).
+    const barH = barRef.current?.offsetHeight ?? 64;
+    const rootMargin = `-${barH}px 0px 0px 0px`;
+    // Synchronous first read (IntersectionObserver's initial callback is async).
+    setOverHero(hero.getBoundingClientRect().bottom > barH);
+    const io = new IntersectionObserver(
+      ([entry]) => setOverHero(entry.isIntersecting),
+      { rootMargin, threshold: 0 }
+    );
+    io.observe(hero);
+    return () => io.disconnect();
+  }, [pathname]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
