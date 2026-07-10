@@ -83,3 +83,23 @@ export function useShippingOptions() {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+export interface CountryShippingRate {
+  country: string; // ISO-2 destination code, e.g. "US"
+  label: string;
+  estimate: string;
+  price: number; // flat rate in GHS
+}
+
+export const DEFAULT_COUNTRY_SHIPPING_RATES: CountryShippingRate[] = [
+  { country: "US", label: "United States", estimate: "10-15 business days", price: 900 },
+];
+
+export function useCountryShippingRates() {
+  return useQuery({
+    queryKey: ["country-shipping-rates"],
+    queryFn: () => apiClient<CountryShippingRate[]>("/settings/country-shipping-rates"),
+    placeholderData: DEFAULT_COUNTRY_SHIPPING_RATES,
+    staleTime: 5 * 60 * 1000,
+  });
+}

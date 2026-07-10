@@ -175,6 +175,26 @@ export class OrdersService {
     return `IRD-${String(next).padStart(6, '0')}`;
   }
 
+  /**
+   * Server-authoritative shipping cost. For international destinations we charge
+   * the flat per-country rate stored in settings (never the client-supplied
+   * amount) so the fee can't be tampered with; Ghana keeps the tiered domestic
+   * option the client picked.
+   */
+  private async resolveShippingCost(dto: CreateOrderDto): Promise<number> {
+    const country = dto.shippingAddress?.region;
+    if (country && country !== 'GH') {
+      const rate = await this.settingsService.getShippingRateForCountry(country);
+      if (rate === null) {
+        throw new BadRequestException(
+          `We don't currently ship to the selected country (${country}).`,
+        );
+      }
+      return rate;
+    }
+    return dto.shippingCost ?? 0;
+  }
+
   async create(dto: CreateOrderDto, userId: string | null, email: string | null) {
     const resolvedEmail = email ?? dto.guestEmail ?? '';
     if (!resolvedEmail) {
@@ -300,7 +320,7 @@ export class OrdersService {
       (sum, i) => sum + i.price * i.quantity,
       0,
     );
-    const shippingCost = dto.shippingCost ?? 0;
+    const shippingCost = await this.resolveShippingCost(dto);
 
     // 2b. Validate promo code if supplied
     let discountAmount = 0;
@@ -1564,7 +1584,7 @@ export class OrdersService {
       (sum, i) => sum + i.price * i.quantity,
       0,
     );
-    const shippingCost = dto.shippingCost ?? 0;
+    const shippingCost = await this.resolveShippingCost(dto);
 
     // 2b. Validate promo code if supplied
     let discountAmount = 0;

@@ -55,6 +55,10 @@ export class ShippingAddressDto {
 
   @IsOptional()
   @IsString()
+  state?: string;
+
+  @IsOptional()
+  @IsString()
   postalCode?: string;
 
   @IsPhoneNumber()

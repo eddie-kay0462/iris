@@ -4890,3 +4890,47 @@ No double-counting: in-stock items and pre-order items are stored separately, so
 2. Place (and pay for) a **pre-order** on the storefront.
 3. After the homepage refreshes (within a few minutes), the counter should go **up by the quantity ordered** — without needing to fulfil the pre-order first.
 4. **Cancel or refund** that pre-order → after the next refresh, the counter drops back down.
+
+---
+
+## Shipping to the US + prices shown in the customer's currency (July 2026)
+
+Two connected checkout upgrades.
+
+**1. We now ship to the United States.** US is selectable at checkout with a flat **GH₵ 900** shipping fee. Because a US address needs more than a Ghana one, checkout now asks for a **State / Province** and makes the street address and **ZIP code required** for any non-Ghana order. Phone numbers already worked internationally (pick the country flag, e.g. 🇺🇸 +1). International orders show a single flat-rate delivery line — the local Express / Pickup options only apply within Ghana.
+
+The **shipping rates live in the database like the other fees**, and there's a new **"International Shipping Rates"** panel in **Settings → General** where staff can edit each country's name, delivery estimate, and price. Today it's just the US at GH₵ 900, but more countries can be added there later. The rate is also **enforced on the server** — the fee a customer is charged for a country is the one saved in settings, so it can't be fiddled with from the browser.
+
+**2. Checkout prices now show in the shopper's chosen currency.** If a customer switches the site currency (say to USD or GBP), the entire checkout summary — item prices, subtotal, **shipping**, discount, fees, and total — now displays in that currency instead of always in cedis. Everything is still **stored and charged in Ghana Cedis** behind the scenes; only the on-screen numbers are converted. The small note that says **"You will be charged GH₵ …"** stays in cedis on purpose, so a shopper paying in another currency always sees the exact amount that will hit their card.
+
+The customer's saved State now also appears on the order confirmation email to staff, the admin order detail page, and the customer's order-tracking page.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/backend/src/settings/settings.service.ts` | Stores/reads per-country shipping rates in settings (default: US = GH₵ 900); helper to look up a country's rate. |
+| `apps/backend/src/settings/settings.controller.ts` | Public endpoint to read country rates + admin endpoint to update them. |
+| `apps/backend/src/orders/orders.service.ts` | Shipping fee for international orders is now taken from the saved rate (server-enforced), not the browser. |
+| `apps/backend/src/orders/dto/create-order.dto.ts` | Accepts the new optional **State** field on the shipping address. |
+| `apps/backend/src/email/email.service.ts` | Staff order email now includes the State line in the address. |
+| `apps/frontend/app/(shop)/checkout/CheckoutClient.tsx` | US enabled; State field + international address rules; flat international delivery line; all prices shown in the selected currency (charge note stays in cedis). |
+| `apps/frontend/lib/api/settings.ts` | Fetches the country shipping rates for checkout. |
+| `apps/frontend/lib/api/orders.ts`, `apps/frontend/app/(shop)/track/page.tsx` | Order data carries State; tracking page shows it. |
+| `apps/admin/app/(dashboard)/settings/general/page.tsx` | New **International Shipping Rates** editor panel. |
+| `apps/admin/lib/api/settings.ts` | Hooks to read/update country shipping rates. |
+| `apps/admin/lib/api/orders.ts`, `apps/admin/app/(dashboard)/orders/[id]/page.tsx` | Order carries State; admin order detail shows it. |
+
+> **Heads-up:**
+> - **No database migration needed** — the rates are stored in the existing settings store and default to US = GH₵ 900 automatically, and the State is saved alongside the rest of the address.
+> - **Only the US is switched on** right now. Canada / UK / Netherlands are still off until we set their rates and enable them.
+> - Not yet driven end-to-end on a live server with a real US payment — that click-through check still needs doing.
+> - Small cosmetic note: for cedi shoppers, prices now render as `₵1,234.00` (with the shared currency formatter) rather than the old `GH₵ 1,234` style.
+
+### How to test
+
+1. At checkout, change **Country / Region** to **United States** → the delivery line becomes the flat **GH₵ 900** international rate, and **State / Province** + **ZIP** appear and are required.
+2. Try to continue with a US address missing the State or ZIP → it should block you with an error.
+3. Switch the **site currency** (top bar) to USD/GBP → every price in the summary updates to that currency, but the **"You will be charged GH₵ …"** note still shows cedis.
+4. Complete a US order and check the **admin order detail**, the **staff email**, and the customer **/track** page all show the State in the address.
+5. In **admin → Settings → General → International Shipping Rates**, change the US price, save, and confirm checkout picks up the new amount.

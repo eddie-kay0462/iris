@@ -11,7 +11,7 @@ import PhoneInput from "@/components/PhoneInput";
 import { useProfile, parseDefaultAddress } from "@/lib/api/profile";
 import { apiClient, hasToken, getToken } from "@/lib/api/client";
 import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
-import { useShippingOptions, DEFAULT_SHIPPING_OPTIONS } from "@/lib/api/settings";
+import { useShippingOptions, DEFAULT_SHIPPING_OPTIONS, useCountryShippingRates } from "@/lib/api/settings";
 import { useValidatePromo, DiscountType } from "@/lib/api/promos";
 import { ChevronDown } from "lucide-react";
 import { useLocale } from "@/lib/locale/locale-provider";
@@ -63,7 +63,7 @@ const PROCESSING_FEE_RATE = 0.0195;
 
 const COUNTRY_OPTIONS = [
   { code: "GH", label: "Ghana", enabled: true },
-  { code: "US", label: "United States", enabled: false },
+  { code: "US", label: "United States", enabled: true },
   { code: "CA", label: "Canada", enabled: false },
   { code: "GB", label: "United Kingdom", enabled: false },
   { code: "NL", label: "Netherlands", enabled: false },
@@ -77,6 +77,7 @@ interface ShippingForm {
   address2: string;
   phone: string;
   city: string;
+  state: string;
   postalCode: string;
 }
 
@@ -88,6 +89,7 @@ const EMPTY_FORM: ShippingForm = {
   address2: "",
   phone: "",
   city: "",
+  state: "",
   postalCode: "",
 };
 
@@ -98,6 +100,12 @@ function validateForm(form: ShippingForm, isPickup: boolean): Record<string, str
   if (!form.phone) errors.phone = "Phone number is required";
   else if (!/^\+\d{7,15}$/.test(form.phone)) errors.phone = "Enter a valid phone number";
   if (!form.city.trim()) errors.city = "City is required";
+  // International (non-Ghana) destinations need a complete postal address to ship.
+  if (!isPickup && form.country !== "GH") {
+    if (!form.address.trim()) errors.address = "Address is required";
+    if (!form.state.trim()) errors.state = "State / province is required";
+    if (!form.postalCode.trim()) errors.postalCode = "ZIP / postal code is required";
+  }
   return errors;
 }
 
@@ -165,7 +173,7 @@ function PayNowButton({
 export default function CheckoutClient() {
   const router = useRouter();
   const { items, subtotal, clearCart } = useCart();
-  const { currency, rates } = useLocale();
+  const { currency, rates, formatPrice } = useLocale();
   const createOrder = useCreateOrder();
   const [isSignedIn, setIsSignedIn] = useState(false);
   useEffect(() => { setIsSignedIn(hasToken()); }, []);
@@ -203,8 +211,18 @@ export default function CheckoutClient() {
   const validatePromo = useValidatePromo();
 
   const { data: shippingOptions = DEFAULT_SHIPPING_OPTIONS } = useShippingOptions();
-  const shippingCost =
+  const { data: countryShippingRates = [] } = useCountryShippingRates();
+
+  // Ghana ships via the tiered domestic options; other countries use the flat
+  // per-country rate configured in settings. `internationalRate` is undefined for
+  // countries we don't ship to (shouldn't happen — only shippable ones are enabled).
+  const isInternational = form.country !== "GH";
+  const internationalRate = countryShippingRates.find((r) => r.country === form.country);
+  const domesticShippingCost =
     shippingOptions.find((o) => o.id === shippingOption)?.price ?? shippingOptions[0]?.price ?? 40;
+  const shippingCost = isInternational
+    ? internationalRate?.price ?? 0
+    : domesticShippingCost;
   const discountAmount = appliedPromo?.discountAmount ?? 0;
   const amountBeforeFees = Math.max(0, subtotal + shippingCost - discountAmount);
   const fees = Math.round(amountBeforeFees * PROCESSING_FEE_RATE * 100) / 100;
@@ -269,6 +287,7 @@ export default function CheckoutClient() {
       address: prev.address || addr.address1 || "",
       address2: prev.address2 || addr.address2 || "",
       city: prev.city || addr.city || "",
+      state: prev.state || addr.province_code || "",
       postalCode: prev.postalCode || addr.zip || "",
       phone: prev.phone || addr.phone || "",
     }));
@@ -283,6 +302,14 @@ export default function CheckoutClient() {
       setShippingOption("standard");
     }
   }, [hasPreorderItems, shippingOption]);
+
+  // International orders ship on a single flat rate — the domestic Express /
+  // Pickup tiers don't apply. Reset to Standard when shipping abroad.
+  useEffect(() => {
+    if (isInternational && shippingOption !== "standard") {
+      setShippingOption("standard");
+    }
+  }, [isInternational, shippingOption]);
 
   // Re-validate free_shipping discount when the shipping tier changes
   useEffect(() => {
@@ -404,6 +431,7 @@ export default function CheckoutClient() {
           address: form.address,
           address2: form.address2 || undefined,
           city: form.city,
+          state: form.state || undefined,
           region: form.country,
           postalCode: form.postalCode || undefined,
           phone: form.phone,
@@ -450,6 +478,7 @@ export default function CheckoutClient() {
                 address1: form.address,
                 address2: form.address2 || null,
                 city: form.city,
+                province_code: form.state || null,
                 zip: form.postalCode || null,
                 country_code: form.country,
                 phone: form.phone,
@@ -679,7 +708,29 @@ export default function CheckoutClient() {
                       placeholder="Postal code"
                       className={inputClass}
                     />
+                    {errors.postalCode && (
+                      <p className="mt-1 text-xs text-red-500">{errors.postalCode}</p>
+                    )}
                   </div>
+                </div>
+              )}
+
+              {/* Row: State / Province — international destinations only */}
+              {shippingOption !== "pickup" && isInternational && (
+                <div>
+                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                    State / Province
+                  </label>
+                  <input
+                    type="text"
+                    value={form.state}
+                    onChange={(e) => handleChange("state", e.target.value)}
+                    placeholder="e.g. California"
+                    className={inputClass}
+                  />
+                  {errors.state && (
+                    <p className="mt-1 text-xs text-red-500">{errors.state}</p>
+                  )}
                 </div>
               )}
 
@@ -806,7 +857,7 @@ export default function CheckoutClient() {
                     )}
                   </div>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    GH₵{(item.price * item.quantity).toLocaleString()}
+                    {formatPrice(item.price * item.quantity)}
                   </p>
                 </div>
               </div>
@@ -818,8 +869,7 @@ export default function CheckoutClient() {
             {appliedPromo ? (
               <div className="flex items-center justify-between rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm dark:bg-green-950 dark:border-green-800">
                 <span className="text-green-700 dark:text-green-400">
-                  <strong>{appliedPromo.code}</strong> applied - GH₵{" "}
-                  {appliedPromo.discountAmount.toLocaleString()} off
+                  <strong>{appliedPromo.code}</strong> applied - {formatPrice(appliedPromo.discountAmount)} off
                 </span>
                 <button
                   type="button"
@@ -873,7 +923,7 @@ export default function CheckoutClient() {
                 Subtotal
               </span>
               <span className="text-gray-900 dark:text-white">
-                GH₵ {subtotal.toLocaleString()}
+                {formatPrice(subtotal)}
               </span>
             </div>
             {/* <div className="flex justify-between text-sm">
@@ -885,7 +935,7 @@ export default function CheckoutClient() {
                 Shipping/Delivery
               </span>
               <span className={shippingOption === "pickup" ? "font-medium text-green-600 dark:text-green-400" : "text-gray-900 dark:text-white"}>
-                {shippingOption === "pickup" ? "Free" : `GH₵ ${shippingCost.toLocaleString()}`}
+                {shippingOption === "pickup" ? "Free" : formatPrice(shippingCost)}
               </span>
             </div>
             {appliedPromo && (
@@ -894,7 +944,7 @@ export default function CheckoutClient() {
                   Discount ({appliedPromo.code})
                 </span>
                 <span className="text-green-600 dark:text-green-400">
-                  - GH₵ {discountAmount.toLocaleString()}
+                  - {formatPrice(discountAmount)}
                 </span>
               </div>
             )}
@@ -903,13 +953,13 @@ export default function CheckoutClient() {
                 Fees (1.95%)
               </span>
               <span className="text-gray-900 dark:text-white">
-                GH₵ {fees.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {formatPrice(fees)}
               </span>
             </div>
             <div className="flex justify-between border-t border-gray-200 pt-3 text-sm font-semibold dark:border-gray-700">
               <span className="text-gray-900 dark:text-white">Total</span>
               <span className="text-gray-900 dark:text-white">
-                GH₵ {total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {formatPrice(total)}
               </span>
             </div>
             <p className="text-xs text-gray-400 dark:text-gray-500">
@@ -928,7 +978,25 @@ export default function CheckoutClient() {
               Delivery is estimated for
             </p>
             <div className="space-y-3">
-              {shippingOptions.map((option) => {
+              {isInternational ? (
+                // International destinations ship on a single flat per-country rate.
+                <div className="flex items-center justify-between rounded-lg border border-gray-900 bg-white p-4 dark:border-white dark:bg-gray-800">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      {internationalRate?.label ?? "International shipping"}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {internationalRate?.estimate
+                        ? `Estimated delivery, ${internationalRate.estimate}`
+                        : "Flat-rate international delivery"}
+                    </p>
+                  </div>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {formatPrice(shippingCost)}
+                  </span>
+                </div>
+              ) : (
+                shippingOptions.map((option) => {
                 // Express is unavailable when the order contains pre-order items —
                 // those lines ship separately once restocked, so it can't be honoured.
                 const disabled = option.id === "express" && hasPreorderItems;
@@ -965,11 +1033,12 @@ export default function CheckoutClient() {
                     </div>
                   </div>
                   <span className="text-sm font-medium text-gray-900 dark:text-white">
-                    GH₵ {option.price.toLocaleString()}
+                    {formatPrice(option.price)}
                   </span>
                 </label>
                 );
-              })}
+              })
+              )}
             </div>
             {holdExpiresAt && <StockHoldTimer expiresAt={holdExpiresAt} />}
           </div>

@@ -351,6 +351,7 @@ export class EmailService {
       address?: string;
       address2?: string;
       city?: string;
+      state?: string;
       region?: string;
       phone?: string;
     } | null;
@@ -369,7 +370,7 @@ export class EmailService {
       addr.fullName,
       addr.address,
       addr.address2,
-      addr.city,
+      [addr.city, addr.state].filter(Boolean).join(', '),
       addr.region,
     ]
       .filter(Boolean)

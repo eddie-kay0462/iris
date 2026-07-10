@@ -185,6 +185,42 @@ export class SettingsService {
     return options;
   }
 
+  /**
+   * Flat shipping rates for international destinations, keyed by ISO-2 country
+   * code. Domestic (Ghana) shipping uses the tiered `shipping_options` above;
+   * these cover countries we ship to at a single per-country rate.
+   */
+  async getCountryShippingRates(): Promise<CountryShippingRate[]> {
+    const db = this.supabase.getAdminClient();
+    const { data } = await db
+      .from('store_settings')
+      .select('value')
+      .eq('key', 'country_shipping_rates')
+      .single();
+
+    if (!data) return DEFAULT_COUNTRY_SHIPPING_RATES;
+    return data.value as CountryShippingRate[];
+  }
+
+  async updateCountryShippingRates(
+    rates: CountryShippingRate[],
+  ): Promise<CountryShippingRate[]> {
+    const db = this.supabase.getAdminClient();
+    const { error } = await db
+      .from('store_settings')
+      .upsert({ key: 'country_shipping_rates', value: rates, updated_at: new Date().toISOString() });
+
+    if (error) throw error;
+    return rates;
+  }
+
+  /** Flat rate for a destination country, or null if we don't ship there. */
+  async getShippingRateForCountry(countryCode: string): Promise<number | null> {
+    const rates = await this.getCountryShippingRates();
+    const match = rates.find((r) => r.country === countryCode);
+    return match ? match.price : null;
+  }
+
   async getStockHoldMinutes(): Promise<number> {
     const db = this.supabase.getAdminClient();
     const { data } = await db
@@ -311,6 +347,17 @@ export interface ShippingOption {
 const DEFAULT_SHIPPING_OPTIONS: ShippingOption[] = [
   { id: 'standard', label: 'No rush shipping', estimate: '5-7 business days', price: 1 },
   { id: 'express', label: 'Express', estimate: '2-3 business days', price: 2 },
+];
+
+export interface CountryShippingRate {
+  country: string; // ISO-2 destination country code, e.g. 'US'
+  label: string;
+  estimate: string;
+  price: number; // flat rate in GHS
+}
+
+const DEFAULT_COUNTRY_SHIPPING_RATES: CountryShippingRate[] = [
+  { country: 'US', label: 'United States', estimate: '10-15 business days', price: 900 },
 ];
 
 const DEFAULT_STOCK_HOLD_MINUTES = 10;

@@ -67,6 +67,19 @@ export class SettingsController {
     return this.settingsService.updateShippingOptions(body.options);
   }
 
+  @Get('country-shipping-rates')
+  @Public()
+  getCountryShippingRates() {
+    return this.settingsService.getCountryShippingRates();
+  }
+
+  @Put('country-shipping-rates')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings:update')
+  updateCountryShippingRates(@Body() body: { rates: any[] }) {
+    return this.settingsService.updateCountryShippingRates(body.rates);
+  }
+
   @Get('stock-hold-minutes')
   @RequirePermission('settings:read')
   getStockHoldMinutes() {

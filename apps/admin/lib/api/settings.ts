@@ -116,6 +116,34 @@ export function useUpdateShippingOptions() {
   });
 }
 
+export interface CountryShippingRate {
+  country: string; // ISO-2 destination code, e.g. "US"
+  label: string;
+  estimate: string;
+  price: number; // flat rate in GHS
+}
+
+export function useCountryShippingRates() {
+  return useQuery({
+    queryKey: ["country-shipping-rates"],
+    queryFn: () => apiClient<CountryShippingRate[]>("/settings/country-shipping-rates"),
+  });
+}
+
+export function useUpdateCountryShippingRates() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rates: CountryShippingRate[]) =>
+      apiClient<CountryShippingRate[]>("/settings/country-shipping-rates", {
+        method: "PUT",
+        body: { rates },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["country-shipping-rates"] });
+    },
+  });
+}
+
 export function useStockHoldMinutes() {
   return useQuery({
     queryKey: ["stock-hold-minutes"],

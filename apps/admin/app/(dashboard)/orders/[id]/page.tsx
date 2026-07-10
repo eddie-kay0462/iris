@@ -364,7 +364,7 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
                 <p>{shipping.address}</p>
                 {shipping.address2 && <p>{shipping.address2}</p>}
                 <p>
-                  {shipping.city}, {shipping.region}
+                  {[shipping.city, shipping.state].filter(Boolean).join(", ")}, {shipping.region}
                   {shipping.postalCode ? ` ${shipping.postalCode}` : ""}
                 </p>
                 <p>{shipping.phone}</p>

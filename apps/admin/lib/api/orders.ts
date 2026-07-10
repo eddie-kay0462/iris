@@ -46,6 +46,7 @@ export interface Order {
     address: string;
     address2?: string;
     city: string;
+    state?: string;
     region: string;
     postalCode?: string;
     phone: string;
