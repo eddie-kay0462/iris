@@ -4967,3 +4967,41 @@ The modal and the currency picker in the top bar were **redesigned to match the 
 3. Pick a different currency and **Confirm** → prices update; reopen the site → the modal doesn't come back.
 4. Try **Dismiss** / the ✕ / clicking outside → modal closes, currency stays as detected, and it won't reappear.
 5. Check the **top-bar** and **mobile-menu** currency pickers → both show the new black/white styling and switch currency correctly.
+
+---
+
+## Customisable announcement banner (July 2026)
+
+There's now a **banner strip at the very top of the storefront** — the kind big brands use for "Sale now on" or "Free shipping this week." It's fully controlled from admin, so no code changes are needed to put up a notice.
+
+In **admin → Settings → General**, there's an **Announcement Banner** panel: a show/hide switch, the **text** to display, an optional **link** (makes the whole bar clickable, e.g. to the sale page), and a **live preview** of how it'll look. It's **off by default** — nothing shows until someone turns it on.
+
+On the storefront the bar sits **above the navigation**, in the site's black-and-white style (black bar in light mode, white in dark), with a **✕ to dismiss**. If a shopper closes it, it stays closed for them — until the text is changed, at which point it shows again to everyone (so a new message isn't missed).
+
+**A note on the fixes along the way:** getting the bar to sit cleanly above the nav on every page took a couple of passes. The header and the page content used to assume a fixed height, which pushed page content up underneath the bar on the products page and others. That's now handled by **measuring the header's real height** and spacing the page down by exactly that much, so it stays correct whether the banner is on or off, on any screen size.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/backend/src/settings/settings.service.ts` | Stores/reads the banner (on/off, text, link) in settings; validates that an enabled banner has text. |
+| `apps/backend/src/settings/settings.controller.ts` | Public endpoint to read the banner + admin endpoint to update it. |
+| `apps/frontend/lib/api/settings.ts` | Storefront fetches the banner. |
+| `apps/frontend/app/(shop)/layout.tsx` | The banner bar itself (above the nav, dismissible, theme-aware) plus the header-height measurement that keeps page content clear of it. |
+| `apps/admin/lib/api/settings.ts` | Admin hooks to read/update the banner. |
+| `apps/admin/app/(dashboard)/settings/general/page.tsx` | New **Announcement Banner** editor panel with live preview. |
+
+> **Heads-up:**
+> - **No backend or database changes** to run — it's stored in the existing settings, off by default.
+> - Dismissal is remembered per browser (via local storage); it re-appears if the text is edited or the visitor clears their site data.
+> - **Known minor issue:** on desktop, two "sticky" side panels (the product detail page's thumbnail rail and the Road to HQ progress card) are pinned to a fixed position and will sit ~36px too high while a banner is showing. Cosmetic, and only when a banner is active — can be fixed on request.
+> - Not yet clicked through on a live server with a banner enabled — that visual check still needs doing.
+
+### How to test
+
+1. In **admin → Settings → General → Announcement Banner**, tick **Show the banner**, type a message (and optionally a link), watch the **preview**, and **Save**.
+2. Open the storefront → the bar appears at the very top, above the nav, on the home page **and** inner pages (products, etc.), with content sitting neatly below it.
+3. Click the **✕** → the bar closes and stays closed on refresh.
+4. Change the banner **text** in admin and save → it reappears for everyone (even those who dismissed the old one).
+5. If you set a **link**, click the bar → it navigates there.
+6. Turn the banner **off** in admin → it disappears and page spacing returns to normal.

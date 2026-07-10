@@ -221,6 +221,42 @@ export class SettingsService {
     return match ? match.price : null;
   }
 
+  /**
+   * Site-wide announcement bar shown above the storefront header (sale notices,
+   * shipping cut-offs, etc.). Public — read by every storefront page.
+   */
+  async getAnnouncementBanner(): Promise<AnnouncementBanner> {
+    const db = this.supabase.getAdminClient();
+    const { data } = await db
+      .from('store_settings')
+      .select('value')
+      .eq('key', 'announcement_banner')
+      .single();
+
+    if (!data?.value) return DEFAULT_ANNOUNCEMENT_BANNER;
+    return { ...DEFAULT_ANNOUNCEMENT_BANNER, ...(data.value as AnnouncementBanner) };
+  }
+
+  async updateAnnouncementBanner(
+    banner: AnnouncementBanner,
+  ): Promise<AnnouncementBanner> {
+    const clean: AnnouncementBanner = {
+      enabled: !!banner.enabled,
+      text: (banner.text ?? '').trim(),
+      link: (banner.link ?? '').trim(),
+    };
+    if (clean.enabled && !clean.text) {
+      throw new BadRequestException('Banner text is required when the banner is enabled');
+    }
+    const db = this.supabase.getAdminClient();
+    const { error } = await db
+      .from('store_settings')
+      .upsert({ key: 'announcement_banner', value: clean, updated_at: new Date().toISOString() });
+
+    if (error) throw error;
+    return clean;
+  }
+
   async getStockHoldMinutes(): Promise<number> {
     const db = this.supabase.getAdminClient();
     const { data } = await db
@@ -359,6 +395,18 @@ export interface CountryShippingRate {
 const DEFAULT_COUNTRY_SHIPPING_RATES: CountryShippingRate[] = [
   { country: 'US', label: 'United States', estimate: '10-15 business days', price: 900 },
 ];
+
+export interface AnnouncementBanner {
+  enabled: boolean;
+  text: string;
+  link: string; // optional URL; empty string = plain text banner
+}
+
+const DEFAULT_ANNOUNCEMENT_BANNER: AnnouncementBanner = {
+  enabled: false,
+  text: '',
+  link: '',
+};
 
 const DEFAULT_STOCK_HOLD_MINUTES = 10;
 

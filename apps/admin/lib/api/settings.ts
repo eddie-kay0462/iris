@@ -144,6 +144,33 @@ export function useUpdateCountryShippingRates() {
   });
 }
 
+export interface AnnouncementBanner {
+  enabled: boolean;
+  text: string;
+  link: string;
+}
+
+export function useAnnouncementBanner() {
+  return useQuery({
+    queryKey: ["announcement-banner"],
+    queryFn: () => apiClient<AnnouncementBanner>("/settings/announcement-banner"),
+  });
+}
+
+export function useUpdateAnnouncementBanner() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (banner: AnnouncementBanner) =>
+      apiClient<AnnouncementBanner>("/settings/announcement-banner", {
+        method: "PUT",
+        body: banner,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["announcement-banner"] });
+    },
+  });
+}
+
 export function useStockHoldMinutes() {
   return useQuery({
     queryKey: ["stock-hold-minutes"],

@@ -103,3 +103,17 @@ export function useCountryShippingRates() {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+export interface AnnouncementBanner {
+  enabled: boolean;
+  text: string;
+  link: string; // optional URL; empty string = plain text banner
+}
+
+export function useAnnouncementBanner() {
+  return useQuery({
+    queryKey: ["announcement-banner"],
+    queryFn: () => apiClient<AnnouncementBanner>("/settings/announcement-banner"),
+    staleTime: 5 * 60 * 1000,
+  });
+}

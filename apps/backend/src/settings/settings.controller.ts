@@ -80,6 +80,19 @@ export class SettingsController {
     return this.settingsService.updateCountryShippingRates(body.rates);
   }
 
+  @Get('announcement-banner')
+  @Public()
+  getAnnouncementBanner() {
+    return this.settingsService.getAnnouncementBanner();
+  }
+
+  @Put('announcement-banner')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings:update')
+  updateAnnouncementBanner(@Body() body: any) {
+    return this.settingsService.updateAnnouncementBanner(body);
+  }
+
   @Get('stock-hold-minutes')
   @RequirePermission('settings:read')
   getStockHoldMinutes() {
