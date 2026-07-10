@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import CurrencyModal from "./CurrencyModal";
 
 // ── Currencies ────────────────────────────────────────────
 export interface Currency {
@@ -56,14 +57,46 @@ const TZ_MAP: Record<string, Region> = {
 
 const FALLBACK_REGION: Region = { country: "Global", countryCode: "GL", flag: "🌐" };
 
-function detectRegion(): Region {
+function getTimezone(): string {
   try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    return TZ_MAP[tz] ?? FALLBACK_REGION;
+    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
   } catch {
-    return FALLBACK_REGION;
+    return "";
   }
 }
+
+function detectRegion(tz: string): Region {
+  return TZ_MAP[tz] ?? FALLBACK_REGION;
+}
+
+/**
+ * Most suitable shopping currency for a visitor's location. Falls back to the
+ * store's base currency (GHS) when we can't confidently place them outside
+ * Ghana — the currency prompt only appears when this returns something other
+ * than GHS, so an unknown location is never nagged.
+ */
+export function suggestCurrency(tz: string, region: Region): string {
+  const byCountry: Record<string, string> = {
+    GH: "GHS",
+    NG: "NGN",
+    US: "USD",
+    CA: "CAD",
+    AU: "AUD",
+    GB: "GBP",
+    DE: "EUR", FR: "EUR", IT: "EUR", ES: "EUR", NL: "EUR",
+  };
+  if (byCountry[region.countryCode]) return byCountry[region.countryCode];
+
+  // Broader timezone-based fallback for countries not explicitly mapped above.
+  if (tz === "Europe/London") return "GBP";
+  if (tz.startsWith("Europe/")) return "EUR"; // rest of Europe → Euro
+  if (tz.startsWith("Australia/")) return "AUD";
+  if (tz === "Africa/Lagos" || tz === "Africa/Abuja") return "NGN";
+  if (tz.startsWith("America/")) return "USD"; // Americas outside US/CA → USD
+  return "GHS"; // unknown location → base currency, no prompt
+}
+
+const CURRENCY_PROMPTED_KEY = "iris_currency_prompted";
 
 // ── Exchange rates ─────────────────────────────────────────
 const FX_CACHE_KEY = "iris_fx_rates";
@@ -100,6 +133,9 @@ interface LocaleContextValue {
   rates: Record<string, number>;
   setCurrency: (code: string) => void;
   formatPrice: (ghsAmount: number) => string;
+  suggestedCurrency: string;
+  showCurrencyModal: boolean;
+  dismissCurrencyModal: () => void;
 }
 
 const LocaleContext = createContext<LocaleContextValue | null>(null);
@@ -110,11 +146,43 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   const [region, setRegion] = useState<Region>(FALLBACK_REGION);
   const [currency, setCurrencyState] = useState<string>("GHS");
   const [rates, setRates] = useState<Record<string, number>>({});
+  const [suggestedCurrency, setSuggestedCurrency] = useState<string>("GHS");
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
 
   useEffect(() => {
-    setRegion(detectRegion());
+    // Client-only detection (timezone + localStorage): must run after hydration,
+    // so setting state here is the intended pattern despite the lint rule.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    const tz = getTimezone();
+    const detected = detectRegion(tz);
+    setRegion(detected);
+
+    const suggested = suggestCurrency(tz, detected);
+    setSuggestedCurrency(suggested);
+
     const stored = localStorage.getItem("iris_currency");
-    if (stored) setCurrencyState(stored);
+    if (stored) {
+      setCurrencyState(stored);
+    } else if (suggested !== "GHS") {
+      // First visit from outside Ghana — localise prices to their currency up front.
+      setCurrencyState(suggested);
+      try { localStorage.setItem("iris_currency", suggested); } catch {}
+    }
+
+    // Offer the currency choice once, and only to first-time visitors we've placed
+    // outside Ghana (suggested !== GHS). Ghana, unknown locations, and anyone who
+    // already has a saved currency are never prompted.
+    let prompted = false;
+    try { prompted = localStorage.getItem(CURRENCY_PROMPTED_KEY) === "1"; } catch {}
+    if (!stored && !prompted && suggested !== "GHS") {
+      setShowCurrencyModal(true);
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
+
+  const dismissCurrencyModal = useCallback(() => {
+    setShowCurrencyModal(false);
+    try { localStorage.setItem(CURRENCY_PROMPTED_KEY, "1"); } catch {}
   }, []);
 
   useEffect(() => {
@@ -150,11 +218,25 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ region, currency, rates, setCurrency, formatPrice }),
-    [region, currency, rates, setCurrency, formatPrice],
+    () => ({
+      region,
+      currency,
+      rates,
+      setCurrency,
+      formatPrice,
+      suggestedCurrency,
+      showCurrencyModal,
+      dismissCurrencyModal,
+    }),
+    [region, currency, rates, setCurrency, formatPrice, suggestedCurrency, showCurrencyModal, dismissCurrencyModal],
   );
 
-  return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
+  return (
+    <LocaleContext.Provider value={value}>
+      {children}
+      <CurrencyModal />
+    </LocaleContext.Provider>
+  );
 }
 
 export function useLocale(): LocaleContextValue {

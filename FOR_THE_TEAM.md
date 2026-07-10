@@ -4934,3 +4934,36 @@ The customer's saved State now also appears on the order confirmation email to s
 3. Switch the **site currency** (top bar) to USD/GBP → every price in the summary updates to that currency, but the **"You will be charged GH₵ …"** note still shows cedis.
 4. Complete a US order and check the **admin order detail**, the **staff email**, and the customer **/track** page all show the State in the address.
 5. In **admin → Settings → General → International Shipping Rates**, change the US price, save, and confirm checkout picks up the new amount.
+
+---
+
+## Auto currency detection + a "Select currency" welcome modal (July 2026)
+
+When someone opens the site, we now **guess their best currency from their location** (using their device's timezone, which is hard to fake with a VPN) and switch prices to it automatically — Cedis for Ghana, Naira for Nigeria, USD for the US, CAD for Canada, AUD for Australia, GBP for the UK, and Euro for the rest of Europe. Anywhere we can't confidently place falls back to Cedis.
+
+On a first visit **from outside Ghana**, a **"Select Currency" modal** pops up (once) with their detected currency already selected, so they can confirm or pick another. **Ghana visitors never see it** — they just get Cedis. It's a one-time prompt: once confirmed or dismissed it won't nag them again, and anyone who already picked a currency before is left alone.
+
+The modal and the currency picker in the top bar were **redesigned to match the site's look** — the black-and-white, sharp-edged, spec-sheet style with wide-spaced type, instead of the rounded generic version. The modal shows all seven currencies (the six international ones in a grid, with Cedis as a full-width option at the bottom), and the selected one flips to a solid black tile. Per request, the top-bar currency selector and the modal use **Helvetica** for their text.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/frontend/lib/locale/locale-provider.tsx` | Added location→currency detection, first-visit auto-switch, and the once-only prompt logic (only for visitors outside Ghana). |
+| `apps/frontend/lib/locale/CurrencyModal.tsx` | **New** "Select Currency" modal, styled to the site's black/white spec-sheet aesthetic, with the detected currency preselected and Cedis included. |
+| `apps/frontend/app/(shop)/layout.tsx` | Redesigned the top-bar currency selector (sharp, hairline, Helvetica) to match. |
+| `apps/frontend/app/(shop)/components/NavDrawer.tsx` | Mobile menu currency selector restyled to match the new look. |
+
+> **Heads-up:**
+> - **No backend or database changes** — this is all front-end, using the exchange rates the site already fetches.
+> - The prompt is remembered per browser (via local storage), so clearing site data will make it appear again on the next visit from outside Ghana.
+> - The mobile-menu selector was left on the site's mono (typewriter-style) font rather than Helvetica — easy to switch if we want it to match the top bar exactly.
+> - Not yet eyeballed on a live server from a non-Ghana location — that visual check still needs doing (the modal only triggers outside Ghana).
+
+### How to test
+
+1. Open the site normally from Ghana → prices are in Cedis and **no modal** appears.
+2. Simulate being abroad (change your computer's timezone to, e.g., America/Toronto, or use a browser profile set to another region) and open the site fresh → prices switch to that currency and the **Select Currency** modal appears with it preselected.
+3. Pick a different currency and **Confirm** → prices update; reopen the site → the modal doesn't come back.
+4. Try **Dismiss** / the ✕ / clicking outside → modal closes, currency stays as detected, and it won't reappear.
+5. Check the **top-bar** and **mobile-menu** currency pickers → both show the new black/white styling and switch currency correctly.

@@ -367,37 +367,65 @@ function LocaleSelectorButton({ isTransparent = false }: { isTransparent?: boole
     : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white";
 
   return (
-    <div ref={ref} className="relative hidden md:flex">
+    <div
+      ref={ref}
+      className="relative hidden md:flex"
+      style={{ fontFamily: 'Helvetica, "Helvetica Neue", Arial, sans-serif' }}
+    >
       <button
         onClick={() => setOpen((o) => !o)}
-        className={`flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-widest transition ${textClass}`}
+        className={`flex items-center gap-1.5 text-[11px] uppercase tracking-[0.2em] transition ${textClass}`}
       >
         <span className="text-sm leading-none">{region.flag}</span>
-        <span>{region.country.toUpperCase()} ({region.countryCode})</span>
-        <span className="mx-0.5 opacity-30">·</span>
-        <span>{activeCurrency.symbol} {activeCurrency.code}</span>
+        <span>{region.countryCode}</span>
+        <span className="opacity-30">/</span>
+        <span>{activeCurrency.code}</span>
         <ChevronDown
           className={`h-3 w-3 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-          strokeWidth={2}
+          strokeWidth={1.75}
         />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 min-w-[220px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
-          {CURRENCIES.map((cur) => (
-            <button
-              key={cur.code}
-              onClick={() => { setCurrency(cur.code); setOpen(false); }}
-              className={`flex w-full items-center justify-between px-4 py-3 text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 ${
-                cur.code === currency
-                  ? "bg-gray-100 dark:bg-gray-800"
-                  : ""
-              }`}
-            >
-              <span className="text-gray-900 dark:text-white">{cur.name}</span>
-              <span className="text-gray-400 dark:text-gray-500">{cur.symbol}</span>
-            </button>
-          ))}
+        <div className="absolute right-0 top-full z-50 mt-3 min-w-[240px] border border-neutral-200 bg-white shadow-2xl dark:border-neutral-800 dark:bg-neutral-950">
+          <p className="border-b border-neutral-200 px-4 py-3 text-[9px] uppercase tracking-[0.28em] text-neutral-400 dark:border-neutral-800 dark:text-neutral-500">
+            Currency
+          </p>
+          {CURRENCIES.map((cur) => {
+            const isActive = cur.code === currency;
+            return (
+              <button
+                key={cur.code}
+                onClick={() => { setCurrency(cur.code); setOpen(false); }}
+                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+                  isActive
+                    ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
+                    : "text-neutral-900 hover:bg-neutral-100 dark:text-white dark:hover:bg-neutral-900"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 shrink-0 ${
+                    isActive ? "bg-white dark:bg-neutral-900" : "bg-transparent"
+                  }`}
+                />
+                <span className="text-[12px] font-bold tracking-[0.1em]">{cur.code}</span>
+                <span
+                  className={`text-[9px] uppercase tracking-[0.18em] ${
+                    isActive ? "text-white/60 dark:text-neutral-900/60" : "text-neutral-400 dark:text-neutral-500"
+                  }`}
+                >
+                  {cur.name}
+                </span>
+                <span
+                  className={`ml-auto text-[12px] ${
+                    isActive ? "text-white/70 dark:text-neutral-900/70" : "text-neutral-400 dark:text-neutral-500"
+                  }`}
+                >
+                  {cur.symbol}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

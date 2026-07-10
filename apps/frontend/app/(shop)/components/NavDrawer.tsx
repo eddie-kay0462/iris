@@ -161,42 +161,42 @@ function CurrencySwitcher() {
     <div ref={ref} className="relative px-5 pb-1">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2.5 border border-[#ddd] px-3 py-2.5 text-[12px] uppercase tracking-[0.1em] text-[#666] transition-colors duration-200 hover:border-[#111] hover:text-[#111] dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-white dark:hover:text-[#ededed]"
+        className="flex w-full items-center gap-2.5 border border-[#ddd] px-3 py-2.5 font-mono text-[12px] uppercase tracking-[0.18em] text-[#666] transition-colors duration-200 hover:border-[#111] hover:text-[#111] dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-white dark:hover:text-[#ededed]"
       >
         <span className="text-[14px] leading-none">{region.flag}</span>
         <span>
-          {region.countryCode} · {active.symbol} {active.code}
+          {region.countryCode} <span className="opacity-30">/</span> {active.code}
         </span>
         <ChevronDown
           className={`ml-auto h-3.5 w-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-          strokeWidth={2}
+          strokeWidth={1.75}
         />
       </button>
 
       {open && (
         <div className="absolute bottom-[calc(100%+6px)] left-5 right-5 z-10 border border-[#111] bg-white shadow-[0_-12px_40px_rgba(0,0,0,0.12)] dark:border-white dark:bg-[#0a0a0a]">
-          {CURRENCIES.map((c) => (
-            <button
-              key={c.code}
-              onClick={() => {
-                setCurrency(c.code);
-                setOpen(false);
-              }}
-              className={`flex w-full items-center justify-between px-3.5 py-2.5 text-[13px] transition-colors duration-150 hover:bg-[#111] hover:text-white dark:hover:bg-[#ededed] dark:hover:text-[#0a0a0a] ${
-                c.code === currency
-                  ? "text-[#111] dark:text-[#ededed]"
-                  : "text-[#666] dark:text-neutral-400"
-              }`}
-            >
-              <span>{c.name}</span>
-              <span className="flex items-center gap-2">
-                <span className="opacity-60">{c.symbol}</span>
-                {c.code === currency && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                )}
-              </span>
-            </button>
-          ))}
+          {CURRENCIES.map((c) => {
+            const isActive = c.code === currency;
+            return (
+              <button
+                key={c.code}
+                onClick={() => {
+                  setCurrency(c.code);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center gap-3 px-3.5 py-2.5 text-left font-mono transition-colors duration-150 ${
+                  isActive
+                    ? "bg-[#111] text-white dark:bg-[#ededed] dark:text-[#0a0a0a]"
+                    : "text-[#666] hover:bg-[#111] hover:text-white dark:text-neutral-400 dark:hover:bg-[#ededed] dark:hover:text-[#0a0a0a]"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 shrink-0 ${isActive ? "bg-current" : "bg-transparent"}`} />
+                <span className="text-[12px] font-bold tracking-[0.1em]">{c.code}</span>
+                <span className="text-[9px] uppercase tracking-[0.18em] opacity-60">{c.name}</span>
+                <span className="ml-auto text-[12px] opacity-70">{c.symbol}</span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
