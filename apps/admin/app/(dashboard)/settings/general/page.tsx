@@ -8,6 +8,12 @@ import {
   useShippingOptions,
   useUpdateShippingOptions,
   ShippingOption,
+  useCountryShippingRates,
+  useUpdateCountryShippingRates,
+  CountryShippingRate,
+  useAnnouncementBanner,
+  useUpdateAnnouncementBanner,
+  AnnouncementBanner,
   useStockHoldMinutes,
   useUpdateStockHoldMinutes,
   usePreorderEtaText,
@@ -56,6 +62,67 @@ export default function GeneralSettingsPage() {
         toast.success("Shipping options updated.");
       },
     });
+  }
+
+  const { data: countryRates, isLoading: loadingCountryRates } = useCountryShippingRates();
+  const { mutate: saveCountryRates, isPending: savingCountryRates } = useUpdateCountryShippingRates();
+  const [draftCountryRates, setDraftCountryRates] = useState<CountryShippingRate[]>([]);
+
+  useEffect(() => {
+    if (countryRates) setDraftCountryRates(countryRates);
+  }, [countryRates]);
+
+  function handleCountryRateChange(
+    country: string,
+    field: keyof CountryShippingRate,
+    value: string
+  ) {
+    setDraftCountryRates((prev) =>
+      prev.map((r) =>
+        r.country === country
+          ? { ...r, [field]: field === "price" ? parseFloat(value) || 0 : value }
+          : r
+      )
+    );
+  }
+
+  function handleSaveCountryRates() {
+    saveCountryRates(draftCountryRates, {
+      onSuccess: () => {
+        toast.success("International shipping rates updated.");
+      },
+    });
+  }
+
+  const { data: banner, isLoading: loadingBanner } = useAnnouncementBanner();
+  const { mutate: saveBanner, isPending: savingBanner } = useUpdateAnnouncementBanner();
+  const [draftBanner, setDraftBanner] = useState<AnnouncementBanner>({
+    enabled: false,
+    text: "",
+    link: "",
+  });
+
+  useEffect(() => {
+    if (banner) setDraftBanner(banner);
+  }, [banner]);
+
+  function handleSaveBanner() {
+    if (draftBanner.enabled && !draftBanner.text.trim()) {
+      toast.error("Add banner text before turning it on.");
+      return;
+    }
+    saveBanner(
+      {
+        enabled: draftBanner.enabled,
+        text: draftBanner.text.trim(),
+        link: draftBanner.link.trim(),
+      },
+      {
+        onSuccess: () => {
+          toast.success("Announcement banner updated.");
+        },
+      }
+    );
   }
 
   const { data: stockHoldMinutes, isLoading: loadingStockHold } = useStockHoldMinutes();
@@ -236,6 +303,146 @@ export default function GeneralSettingsPage() {
             >
               <Save className="h-4 w-4" />
               {savingShipping ? "Saving…" : "Save shipping options"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* International Shipping Rates */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="p-6">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-slate-900">International Shipping Rates</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Flat shipping fee (in GH₵) charged for each country we ship to outside Ghana. Applied at checkout and enforced on the order.
+            </p>
+          </div>
+
+          {loadingCountryRates ? (
+            <p className="text-sm text-slate-400">Loading…</p>
+          ) : draftCountryRates.length === 0 ? (
+            <p className="text-sm text-slate-400">No international destinations configured.</p>
+          ) : (
+            <div className="space-y-4">
+              {draftCountryRates.map((rate) => (
+                <div key={rate.country} className="grid grid-cols-1 sm:grid-cols-4 gap-4 pb-4 border-b border-slate-100 last:border-0 last:pb-0">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Country</label>
+                    <input
+                      type="text"
+                      value={rate.label}
+                      onChange={(e) => handleCountryRateChange(rate.country, "label", e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    />
+                  </div>
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Estimate</label>
+                    <input
+                      type="text"
+                      value={rate.estimate}
+                      onChange={(e) => handleCountryRateChange(rate.country, "estimate", e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Price (GH₵)</label>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 text-sm">₵</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={rate.price}
+                        onChange={(e) => handleCountryRateChange(rate.country, "price", e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-6 flex items-center gap-4">
+            <button
+              onClick={handleSaveCountryRates}
+              disabled={savingCountryRates || loadingCountryRates}
+              className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" />
+              {savingCountryRates ? "Saving…" : "Save international rates"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Announcement Banner */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="p-6">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-slate-900">Announcement Banner</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              A bar shown at the very top of the storefront — for sales, shipping notices, or launches. Shoppers can dismiss it; changing the text shows it again to everyone.
+            </p>
+          </div>
+
+          {loadingBanner ? (
+            <p className="text-sm text-slate-400">Loading…</p>
+          ) : (
+            <div className="space-y-4">
+              <label className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={draftBanner.enabled}
+                  onChange={(e) => setDraftBanner((b) => ({ ...b, enabled: e.target.checked }))}
+                  className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+                />
+                <span className="text-sm font-medium text-slate-900">Show the banner</span>
+              </label>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Text</label>
+                <input
+                  type="text"
+                  value={draftBanner.text}
+                  onChange={(e) => setDraftBanner((b) => ({ ...b, text: e.target.value }))}
+                  placeholder="e.g. Free shipping on orders over GH₵ 500"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  Link <span className="text-slate-400 normal-case">(optional — makes the banner clickable)</span>
+                </label>
+                <input
+                  type="text"
+                  value={draftBanner.link}
+                  onChange={(e) => setDraftBanner((b) => ({ ...b, link: e.target.value }))}
+                  placeholder="/products or https://…"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+
+              {/* Live preview */}
+              {draftBanner.text.trim() && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Preview</label>
+                  <div className="flex h-9 items-center justify-center rounded-lg bg-neutral-950 px-8 text-center text-[11px] font-medium uppercase tracking-[0.18em] text-white">
+                    {draftBanner.text}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="mt-6 flex items-center gap-4">
+            <button
+              onClick={handleSaveBanner}
+              disabled={savingBanner || loadingBanner}
+              className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" />
+              {savingBanner ? "Saving…" : "Save banner"}
             </button>
           </div>
         </div>

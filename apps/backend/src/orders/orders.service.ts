@@ -21,6 +21,11 @@ import {
   POPUP_REVENUE_STATUSES,
 } from '../analytics/analytics.constants';
 
+// Payment processing fee charged on top of the order amount. Kept in sync with the
+// frontend checkout display (apps/frontend/app/(shop)/checkout/CheckoutClient.tsx) so
+// the stored total matches what the customer is actually charged via Paystack.
+const PROCESSING_FEE_RATE = 0.0195;
+
 @Injectable()
 export class OrdersService {
   private readonly frontendUrl: string;
@@ -170,6 +175,26 @@ export class OrdersService {
     return `IRD-${String(next).padStart(6, '0')}`;
   }
 
+  /**
+   * Server-authoritative shipping cost. For international destinations we charge
+   * the flat per-country rate stored in settings (never the client-supplied
+   * amount) so the fee can't be tampered with; Ghana keeps the tiered domestic
+   * option the client picked.
+   */
+  private async resolveShippingCost(dto: CreateOrderDto): Promise<number> {
+    const country = dto.shippingAddress?.region;
+    if (country && country !== 'GH') {
+      const rate = await this.settingsService.getShippingRateForCountry(country);
+      if (rate === null) {
+        throw new BadRequestException(
+          `We don't currently ship to the selected country (${country}).`,
+        );
+      }
+      return rate;
+    }
+    return dto.shippingCost ?? 0;
+  }
+
   async create(dto: CreateOrderDto, userId: string | null, email: string | null) {
     const resolvedEmail = email ?? dto.guestEmail ?? '';
     if (!resolvedEmail) {
@@ -266,6 +291,14 @@ export class OrdersService {
       }
     }
 
+    // 1a. Express shipping is not offered for pre-orders: a pre-ordered line ships
+    // separately once restocked, so an expedited method can't be honoured for it.
+    if (preorderItems.length > 0 && dto.shippingMethod === 'express') {
+      throw new BadRequestException(
+        'Express shipping is not available for orders containing pre-order items.',
+      );
+    }
+
     // 1b. Validate pre-order eligibility BEFORE inserting anything, so an
     // ineligible line (limit reached, duplicate, price mismatch) doesn't leave an
     // orphaned order behind.
@@ -287,7 +320,7 @@ export class OrdersService {
       (sum, i) => sum + i.price * i.quantity,
       0,
     );
-    const shippingCost = dto.shippingCost ?? 0;
+    const shippingCost = await this.resolveShippingCost(dto);
 
     // 2b. Validate promo code if supplied
     let discountAmount = 0;
@@ -312,7 +345,9 @@ export class OrdersService {
       }
     }
 
-    const total = Math.max(0, subtotal + shippingCost - discountAmount);
+    const amountBeforeFees = Math.max(0, subtotal + shippingCost - discountAmount);
+    const processingFee = Math.round(amountBeforeFees * PROCESSING_FEE_RATE * 100) / 100;
+    const total = amountBeforeFees + processingFee;
 
     // 3. Generate order number
     const orderNumber = await this.generateOrderNumber();
@@ -337,6 +372,7 @@ export class OrdersService {
         subtotal,
         discount: discountAmount,
         shipping_cost: shippingCost,
+        processing_fee: processingFee,
         total,
         currency: 'GHS',
         shipping_address: dto.shippingAddress,
@@ -1548,7 +1584,7 @@ export class OrdersService {
       (sum, i) => sum + i.price * i.quantity,
       0,
     );
-    const shippingCost = dto.shippingCost ?? 0;
+    const shippingCost = await this.resolveShippingCost(dto);
 
     // 2b. Validate promo code if supplied
     let discountAmount = 0;
@@ -1573,7 +1609,9 @@ export class OrdersService {
       }
     }
 
-    const total = Math.max(0, subtotal + shippingCost - discountAmount);
+    const amountBeforeFees = Math.max(0, subtotal + shippingCost - discountAmount);
+    const processingFee = Math.round(amountBeforeFees * PROCESSING_FEE_RATE * 100) / 100;
+    const total = amountBeforeFees + processingFee;
 
     // 3. Generate order number
     const orderNumber = await this.generateOrderNumber();
@@ -1591,6 +1629,7 @@ export class OrdersService {
         subtotal,
         discount: discountAmount,
         shipping_cost: shippingCost,
+        processing_fee: processingFee,
         total,
         currency: 'GHS',
         shipping_address: dto.shippingAddress,
@@ -1811,6 +1850,7 @@ export class OrdersService {
           order_number: fullOrder.order_number,
           subtotal: fullOrder.subtotal,
           shipping_cost: fullOrder.shipping_cost || 0,
+          processing_fee: fullOrder.processing_fee || 0,
           total: fullOrder.total,
           currency: fullOrder.currency || 'GHS',
           brand,
@@ -1825,6 +1865,7 @@ export class OrdersService {
           order_number: fullOrder.order_number,
           subtotal: fullOrder.subtotal,
           shipping_cost: fullOrder.shipping_cost || 0,
+          processing_fee: fullOrder.processing_fee || 0,
           total: fullOrder.total,
           currency: fullOrder.currency || 'GHS',
           shipping_address: fullOrder.shipping_address as any,

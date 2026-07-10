@@ -34,6 +34,7 @@ export class EmailService {
     order_number: string;
     subtotal: number;
     shipping_cost: number;
+    processing_fee?: number;
     total: number;
     currency: string;
     brand?: string;
@@ -54,6 +55,7 @@ export class EmailService {
     email: string;
     subtotal: number;
     shipping_cost: number;
+    processing_fee?: number;
     total: number;
     currency: string;
     shipping_address?: {
@@ -259,6 +261,7 @@ export class EmailService {
     order_number: string;
     subtotal: number;
     shipping_cost: number;
+    processing_fee?: number;
     total: number;
     currency: string;
     brand?: string;
@@ -314,8 +317,12 @@ export class EmailService {
               <td style="font-size:13px;color:#999;text-align:right;">${symbol} ${(order.shipping_cost || 0).toLocaleString()}</td>
             </tr>
             <tr>
+              <td style="font-size:13px;color:#999;padding:3px 0;">Fees (1.95%)</td>
+              <td style="font-size:13px;color:#999;text-align:right;">${symbol} ${(order.processing_fee || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            </tr>
+            <tr>
               <td style="font-size:15px;font-weight:700;color:#111;padding-top:10px;">Total</td>
-              <td style="font-size:15px;font-weight:700;color:#111;text-align:right;padding-top:10px;">${symbol} ${order.total.toLocaleString()}</td>
+              <td style="font-size:15px;font-weight:700;color:#111;text-align:right;padding-top:10px;">${symbol} ${order.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
             </tr>
           </table>
 
@@ -336,6 +343,7 @@ export class EmailService {
     email: string;
     subtotal: number;
     shipping_cost: number;
+    processing_fee?: number;
     total: number;
     currency: string;
     shipping_address?: {
@@ -343,6 +351,7 @@ export class EmailService {
       address?: string;
       address2?: string;
       city?: string;
+      state?: string;
       region?: string;
       phone?: string;
     } | null;
@@ -361,7 +370,7 @@ export class EmailService {
       addr.fullName,
       addr.address,
       addr.address2,
-      addr.city,
+      [addr.city, addr.state].filter(Boolean).join(', '),
       addr.region,
     ]
       .filter(Boolean)
@@ -434,8 +443,12 @@ export class EmailService {
               <td style="font-size:13px;color:#999;text-align:right;">${symbol} ${(order.shipping_cost || 0).toLocaleString()}</td>
             </tr>
             <tr>
+              <td style="font-size:13px;color:#999;padding:3px 0;">Fees (1.95%)</td>
+              <td style="font-size:13px;color:#999;text-align:right;">${symbol} ${(order.processing_fee || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            </tr>
+            <tr>
               <td style="font-size:15px;font-weight:700;color:#111;padding-top:10px;">Total paid</td>
-              <td style="font-size:15px;font-weight:700;color:#111;text-align:right;padding-top:10px;">${symbol} ${order.total.toLocaleString()}</td>
+              <td style="font-size:15px;font-weight:700;color:#111;text-align:right;padding-top:10px;">${symbol} ${order.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
             </tr>
           </table>
 

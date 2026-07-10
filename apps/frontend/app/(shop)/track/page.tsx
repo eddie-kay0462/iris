@@ -235,7 +235,10 @@ function OrderResult({ order }: { order: TrackingOrder }) {
             <br />
             {order.shipping_address.address}
             <br />
-            {order.shipping_address.city}, {order.shipping_address.region}
+            {[order.shipping_address.city, order.shipping_address.state]
+              .filter(Boolean)
+              .join(", ")}
+            , {order.shipping_address.region}
           </p>
         </div>
       )}

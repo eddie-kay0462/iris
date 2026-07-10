@@ -4818,3 +4818,215 @@ We've folded everything into **one unified Orders page**. The standalone Pre-ord
 3. Open a **pop-up pre-order** (order number starts with `PRE-`) → all its items are grouped in one view, with the pre-order actions available.
 4. From an order, try **Restock & Allocate**, **Mark Fulfilled**, **Refund**, **Cancel**, and **Resend Confirmation** — and confirm the order and the top cards update afterward.
 5. On the storefront **/track** page, look up an order that includes pre-ordered items (and a `PRE-` pop-up number with several items) → confirm the pre-order items all show up neatly.
+
+---
+
+## Checkout now adds a 1.95% fee (and records it properly) (July 2026)
+
+Checkout now charges a small **1.95% fee** on top of each order (this covers the payment-processing cost). Shoppers already saw a **"Fees (1.95%)"** line at checkout, but there was a gap: the customer was *charged* the fee, yet the order we saved in our system recorded the total **without** it. That meant our order records and revenue numbers were coming out about 1.95% lower than what actually landed in the Paystack account.
+
+We've closed that gap. The saved order total now matches exactly what the customer pays, and the fee amount is stored on its own so we can always separate it back out later (e.g. if we want to see "net" revenue without the fee).
+
+**What you'll see:**
+
+- The **"Fees (1.95%)"** line now shows up everywhere an order breakdown appears — the checkout summary, the order confirmation page, the confirmation email to the customer, the staff notification email, and the admin order detail page.
+- **Revenue reporting now reflects gross** — i.e. the full amount collected including the fee. Because the fee is stored separately, we can still calculate revenue without it whenever we want.
+
+**Why it matters:** what we charge, what we record, and what Paystack collects are finally the same number — no more silent ~2% mismatch between the till and the books.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `supabase/migrations/20260709000000_add_order_processing_fee.sql` | **New** — adds a `processing_fee` column to the orders table so the fee is stored per order. |
+| `apps/backend/src/orders/orders.service.ts` | Order total is now calculated **including** the 1.95% fee, and the fee is saved on the order (both online and pending-order paths). |
+| `apps/backend/src/email/email.service.ts` | Confirmation and staff emails now show a "Fees (1.95%)" line in the totals. |
+| `apps/frontend/app/(shop)/checkout/CheckoutClient.tsx` | Tidied the fee logic to use a shared rate, and fixed a totals figure that wasn't showing decimals. |
+| `apps/frontend/app/(shop)/checkout/confirmation/page.tsx` | Order confirmation page now shows the fee line. |
+| `apps/frontend/lib/api/orders.ts`, `apps/admin/lib/api/orders.ts` | Order data now carries the `processing_fee` amount. |
+| `apps/admin/app/(dashboard)/orders/[id]/page.tsx` | Admin order detail shows the fee line in the breakdown. |
+
+> **Heads-up / action required:**
+> - The **database migration must be run before this goes live.** Until the new `processing_fee` column exists, saving a new order will fail. It hasn't been applied to any database yet.
+> - **Revenue figures will tick up ~1.95%** once this is live, because totals now include the fee. That's expected — it's gross revenue. The fee is stored separately if we ever want the "without fee" view.
+> - Not yet driven end-to-end on a live server with a real payment — that click-through check still needs doing.
+
+### How to test
+
+1. Add something to cart and go to **checkout** → confirm the **Fees (1.95%)** line and that the **Total** equals subtotal + shipping − any discount + the fee.
+2. Complete a test order → on the **confirmation page** and in the **confirmation email**, confirm the fee line appears and the total matches what was charged.
+3. In **admin → Orders → open the order** → confirm the breakdown shows the **Fees (1.95%)** line and the total matches.
+4. Sanity-check that the amount charged in **Paystack** equals the order **Total** we recorded (they should now be identical).
+
+---
+
+## Road to HQ counts pre-orders the moment they're placed (July 2026)
+
+The **Road to HQ** unit counter on the homepage adds up every unit sold toward the goal — website orders, pop-up sales, and ally sales — plus a baseline for historical units. But **pre-orders weren't being counted at all**: a pre-ordered item lives in its own place (not as a normal order line), so it never made it into the tally, and it wouldn't have shown up until much later — if ever.
+
+Now **a pre-order counts as soon as it's placed and paid**, not when it's eventually fulfilled and shipped. So the moment a customer pays for a pre-order, the homepage counter moves.
+
+**What counts, exactly:** any **paid** pre-order that hasn't been **cancelled or refunded** — whether it's still waiting, has stock held for it, or is already fulfilled. Unpaid pre-orders (e.g. a pop-up pre-order recorded with payment still pending) don't count until they're paid, and cancelled/refunded ones drop back out. This matches how the rest of the counter already works — only real, paid sales count.
+
+**Why it matters:** the counter now reflects genuine committed demand in real time. Pre-orders are money in and a firm sale; waiting until fulfillment to count them undercounted the road to HQ.
+
+No double-counting: in-stock items and pre-order items are stored separately, so an order that mixes both has each part counted once.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/backend/src/analytics/analytics.service.ts` | The Road to HQ figure now also adds up **paid pre-order** quantities, alongside website / pop-up / ally units and the baseline. |
+| `apps/backend/src/analytics/analytics.constants.ts` | Added the list of pre-order statuses that count (pending, stock-held, fulfilled) as the single source of truth. |
+| `apps/frontend/lib/api/road-to-hq.server.ts` | The homepage data now includes a `preorders` breakdown number for consistency. |
+
+> **Heads-up:**
+> - The homepage counter refreshes a few times an hour (not instantly), so expect a short delay before a new pre-order shows up in the number.
+> - No database change needed — this only changes how the number is *calculated*.
+
+### How to test
+
+1. Note the current **Road to HQ** number on the homepage.
+2. Place (and pay for) a **pre-order** on the storefront.
+3. After the homepage refreshes (within a few minutes), the counter should go **up by the quantity ordered** — without needing to fulfil the pre-order first.
+4. **Cancel or refund** that pre-order → after the next refresh, the counter drops back down.
+
+---
+
+## Shipping to the US + prices shown in the customer's currency (July 2026)
+
+Two connected checkout upgrades.
+
+**1. We now ship to the United States.** US is selectable at checkout with a flat **GH₵ 900** shipping fee. Because a US address needs more than a Ghana one, checkout now asks for a **State / Province** and makes the street address and **ZIP code required** for any non-Ghana order. Phone numbers already worked internationally (pick the country flag, e.g. 🇺🇸 +1). International orders show a single flat-rate delivery line — the local Express / Pickup options only apply within Ghana.
+
+The **shipping rates live in the database like the other fees**, and there's a new **"International Shipping Rates"** panel in **Settings → General** where staff can edit each country's name, delivery estimate, and price. Today it's just the US at GH₵ 900, but more countries can be added there later. The rate is also **enforced on the server** — the fee a customer is charged for a country is the one saved in settings, so it can't be fiddled with from the browser.
+
+**2. Checkout prices now show in the shopper's chosen currency.** If a customer switches the site currency (say to USD or GBP), the entire checkout summary — item prices, subtotal, **shipping**, discount, fees, and total — now displays in that currency instead of always in cedis. Everything is still **stored and charged in Ghana Cedis** behind the scenes; only the on-screen numbers are converted. The small note that says **"You will be charged GH₵ …"** stays in cedis on purpose, so a shopper paying in another currency always sees the exact amount that will hit their card.
+
+The customer's saved State now also appears on the order confirmation email to staff, the admin order detail page, and the customer's order-tracking page.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/backend/src/settings/settings.service.ts` | Stores/reads per-country shipping rates in settings (default: US = GH₵ 900); helper to look up a country's rate. |
+| `apps/backend/src/settings/settings.controller.ts` | Public endpoint to read country rates + admin endpoint to update them. |
+| `apps/backend/src/orders/orders.service.ts` | Shipping fee for international orders is now taken from the saved rate (server-enforced), not the browser. |
+| `apps/backend/src/orders/dto/create-order.dto.ts` | Accepts the new optional **State** field on the shipping address. |
+| `apps/backend/src/email/email.service.ts` | Staff order email now includes the State line in the address. |
+| `apps/frontend/app/(shop)/checkout/CheckoutClient.tsx` | US enabled; State field + international address rules; flat international delivery line; all prices shown in the selected currency (charge note stays in cedis). |
+| `apps/frontend/lib/api/settings.ts` | Fetches the country shipping rates for checkout. |
+| `apps/frontend/lib/api/orders.ts`, `apps/frontend/app/(shop)/track/page.tsx` | Order data carries State; tracking page shows it. |
+| `apps/admin/app/(dashboard)/settings/general/page.tsx` | New **International Shipping Rates** editor panel. |
+| `apps/admin/lib/api/settings.ts` | Hooks to read/update country shipping rates. |
+| `apps/admin/lib/api/orders.ts`, `apps/admin/app/(dashboard)/orders/[id]/page.tsx` | Order carries State; admin order detail shows it. |
+
+> **Heads-up:**
+> - **No database migration needed** — the rates are stored in the existing settings store and default to US = GH₵ 900 automatically, and the State is saved alongside the rest of the address.
+> - **Only the US is switched on** right now. Canada / UK / Netherlands are still off until we set their rates and enable them.
+> - Not yet driven end-to-end on a live server with a real US payment — that click-through check still needs doing.
+> - Small cosmetic note: for cedi shoppers, prices now render as `₵1,234.00` (with the shared currency formatter) rather than the old `GH₵ 1,234` style.
+
+### How to test
+
+1. At checkout, change **Country / Region** to **United States** → the delivery line becomes the flat **GH₵ 900** international rate, and **State / Province** + **ZIP** appear and are required.
+2. Try to continue with a US address missing the State or ZIP → it should block you with an error.
+3. Switch the **site currency** (top bar) to USD/GBP → every price in the summary updates to that currency, but the **"You will be charged GH₵ …"** note still shows cedis.
+4. Complete a US order and check the **admin order detail**, the **staff email**, and the customer **/track** page all show the State in the address.
+5. In **admin → Settings → General → International Shipping Rates**, change the US price, save, and confirm checkout picks up the new amount.
+
+---
+
+## Auto currency detection + a "Select currency" welcome modal (July 2026)
+
+When someone opens the site, we now **guess their best currency from their location** (using their device's timezone, which is hard to fake with a VPN) and switch prices to it automatically — Cedis for Ghana, Naira for Nigeria, USD for the US, CAD for Canada, AUD for Australia, GBP for the UK, and Euro for the rest of Europe. Anywhere we can't confidently place falls back to Cedis.
+
+On a first visit **from outside Ghana**, a **"Select Currency" modal** pops up (once) with their detected currency already selected, so they can confirm or pick another. **Ghana visitors never see it** — they just get Cedis. It's a one-time prompt: once confirmed or dismissed it won't nag them again, and anyone who already picked a currency before is left alone.
+
+The modal and the currency picker in the top bar were **redesigned to match the site's look** — the black-and-white, sharp-edged, spec-sheet style with wide-spaced type, instead of the rounded generic version. The modal shows all seven currencies (the six international ones in a grid, with Cedis as a full-width option at the bottom), and the selected one flips to a solid black tile. Per request, the top-bar currency selector and the modal use **Helvetica** for their text.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/frontend/lib/locale/locale-provider.tsx` | Added location→currency detection, first-visit auto-switch, and the once-only prompt logic (only for visitors outside Ghana). |
+| `apps/frontend/lib/locale/CurrencyModal.tsx` | **New** "Select Currency" modal, styled to the site's black/white spec-sheet aesthetic, with the detected currency preselected and Cedis included. |
+| `apps/frontend/app/(shop)/layout.tsx` | Redesigned the top-bar currency selector (sharp, hairline, Helvetica) to match. |
+| `apps/frontend/app/(shop)/components/NavDrawer.tsx` | Mobile menu currency selector restyled to match the new look. |
+
+> **Heads-up:**
+> - **No backend or database changes** — this is all front-end, using the exchange rates the site already fetches.
+> - The prompt is remembered per browser (via local storage), so clearing site data will make it appear again on the next visit from outside Ghana.
+> - The mobile-menu selector was left on the site's mono (typewriter-style) font rather than Helvetica — easy to switch if we want it to match the top bar exactly.
+> - Not yet eyeballed on a live server from a non-Ghana location — that visual check still needs doing (the modal only triggers outside Ghana).
+
+### How to test
+
+1. Open the site normally from Ghana → prices are in Cedis and **no modal** appears.
+2. Simulate being abroad (change your computer's timezone to, e.g., America/Toronto, or use a browser profile set to another region) and open the site fresh → prices switch to that currency and the **Select Currency** modal appears with it preselected.
+3. Pick a different currency and **Confirm** → prices update; reopen the site → the modal doesn't come back.
+4. Try **Dismiss** / the ✕ / clicking outside → modal closes, currency stays as detected, and it won't reappear.
+5. Check the **top-bar** and **mobile-menu** currency pickers → both show the new black/white styling and switch currency correctly.
+
+---
+
+## Customisable announcement banner (July 2026)
+
+There's now a **banner strip at the very top of the storefront** — the kind big brands use for "Sale now on" or "Free shipping this week." It's fully controlled from admin, so no code changes are needed to put up a notice.
+
+In **admin → Settings → General**, there's an **Announcement Banner** panel: a show/hide switch, the **text** to display, an optional **link** (makes the whole bar clickable, e.g. to the sale page), and a **live preview** of how it'll look. It's **off by default** — nothing shows until someone turns it on.
+
+On the storefront the bar sits **above the navigation**, in the site's black-and-white style (black bar in light mode, white in dark), with a **✕ to dismiss**. If a shopper closes it, it stays closed for them — until the text is changed, at which point it shows again to everyone (so a new message isn't missed).
+
+**A note on the fixes along the way:** getting the bar to sit cleanly above the nav on every page took a couple of passes. The header and the page content used to assume a fixed height, which pushed page content up underneath the bar on the products page and others. That's now handled by **measuring the header's real height** and spacing the page down by exactly that much, so it stays correct whether the banner is on or off, on any screen size.
+
+### Files changed
+
+| File | What changed |
+|---|---|
+| `apps/backend/src/settings/settings.service.ts` | Stores/reads the banner (on/off, text, link) in settings; validates that an enabled banner has text. |
+| `apps/backend/src/settings/settings.controller.ts` | Public endpoint to read the banner + admin endpoint to update it. |
+| `apps/frontend/lib/api/settings.ts` | Storefront fetches the banner. |
+| `apps/frontend/app/(shop)/layout.tsx` | The banner bar itself (above the nav, dismissible, theme-aware) plus the header-height measurement that keeps page content clear of it. |
+| `apps/admin/lib/api/settings.ts` | Admin hooks to read/update the banner. |
+| `apps/admin/app/(dashboard)/settings/general/page.tsx` | New **Announcement Banner** editor panel with live preview. |
+
+> **Heads-up:**
+> - **No backend or database changes** to run — it's stored in the existing settings, off by default.
+> - Dismissal is remembered per browser (via local storage); it re-appears if the text is edited or the visitor clears their site data.
+> - **Known minor issue:** on desktop, two "sticky" side panels (the product detail page's thumbnail rail and the Road to HQ progress card) are pinned to a fixed position and will sit ~36px too high while a banner is showing. Cosmetic, and only when a banner is active — can be fixed on request.
+> - Not yet clicked through on a live server with a banner enabled — that visual check still needs doing.
+
+### How to test
+
+1. In **admin → Settings → General → Announcement Banner**, tick **Show the banner**, type a message (and optionally a link), watch the **preview**, and **Save**.
+2. Open the storefront → the bar appears at the very top, above the nav, on the home page **and** inner pages (products, etc.), with content sitting neatly below it.
+3. Click the **✕** → the bar closes and stays closed on refresh.
+4. Change the banner **text** in admin and save → it reappears for everyone (even those who dismissed the old one).
+5. If you set a **link**, click the bar → it navigates there.
+6. Turn the banner **off** in admin → it disappears and page spacing returns to normal.
+
+---
+
+## Homepage Navbar — Fixed the White Bar on First Load (July 2026)
+
+We chased down a bug where, on the **live site**, the homepage navbar showed a solid white (or dark) bar the moment the page loaded — even when you were sitting right at the top over the hero image, where it's meant to be see-through. The odd tell: if you clicked away to another page and came back, it fixed itself and rendered correctly. It also never showed up when running the site on a developer's own machine, only on the real deployed site — which is exactly why it slipped through.
+
+The cause was a timing quirk. The navbar decides "am I scrolled down far enough to turn solid?" by comparing your scroll position against the height of the screen. On the very first render of the live site, the browser sometimes hadn't finished measuring the screen height yet, so that measurement came back as effectively zero. That made the math think you'd already scrolled past the hero, so it painted the solid bar. Coming back to the page later re-ran the check once the screen height was known, which is why it "healed" itself.
+
+The fix hardens that check so it can't be fooled by a not-yet-measured screen: it now falls back to a second way of reading the screen height, refuses to ever treat "top of page" as "scrolled," and re-checks itself one beat after the page paints so a bad first reading corrects on the same load — no click-away-and-back needed. The see-through-over-hero look and the snap-to-solid-on-scroll behaviour are unchanged.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/frontend/app/(shop)/layout.tsx` | Hardened the navbar's scroll check: safe screen-height reading with a fallback, a floor so the top of the page never counts as "scrolled," plus a re-measure after first paint and on window resize. |
+
+> **Heads-up:** This one only reproduces on a **production build**, not `npm run dev`. To see it for yourself, run a real build (`npm run build` then `npm run start`) or check a deploy preview — the dev server hides the bug.
+
+### How to test
+
+1. Run a production build of the storefront (`cd apps/frontend && npm run build && npm run start`) or open a deploy preview.
+2. Hard-refresh the homepage while at the very top → the navbar should be **transparent** over the hero (white logo/text), with no solid bar flashing in. Try it in both light and dark mode, and on a narrow phone-width window.
+3. Scroll down past the hero → the navbar snaps to solid white/dark with a bottom border, as before.
+4. Click to another page and back to home → still transparent at the top, same as the first load.

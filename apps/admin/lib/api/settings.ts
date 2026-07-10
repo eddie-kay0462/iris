@@ -116,6 +116,61 @@ export function useUpdateShippingOptions() {
   });
 }
 
+export interface CountryShippingRate {
+  country: string; // ISO-2 destination code, e.g. "US"
+  label: string;
+  estimate: string;
+  price: number; // flat rate in GHS
+}
+
+export function useCountryShippingRates() {
+  return useQuery({
+    queryKey: ["country-shipping-rates"],
+    queryFn: () => apiClient<CountryShippingRate[]>("/settings/country-shipping-rates"),
+  });
+}
+
+export function useUpdateCountryShippingRates() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rates: CountryShippingRate[]) =>
+      apiClient<CountryShippingRate[]>("/settings/country-shipping-rates", {
+        method: "PUT",
+        body: { rates },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["country-shipping-rates"] });
+    },
+  });
+}
+
+export interface AnnouncementBanner {
+  enabled: boolean;
+  text: string;
+  link: string;
+}
+
+export function useAnnouncementBanner() {
+  return useQuery({
+    queryKey: ["announcement-banner"],
+    queryFn: () => apiClient<AnnouncementBanner>("/settings/announcement-banner"),
+  });
+}
+
+export function useUpdateAnnouncementBanner() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (banner: AnnouncementBanner) =>
+      apiClient<AnnouncementBanner>("/settings/announcement-banner", {
+        method: "PUT",
+        body: banner,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["announcement-banner"] });
+    },
+  });
+}
+
 export function useStockHoldMinutes() {
   return useQuery({
     queryKey: ["stock-hold-minutes"],

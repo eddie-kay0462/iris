@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useLayoutEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -12,6 +12,7 @@ import { useProfile } from "@/lib/api/profile";
 import { useFavourites } from "@/lib/favourites";
 import { FavouritesDrawerProvider, useFavouritesDrawer } from "@/lib/favourites-drawer";
 import { LocaleProvider, useLocale, CURRENCIES } from "@/lib/locale/locale-provider";
+import { useAnnouncementBanner, type AnnouncementBanner } from "@/lib/api/settings";
 import AnalyticsBeacon from "@/components/AnalyticsBeacon";
 import NavDrawer from "./components/NavDrawer";
 import CartDrawer from "./components/CartDrawer";
@@ -367,37 +368,65 @@ function LocaleSelectorButton({ isTransparent = false }: { isTransparent?: boole
     : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white";
 
   return (
-    <div ref={ref} className="relative hidden md:flex">
+    <div
+      ref={ref}
+      className="relative hidden md:flex"
+      style={{ fontFamily: 'Helvetica, "Helvetica Neue", Arial, sans-serif' }}
+    >
       <button
         onClick={() => setOpen((o) => !o)}
-        className={`flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-widest transition ${textClass}`}
+        className={`flex items-center gap-1.5 text-[11px] uppercase tracking-[0.2em] transition ${textClass}`}
       >
         <span className="text-sm leading-none">{region.flag}</span>
-        <span>{region.country.toUpperCase()} ({region.countryCode})</span>
-        <span className="mx-0.5 opacity-30">·</span>
-        <span>{activeCurrency.symbol} {activeCurrency.code}</span>
+        <span>{region.countryCode}</span>
+        <span className="opacity-30">/</span>
+        <span>{activeCurrency.code}</span>
         <ChevronDown
           className={`h-3 w-3 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-          strokeWidth={2}
+          strokeWidth={1.75}
         />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 min-w-[220px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
-          {CURRENCIES.map((cur) => (
-            <button
-              key={cur.code}
-              onClick={() => { setCurrency(cur.code); setOpen(false); }}
-              className={`flex w-full items-center justify-between px-4 py-3 text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 ${
-                cur.code === currency
-                  ? "bg-gray-100 dark:bg-gray-800"
-                  : ""
-              }`}
-            >
-              <span className="text-gray-900 dark:text-white">{cur.name}</span>
-              <span className="text-gray-400 dark:text-gray-500">{cur.symbol}</span>
-            </button>
-          ))}
+        <div className="absolute right-0 top-full z-50 mt-3 min-w-[240px] border border-neutral-200 bg-white shadow-2xl dark:border-neutral-800 dark:bg-neutral-950">
+          <p className="border-b border-neutral-200 px-4 py-3 text-[9px] uppercase tracking-[0.28em] text-neutral-400 dark:border-neutral-800 dark:text-neutral-500">
+            Currency
+          </p>
+          {CURRENCIES.map((cur) => {
+            const isActive = cur.code === currency;
+            return (
+              <button
+                key={cur.code}
+                onClick={() => { setCurrency(cur.code); setOpen(false); }}
+                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+                  isActive
+                    ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
+                    : "text-neutral-900 hover:bg-neutral-100 dark:text-white dark:hover:bg-neutral-900"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 shrink-0 ${
+                    isActive ? "bg-white dark:bg-neutral-900" : "bg-transparent"
+                  }`}
+                />
+                <span className="text-[12px] font-bold tracking-[0.1em]">{cur.code}</span>
+                <span
+                  className={`text-[9px] uppercase tracking-[0.18em] ${
+                    isActive ? "text-white/60 dark:text-neutral-900/60" : "text-neutral-400 dark:text-neutral-500"
+                  }`}
+                >
+                  {cur.name}
+                </span>
+                <span
+                  className={`ml-auto text-[12px] ${
+                    isActive ? "text-white/70 dark:text-neutral-900/70" : "text-neutral-400 dark:text-neutral-500"
+                  }`}
+                >
+                  {cur.symbol}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -409,8 +438,56 @@ const navLinks = [
   { href: "/about", label: "About" },
 ];
 
-function ShopHeader() {
+// Fixed announcement bar (36px tall) pinned above the header. Content is set in
+// admin → Settings → General. Inverts black/white with the theme to stay loud.
+const BANNER_HEIGHT = "h-9"; // 36px tall strip
+const BANNER_PX = 36; // matches BANNER_HEIGHT; used to offset the home hero
+
+function AnnouncementBar({
+  banner,
+  onDismiss,
+}: {
+  banner: AnnouncementBanner;
+  onDismiss: () => void;
+}) {
+  const textClass =
+    "block w-full truncate px-10 text-center text-[11px] font-medium uppercase leading-none tracking-[0.18em]";
+  return (
+    <div
+      className={`relative flex ${BANNER_HEIGHT} w-full items-center justify-center overflow-hidden bg-neutral-950 text-white dark:bg-white dark:text-neutral-950`}
+    >
+      {banner.link ? (
+        <Link href={banner.link} className={`${textClass} transition-opacity hover:opacity-70`}>
+          {banner.text}
+        </Link>
+      ) : (
+        <span className={textClass}>{banner.text}</span>
+      )}
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Dismiss announcement"
+        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-current transition-opacity hover:opacity-60"
+      >
+        <X className="h-3.5 w-3.5" strokeWidth={2} />
+      </button>
+    </div>
+  );
+}
+
+function ShopHeader({
+  banner,
+  bannerVisible = false,
+  onDismiss,
+  onMeasure,
+}: {
+  banner?: AnnouncementBanner | null;
+  bannerVisible?: boolean;
+  onDismiss?: () => void;
+  onMeasure?: (height: number) => void;
+}) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
@@ -429,12 +506,26 @@ function ShopHeader() {
     // header transparent until we've scrolled (almost) past it — otherwise it
     // flips to a solid white bar while the dark hero is still on screen.
     const handleScroll = () => {
-      const threshold = isHome ? window.innerHeight - 80 : 10;
+      // Read the viewport height defensively: on the first (and, in a prod
+      // build, only) run of this effect `window.innerHeight` can still be 0 /
+      // unsettled, which would make the home threshold negative and force the
+      // bar solid at the very top. Fall back to clientHeight and clamp to a
+      // positive floor so scrollY === 0 can never read as "scrolled".
+      const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+      const threshold = isHome ? Math.max(vh - 80, 200) : 10;
       setScrolled(window.scrollY > threshold);
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll, { passive: true });
     handleScroll();
-    return () => window.removeEventListener("scroll", handleScroll);
+    // Re-measure after the first paint so a too-early viewport read on initial
+    // load self-corrects on the same load, not only after a client-side re-nav.
+    const raf = requestAnimationFrame(handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+      cancelAnimationFrame(raf);
+    };
   }, [isHome]);
 
   useEffect(() => {
@@ -453,15 +544,32 @@ function ShopHeader() {
     return pathname === href || pathname.startsWith(href + "/");
   }
 
+  // Report the real rendered height of the banner+nav bar so the layout can
+  // offset page content by exactly that much — no hardcoded pixel guesses, and it
+  // stays correct as the banner toggles or the bar wraps on small screens.
+  useIsomorphicLayoutEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const report = () => onMeasure?.(el.offsetHeight);
+    report();
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [bannerVisible, banner?.text, onMeasure]);
+
   return (
-    <header
-      className={`fixed top-0 z-50 w-full transition-all duration-150 ${
-        isTransparent
-          ? "border-b border-transparent bg-transparent"
-          : "border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950"
-      }`}
-    >
-      <div className="flex w-full items-center justify-between px-6 py-4">
+    <header className="fixed top-0 z-50 w-full">
+      <div ref={barRef}>
+        {bannerVisible && banner && (
+          <AnnouncementBar banner={banner} onDismiss={onDismiss ?? (() => {})} />
+        )}
+        <div
+          className={`flex w-full items-center justify-between px-6 py-4 transition-all duration-150 ${
+            isTransparent
+              ? "border-b border-transparent bg-transparent"
+              : "border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950"
+          }`}
+        >
         {/* Left nav (desktop) */}
         <nav className="hidden items-center gap-6 md:flex">
           <button
@@ -545,6 +653,7 @@ function ShopHeader() {
           <CartLink isTransparent={isTransparentWhite} />
           <UserLink isTransparent={isTransparentWhite} />
         </div>
+      </div>
       </div>
 
       <NavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
@@ -691,11 +800,49 @@ function ShopFooter() {
 function ShopLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isHome = pathname === "/";
+
+  const { data: banner } = useAnnouncementBanner();
+  // Start hidden so SSR/first paint matches; the effect reveals it after we've
+  // read this browser's dismissal. Dismissal is keyed to the banner text, so
+  // editing the message re-shows it to everyone.
+  const [bannerDismissed, setBannerDismissed] = useState(true);
+  useEffect(() => {
+    // Reads this browser's dismissal (client-only) once the banner setting loads.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (!banner?.enabled || !banner.text) {
+      setBannerDismissed(true);
+      return;
+    }
+    let dismissedText = "";
+    try { dismissedText = localStorage.getItem("iris_banner_dismissed") ?? ""; } catch {}
+    setBannerDismissed(dismissedText === banner.text);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [banner?.enabled, banner?.text]);
+
+  const bannerVisible = !!banner?.enabled && !!banner?.text && !bannerDismissed;
+
+  function dismissBanner() {
+    setBannerDismissed(true);
+    try { if (banner?.text) localStorage.setItem("iris_banner_dismissed", banner.text); } catch {}
+  }
+
+  // Measured banner+nav height, so content clears the header exactly. The home
+  // hero deliberately sits UNDER the transparent nav, so there it only offsets by
+  // the solid banner strip; every other page offsets by the full header.
+  const [headerHeight, setHeaderHeight] = useState(65);
+  const handleMeasure = useCallback((h: number) => setHeaderHeight(h), []);
+  const mainPaddingTop = isHome ? (bannerVisible ? BANNER_PX : 0) : headerHeight;
+
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-white dark:bg-gray-950">
       <AnalyticsBeacon />
-      <ShopHeader />
-      <main className={isHome ? "" : "pt-[65px]"}>{children}</main>
+      <ShopHeader
+        banner={banner}
+        bannerVisible={bannerVisible}
+        onDismiss={dismissBanner}
+        onMeasure={handleMeasure}
+      />
+      <main style={{ paddingTop: mainPaddingTop }}>{children}</main>
       <ShopFooter />
       <CartDrawer />
       <FavouritesDrawer />

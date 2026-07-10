@@ -15,6 +15,7 @@ import {
   ONLINE_REVENUE_STATUSES,
   POPUP_REVENUE_STATUSES,
   ALLY_REVENUE_STATUSES,
+  PREORDER_COUNTED_STATUSES,
   round2,
 } from './analytics.constants';
 import { SettingsService } from '../settings/settings.service';
@@ -85,21 +86,28 @@ export class AnalyticsService {
 
   /**
    * Total units sold toward the HQ goal: online + popup + ally line-item
-   * quantities (revenue statuses only) plus a manual baseline for historical
-   * (Shopify) units not stored in this system. Public — powers the storefront
-   * homepage.
+   * quantities (revenue statuses only) plus pre-order quantities (counted as soon
+   * as a pre-order is placed/paid, not only once fulfilled) plus a manual baseline
+   * for historical (Shopify) units not stored in this system. Public — powers the
+   * storefront homepage.
+   *
+   * Pre-orders live in their own table rather than as order_items, so they're
+   * counted separately here; in-stock lines of an order that also contains
+   * pre-orders are already covered by the order_items query, so there's no
+   * double-counting.
    */
   async getRoadToHq(): Promise<{
     units: number;
     online: number;
     popup: number;
     allies: number;
+    preorders: number;
     baseline: number;
     target: number;
   }> {
     const db = this.supabase.getAdminClient();
 
-    const [onlineRes, popupRes, allyRes, baseline, target] = await Promise.all([
+    const [onlineRes, popupRes, allyRes, preorderRes, baseline, target] = await Promise.all([
       db
         .from('order_items')
         .select('quantity, orders!inner(status, deleted_at)')
@@ -113,6 +121,11 @@ export class AnalyticsService {
         .from('ally_sale_items')
         .select('quantity, ally_sales!inner(status)')
         .in('ally_sales.status', ALLY_REVENUE_STATUSES),
+      db
+        .from('preorders')
+        .select('quantity, status, payment_status')
+        .eq('payment_status', 'paid')
+        .in('status', PREORDER_COUNTED_STATUSES),
       this.settings.getRoadToHqBaseline(),
       this.settings.getRoadToHqTarget(),
     ]);
@@ -120,8 +133,17 @@ export class AnalyticsService {
     const online = (onlineRes.data ?? []).reduce((sum, r: any) => sum + (r.quantity ?? 0), 0);
     const popup = (popupRes.data ?? []).reduce((sum, r: any) => sum + (r.quantity ?? 0), 0);
     const allies = (allyRes.data ?? []).reduce((sum, r: any) => sum + (r.quantity ?? 0), 0);
+    const preorders = (preorderRes.data ?? []).reduce((sum, r: any) => sum + (r.quantity ?? 0), 0);
 
-    return { units: online + popup + allies + baseline, online, popup, allies, baseline, target };
+    return {
+      units: online + popup + allies + preorders + baseline,
+      online,
+      popup,
+      allies,
+      preorders,
+      baseline,
+      target,
+    };
   }
 
   // ─── Date Helpers ──────────────────────────────────────────────────────────

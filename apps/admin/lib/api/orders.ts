@@ -38,6 +38,7 @@ export interface Order {
   discount: number;
   shipping_cost: number;
   tax: number;
+  processing_fee: number;
   total: number;
   currency: string;
   shipping_address: {
@@ -45,6 +46,7 @@ export interface Order {
     address: string;
     address2?: string;
     city: string;
+    state?: string;
     region: string;
     postalCode?: string;
     phone: string;
