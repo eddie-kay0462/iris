@@ -5005,3 +5005,28 @@ On the storefront the bar sits **above the navigation**, in the site's black-and
 4. Change the banner **text** in admin and save → it reappears for everyone (even those who dismissed the old one).
 5. If you set a **link**, click the bar → it navigates there.
 6. Turn the banner **off** in admin → it disappears and page spacing returns to normal.
+
+---
+
+## Homepage Navbar — Fixed the White Bar on First Load (July 2026)
+
+We chased down a bug where, on the **live site**, the homepage navbar showed a solid white (or dark) bar the moment the page loaded — even when you were sitting right at the top over the hero image, where it's meant to be see-through. The odd tell: if you clicked away to another page and came back, it fixed itself and rendered correctly. It also never showed up when running the site on a developer's own machine, only on the real deployed site — which is exactly why it slipped through.
+
+The cause was a timing quirk. The navbar decides "am I scrolled down far enough to turn solid?" by comparing your scroll position against the height of the screen. On the very first render of the live site, the browser sometimes hadn't finished measuring the screen height yet, so that measurement came back as effectively zero. That made the math think you'd already scrolled past the hero, so it painted the solid bar. Coming back to the page later re-ran the check once the screen height was known, which is why it "healed" itself.
+
+The fix hardens that check so it can't be fooled by a not-yet-measured screen: it now falls back to a second way of reading the screen height, refuses to ever treat "top of page" as "scrolled," and re-checks itself one beat after the page paints so a bad first reading corrects on the same load — no click-away-and-back needed. The see-through-over-hero look and the snap-to-solid-on-scroll behaviour are unchanged.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/frontend/app/(shop)/layout.tsx` | Hardened the navbar's scroll check: safe screen-height reading with a fallback, a floor so the top of the page never counts as "scrolled," plus a re-measure after first paint and on window resize. |
+
+> **Heads-up:** This one only reproduces on a **production build**, not `npm run dev`. To see it for yourself, run a real build (`npm run build` then `npm run start`) or check a deploy preview — the dev server hides the bug.
+
+### How to test
+
+1. Run a production build of the storefront (`cd apps/frontend && npm run build && npm run start`) or open a deploy preview.
+2. Hard-refresh the homepage while at the very top → the navbar should be **transparent** over the hero (white logo/text), with no solid bar flashing in. Try it in both light and dark mode, and on a narrow phone-width window.
+3. Scroll down past the hero → the navbar snaps to solid white/dark with a bottom border, as before.
+4. Click to another page and back to home → still transparent at the top, same as the first load.

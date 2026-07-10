@@ -506,12 +506,26 @@ function ShopHeader({
     // header transparent until we've scrolled (almost) past it — otherwise it
     // flips to a solid white bar while the dark hero is still on screen.
     const handleScroll = () => {
-      const threshold = isHome ? window.innerHeight - 80 : 10;
+      // Read the viewport height defensively: on the first (and, in a prod
+      // build, only) run of this effect `window.innerHeight` can still be 0 /
+      // unsettled, which would make the home threshold negative and force the
+      // bar solid at the very top. Fall back to clientHeight and clamp to a
+      // positive floor so scrollY === 0 can never read as "scrolled".
+      const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+      const threshold = isHome ? Math.max(vh - 80, 200) : 10;
       setScrolled(window.scrollY > threshold);
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll, { passive: true });
     handleScroll();
-    return () => window.removeEventListener("scroll", handleScroll);
+    // Re-measure after the first paint so a too-early viewport read on initial
+    // load self-corrects on the same load, not only after a client-side re-nav.
+    const raf = requestAnimationFrame(handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+      cancelAnimationFrame(raf);
+    };
   }, [isHome]);
 
   useEffect(() => {
