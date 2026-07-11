@@ -376,6 +376,7 @@ export class OrdersService {
         total,
         currency: 'GHS',
         shipping_address: dto.shippingAddress,
+        shipping_method: dto.shippingMethod || 'standard',
         payment_provider: 'paystack',
         payment_reference: dto.paymentReference,
         payment_status: 'pending',
@@ -1702,6 +1703,7 @@ export class OrdersService {
         total,
         currency: 'GHS',
         shipping_address: dto.shippingAddress,
+        shipping_method: dto.shippingMethod || 'standard',
         payment_provider: 'paystack',
         payment_reference: dto.paymentReference,
         payment_status: 'pending',
@@ -1938,6 +1940,8 @@ export class OrdersService {
           total: fullOrder.total,
           currency: fullOrder.currency || 'GHS',
           shipping_address: fullOrder.shipping_address as any,
+          shipping_method: fullOrder.shipping_method,
+          placed_at: fullOrder.created_at,
           order_items: fullOrder.order_items,
         })
         .catch(() => null);
