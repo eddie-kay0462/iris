@@ -4,6 +4,7 @@
 export const ONLINE_REVENUE_STATUSES = ['paid', 'processing', 'shipped', 'delivered'];
 export const POPUP_REVENUE_STATUSES = ['confirmed', 'completed'];
 export const ALLY_REVENUE_STATUSES = ['completed'];
+export const WALKIN_REVENUE_STATUSES = ['completed'];
 
 // Pre-orders count toward the goal as soon as they're placed (paid), not only once
 // fulfilled — so every not-yet-cancelled/refunded status counts. Paired with a

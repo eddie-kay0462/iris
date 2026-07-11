@@ -325,7 +325,11 @@ export class PreordersService {
     }
   }
 
-  async createPopup(dto: CreatePopupPreorderDto, adminId: string) {
+  async createPopup(
+    dto: CreatePopupPreorderDto,
+    adminId: string,
+    source: 'popup' | 'walkin' = 'popup',
+  ) {
     const db = this.supabase.getAdminClient();
 
     if (dto.event_id) {
@@ -373,7 +377,7 @@ export class PreordersService {
         .from('preorders')
         .insert({
           order_number: orderNumber,
-          source: 'popup',
+          source,
           customer_name: dto.customer_name ?? null,
           customer_email: dto.customer_email ?? null,
           customer_phone: dto.customer_phone,
