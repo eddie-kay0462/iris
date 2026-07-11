@@ -21,6 +21,7 @@ import { RecommendationsModule } from './recommendations/recommendations.module'
 import { ReviewsModule } from './reviews/reviews.module';
 import { PopupSalesModule } from './popup-sales/popup-sales.module';
 import { PreordersModule } from './preorders/preorders.module';
+import { WalkinSalesModule } from './walkin-sales/walkin-sales.module';
 import { LetsfishModule } from './letsfish/letsfish.module';
 import { CommunicationsModule } from './communications/communications.module';
 import { AnalyticsModule } from './analytics/analytics.module';
@@ -55,6 +56,7 @@ import { AlliesModule } from './allies/allies.module';
     ReviewsModule,
     PopupSalesModule,
     PreordersModule,
+    WalkinSalesModule,
     CommunicationsModule,
     AnalyticsModule,
     EmailModule,

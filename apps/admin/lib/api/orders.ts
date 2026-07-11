@@ -69,6 +69,7 @@ export interface Order {
   preorders?: Preorder[];
   contains_preorders?: boolean;
   is_popup_preorder?: boolean;
+  is_walkin?: boolean;
   customer_name?: string | null;
   payment_method?: string | null;
 }

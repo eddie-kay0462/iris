@@ -5119,3 +5119,54 @@ To set it: open a product in the admin, find the **Merchandising** section, tick
 2. Place (or seed) a paid order of quantity 1 for that product.
 3. Check the homepage Road to HQ counter (or `GET /api/analytics/road-to-hq`) - it should go up by **2**, not 1. The counter refreshes a few times an hour, so allow a short delay.
 4. Confirm other reports (e.g. top products) still show the real quantity of 1 for that product - only Road to HQ is weighted.
+
+---
+
+## Walk-in Sales — Record In-Person HQ Orders & Pre-orders (July 2026)
+
+We now have a dedicated **Walk-in Sales** section in the admin for people who come to HQ and buy in person. Until now the only way to record an in-person sale was through **Pop-up Sales**, which forces you to pick a pop-up event first and mixes those numbers into pop-up reporting. Walk-ins finally have their own home.
+
+What it does, end to end:
+
+- **Capture the customer** — search existing customers, or add a new one on the spot. If they give an email, they get invited to create a storefront account (same flow the allies app uses); phone-only customers are saved without an invite.
+- **Build the order** — search products, add sizes/variants to a cart, adjust quantities (capped at what's actually in stock), and apply a discount if needed.
+- **Take payment** — cash, bank transfer, or **live Mobile Money**. MoMo works exactly like pop-up sales: you send a USSD prompt to the customer's phone, enter the OTP if one's needed, and the sale only completes once Paystack confirms the payment. Cash and bank transfer complete on the spot.
+- **Stock updates automatically** — completing a sale deducts the items from inventory and logs a stock movement, just like online and pop-up orders. (For MoMo, stock is deducted only after the payment actually confirms — never for an unpaid order.)
+- **Out-of-stock? Take a pre-order** — flip on "Pre-order" mode and the item is held for the customer using the existing pre-order system (so they get the same email + SMS and FIFO restock treatment).
+- **Confirmations sent** — the customer gets an order confirmation by email and SMS automatically.
+
+Two things worth knowing:
+
+- Walk-in sales **show up on the main Orders page** with a teal "Walk-in" badge, so everything's trackable in one place. They're read-only there — you manage them from the Walk-in Sales page.
+- Walk-in units **count toward Road to HQ** (respecting bundle unit counts), alongside online, pop-up, ally, and pre-order sales.
+
+Refunding a walk-in order from its detail view restores the stock and texts the customer.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `supabase/migrations/20260710200000_create_walkin_orders.sql` | New `walkin_orders` + `walkin_order_items` tables (and access rules); also lets pre-orders be tagged as coming from a walk-in. |
+| `apps/backend/src/walkin-sales/` (new module) | All the walk-in logic: create/list/refund orders, live MoMo charging via Paystack (USSD prompt + OTP + auto-confirm), deduct & restore stock, customer capture with storefront invites, pre-order handoff, and email/SMS confirmations. |
+| `apps/backend/src/app.module.ts` | Registers the new walk-in module. |
+| `apps/backend/src/preorders/preorders.service.ts` | Pre-orders can now be created from a walk-in (reuses the existing pre-order engine). |
+| `apps/backend/src/analytics/analytics.service.ts`, `analytics.constants.ts` | Road to HQ now includes completed walk-in units. |
+| `apps/backend/src/orders/orders.service.ts` | The main Orders list now merges in walk-in orders (and walk-in pre-orders). |
+| `apps/admin/app/(dashboard)/walkin-sales/page.tsx` (new) | The Walk-in Sales page: stats, order list, and the "New Walk-in Sale" builder. |
+| `apps/admin/lib/api/walkin-sales.ts` (new) | Talks to the new backend endpoints. |
+| `apps/admin/app/components/PhoneInput.tsx` (new) | Reusable phone field (copied from the allies app) for customer capture. |
+| `apps/admin/app/components/Sidebar.tsx` | Adds the "Walk-in Sales" nav item. |
+| `apps/admin/app/(dashboard)/orders/page.tsx`, `apps/admin/lib/api/orders.ts` | Shows the "Walk-in" badge on the main Orders list. |
+
+> **Heads-up / action required:** The database migration must be run before this goes live (it creates the new tables). Deploy the migration and the backend together. Staff, managers, and admins can all record walk-in sales (it reuses the existing order permissions).
+
+### How to test
+
+1. Apply the migration, then open **Walk-in Sales** in the admin sidebar and click **New Walk-in Sale**.
+2. Add a brand-new customer with an email — they should be saved and get a storefront invite email.
+3. Add an in-stock product, take a cash payment, and complete the sale. Check that: the sale appears in the list, the product's stock dropped, and the customer got an email + SMS.
+   - For **Mobile Money**, pick MoMo, hit "Charge MoMo", send the USSD prompt to a test number, and confirm the sale only completes (and stock only drops) once Paystack reports success.
+4. Try an out-of-stock (pre-order-enabled) product with "Pre-order" mode on — it should record a pre-order and notify the customer.
+5. Open the main **Orders** page and confirm the walk-in shows with a teal "Walk-in" badge.
+6. Check the homepage Road to HQ counter (or `GET /api/analytics/road-to-hq`) — it should include the walk-in units.
+7. Open a completed walk-in order and refund it — stock should come back and the customer gets a text.

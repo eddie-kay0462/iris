@@ -612,6 +612,53 @@ export class OrdersService {
     };
   }
 
+  /**
+   * Maps a walk-in order row (its own table) into the order shape the admin
+   * Orders list expects, flagged `is_walkin` so the UI can badge and treat it
+   * as read-only (it's managed on the Walk-in Sales page).
+   */
+  private buildWalkinOrder(w: any): any {
+    return {
+      id: w.id,
+      order_number: w.order_number,
+      user_id: w.customer_profile_id ?? null,
+      email: w.customer_email ?? null,
+      customer_name: w.customer_name ?? null,
+      status: w.status,
+      subtotal: Number(w.subtotal),
+      discount: Number(w.discount_amount ?? 0),
+      shipping_cost: 0,
+      tax: 0,
+      total: Number(w.total),
+      currency: 'GHS',
+      shipping_address: null,
+      billing_address: null,
+      tracking_number: null,
+      carrier: null,
+      payment_provider: null,
+      payment_reference: w.payment_reference ?? null,
+      payment_status: w.status === 'completed' ? 'paid' : null,
+      payment_method: w.payment_method ?? null,
+      created_at: w.created_at,
+      updated_at: w.updated_at ?? w.created_at,
+      is_popup_preorder: false,
+      is_walkin: true,
+      contains_preorders: false,
+      order_items: (w.walkin_order_items || []).map((i: any) => ({
+        id: i.id,
+        product_id: i.product_id,
+        variant_id: i.variant_id,
+        product_name: i.product_name,
+        variant_title: i.variant_title,
+        sku: i.sku,
+        quantity: i.quantity,
+        unit_price: Number(i.unit_price),
+        total_price: Number(i.total_price),
+      })),
+      preorders: [],
+    };
+  }
+
   async findAdmin(query: QueryOrdersDto) {
     const db = this.supabase.getAdminClient();
     const page = parseInt(query.page || '1', 10);
@@ -656,7 +703,7 @@ export class OrdersService {
     let popupQ = db
       .from('preorders')
       .select('*')
-      .eq('source', 'popup')
+      .in('source', ['popup', 'walkin'])
       .is('order_id', null);
     if (query.search) {
       popupQ = popupQ.or(
@@ -685,8 +732,30 @@ export class OrdersService {
       popupGroups = popupGroups.filter((g) => g.status === query.status);
     }
 
-    // 3. Merge, sort by date desc, paginate in JS.
-    const merged = [...orders, ...popupGroups].sort(
+    // 3. Walk-in orders (real rows in their own table — surface as orders).
+    let walkinOrders: any[] = [];
+    if (!hasPreordersOnly) {
+      let walkinQ = db
+        .from('walkin_orders')
+        .select('*, walkin_order_items(*)');
+      if (query.status) walkinQ = walkinQ.eq('status', query.status);
+      if (query.search) {
+        walkinQ = walkinQ.or(
+          `order_number.ilike.%${query.search}%,customer_email.ilike.%${query.search}%,customer_name.ilike.%${query.search}%`,
+        );
+      }
+      if (query.from_date) walkinQ = walkinQ.gte('created_at', query.from_date);
+      if (query.to_date) walkinQ = walkinQ.lte('created_at', query.to_date);
+
+      const { data: walkinRows, error: walkinError } = await walkinQ;
+      if (walkinError) throw walkinError;
+      walkinOrders = (walkinRows || []).map((w: any) =>
+        this.buildWalkinOrder(w),
+      );
+    }
+
+    // 4. Merge, sort by date desc, paginate in JS.
+    const merged = [...orders, ...popupGroups, ...walkinOrders].sort(
       (a, b) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
     );

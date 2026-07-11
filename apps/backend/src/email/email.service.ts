@@ -160,6 +160,23 @@ export class EmailService {
     await this.send(order.email, subject, html, order.order_number);
   }
 
+  async sendWalkinOrderSummary(order: {
+    email: string;
+    customer_name?: string | null;
+    order_number: string;
+    order_date?: string | null;
+    items: { product_name: string; variant_title?: string | null; quantity: number; unit_price: number; total_price: number }[];
+    subtotal: number;
+    discount_amount?: number | null;
+    total: number;
+    payment_method?: string | null;
+    brand?: string;
+  }): Promise<void> {
+    const subject = `Your ${order.brand || '1NRI'} purchase - ${order.order_number}`;
+    const html = this.buildWalkinOrderSummaryHtml(order);
+    await this.send(order.email, subject, html, order.order_number);
+  }
+
   async sendPopupPreorderConfirmation(order: {
     email: string;
     customer_name?: string | null;
@@ -787,6 +804,128 @@ export class EmailService {
         <!-- Footer -->
         <tr><td style="padding:24px 32px 32px;">
           <p style="margin:0;font-size:13px;color:#999;">We hope to see you at the next pop-up. Thank you for shopping with ${brandName}.</p>
+        </td></tr>
+
+      </table>
+
+      <!-- Copyright -->
+      <p style="margin:16px 0 0;font-size:11px;color:#a1a1aa;text-align:center;">&copy; ${new Date().getFullYear()} ${brandName}. All rights reserved.</p>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+  }
+
+  private buildWalkinOrderSummaryHtml(order: {
+    customer_name?: string | null;
+    order_number: string;
+    order_date?: string | null;
+    items: { product_name: string; variant_title?: string | null; quantity: number; unit_price: number; total_price: number }[];
+    subtotal: number;
+    discount_amount?: number | null;
+    total: number;
+    payment_method?: string | null;
+    brand?: string;
+  }): string {
+    const brandName = order.brand || '1NRI';
+    const greeting = order.customer_name
+      ? `Thanks, ${order.customer_name.split(' ')[0]}.`
+      : 'Thank you for your purchase.';
+
+    const purchaseDate = new Date(order.order_date || Date.now()).toLocaleDateString(
+      'en-GB',
+      { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' },
+    );
+    // Walk-ins are bought in person at HQ — no shipping, no tracking.
+    const meta = `In-store purchase · ${purchaseDate}`;
+
+    const paymentLabel: Record<string, string> = {
+      cash: 'Cash',
+      momo: 'Mobile Money',
+      bank_transfer: 'Bank Transfer',
+    };
+    const paymentDisplay = order.payment_method
+      ? (paymentLabel[order.payment_method] ?? order.payment_method)
+      : null;
+
+    const itemRows = order.items
+      .map(
+        (item) => `
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;">
+          ${item.product_name}${item.variant_title ? ` - ${item.variant_title}` : ''}${item.quantity > 1 ? ` × ${item.quantity}` : ''}
+        </td>
+        <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;text-align:right;white-space:nowrap;">
+          GH₵ ${item.total_price.toFixed(2)}
+        </td>
+      </tr>`,
+      )
+      .join('');
+
+    const discountRow =
+      order.discount_amount && order.discount_amount > 0
+        ? `<tr>
+             <td style="font-size:13px;color:#22c55e;padding:3px 0;">Discount</td>
+             <td style="font-size:13px;color:#22c55e;text-align:right;">- GH₵ ${order.discount_amount.toFixed(2)}</td>
+           </tr>`
+        : '';
+
+    const paymentRow = paymentDisplay
+      ? `<p style="margin:20px 0 0;font-size:13px;color:#666;">Paid by <strong>${paymentDisplay}</strong>.</p>`
+      : '';
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Your ${brandName} purchase - ${order.order_number}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f4f4f5;padding:32px 0;">
+    <tr><td align="center" style="padding:0 16px;">
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:560px;background:#fff;border-radius:10px;overflow:hidden;border:1px solid #e4e4e7;">
+
+        <!-- Header -->
+        <tr><td style="background:${this.brandBgColor(brandName)};padding:24px 32px;">
+          ${this.brandHeader(brandName)}
+        </td></tr>
+
+        <!-- Body -->
+        <tr><td style="padding:32px 32px 0;">
+          <h1 style="margin:0 0 6px;font-size:22px;font-weight:700;color:#111;">${greeting}</h1>
+          <p style="margin:0 0 4px;font-size:14px;color:#666;">Order <strong>${order.order_number}</strong> is confirmed.</p>
+          <p style="margin:0 0 24px;font-size:13px;color:#999;">${meta}</p>
+
+          <!-- Items -->
+          <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+            ${itemRows}
+          </table>
+
+          <!-- Totals -->
+          <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:16px;border-top:2px solid #111;padding-top:14px;">
+            <tr>
+              <td style="font-size:13px;color:#999;padding:3px 0;">Subtotal</td>
+              <td style="font-size:13px;color:#999;text-align:right;">GH₵ ${order.subtotal.toFixed(2)}</td>
+            </tr>
+            ${discountRow}
+            <tr>
+              <td style="font-size:16px;font-weight:700;color:#111;padding-top:10px;">Total</td>
+              <td style="font-size:16px;font-weight:700;color:#111;text-align:right;padding-top:10px;">GH₵ ${order.total.toFixed(2)}</td>
+            </tr>
+          </table>
+
+          ${paymentRow}
+
+          <!-- CTA -->
+          <div style="margin:28px 0 4px;text-align:center;">
+            <a href="${this.frontendUrl}" style="display:inline-block;background:#111;color:#fff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:6px;text-decoration:none;letter-spacing:0.01em;">Shop the collection online</a>
+          </div>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:24px 32px 32px;">
+          <p style="margin:0;font-size:13px;color:#999;">Thank you for shopping with ${brandName}. We hope to see you again soon.</p>
         </td></tr>
 
       </table>

@@ -100,7 +100,11 @@ export default function AdminOrdersPage() {
       render: (row) => (
         <div className="flex items-center gap-2">
           <span className="font-medium">{row.order_number}</span>
-          {row.is_popup_preorder ? (
+          {row.is_walkin ? (
+            <span className="inline-flex items-center rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-700">
+              Walk-in
+            </span>
+          ) : row.is_popup_preorder ? (
             <PreorderSourceBadge source="popup" />
           ) : (
             row.contains_preorders && (
@@ -121,7 +125,9 @@ export default function AdminOrdersPage() {
       key: "status",
       header: "Status",
       render: (row) =>
-        row.is_popup_preorder ? (
+        row.is_walkin ? (
+          <StatusBadge status={row.status} />
+        ) : row.is_popup_preorder ? (
           <PreorderStatusBadge status={row.status as PreorderStatus} />
         ) : (
           <StatusDropdown order={row} onUpdate={handleStatusUpdate} />
@@ -252,7 +258,9 @@ export default function AdminOrdersPage() {
         rows={data?.data || []}
         loading={isLoading}
         emptyMessage="No orders found."
-        onRowClick={(row) => router.push(`/orders/${row.id}`)}
+        onRowClick={(row) =>
+          router.push(row.is_walkin ? `/walkin-sales` : `/orders/${row.id}`)
+        }
       />
 
       {data && (

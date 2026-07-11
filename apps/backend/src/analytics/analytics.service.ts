@@ -15,6 +15,7 @@ import {
   ONLINE_REVENUE_STATUSES,
   POPUP_REVENUE_STATUSES,
   ALLY_REVENUE_STATUSES,
+  WALKIN_REVENUE_STATUSES,
   PREORDER_COUNTED_STATUSES,
   round2,
 } from './analytics.constants';
@@ -101,13 +102,14 @@ export class AnalyticsService {
     online: number;
     popup: number;
     allies: number;
+    walkin: number;
     preorders: number;
     baseline: number;
     target: number;
   }> {
     const db = this.supabase.getAdminClient();
 
-    const [onlineRes, popupRes, allyRes, preorderRes, baseline, target] = await Promise.all([
+    const [onlineRes, popupRes, allyRes, walkinRes, preorderRes, baseline, target] = await Promise.all([
       db
         .from('order_items')
         .select('quantity, products(hq_unit_count), orders!inner(status, deleted_at)')
@@ -121,6 +123,10 @@ export class AnalyticsService {
         .from('ally_sale_items')
         .select('quantity, products(hq_unit_count), ally_sales!inner(status)')
         .in('ally_sales.status', ALLY_REVENUE_STATUSES),
+      db
+        .from('walkin_order_items')
+        .select('quantity, products(hq_unit_count), walkin_orders!inner(status)')
+        .in('walkin_orders.status', WALKIN_REVENUE_STATUSES),
       db
         .from('preorders')
         .select('quantity, status, payment_status, product_variants(products(hq_unit_count))')
@@ -138,16 +144,18 @@ export class AnalyticsService {
     const online = weighted(onlineRes.data ?? [], (r) => r.products?.hq_unit_count ?? 1);
     const popup = weighted(popupRes.data ?? [], (r) => r.products?.hq_unit_count ?? 1);
     const allies = weighted(allyRes.data ?? [], (r) => r.products?.hq_unit_count ?? 1);
+    const walkin = weighted(walkinRes.data ?? [], (r) => r.products?.hq_unit_count ?? 1);
     const preorders = weighted(
       preorderRes.data ?? [],
       (r) => r.product_variants?.products?.hq_unit_count ?? 1,
     );
 
     return {
-      units: online + popup + allies + preorders + baseline,
+      units: online + popup + allies + walkin + preorders + baseline,
       online,
       popup,
       allies,
+      walkin,
       preorders,
       baseline,
       target,
