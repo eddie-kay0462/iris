@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import {
+  QueryClient,
+  HydrationBoundary,
+  dehydrate,
+} from "@tanstack/react-query";
 import "./globals.css";
 import { QueryProvider } from "@/lib/query/providers";
 import { ClientToaster } from "@/components/ClientToaster";
 import { SITE_URL } from "@/lib/seo/site";
+import { getAnnouncementBanner } from "@/lib/api/settings.server";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -80,11 +86,21 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Prefetch the announcement banner on the server and hydrate it into React
+  // Query, so the (shop) layout renders the bar in the first paint instead of
+  // popping it in after a client fetch. Cacheable fetch → route stays static.
+  const queryClient = new QueryClient();
+  await queryClient.prefetchQuery({
+    queryKey: ["announcement-banner"],
+    queryFn: getAnnouncementBanner,
+  });
+  const dehydratedState = dehydrate(queryClient);
+
   return (
     <html lang="en" style={{ colorScheme: "light" }} suppressHydrationWarning>
       <head>
@@ -117,7 +133,11 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <QueryProvider>{children}</QueryProvider>
+        <QueryProvider>
+          <HydrationBoundary state={dehydratedState}>
+            {children}
+          </HydrationBoundary>
+        </QueryProvider>
         <ClientToaster />
         <script
           type="application/ld+json"
