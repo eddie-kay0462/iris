@@ -494,8 +494,12 @@ function ShopHeader({
   // white control colour, so they can never desync (the previous pathname +
   // scroll-threshold approach could leave a transparent bar with dark, invisible
   // text over the hero when returning to the home page).
-  const [overHero, setOverHero] = useState(false);
   const pathname = usePathname();
+  // Seed from the route so the home page's first paint is already the
+  // transparent-over-hero variant (usePathname resolves during SSR). This avoids
+  // a solid→transparent flash on load; the observer below still refines it on
+  // scroll and client navigation.
+  const [overHero, setOverHero] = useState(pathname === "/");
 
   const isTransparent = overHero;
   const isTransparentWhite = overHero;
@@ -802,11 +806,14 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isHome = pathname === "/";
 
+  // Banner content is prefetched on the server and hydrated (see root layout),
+  // so `banner` is populated on the first render — the bar is in the SSR HTML
+  // with no client pop-in.
   const { data: banner } = useAnnouncementBanner();
-  // Start hidden so SSR/first paint matches; the effect reveals it after we've
-  // read this browser's dismissal. Dismissal is keyed to the banner text, so
-  // editing the message re-shows it to everyone.
-  const [bannerDismissed, setBannerDismissed] = useState(true);
+  // Start shown (when enabled) so the first paint matches the server render.
+  // The effect below hides it for this browser if it was previously dismissed
+  // (localStorage, keyed to the banner text so editing re-shows it to everyone).
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   useEffect(() => {
     // Reads this browser's dismissal (client-only) once the banner setting loads.
     /* eslint-disable react-hooks/set-state-in-effect */
@@ -830,7 +837,12 @@ function ShopLayoutInner({ children }: { children: React.ReactNode }) {
   // Measured banner+nav height, so content clears the header exactly. The home
   // hero deliberately sits UNDER the transparent nav, so there it only offsets by
   // the solid banner strip; every other page offsets by the full header.
-  const [headerHeight, setHeaderHeight] = useState(65);
+  // Seed with the banner reserved (when it will show) so non-home pages don't
+  // jump 36px when the measured height arrives; ResizeObserver corrects it to
+  // the exact value right after mount.
+  const [headerHeight, setHeaderHeight] = useState(() =>
+    banner?.enabled && banner?.text ? 65 + BANNER_PX : 65,
+  );
   const handleMeasure = useCallback((h: number) => setHeaderHeight(h), []);
   const mainPaddingTop = isHome ? (bannerVisible ? BANNER_PX : 0) : headerHeight;
 

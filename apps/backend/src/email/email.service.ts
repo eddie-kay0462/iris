@@ -58,6 +58,8 @@ export class EmailService {
     processing_fee?: number;
     total: number;
     currency: string;
+    shipping_method?: string | null;
+    placed_at?: string | null;
     shipping_address?: {
       fullName?: string;
       address?: string;
@@ -391,6 +393,8 @@ export class EmailService {
     processing_fee?: number;
     total: number;
     currency: string;
+    shipping_method?: string | null;
+    placed_at?: string | null;
     shipping_address?: {
       fullName?: string;
       address?: string;
@@ -410,6 +414,40 @@ export class EmailService {
   }): string {
     const symbol = order.currency === 'GHS' ? 'GH₵' : order.currency;
     const addr = order.shipping_address || {};
+
+    // Express deliveries are prioritised: orders placed before 3PM GMT (Ghana
+    // is UTC+0, so GMT hour == UTC hour) must go out the same day.
+    const isExpress = order.shipping_method === 'express';
+    const deliveryLabel = isExpress ? 'Express' : 'Standard';
+    const placed = order.placed_at ? new Date(order.placed_at) : null;
+    const placedTime = placed
+      ? placed
+          .toLocaleTimeString('en-GB', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+            timeZone: 'UTC',
+          })
+          .toUpperCase()
+      : null;
+    const beforeCutoff = placed ? placed.getUTCHours() < 15 : null;
+
+    const cutoffLine =
+      placedTime === null
+        ? ''
+        : beforeCutoff
+          ? `<p style="margin:8px 0 0;font-size:13px;font-weight:600;color:#4ade80;">✓ Placed ${placedTime} GMT — within the 3PM cutoff. Dispatch today.</p>`
+          : `<p style="margin:8px 0 0;font-size:13px;font-weight:600;color:#fbbf24;">Placed ${placedTime} GMT — after the 3PM cutoff. Dispatch next business day.</p>`;
+
+    const expressBanner = isExpress
+      ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#111;border-radius:6px;">
+          <tr><td style="padding:16px 18px;">
+            <p style="margin:0;font-size:13px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#fff;">⚡ Express delivery — prioritise</p>
+            <p style="margin:6px 0 0;font-size:13px;line-height:1.5;color:#e5e5e5;">Express orders placed before <strong style="color:#fff;">3:00&nbsp;PM GMT</strong> must go out the <strong style="color:#fff;">same day</strong>.</p>
+            ${cutoffLine}
+          </td></tr>
+        </table>`
+      : '';
 
     const addressLines = [
       addr.fullName,
@@ -449,9 +487,11 @@ export class EmailService {
           ${this.brandHeader('1NRI')}
         </td></tr>
         <tr><td style="padding:32px;">
-          <p style="margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#111;border:1px solid #111;display:inline-block;padding:4px 10px;">New Order</p>
+          <p style="margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#111;border:1px solid #111;display:inline-block;padding:4px 10px;">${isExpress ? '⚡ Express Order' : 'New Order'}</p>
           <h1 style="margin:0 0 4px;font-size:20px;font-weight:700;color:#111;">New order to fulfil</h1>
-          <p style="margin:0 0 28px;font-size:14px;color:#666;">Order <strong>${order.order_number}</strong></p>
+          <p style="margin:0 0 24px;font-size:14px;color:#666;">Order <strong>${order.order_number}</strong></p>
+
+          ${expressBanner}
 
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
             <tr>
@@ -464,6 +504,7 @@ export class EmailService {
               <td width="50%" style="vertical-align:top;">
                 <p style="margin:0 0 6px;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#999;">Ship to</p>
                 <p style="margin:0;font-size:14px;color:#111;line-height:1.5;">${addressLines || '-'}</p>
+                <p style="margin:8px 0 0;font-size:13px;color:#111;"><span style="color:#999;">Delivery:</span> <strong>${deliveryLabel}</strong>${isExpress ? ' <span style="color:#111;">⚡</span>' : ''}</p>
               </td>
             </tr>
           </table>
