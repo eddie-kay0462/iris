@@ -494,12 +494,8 @@ function ShopHeader({
   // white control colour, so they can never desync (the previous pathname +
   // scroll-threshold approach could leave a transparent bar with dark, invisible
   // text over the hero when returning to the home page).
+  const [overHero, setOverHero] = useState(false);
   const pathname = usePathname();
-  // Seed from the route so the home page's first paint is already the
-  // transparent-over-hero variant (usePathname resolves during SSR). This avoids
-  // a solid→transparent flash on load; the observer below still refines it on
-  // scroll and client navigation.
-  const [overHero, setOverHero] = useState(pathname === "/");
 
   const isTransparent = overHero;
   const isTransparentWhite = overHero;
