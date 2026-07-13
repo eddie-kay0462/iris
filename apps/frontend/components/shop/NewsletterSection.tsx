@@ -74,7 +74,7 @@ export function NewsletterSection() {
             variants={fadeUp}
             className="mt-4 max-w-xl text-base sm:text-lg text-neutral-400 dark:text-neutral-600 leading-relaxed"
           >
-            Drops, milestone updates, and early access &mdash; direct to your inbox.
+            Drops, milestone updates, and early access; direct to your inbox.
           </motion.p>
 
           <motion.div variants={fadeUp} className="mt-10">

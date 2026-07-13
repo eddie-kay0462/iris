@@ -58,7 +58,7 @@ export default function AboutPage() {
             </motion.h1>
 
             <motion.p variants={fadeUp} className="mt-10 max-w-2xl text-lg sm:text-xl text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              1NRI Worldwide is a Ghana-based fashion and manufacturing brand &mdash; built to close the gap between trend-responsive design and structured, locally-made production.
+              1NRI Worldwide is a Ghana-based fashion and manufacturing brand; built to close the gap between trend-responsive design and structured, locally-made production.
             </motion.p>
 
             {/* Meta strip */}
@@ -132,7 +132,7 @@ export default function AboutPage() {
               1NRI was founded to address the gap between trend-responsive fashion and structured local production.
             </motion.p>
             <motion.p variants={fadeUp}>
-              We combine contemporary design with disciplined, quality-controlled garment construction. Headquartered in Accra and operating production networks in Ghana, the brand serves style-conscious consumers locally and within the diaspora &mdash; people who seek fashion that reflects current trends while offering superior construction and longer wear compared to disposable alternatives.
+              We combine contemporary design with disciplined, quality-controlled garment construction. Headquartered in Accra and operating production networks in Ghana, the brand serves style-conscious consumers locally and within the diaspora; people who seek fashion that reflects current trends while offering superior construction and longer wear compared to disposable alternatives.
             </motion.p>
             <motion.p variants={fadeUp}>
               Since inception, 1NRI has built a growing customer base across Ghana, Nigeria, the United Kingdom, Canada, and the United States.
@@ -183,7 +183,7 @@ export default function AboutPage() {
               <div className="font-mono text-2xl font-semibold tabular-nums">03</div>
               <h3 className="mt-6 text-xl font-semibold uppercase tracking-tight">Inclusive production</h3>
               <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                Through a distributed manufacturing network, we engage women and youth &mdash; particularly in Ghana &mdash; with technical garment construction skills and structured income.
+                Through a distributed manufacturing network, we engage women and youth; particularly in Ghana; with technical garment construction skills and structured income.
               </p>
             </motion.article>
           </motion.div>
@@ -210,12 +210,11 @@ export default function AboutPage() {
             variants={stagger}
           >
             <motion.p variants={fadeUp} className="display text-3xl sm:text-4xl lg:text-5xl font-semibold uppercase tracking-tight leading-tight text-neutral-900 dark:text-neutral-100">
-              We&rsquo;re building a circular production strategy &mdash;{" "}
-              <span className="text-neutral-400 dark:text-neutral-500">textile recovery, upcycling, waste reduction</span>{" "}
-              &mdash; into the way we make clothes.
+              We&rsquo;re building a circular production strategy;{" "}
+              <span className="text-neutral-400 dark:text-neutral-500">textile recovery, upcycling, waste reduction</span>{" "}; into the way we make clothes.
             </motion.p>
             <motion.p variants={fadeUp} className="mt-8 max-w-2xl text-base sm:text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              By combining environmental responsibility, local capacity building, and commercially viable design, the goal is to strengthen Ghana&rsquo;s textile ecosystem &mdash; and to show that durable fashion and climate-conscious manufacturing can scale together.
+              By combining environmental responsibility, local capacity building, and commercially viable design, the goal is to strengthen Ghana&rsquo;s textile ecosystem; and to show that durable fashion and climate-conscious manufacturing can scale together.
             </motion.p>
           </motion.div>
         </div>
@@ -242,7 +241,7 @@ export default function AboutPage() {
         >
           <motion.div variants={fadeUp} className="font-mono text-[10px] uppercase tracking-[0.4em] text-white/60">Currently underway</motion.div>
           <motion.h2 variants={fadeUp} className="display mt-4 text-3xl sm:text-5xl lg:text-6xl font-bold uppercase tracking-tight">
-            Road to HQ &mdash; Accra, by 26.12.2026.
+            Road to HQ; Accra, by 26.12.2026.
           </motion.h2>
           <motion.p variants={fadeUp} className="mt-6 max-w-xl text-base text-white/70 leading-relaxed">
             Six thousand units. One headquarters. Six milestones along the way. Every piece sold gets us a little closer.
@@ -275,7 +274,7 @@ export default function AboutPage() {
 
             <motion.h2 variants={fadeUp} className="display mt-6 text-3xl sm:text-5xl font-bold uppercase tracking-tight">Stay close to the work.</motion.h2>
             <motion.p variants={fadeUp} className="mt-4 max-w-xl text-base sm:text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              Drops, sit-downs from the studio, behind-the-machines footage from Ghana &mdash; choose your platform.
+              Drops, sit-downs from the studio, behind-the-machines footage from Ghana; choose your platform.
             </motion.p>
           </motion.div>
 
