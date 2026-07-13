@@ -5170,3 +5170,24 @@ Refunding a walk-in order from its detail view restores the stock and texts the 
 5. Open the main **Orders** page and confirm the walk-in shows with a teal "Walk-in" badge.
 6. Check the homepage Road to HQ counter (or `GET /api/analytics/road-to-hq`) — it should include the walk-in units.
 7. Open a completed walk-in order and refund it — stock should come back and the customer gets a text.
+
+## No More Duplicate "You Left Something Behind" Emails (July 2026)
+
+We send a friendly reminder email when someone starts checking out but doesn't finish. The problem: if the same person came back and started checkout again a little later (new visit, different device, or after clearing their browser), our system treated it as a brand-new cart and sent them *another* identical reminder. Someone who kept re-opening checkout could get their inbox flooded with the same email.
+
+Now there's a guardrail: **each email address gets at most one abandoned-checkout reminder every 24 hours**, no matter how many times they re-start checkout. If they go quiet for a full day and then abandon a genuinely new cart, they can be reminded again — we're only blocking the repeat spam, not legitimate follow-ups.
+
+Nothing changed about the email itself or when the first one goes out — this only stops the duplicates.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/backend/src/analytics/analytics.service.ts` | Added a 24-hour per-inbox cooldown to the abandoned-checkout reminder job so the same email address isn't reminded more than once a day, even across separate checkout sessions. |
+
+### How to test
+
+1. Start a checkout with an email address and a few items, then leave without finishing.
+2. Wait for the reminder email to arrive (the job runs every few minutes once the cart's been idle a while).
+3. Start checkout *again* with the same email shortly after — you should **not** get a second reminder.
+4. A single, one-off abandoned cart should still get its one reminder as normal.

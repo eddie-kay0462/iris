@@ -38,6 +38,9 @@ const ABANDON_AFTER_MS = 10 * 60 * 1000;
 const REMINDER_AFTER_MS = 60 * 60 * 1000;
 // Don't email reminders for carts older than this; they're stale, not recoverable.
 const MAX_REMINDER_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+// Never send more than one abandoned-checkout reminder to the same inbox within
+// this window, even across separate checkout sessions for that email.
+const REMINDER_EMAIL_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h
 
 @Injectable()
 export class AnalyticsService {
@@ -1663,6 +1666,24 @@ export class AnalyticsService {
       const items: any[] = Array.isArray(r.items) ? r.items : [];
       if (items.length === 0) continue;
 
+      // Per-inbox cooldown: a customer who re-opens checkout in a new session
+      // creates a fresh row (new session_id, reminder_sent_at = NULL) that would
+      // otherwise slip past the per-row guard and email them again. Suppress the
+      // send if this same email was already reminded within the cooldown window.
+      const cooldownCutoff = new Date(now - REMINDER_EMAIL_COOLDOWN_MS).toISOString();
+      // Case-insensitive exact match; escape LIKE wildcards so emails containing
+      // '_' (e.g. john_doe@x.com) don't match too broadly.
+      const emailPattern = String(r.email).replace(/([\\%_])/g, '\\$1');
+      const { data: recent } = await db
+        .from('checkout_sessions')
+        .select('id')
+        .neq('id', r.id)
+        .ilike('email', emailPattern)
+        .not('reminder_sent_at', 'is', null)
+        .gte('reminder_sent_at', cooldownCutoff)
+        .limit(1);
+      const withinCooldown = !!recent?.length;
+
       // Atomically CLAIM the row before sending: flip reminder_sent_at from NULL
       // to now() only if it's still open and unclaimed. This is the single source
       // of truth for "who gets to email this cart" — the WHERE ... reminder_sent_at
@@ -1680,6 +1701,9 @@ export class AnalyticsService {
         .select('id')
         .maybeSingle();
       if (!claimed) continue; // already claimed/converted elsewhere
+      // Row is now marked handled (won't be re-evaluated), but the same inbox was
+      // reminded recently — suppress the duplicate email.
+      if (withinCooldown) continue;
 
       try {
         await this.email.sendAbandonedCheckoutReminder({
