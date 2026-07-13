@@ -49,7 +49,16 @@ export class PaymentsService {
             event?.data?.customer?.customer_code,
           );
           if (!confirmedAlly) {
-            await this.ordersService.confirmPayment(reference);
+            const confirmedOrder =
+              await this.ordersService.confirmPayment(reference);
+            if (!confirmedOrder) {
+              // Charge succeeded but no order/popup/ally row matched this
+              // reference. Log loudly so it's visible — the pending-order
+              // reconciliation cron will also catch it if an order later appears.
+              console.warn(
+                `[Paystack Webhook] charge.success for reference ${reference} matched no order — possible missed payment`,
+              );
+            }
           }
         }
       }
