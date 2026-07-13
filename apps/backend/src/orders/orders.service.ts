@@ -26,9 +26,20 @@ import {
 // the stored total matches what the customer is actually charged via Paystack.
 const PROCESSING_FEE_RATE = 0.0195;
 
+// Reconciliation windows for never-paid pending orders (see reconcilePendingOrders).
+// GRACE: don't touch an order until the normal client-side confirm callback has had
+// time to run, so we only chase genuinely stuck/abandoned attempts.
+const RECONCILE_GRACE_MS = 3 * 60_000; // 3 minutes
+// After this age, a pending order Paystack reports as unpaid is considered dead and
+// soft-deleted so it stops cluttering the DB and abandoned-recovery matching.
+const RECONCILE_DELETE_AFTER_MS = 24 * 60 * 60_000; // 24 hours
+// Cap per cron tick so a backlog can't blow up a single run.
+const RECONCILE_BATCH_SIZE = 50;
+
 @Injectable()
 export class OrdersService {
   private readonly frontendUrl: string;
+  private readonly paystackSecretKey: string;
 
   constructor(
     private supabase: SupabaseService,
@@ -40,6 +51,7 @@ export class OrdersService {
     private configService: ConfigService,
   ) {
     this.frontendUrl = this.configService.get<string>('FRONTEND_URL', 'https://storefront.1nri.store');
+    this.paystackSecretKey = this.configService.get<string>('PAYSTACK_SECRET_KEY', '');
   }
 
   /**
@@ -677,6 +689,13 @@ export class OrdersService {
       )
       .is('deleted_at', null);
 
+    // Never-paid checkout attempts (status='pending' AND payment_status='pending')
+    // are not real orders — they exist only as a stock-hold/payment container that
+    // the customer abandoned. Keep them off the Orders page; they still surface on
+    // the Payments page and are reconciled/cleaned up by reconcilePendingOrders().
+    // The one exception, a pending row that DID get paid, passes this filter.
+    q = q.or('status.neq.pending,payment_status.neq.pending');
+
     if (query.status) q = q.eq('status', query.status);
     if (query.search) {
       q = q.or(
@@ -899,23 +918,25 @@ export class OrdersService {
   async getAdminStats() {
     const db = this.supabase.getAdminClient();
 
-    // Total revenue (non-cancelled/refunded orders)
+    // Total revenue — revenue-status orders only (paid/processing/shipped/
+    // delivered). Never-paid pending attempts carry a `total` but aren't money in.
     const { data: revenueData } = await db
       .from('orders')
       .select('total')
       .is('deleted_at', null)
-      .not('status', 'in', '("cancelled","refunded")');
+      .in('status', ONLINE_REVENUE_STATUSES);
 
     const totalRevenue = (revenueData || []).reduce(
       (sum, o) => sum + Number(o.total),
       0,
     );
 
-    // Order count
+    // Order count — excludes never-paid pending attempts, matching findAdmin().
     const { count: orderCount } = await db
       .from('orders')
       .select('*', { count: 'exact', head: true })
-      .is('deleted_at', null);
+      .is('deleted_at', null)
+      .or('status.neq.pending,payment_status.neq.pending');
 
     // Customer count (distinct user_ids who have orders)
     const { data: customerData } = await db
@@ -955,7 +976,7 @@ export class OrdersService {
       .from('orders')
       .select('total, created_at')
       .is('deleted_at', null)
-      .not('status', 'in', '("cancelled","refunded")')
+      .in('status', ONLINE_REVENUE_STATUSES)
       .gte('created_at', thirtyDaysAgo.toISOString());
 
     const recentRevenue = (recentData || []).reduce(
@@ -1962,5 +1983,94 @@ export class OrdersService {
     }
 
     return fullOrder ?? null;
+  }
+
+  /**
+   * Ask Paystack whether a reference was actually charged. Returns the
+   * transaction status string ('success' | 'failed' | 'abandoned' | ...), or
+   * null if the lookup itself failed (network/HTTP error) so the caller can
+   * safely skip and retry on the next tick.
+   */
+  private async verifyPaystackTransaction(
+    reference: string,
+  ): Promise<string | null> {
+    if (!this.paystackSecretKey) return null;
+    try {
+      const response = await fetch(
+        `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+        { headers: { Authorization: `Bearer ${this.paystackSecretKey}` } },
+      );
+      if (!response.ok) return null;
+      const result = (await response.json()) as any;
+      return result?.data?.status ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Safety net for the two ways a paid order can get stuck as `pending`:
+   * the client-side confirm callback never fired AND the webhook was missed.
+   * Runs on a schedule (see OrdersReconciliationCron).
+   *
+   * For each still-pending, unpaid order older than the grace window we ask
+   * Paystack for the truth:
+   *   - success                          → confirmPayment() recovers the sale
+   *   - unpaid AND older than DELETE age  → soft-delete (dead abandoned attempt)
+   *   - unpaid but still young            → leave it, retry next tick
+   * Every order is handled independently so one failure can't stall the batch.
+   */
+  async reconcilePendingOrders(): Promise<{ recovered: number; cleaned: number }> {
+    const db = this.supabase.getAdminClient();
+    const now = Date.now();
+    const graceCutoff = new Date(now - RECONCILE_GRACE_MS).toISOString();
+
+    const { data: rows, error } = await db
+      .from('orders')
+      .select('id, payment_reference, order_number, created_at')
+      .is('deleted_at', null)
+      .eq('status', 'pending')
+      .eq('payment_status', 'pending')
+      .not('payment_reference', 'is', null)
+      .lt('created_at', graceCutoff)
+      .order('created_at', { ascending: true })
+      .limit(RECONCILE_BATCH_SIZE);
+
+    if (error) throw error;
+    if (!rows?.length) return { recovered: 0, cleaned: 0 };
+
+    let recovered = 0;
+    let cleaned = 0;
+
+    for (const order of rows) {
+      try {
+        const status = await this.verifyPaystackTransaction(order.payment_reference);
+        if (status === null) continue; // lookup failed — retry next tick
+
+        if (status === 'success') {
+          // Idempotent: deducts inventory, sends receipts, flips to paid/processing.
+          await this.confirmPayment(order.payment_reference);
+          recovered += 1;
+          continue;
+        }
+
+        const age = now - new Date(order.created_at).getTime();
+        if (age > RECONCILE_DELETE_AFTER_MS) {
+          await db
+            .from('orders')
+            .update({ deleted_at: new Date().toISOString() })
+            .eq('id', order.id)
+            .eq('payment_status', 'pending'); // guard: never soft-delete a paid order
+          cleaned += 1;
+        }
+      } catch (err: any) {
+        console.error(
+          `reconcilePendingOrders failed for ${order.order_number}:`,
+          err?.message ?? err,
+        );
+      }
+    }
+
+    return { recovered, cleaned };
   }
 }
