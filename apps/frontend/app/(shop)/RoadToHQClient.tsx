@@ -366,7 +366,7 @@ export default function RoadToHQPage({
           </motion.h2>
           <motion.p variants={fadeUp} className="mt-8 mx-auto max-w-2xl text-center text-base sm:text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed">
             1NRI is moving into its first permanent headquarters in Accra by{" "}
-            <span className="font-mono">26.12.2026</span> &mdash; a studio, a fitting room, and somewhere
+            <span className="font-mono">26.12.2026</span>; a studio, a fitting room, and somewhere
             our distributed production network in Northern Ghana can finally call home. The math is simple.
             The road is not.
           </motion.p>
