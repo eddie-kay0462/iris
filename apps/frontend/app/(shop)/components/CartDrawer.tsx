@@ -361,7 +361,7 @@ function RecCard({ product }: { product: Product }) {
       productTitle: product.title,
       variantTitle: [selectedColor || null, sizeLabel ?? variantLabel(variant)]
         .filter(Boolean)
-        .join(" · ") || null,
+        .join(" / ") || null,
       price: variant.price ?? product.base_price ?? 0,
       image,
       isPreorder,
