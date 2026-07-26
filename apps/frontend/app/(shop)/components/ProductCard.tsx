@@ -62,6 +62,7 @@ export function ProductCard({
   const sizes = extractSizes(variants);
   const colors = extractColorsFromTags(images);
   const hasSizes = sizes.length > 0;
+  const hasSizeChoice = sizes.length > 1;
 
   const firstColor = colors[0] ?? "";
 
@@ -314,12 +315,17 @@ export function ProductCard({
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    if (!hasSizeChoice) {
+                      if (!addingSize && successSize !== sizes[0]) handleAddToCart(sizes[0]);
+                      return;
+                    }
                     setQuickAddOpen(true);
                   }}
                   className="w-full bg-white/95 py-3 text-center text-[10px] font-medium uppercase tracking-widest text-gray-900 opacity-0 transition-opacity duration-200 group-hover:opacity-100 dark:bg-black/90 dark:text-white"
                   aria-label="Quick add to cart"
                 >
-                  Quick Add +
+                  {!hasSizeChoice && (addingSize === sizes[0] ? <SpinnerIcon /> : successSize === sizes[0] ? <CheckIcon /> : "Quick Add +")}
+                  {hasSizeChoice && "Quick Add +"}
                 </button>
               ) : (
                 <motion.div

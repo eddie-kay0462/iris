@@ -78,6 +78,11 @@ export function extractSizes(variants: ProductVariant[]): string[] {
   return sortSizes(sizes);
 }
 
+/** True when a product has more than one size value to pick between (e.g. not "One Size"). */
+export function hasSizeChoice(variants: ProductVariant[]): boolean {
+  return extractSizes(variants).length > 1;
+}
+
 /** The variant matching a given size value, if any. */
 export function findVariantBySize(
   variants: ProductVariant[],

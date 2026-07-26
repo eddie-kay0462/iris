@@ -462,7 +462,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
     const firstInStock = variants.find(isVariantInStock) ?? variants[0]!;
     const sel: Record<string, string> = {};
     for (const g of groups) {
-      if (g.name.toLowerCase() === "size") continue;
+      if (g.name.toLowerCase() === "size" && g.values.length > 1) continue;
       const key = g.slot === 1 ? "option1_value" : g.slot === 2 ? "option2_value" : "option3_value";
       const isColorGroup = g.name.toLowerCase() === "color" || g.name.toLowerCase() === "colour";
       if (isColorGroup && initialColor) {
@@ -505,7 +505,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
     );
   }
 
-  const hasSizeOption = optionGroups.some((g) => g.name.toLowerCase() === "size");
+  const hasSizeOption = optionGroups.some((g) => g.name.toLowerCase() === "size" && g.values.length > 1);
   const sizeSelected = !hasSizeOption || !!selectedOptions[optionGroups.find((g) => g.name.toLowerCase() === "size")?.name ?? ""];
   // Resolve the active variant regardless of stock so OOS variants surface the
   // correct "Sold Out" / preorder state on the CTA.
@@ -619,6 +619,7 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
           {/* Variant options */}
           {optionGroups.map((group) => {
             const isSize = group.name.toLowerCase() === "size";
+            if (isSize && group.values.length === 1) return null;
             return (
               <div key={group.name} className="flex flex-col gap-2.5">
                 <div className="flex justify-between items-baseline">
