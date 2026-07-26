@@ -8,7 +8,7 @@ import { useCart } from "@/lib/cart";
 import { useLocale } from "@/lib/locale/locale-provider";
 import { usePersonalisedProducts } from "@/lib/api/recommendations";
 import { apiClient } from "@/lib/api/client";
-import { extractSizes, findVariantBySize } from "@/lib/products/variants";
+import { extractSizes, filterVariantsByColor, findVariantByColorAndSize } from "@/lib/products/variants";
 import {
   colorToHex,
   extractColorsFromTags,
@@ -17,9 +17,14 @@ import {
 import { prefetchRawImage } from "@/hooks/useImagePrefetch";
 import type { Product, ProductVariant, PaginatedResponse } from "@/lib/api/products";
 
-/** First in-stock variant, falling back to the first preorderable one. */
-function defaultVariant(product: Product): ProductVariant | null {
-  const variants = product.product_variants ?? [];
+/**
+ * First in-stock variant for a given color, falling back to the first
+ * preorderable one. Scoping to `color` keeps a "+" quick-add from silently
+ * substituting a different color's variant when the shown swatch is out of
+ * stock for the one actually selected.
+ */
+function defaultVariant(product: Product, color?: string): ProductVariant | null {
+  const variants = filterVariantsByColor(product.product_variants ?? [], color);
   const inStock = variants.find(
     (v) => v.inventory_quantity > 0 && v.available !== false,
   );
@@ -318,7 +323,19 @@ function RecCard({ product }: { product: Product }) {
   const sizes = extractSizes(variants);
   const hasSizes = sizes.length > 0;
   const colors = extractColorsFromTags(images);
-  const fallback = defaultVariant(product);
+
+  // Mirrors ProductCard's quick-add flow: pick a size, brief spinner, then ✓.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [addingSize, setAddingSize] = useState<string | null>(null);
+  const [successSize, setSuccessSize] = useState<string | null>(null);
+  const [addedFlash, setAddedFlash] = useState(false);
+  // Colour swatches swap the previewed image, just like on the shop page.
+  const [selectedColor, setSelectedColor] = useState(colors[0] ?? "");
+  const [imgIndex, setImgIndex] = useState(() =>
+    findImageIndexByTag(images, colors[0] ?? ""),
+  );
+
+  const fallback = defaultVariant(product, selectedColor);
 
   const price = fallback?.price ?? product.base_price ?? 0;
   const compareAt = fallback?.compare_at_price ?? null;
@@ -331,17 +348,6 @@ function RecCard({ product }: { product: Product }) {
   const hasPreorder =
     allOutOfStock && variants.some((v) => v.preorder_enabled === true);
   const soldOut = (allOutOfStock && !hasPreorder) || !fallback;
-
-  // Mirrors ProductCard's quick-add flow: pick a size, brief spinner, then ✓.
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [addingSize, setAddingSize] = useState<string | null>(null);
-  const [successSize, setSuccessSize] = useState<string | null>(null);
-  const [addedFlash, setAddedFlash] = useState(false);
-  // Colour swatches swap the previewed image, just like on the shop page.
-  const [selectedColor, setSelectedColor] = useState(colors[0] ?? "");
-  const [imgIndex, setImgIndex] = useState(() =>
-    findImageIndexByTag(images, colors[0] ?? ""),
-  );
 
   const image = images[imgIndex]?.src ?? images[0]?.src ?? null;
 
@@ -364,7 +370,9 @@ function RecCard({ product }: { product: Product }) {
   }
 
   function handlePickSize(size: string) {
-    const variant = findVariantBySize(variants, size);
+    // Match on the selected color too — a size shared by another color must
+    // never resolve to that other color's variant.
+    const variant = findVariantByColorAndSize(variants, selectedColor, size);
     if (!variant) return;
     const inStock =
       variant.inventory_quantity > 0 && variant.available !== false;
@@ -439,7 +447,7 @@ function RecCard({ product }: { product: Product }) {
               className="absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-center gap-0.5 bg-white/95 p-1.5 dark:bg-black/90"
             >
               {sizes.map((size) => {
-                const v = findVariantBySize(variants, size);
+                const v = findVariantByColorAndSize(variants, selectedColor, size);
                 const inStock =
                   !!v && v.inventory_quantity > 0 && v.available !== false;
                 const canPreorder = !inStock && v?.preorder_enabled === true;

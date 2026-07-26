@@ -92,3 +92,43 @@ export function findVariantBySize(
   if (!slot) return undefined;
   return variants.find((v) => v[slot] === size);
 }
+
+/** The variant option slot that holds the color/colour value. */
+export function getColorSlot(variants: ProductVariant[]): OptionSlotKey | null {
+  const first = variants[0];
+  if (!first) return null;
+  const isColorName = (name?: string | null) =>
+    name?.toLowerCase() === "color" || name?.toLowerCase() === "colour";
+  if (isColorName(first.option1_name)) return "option1_value";
+  if (isColorName(first.option2_name)) return "option2_value";
+  if (isColorName(first.option3_name)) return "option3_value";
+  return null;
+}
+
+/**
+ * Narrow variants down to a given color. Returns the full list unchanged when
+ * the product has no color axis or no color is given — callers that then
+ * match on size alone stay correct for single-axis products.
+ */
+export function filterVariantsByColor(
+  variants: ProductVariant[],
+  color: string | null | undefined,
+): ProductVariant[] {
+  const slot = getColorSlot(variants);
+  if (!slot || !color) return variants;
+  const colorLc = color.toLowerCase();
+  return variants.filter((v) => v[slot]?.toLowerCase() === colorLc);
+}
+
+/**
+ * The variant matching a given color AND size, so a size shared by multiple
+ * colors never resolves to another color's row (e.g. Black/M when White is
+ * selected but has no M in stock).
+ */
+export function findVariantByColorAndSize(
+  variants: ProductVariant[],
+  color: string | null | undefined,
+  size: string,
+): ProductVariant | undefined {
+  return findVariantBySize(filterVariantsByColor(variants, color), size);
+}
