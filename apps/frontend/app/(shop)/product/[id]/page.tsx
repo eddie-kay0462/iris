@@ -100,6 +100,25 @@ function isValuePreorderable(
   );
 }
 
+function isValueAvailable(
+  variants: ProductVariant[],
+  groups: OptionGroup[],
+  selected: Record<string, string>,
+  targetGroup: OptionGroup,
+  targetValue: string,
+): boolean {
+  const testSelected = { ...selected, [targetGroup.name]: targetValue };
+  return variants.some((v) =>
+    groups.every((g) => {
+      const val = testSelected[g.name];
+      if (!val) return true;
+      const key =
+        g.slot === 1 ? "option1_value" : g.slot === 2 ? "option2_value" : "option3_value";
+      return v[key] === val;
+    }),
+  );
+}
+
 // ─── PDPGallery ───────────────────────────────────────────────────────────────
 
 interface GalleryImage {
@@ -484,8 +503,14 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
   }, [variants, selectedOptions]);
 
   const handleOptionSelect = useCallback((optionName: string, value: string) => {
-    setSelectedOptions((prev) => ({ ...prev, [optionName]: value }));
-  }, []);
+    setSelectedOptions((prev) => {
+      const group = optionGroups.find((g) => g.name === optionName);
+      if (group && !isValueAvailable(variants, optionGroups, prev, group, value)) {
+        return prev;
+      }
+      return { ...prev, [optionName]: value };
+    });
+  }, [optionGroups, variants]);
 
   const { data: similarProducts } = useSimilarProducts(product?.handle ?? "", 6);
   const { data: allProducts } = useProducts({ limit: 8, sort_by: "created_at", sort_order: "desc" });
@@ -508,8 +533,10 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
   const hasSizeOption = optionGroups.some((g) => g.name.toLowerCase() === "size" && g.values.length > 1);
   const sizeSelected = !hasSizeOption || !!selectedOptions[optionGroups.find((g) => g.name.toLowerCase() === "size")?.name ?? ""];
   // Resolve the active variant regardless of stock so OOS variants surface the
-  // correct "Sold Out" / preorder state on the CTA.
-  const active = sizeSelected ? (activeVariant || variants[0] || null) : null;
+  // correct "Sold Out" / preorder state on the CTA. No fallback to variants[0]
+  // here: an unmatched option combination (e.g. a color/size pair with no
+  // variant row) must resolve to null, not a substituted unrelated variant.
+  const active = sizeSelected ? activeVariant : null;
   // Price display should reflect the product's pricing even before a size is
   // picked (mirrors ProductCard, which reads from the first variant). Stock and
   // CTA state still key off `active`, so an unselected size can't be purchased.
@@ -639,11 +666,14 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
                     const isSelected = selectedOptions[group.name] === val;
                     const inStockForVal = isValueInStock(variants, optionGroups, selectedOptions, group, val);
                     const preorderableForVal = !inStockForVal && isValuePreorderable(variants, optionGroups, selectedOptions, group, val);
+                    const availableForVal = isValueAvailable(variants, optionGroups, selectedOptions, group, val);
                     return (
                       <button
                         key={val}
                         onClick={() => handleOptionSelect(group.name, val)}
-                        className={`${isSize ? "h-11" : "h-11 px-4"} border font-light text-[13px] tracking-[0.06em] transition-all duration-[160ms] ${
+                        disabled={!availableForVal}
+                        aria-disabled={!availableForVal}
+                        className={`${isSize ? "h-11" : "h-11 px-4"} border font-light text-[13px] tracking-[0.06em] transition-all duration-[160ms] disabled:cursor-not-allowed ${
                           isSelected && inStockForVal
                             ? "bg-black text-[#F4F3F1] border-black dark:bg-white dark:text-black dark:border-white"
                             : isSelected && preorderableForVal

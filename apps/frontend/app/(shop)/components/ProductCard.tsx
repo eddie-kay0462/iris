@@ -11,7 +11,7 @@ import { useCart } from "@/lib/cart";
 import { useLocale } from "@/lib/locale/locale-provider";
 import { prefetchImage } from "@/hooks/useImagePrefetch";
 import { isVariantInStock } from "@/lib/products/variants";
-import { extractSizes, findVariantBySize } from "@/lib/products/variants";
+import { extractSizes, findVariantByColorAndSize } from "@/lib/products/variants";
 import {
   colorToHex,
   extractColorsFromTags,
@@ -195,7 +195,9 @@ export function ProductCard({
 
   const handleAddToCart = useCallback(
     (size: string) => {
-      const variant = findVariantBySize(variants, size);
+      // Match on the currently selected color too — a size shared by another
+      // color (but not this one) must never resolve to that other color's variant.
+      const variant = findVariantByColorAndSize(variants, selectedColor, size);
       if (!variant) return;
       const inStock = isVariantInStock(variant);
       if (!inStock && !variant.preorder_enabled) return;
@@ -206,7 +208,7 @@ export function ProductCard({
           variantId: variant.id,
           productId: product.id,
           productTitle: product.title,
-          variantTitle: size,
+          variantTitle: [selectedColor || null, size].filter(Boolean).join(" / ") || size,
           price: variant.price ?? product.base_price ?? 0,
           image: image?.src ?? null,
           isPreorder,
@@ -220,7 +222,7 @@ export function ProductCard({
         }, 800);
       }, 500);
     },
-    [product, variants, image, addItem],
+    [product, variants, image, addItem, selectedColor],
   );
 
   return (
@@ -337,7 +339,7 @@ export function ProductCard({
                   className="flex w-full items-center justify-center gap-0.5 bg-white/95 py-2 dark:bg-black/90"
                 >
                   {sizes.map((size, i) => {
-                    const variant = findVariantBySize(variants, size);
+                    const variant = findVariantByColorAndSize(variants, selectedColor, size);
                     const inStock = !!variant && isVariantInStock(variant);
                     const canPreorder = !inStock && variant?.preorder_enabled === true;
                     const unavailable = !inStock && !canPreorder;
