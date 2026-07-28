@@ -522,15 +522,28 @@ function ShopHeader({
     // hero scrolls out from behind it (accounts for the announcement banner too).
     const barH = barRef.current?.offsetHeight ?? 64;
     const rootMargin = `-${barH}px 0px 0px 0px`;
+    const check = () => setOverHero(hero.getBoundingClientRect().bottom > barH);
     // Synchronous first read (IntersectionObserver's initial callback is async).
-    setOverHero(hero.getBoundingClientRect().bottom > barH);
+    check();
+    // The browser/router may still be settling scroll position (back/forward
+    // restoration, reload scroll-anchoring, router scroll-to-top) when this
+    // layout effect runs. Re-sample after the browser's own scroll/layout pass
+    // for this frame so a settled scrollY decides overHero, not a transient one.
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(check);
+    });
     const io = new IntersectionObserver(
       ([entry]) => setOverHero(entry.isIntersecting),
       { rootMargin, threshold: 0 }
     );
     io.observe(hero);
-    return () => io.disconnect();
-  }, [pathname]);
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      io.disconnect();
+    };
+  }, [pathname, bannerVisible, banner?.text]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
