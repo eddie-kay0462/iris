@@ -110,10 +110,11 @@ export interface AnnouncementBanner {
   link: string; // optional URL; empty string = plain text banner
 }
 
-export function useAnnouncementBanner() {
+export function useAnnouncementBanner(initialData?: AnnouncementBanner | null) {
   return useQuery({
     queryKey: ["announcement-banner"],
     queryFn: () => apiClient<AnnouncementBanner>("/settings/announcement-banner"),
+    ...(initialData ? { placeholderData: initialData } : {}),
     staleTime: 5 * 60 * 1000,
   });
 }
