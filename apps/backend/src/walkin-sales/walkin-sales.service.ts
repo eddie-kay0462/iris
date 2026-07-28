@@ -296,7 +296,7 @@ export class WalkinSalesService {
       this.smsService
         .sendSMS(
           order.customer_phone,
-          `Hi${name}, ` + SMS_TEMPLATES.orderConfirmation(order.order_number),
+          `Hi${name}, ` + SMS_TEMPLATES.walkinOrderConfirmation(order.order_number),
         )
         .catch(() => {});
     }

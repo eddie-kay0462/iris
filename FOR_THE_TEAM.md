@@ -5191,3 +5191,24 @@ Nothing changed about the email itself or when the first one goes out — this o
 2. Wait for the reminder email to arrive (the job runs every few minutes once the cart's been idle a while).
 3. Start checkout *again* with the same email shortly after — you should **not** get a second reminder.
 4. A single, one-off abandoned cart should still get its one reminder as normal.
+
+---
+
+## Walk-in Order Text Messages No Longer Promise Shipping (July 2026)
+
+Walk-in customers pick up their item in the store — there's no shipping involved. But the confirmation text they got after a regular walk-in sale still said "We'll update you on shipping soon," which didn't make sense and could confuse people.
+
+That line is now gone for regular walk-in sales — the text just confirms the order and thanks them for shopping with us. Walk-in **pre-orders** (items we don't have in stock yet) are unaffected — those texts already correctly talk about us reaching out once the item is ready, not shipping, so nothing needed to change there.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/backend/src/sms/sms.service.ts` | Added a new walk-in-specific text template that skips the shipping line. |
+| `apps/backend/src/walkin-sales/walkin-sales.service.ts` | Completed walk-in sales now use the new template instead of the shared online-order one. |
+
+### How to test
+
+1. Complete a regular (in-stock) walk-in sale with a customer phone number.
+2. Check the confirmation text — it should say the order is confirmed and thank them for shopping, with no mention of shipping.
+3. Take a walk-in pre-order (out-of-stock item) and confirm its text still talks about reaching out once the item is ready — unchanged.
