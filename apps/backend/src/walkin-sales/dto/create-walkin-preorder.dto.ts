@@ -57,4 +57,9 @@ export class CreateWalkinPreorderDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  delivery_fee?: number;
 }

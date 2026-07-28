@@ -145,7 +145,7 @@ export default function RootLayout({
               ],
               contactPoint: {
                 "@type": "ContactPoint",
-                email: "1nriiworldwide@gmail.com",
+                email: "hello@1nri.store",
                 contactType: "customer service",
               },
             }),

@@ -8,6 +8,7 @@ import { apiClient } from "./client";
 function invalidatePreorderViews(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["preorders"] });
   qc.invalidateQueries({ queryKey: ["preorder-stats"] });
+  qc.invalidateQueries({ queryKey: ["preorder-group-history"] });
   qc.invalidateQueries({ queryKey: ["admin-orders"] });
   qc.invalidateQueries({ queryKey: ["admin-order"] });
   qc.invalidateQueries({ queryKey: ["payment-stats"] });
@@ -16,7 +17,7 @@ function invalidatePreorderViews(qc: QueryClient) {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type PreorderStatus = "pending" | "stock_held" | "fulfilled" | "cancelled" | "refunded";
-export type PreorderSource = "online" | "popup";
+export type PreorderSource = "online" | "popup" | "walkin";
 
 export interface Preorder {
   id: string;
@@ -39,6 +40,7 @@ export interface Preorder {
   priority: number | null;
   notified_at: string | null;
   notes: string | null;
+  delivery_fee: number;
   created_at: string;
   updated_at: string;
   product_variants?: {
@@ -66,6 +68,22 @@ export interface PreordersResult {
   totalPages: number;
 }
 
+export interface PreorderStatusHistoryEntry {
+  id: string;
+  preorder_id: string;
+  order_number: string;
+  from_status: PreorderStatus | null;
+  to_status: PreorderStatus;
+  notes: string | null;
+  changed_by: string | null;
+  created_at: string;
+}
+
+export interface UpdateGroupStatusResult {
+  updated: number;
+  skipped: number;
+}
+
 export interface RestockResult {
   variant_id: string;
   quantity_added: number;
@@ -90,6 +108,7 @@ export interface CreatePopupPreorderInput {
   payment_reference?: string;
   notes?: string;
   event_id?: string;
+  delivery_fee?: number;
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
@@ -101,10 +120,11 @@ export function usePreorderStats() {
   });
 }
 
-export function usePreorders(params?: { status?: string; variant_id?: string; page?: number; limit?: number }) {
+export function usePreorders(params?: { status?: string; variant_id?: string; source?: PreorderSource; page?: number; limit?: number }) {
   const qs = new URLSearchParams();
   if (params?.status) qs.set("status", params.status);
   if (params?.variant_id) qs.set("variant_id", params.variant_id);
+  if (params?.source) qs.set("source", params.source);
   if (params?.page) qs.set("page", String(params.page));
   if (params?.limit) qs.set("limit", String(params.limit));
   const query = qs.toString();
@@ -188,6 +208,34 @@ export function useCreatePopupPreorder() {
   return useMutation({
     mutationFn: (dto: CreatePopupPreorderInput) =>
       apiClient<Preorder[]>("/admin/preorders/popup", { method: "POST", body: dto }),
+    onSuccess: () => invalidatePreorderViews(qc),
+  });
+}
+
+export function usePreorderGroupHistory(orderNumber: string) {
+  return useQuery({
+    queryKey: ["preorder-group-history", orderNumber],
+    queryFn: () => apiClient<PreorderStatusHistoryEntry[]>(`/admin/preorders/group/${orderNumber}/history`),
+    enabled: !!orderNumber,
+  });
+}
+
+export function useUpdatePreorderGroupStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orderNumber,
+      status,
+      notes,
+    }: {
+      orderNumber: string;
+      status: "fulfilled" | "cancelled" | "refunded";
+      notes?: string;
+    }) =>
+      apiClient<UpdateGroupStatusResult>(`/admin/preorders/group/${orderNumber}/status`, {
+        method: "PATCH",
+        body: { status, notes },
+      }),
     onSuccess: () => invalidatePreorderViews(qc),
   });
 }

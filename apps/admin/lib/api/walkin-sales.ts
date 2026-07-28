@@ -114,6 +114,7 @@ export interface CreateWalkinPreorderInput {
   payment_method?: WalkinPaymentMethod | "pending";
   payment_reference?: string;
   notes?: string;
+  delivery_fee?: number;
 }
 
 export interface WalkinCustomer {

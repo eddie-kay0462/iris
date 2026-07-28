@@ -493,7 +493,7 @@ export class OrdersService {
       .from('preorders')
       .select('*')
       .eq('order_number', id)
-      .eq('source', 'popup');
+      .in('source', ['popup', 'walkin']);
 
     if (!popupError && popupRows && popupRows.length > 0) {
       return {
@@ -588,10 +588,12 @@ export class OrdersService {
    */
   private buildPopupOrderGroup(rows: any[]): any {
     const first = rows[0];
-    const total = rows.reduce(
+    const subtotal = rows.reduce(
       (sum, r) => sum + Number(r.unit_price) * r.quantity,
       0,
     );
+    const shippingCost = Number(first.delivery_fee ?? 0);
+    const total = subtotal + shippingCost;
     const createdAt = rows
       .map((r) => r.created_at)
       .sort()[0];
@@ -602,9 +604,9 @@ export class OrdersService {
       email: first.customer_email ?? null,
       customer_name: first.customer_name ?? null,
       status: this.derivePreorderGroupStatus(rows),
-      subtotal: total,
+      subtotal,
       discount: 0,
-      shipping_cost: 0,
+      shipping_cost: shippingCost,
       tax: 0,
       total,
       currency: 'GHS',

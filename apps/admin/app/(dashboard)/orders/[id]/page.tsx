@@ -18,6 +18,8 @@ import {
   RefundModal,
   ResendConfirmationModal,
   PreorderActionsMenu,
+  PreorderGroupStatusPanel,
+  PreorderGroupStatusHistory,
 } from "../../../components/preorders/PreorderControls";
 
 const STATUS_OPTIONS = [
@@ -103,7 +105,7 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
             )}
             {isPopup ? (
               <span className="inline-flex items-center gap-1.5">
-                <PreorderSourceBadge source="popup" />
+                <PreorderSourceBadge source={preorders[0]?.source ?? "popup"} />
                 <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
                   Pre-order
                 </span>
@@ -141,7 +143,7 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
                   <th className="pb-2">Qty</th>
                   <th className="pb-2 text-right">Unit Price</th>
                   <th className="pb-2 text-right">Total</th>
-                  {preorders.length > 0 && <th className="pb-2" />}
+                  {preorders.length > 0 && <th className="pb-2 pl-4" />}
                 </tr>
               </thead>
               <tbody>
@@ -163,7 +165,7 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
                     <td className="py-2 text-right">
                       GH₵{Number(item.total_price).toLocaleString()}
                     </td>
-                    {preorders.length > 0 && <td />}
+                    {preorders.length > 0 && <td className="pl-4" />}
                   </tr>
                 ))}
                 {preorders.map((pre) => (
@@ -185,7 +187,7 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
                     <td className="py-2 text-right">
                       GH₵{(Number(pre.unit_price) * pre.quantity).toLocaleString()}
                     </td>
-                    <td className="py-2 text-right">
+                    <td className="py-2 pl-4 text-right">
                       <PreorderActionsMenu
                         preorder={pre}
                         onRestock={() => setRestockTarget(pre)}
@@ -204,7 +206,7 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
                   <td className="py-2 text-right">
                     GH₵{Number(order.total).toLocaleString()}
                   </td>
-                  {preorders.length > 0 && <td />}
+                  {preorders.length > 0 && <td className="pl-4" />}
                 </tr>
               </tfoot>
             </table>
@@ -265,6 +267,14 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
               />
             </div>
           </div>
+          )}
+
+          {/* Update Status + history for popup/walkin pre-order groups (no real orders row) */}
+          {isPopup && (
+            <>
+              <PreorderGroupStatusPanel orderNumber={order.order_number} currentStatus={order.status as Preorder["status"]} />
+              <PreorderGroupStatusHistory orderNumber={order.order_number} />
+            </>
           )}
 
           {/* Status timeline */}

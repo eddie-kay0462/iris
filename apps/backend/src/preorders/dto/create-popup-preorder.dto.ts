@@ -53,4 +53,9 @@ export class CreatePopupPreorderDto {
   @IsOptional()
   @IsUUID()
   event_id?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  delivery_fee?: number;
 }

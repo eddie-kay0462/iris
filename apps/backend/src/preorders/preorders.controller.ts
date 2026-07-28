@@ -6,6 +6,7 @@ import { CreatePopupPreorderDto } from './dto/create-popup-preorder.dto';
 import { QueryPreordersDto } from './dto/query-preorders.dto';
 import { RefundPreorderDto } from './dto/refund-preorder.dto';
 import { RestockPreorderDto } from './dto/restock-preorder.dto';
+import { UpdatePreorderGroupStatusDto } from './dto/update-preorder-group-status.dto';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -82,5 +83,21 @@ export class PreordersController {
   @RequirePermission('orders:update')
   sendConfirmation(@Param('id') id: string, @Body() body: { channels: ('email' | 'sms')[] }) {
     return this.preordersService.sendConfirmation(id, body.channels);
+  }
+
+  @Patch('admin/preorders/group/:orderNumber/status')
+  @RequirePermission('orders:refund')
+  updateGroupStatus(
+    @Param('orderNumber') orderNumber: string,
+    @Body() dto: UpdatePreorderGroupStatusDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.preordersService.updateGroupStatus(orderNumber, dto.status, dto.notes, user.sub);
+  }
+
+  @Get('admin/preorders/group/:orderNumber/history')
+  @RequirePermission('orders:read')
+  getGroupHistory(@Param('orderNumber') orderNumber: string) {
+    return this.preordersService.getGroupHistory(orderNumber);
   }
 }
