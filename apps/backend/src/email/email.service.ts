@@ -188,6 +188,7 @@ export class EmailService {
     payment_status: string;
     etaText: string;
     brand?: string;
+    delivery_fee?: number;
   }): Promise<void> {
     const subject = `Pre-order Confirmed - ${order.order_number}`;
     const html = this.buildPreorderConfirmationHtml(order);
@@ -987,6 +988,7 @@ export class EmailService {
     payment_status: string;
     etaText: string;
     brand?: string;
+    delivery_fee?: number;
   }): string {
     const brandName = order.brand || '1NRI';
     const greeting = order.customer_name ? `Hi ${order.customer_name.split(' ')[0]},` : 'Hi there,';
@@ -998,15 +1000,35 @@ export class EmailService {
     const statusColor = isPaid ? '#16a34a' : '#a16207';
     const statusLabel = isPaid ? 'Payment Received' : 'Awaiting Payment';
 
+    const subtotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const deliveryFee = order.delivery_fee ?? 0;
+    const total = subtotal + deliveryFee;
+
     const itemRows = order.items.map((item) => `
       <tr>
         <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;">
           ${item.product_name}${item.variant_title ? ` - ${item.variant_title}` : ''}
+          <span style="color:#999;"> × ${item.quantity}</span>
         </td>
         <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;text-align:right;white-space:nowrap;">
-          × ${item.quantity}
+          GH₵${(item.price * item.quantity).toFixed(2)}
         </td>
       </tr>`).join('');
+
+    const totalsRows = `
+      ${deliveryFee > 0 ? `
+      <tr>
+        <td style="padding:6px 0;font-size:13px;color:#666;">Subtotal</td>
+        <td style="padding:6px 0;font-size:13px;color:#666;text-align:right;">GH₵${subtotal.toFixed(2)}</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0;font-size:13px;color:#666;">Delivery Fee</td>
+        <td style="padding:6px 0;font-size:13px;color:#666;text-align:right;">GH₵${deliveryFee.toFixed(2)}</td>
+      </tr>` : ''}
+      <tr>
+        <td style="padding:6px 0;font-size:14px;font-weight:700;color:#111;">Total</td>
+        <td style="padding:6px 0;font-size:14px;font-weight:700;color:#111;text-align:right;">GH₵${total.toFixed(2)}</td>
+      </tr>`;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -1034,6 +1056,9 @@ export class EmailService {
           <p style="margin:0 0 8px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#999;">Items on Hold</p>
           <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
             ${itemRows}
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:4px;border-top:1px solid #f0f0f0;">
+            ${totalsRows}
           </table>
 
           <!-- Payment status badge -->

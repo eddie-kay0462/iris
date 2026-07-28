@@ -15,8 +15,12 @@ import { getToken } from "@/lib/api/client";
 import {
   PreorderStatusBadge,
   PreorderSourceBadge,
+  PreorderActionsMenu,
+  RestockModal,
+  RefundModal,
+  ResendConfirmationModal,
 } from "../../components/preorders/PreorderControls";
-import type { PreorderStatus } from "@/lib/api/preorders";
+import type { Preorder, PreorderStatus } from "@/lib/api/preorders";
 
 function fmt(n: number) {
   return `GH₵${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -79,6 +83,9 @@ export default function AdminOrdersPage() {
   const [status, setStatus] = useState("");
   const [preordersOnly, setPreordersOnly] = useState(false);
   const [page, setPage] = useState(1);
+  const [restockTarget, setRestockTarget] = useState<Preorder | null>(null);
+  const [refundTarget, setRefundTarget] = useState<Preorder | null>(null);
+  const [resendTarget, setResendTarget] = useState<Preorder | null>(null);
 
   const { data, isLoading } = useAdminOrders({
     search,
@@ -105,7 +112,12 @@ export default function AdminOrdersPage() {
               Walk-in
             </span>
           ) : row.is_popup_preorder ? (
-            <PreorderSourceBadge source="popup" />
+            <>
+              <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                Pre-order
+              </span>
+              <PreorderSourceBadge source={row.preorders?.[0]?.source ?? "popup"} />
+            </>
           ) : (
             row.contains_preorders && (
               <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
@@ -128,7 +140,36 @@ export default function AdminOrdersPage() {
         row.is_walkin ? (
           <StatusBadge status={row.status} />
         ) : row.is_popup_preorder ? (
-          <PreorderStatusBadge status={row.status as PreorderStatus} />
+          <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-1.5">
+              <PreorderStatusBadge status={row.status as PreorderStatus} />
+              {row.preorders?.length === 1 && (
+                <PreorderActionsMenu
+                  preorder={row.preorders[0]}
+                  onRestock={() => setRestockTarget(row.preorders![0])}
+                  onRefund={() => setRefundTarget(row.preorders![0])}
+                  onResendConfirmation={() => setResendTarget(row.preorders![0])}
+                  align="left"
+                />
+              )}
+            </div>
+            {(row.preorders?.length ?? 0) > 1 &&
+              row.preorders!.map((pre) => (
+                <div key={pre.id} className="flex items-center gap-1.5">
+                  <span className="max-w-[8rem] truncate text-xs text-slate-500" title={pre.variant_title ?? pre.product_name}>
+                    {pre.variant_title ?? pre.product_name}
+                  </span>
+                  <PreorderStatusBadge status={pre.status} />
+                  <PreorderActionsMenu
+                    preorder={pre}
+                    onRestock={() => setRestockTarget(pre)}
+                    onRefund={() => setRefundTarget(pre)}
+                    onResendConfirmation={() => setResendTarget(pre)}
+                    align="left"
+                  />
+                </div>
+              ))}
+          </div>
         ) : (
           <StatusDropdown order={row} onUpdate={handleStatusUpdate} />
         ),
@@ -269,6 +310,16 @@ export default function AdminOrdersPage() {
           totalPages={data.totalPages}
           onPageChange={setPage}
         />
+      )}
+
+      {restockTarget && (
+        <RestockModal preorder={restockTarget} onClose={() => setRestockTarget(null)} />
+      )}
+      {refundTarget && (
+        <RefundModal preorder={refundTarget} onClose={() => setRefundTarget(null)} />
+      )}
+      {resendTarget && (
+        <ResendConfirmationModal preorder={resendTarget} onClose={() => setResendTarget(null)} />
       )}
     </section>
   );

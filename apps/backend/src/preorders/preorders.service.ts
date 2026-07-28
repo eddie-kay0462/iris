@@ -26,6 +26,25 @@ export class PreordersService {
     this.paystackSecretKey = this.configService.get<string>('PAYSTACK_SECRET_KEY', '');
   }
 
+  private async recordStatusHistory(
+    preorderId: string,
+    orderNumber: string,
+    fromStatus: string | null,
+    toStatus: string,
+    notes: string | null = null,
+    changedBy: string | null = null,
+  ) {
+    const db = this.supabase.getAdminClient();
+    await db.from('preorder_status_history').insert({
+      preorder_id: preorderId,
+      order_number: orderNumber,
+      from_status: fromStatus,
+      to_status: toStatus,
+      notes,
+      changed_by: changedBy,
+    });
+  }
+
   private async generateOrderNumber(): Promise<string> {
     const db = this.supabase.getAdminClient();
     const { data } = await db
@@ -392,6 +411,7 @@ export class PreordersService {
           status: 'pending',
           notes: dto.notes ?? null,
           popup_event_id: dto.event_id ?? null,
+          delivery_fee: dto.delivery_fee ?? 0,
         })
         .select()
         .single();
@@ -416,6 +436,7 @@ export class PreordersService {
         payment_method: dto.payment_method ?? null,
         payment_status: isPaid ? 'paid' : 'awaiting',
         etaText,
+        delivery_fee: dto.delivery_fee ?? 0,
       }).catch(() => {});
     }
 
@@ -544,6 +565,7 @@ export class PreordersService {
       .from('preorders')
       .update({ status: 'cancelled', updated_at: new Date().toISOString() })
       .eq('id', id);
+    await this.recordStatusHistory(id, preorder.order_number, preorder.status, 'cancelled');
     return this.findOne(id);
   }
 
@@ -560,6 +582,7 @@ export class PreordersService {
       .from('preorders')
       .update({ status: 'fulfilled', updated_at: new Date().toISOString() })
       .eq('id', id);
+    await this.recordStatusHistory(id, preorder.order_number, 'stock_held', 'fulfilled');
     return this.findOne(id);
   }
 
@@ -612,6 +635,7 @@ export class PreordersService {
         notified_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }).eq('id', p.id);
+      await this.recordStatusHistory(p.id, p.order_number, 'pending', 'stock_held', 'Restock allocation (FIFO)');
       priority++;
     }
 
@@ -635,23 +659,16 @@ export class PreordersService {
     };
   }
 
-  async refund(id: string, dto: RefundPreorderDto, staffId: string) {
-    if (!this.paystackSecretKey) {
-      throw new InternalServerErrorException('PAYSTACK_SECRET_KEY not configured');
-    }
-
+  private async refundPreorderRow(
+    preorder: any,
+    amount: number | undefined,
+    reason: string | null,
+    staffId: string,
+  ) {
     const db = this.supabase.getAdminClient();
-    const { data: preorder, error } = await db.from('preorders').select('*').eq('id', id).single();
-    if (error || !preorder) throw new NotFoundException('Preorder not found');
 
-    if (!['pending', 'stock_held'].includes(preorder.status)) {
-      throw new BadRequestException(
-        `Only pending or stock_held preorders can be refunded. Current: "${preorder.status}"`,
-      );
-    }
-
-    const refundAmount = dto.amount
-      ? Math.round(dto.amount * 100) / 100
+    const refundAmount = amount
+      ? Math.round(amount * 100) / 100
       : Math.round(Number(preorder.unit_price) * preorder.quantity * 100) / 100;
 
     if (refundAmount <= 0) throw new BadRequestException('Refund amount must be positive');
@@ -681,9 +698,9 @@ export class PreordersService {
     const { data: refund, error: refundError } = await db
       .from('preorder_refunds')
       .insert({
-        preorder_id: id,
+        preorder_id: preorder.id,
         amount: refundAmount,
-        reason: dto.reason ?? null,
+        reason,
         status: 'processed',
         initiated_by: staffId,
         paystack_refund_id: paystackRefundId,
@@ -698,7 +715,9 @@ export class PreordersService {
     await db
       .from('preorders')
       .update({ status: 'refunded', payment_status: 'refunded', updated_at: new Date().toISOString() })
-      .eq('id', id);
+      .eq('id', preorder.id);
+
+    await this.recordStatusHistory(preorder.id, preorder.order_number, preorder.status, 'refunded', reason, staffId);
 
     // Restore inventory if stock was held
     if (preorder.status === 'stock_held') {
@@ -734,5 +753,88 @@ export class PreordersService {
     }
 
     return refund;
+  }
+
+  async refund(id: string, dto: RefundPreorderDto, staffId: string) {
+    if (!this.paystackSecretKey) {
+      throw new InternalServerErrorException('PAYSTACK_SECRET_KEY not configured');
+    }
+
+    const db = this.supabase.getAdminClient();
+    const { data: preorder, error } = await db.from('preorders').select('*').eq('id', id).single();
+    if (error || !preorder) throw new NotFoundException('Preorder not found');
+
+    if (!['pending', 'stock_held'].includes(preorder.status)) {
+      throw new BadRequestException(
+        `Only pending or stock_held preorders can be refunded. Current: "${preorder.status}"`,
+      );
+    }
+
+    return this.refundPreorderRow(preorder, dto.amount, dto.reason ?? null, staffId);
+  }
+
+  /**
+   * Bulk status change for a synthetic popup/walkin pre-order group (all rows
+   * sharing `order_number`) — the "Update Status" panel equivalent for orders
+   * that have no real `orders` row. `stock_held` isn't a valid target here since
+   * it requires an inventory quantity (use restock() instead); rows that aren't
+   * eligible for the requested transition are left untouched.
+   */
+  async updateGroupStatus(
+    orderNumber: string,
+    status: 'fulfilled' | 'cancelled' | 'refunded',
+    notes: string | undefined,
+    staffId: string,
+  ) {
+    if (status === 'refunded' && !this.paystackSecretKey) {
+      throw new InternalServerErrorException('PAYSTACK_SECRET_KEY not configured');
+    }
+
+    const db = this.supabase.getAdminClient();
+    const { data: rows, error } = await db
+      .from('preorders')
+      .select('*')
+      .eq('order_number', orderNumber)
+      .in('source', ['popup', 'walkin']);
+    if (error) throw error;
+    if (!rows || rows.length === 0) throw new NotFoundException('Preorder group not found');
+
+    let updated = 0;
+    for (const row of rows) {
+      if (status === 'cancelled') {
+        if (['cancelled', 'fulfilled', 'refunded'].includes(row.status)) continue;
+        await db
+          .from('preorders')
+          .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+          .eq('id', row.id);
+        await this.recordStatusHistory(row.id, orderNumber, row.status, 'cancelled', notes ?? null, staffId);
+        updated++;
+      } else if (status === 'fulfilled') {
+        if (row.status !== 'stock_held') continue;
+        await db
+          .from('preorders')
+          .update({ status: 'fulfilled', updated_at: new Date().toISOString() })
+          .eq('id', row.id);
+        await this.recordStatusHistory(row.id, orderNumber, 'stock_held', 'fulfilled', notes ?? null, staffId);
+        updated++;
+      } else if (status === 'refunded') {
+        if (!['pending', 'stock_held'].includes(row.status)) continue;
+        await this.refundPreorderRow(row, undefined, notes ?? null, staffId);
+        updated++;
+      }
+    }
+
+    return { updated, skipped: rows.length - updated };
+  }
+
+  async getGroupHistory(orderNumber: string) {
+    const db = this.supabase.getAdminClient();
+    const { data, error } = await db
+      .from('preorder_status_history')
+      .select('*')
+      .eq('order_number', orderNumber)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
   }
 }

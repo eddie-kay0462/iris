@@ -50,6 +50,7 @@ import {
   type CreateOrderItemInput,
 } from "@/lib/api/popup-sales";
 import { apiClient } from "@/lib/api/client";
+import { useShippingOptions } from "@/lib/api/settings";
 
 type DisplayOrder = PopupOrder & { _isPreorder?: boolean };
 
@@ -1303,6 +1304,16 @@ function NewOrderModal({
   const pendingAction = useRef<"submit" | "hold" | null>(null);
   const discountConfirmed = useRef(false);
 
+  // ── Delivery fee state (pre-order mode only, opt-in) ─────────────────────────
+  const { data: shippingOptions } = useShippingOptions();
+  const standardRate = shippingOptions?.find((o) => o.id === "standard")?.price ?? 0;
+  const [includeDeliveryFee, setIncludeDeliveryFee] = useState(false);
+  const [deliveryFeeAmount, setDeliveryFeeAmount] = useState("");
+  const [deliveryFeeTouched, setDeliveryFeeTouched] = useState(false);
+  useEffect(() => {
+    if (!deliveryFeeTouched && standardRate > 0) setDeliveryFeeAmount(String(standardRate));
+  }, [standardRate, deliveryFeeTouched]);
+
   // ── Payment state ──────────────────────────────────────────────────────────
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodLocal>("cash");
   const [isSplit, setIsSplit] = useState(false);
@@ -1395,7 +1406,8 @@ function NewOrderModal({
     discountType === "percentage" ? (subtotal * discountNum) / 100
       : discountType === "fixed" ? discountNum
         : 0;
-  const total = Math.max(0, subtotal - discountAmount);
+  const deliveryFeeNum = isPreorderMode && includeDeliveryFee ? parseFloat(deliveryFeeAmount) || 0 : 0;
+  const total = Math.max(0, subtotal - discountAmount) + deliveryFeeNum;
   const discountPct = subtotal > 0 ? (discountAmount / subtotal) * 100 : 0;
   const isHighDiscount = discountPct > 30;
   const changeDue = cashReceived ? parseFloat(cashReceived) - total : null;
@@ -1470,6 +1482,7 @@ function NewOrderModal({
           paymentMethod === "bank_transfer" ? bankReference || undefined : undefined,
         notes: undefined,
         event_id: eventId,
+        delivery_fee: deliveryFeeNum,
       });
       onClose();
       return;
@@ -2083,6 +2096,33 @@ function NewOrderModal({
                     </div>
                   )}
                 </section>
+
+                {/* DELIVERY (pre-order mode only) */}
+                {isPreorderMode && (
+                  <section className="p-4">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">Delivery</p>
+                    <label className="mb-2 flex items-center gap-2 text-xs font-medium text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={includeDeliveryFee}
+                        onChange={(e) => setIncludeDeliveryFee(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+                      />
+                      Add standard delivery fee{standardRate > 0 ? ` (${formatCurrency(standardRate)})` : ""}
+                    </label>
+                    {includeDeliveryFee && (
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={deliveryFeeAmount}
+                        onChange={(e) => { setDeliveryFeeAmount(e.target.value); setDeliveryFeeTouched(true); }}
+                        placeholder="0.00"
+                        className="h-9 w-28 rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-400 focus:outline-none"
+                      />
+                    )}
+                  </section>
+                )}
 
                 {/* PAYMENT */}
                 <section className="p-4">

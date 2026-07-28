@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Plus,
@@ -38,6 +39,15 @@ import {
   type WalkinPaymentMethod,
   type WalkinCustomer,
 } from "@/lib/api/walkin-sales";
+import { usePreorders, type Preorder, type PreorderStatus } from "@/lib/api/preorders";
+import { useShippingOptions } from "@/lib/api/settings";
+import {
+  PreorderStatusBadge,
+  PreorderActionsMenu,
+  RestockModal,
+  RefundModal,
+  ResendConfirmationModal,
+} from "@/app/components/preorders/PreorderControls";
 
 const GHS = (n: number) =>
   `GH₵${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -67,14 +77,72 @@ const STATUS_FILTERS: { label: string; value: WalkinOrderStatus | "" }[] = [
   { label: "Cancelled", value: "cancelled" },
 ];
 
+// ─── Walk-in pre-order grouping ─────────────────────────────────────────────
+
+interface WalkinPreorderGroup {
+  order_number: string;
+  customer_name: string | null;
+  customer_phone: string | null;
+  customer_email: string | null;
+  status: PreorderStatus;
+  source: Preorder["source"];
+  total: number;
+  delivery_fee: number;
+  item_count: number;
+  created_at: string;
+  items: Preorder[];
+}
+
+function derivePreorderGroupStatus(rows: Preorder[]): PreorderStatus {
+  const statuses = rows.map((r) => r.status);
+  if (statuses.every((s) => s === "refunded")) return "refunded";
+  if (statuses.every((s) => s === "cancelled")) return "cancelled";
+  if (statuses.every((s) => s === "fulfilled")) return "fulfilled";
+  if (statuses.some((s) => s === "pending")) return "pending";
+  return "stock_held";
+}
+
+function groupWalkinPreorders(rows: Preorder[]): WalkinPreorderGroup[] {
+  const byNumber = new Map<string, Preorder[]>();
+  for (const row of rows) {
+    const list = byNumber.get(row.order_number) || [];
+    list.push(row);
+    byNumber.set(row.order_number, list);
+  }
+  return Array.from(byNumber.values()).map((group) => {
+    const first = group[0];
+    return {
+      order_number: first.order_number,
+      customer_name: first.customer_name,
+      customer_phone: first.customer_phone,
+      customer_email: first.customer_email,
+      status: derivePreorderGroupStatus(group),
+      source: first.source,
+      total: group.reduce((s, r) => s + Number(r.unit_price) * r.quantity, 0) + Number(first.delivery_fee ?? 0),
+      delivery_fee: Number(first.delivery_fee ?? 0),
+      item_count: group.reduce((s, r) => s + r.quantity, 0),
+      created_at: group.map((r) => r.created_at).sort()[0],
+      items: group,
+    };
+  });
+}
+
+type WalkinRow =
+  | ({ _kind: "sale" } & WalkinOrder)
+  | ({ _kind: "preorder" } & WalkinPreorderGroup);
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function WalkinSalesPage() {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<WalkinOrderStatus | "">("");
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [detailOrder, setDetailOrder] = useState<WalkinOrder | null>(null);
+  const [restockTarget, setRestockTarget] = useState<Preorder | null>(null);
+  const [refundTarget, setRefundTarget] = useState<Preorder | null>(null);
+  const [resendTarget, setResendTarget] = useState<Preorder | null>(null);
 
   const { data: stats } = useWalkinStats();
   const { data, isLoading } = useWalkinOrders({
@@ -82,9 +150,50 @@ export default function WalkinSalesPage() {
     status: status || undefined,
     page,
   });
+  // Walk-in pre-orders live in the `preorders` table, not `walkin_orders`, so they
+  // need a separate fetch merged into the list below. Only shown for the "All"
+  // status filter — pre-order statuses (pending/stock_held/fulfilled/…) don't map
+  // onto the completed/refunded/cancelled filters above.
+  const { data: preorderData } = usePreorders({ source: "walkin", limit: 100 });
 
-  const columns: Column<WalkinOrder>[] = [
-    { key: "order_number", header: "Order #", render: (o) => <span className="font-medium">{o.order_number}</span> },
+  const preorderRows = useMemo<WalkinRow[]>(() => {
+    if (status) return [];
+    const groups = groupWalkinPreorders(preorderData?.data ?? []);
+    const term = search.trim().toLowerCase();
+    const filtered = term
+      ? groups.filter(
+          (g) =>
+            g.order_number.toLowerCase().includes(term) ||
+            (g.customer_name || "").toLowerCase().includes(term) ||
+            (g.customer_phone || "").toLowerCase().includes(term) ||
+            (g.customer_email || "").toLowerCase().includes(term)
+        )
+      : groups;
+    return filtered.map((g) => ({ _kind: "preorder" as const, ...g }));
+  }, [preorderData, search, status]);
+
+  const rows = useMemo<WalkinRow[]>(() => {
+    const saleRows: WalkinRow[] = (data?.data ?? []).map((o) => ({ _kind: "sale" as const, ...o }));
+    return [...saleRows, ...preorderRows].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }, [data, preorderRows]);
+
+  const columns: Column<WalkinRow>[] = [
+    {
+      key: "order_number",
+      header: "Order #",
+      render: (o) => (
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{o.order_number}</span>
+          {o._kind === "preorder" && (
+            <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+              Pre-order
+            </span>
+          )}
+        </div>
+      ),
+    },
     {
       key: "customer",
       header: "Customer",
@@ -99,10 +208,54 @@ export default function WalkinSalesPage() {
       key: "items",
       header: "Items",
       render: (o) =>
-        `${(o.walkin_order_items || []).reduce((s, i) => s + i.quantity, 0)} item(s)`,
+        o._kind === "preorder"
+          ? `${o.item_count} item(s)`
+          : `${(o.walkin_order_items || []).reduce((s, i) => s + i.quantity, 0)} item(s)`,
     },
-    { key: "payment", header: "Payment", render: (o) => <span className="capitalize">{o.payment_method || "—"}</span> },
-    { key: "status", header: "Status", render: (o) => <StatusBadge status={o.status} /> },
+    {
+      key: "payment",
+      header: "Payment",
+      render: (o) => (o._kind === "preorder" ? "—" : <span className="capitalize">{o.payment_method || "—"}</span>),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (o) =>
+        o._kind === "preorder" ? (
+          <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-1.5">
+              <PreorderStatusBadge status={o.status} />
+              {o.items.length === 1 && (
+                <PreorderActionsMenu
+                  preorder={o.items[0]}
+                  onRestock={() => setRestockTarget(o.items[0])}
+                  onRefund={() => setRefundTarget(o.items[0])}
+                  onResendConfirmation={() => setResendTarget(o.items[0])}
+                  align="left"
+                />
+              )}
+            </div>
+            {o.items.length > 1 &&
+              o.items.map((pre) => (
+                <div key={pre.id} className="flex items-center gap-1.5">
+                  <span className="max-w-[8rem] truncate text-xs text-slate-500" title={pre.variant_title ?? pre.product_name}>
+                    {pre.variant_title ?? pre.product_name}
+                  </span>
+                  <PreorderStatusBadge status={pre.status} />
+                  <PreorderActionsMenu
+                    preorder={pre}
+                    onRestock={() => setRestockTarget(pre)}
+                    onRefund={() => setRefundTarget(pre)}
+                    onResendConfirmation={() => setResendTarget(pre)}
+                    align="left"
+                  />
+                </div>
+              ))}
+          </div>
+        ) : (
+          <StatusBadge status={o.status} />
+        ),
+    },
     { key: "total", header: "Total", render: (o) => GHS(o.total) },
     {
       key: "date",
@@ -157,16 +310,25 @@ export default function WalkinSalesPage() {
 
       <DataTable
         columns={columns}
-        rows={data?.data ?? []}
+        rows={rows}
         loading={isLoading}
         emptyMessage="No walk-in sales yet."
-        onRowClick={(o) => setDetailOrder(o)}
+        onRowClick={(o) => (o._kind === "preorder" ? router.push(`/orders/${o.order_number}`) : setDetailOrder(o))}
       />
 
       <Pagination page={page} totalPages={data?.totalPages ?? 1} onPageChange={setPage} />
 
       {showModal && <NewWalkinModal onClose={() => setShowModal(false)} />}
       {detailOrder && <OrderDetailModal order={detailOrder} onClose={() => setDetailOrder(null)} />}
+      {restockTarget && (
+        <RestockModal preorder={restockTarget} onClose={() => setRestockTarget(null)} />
+      )}
+      {refundTarget && (
+        <RefundModal preorder={refundTarget} onClose={() => setRefundTarget(null)} />
+      )}
+      {resendTarget && (
+        <ResendConfirmationModal preorder={resendTarget} onClose={() => setResendTarget(null)} />
+      )}
     </div>
   );
 }
@@ -240,6 +402,17 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
   const [paymentMethod, setPaymentMethod] = useState<WalkinPaymentMethod>("cash");
   const [paymentReference, setPaymentReference] = useState("");
   const [notes, setNotes] = useState("");
+
+  // Delivery fee (pre-order mode only) — defaults on, prefilled from the
+  // admin-configured "standard" shipping rate, staff can override the amount.
+  const { data: shippingOptions } = useShippingOptions();
+  const standardRate = shippingOptions?.find((o) => o.id === "standard")?.price ?? 0;
+  const [includeDeliveryFee, setIncludeDeliveryFee] = useState(true);
+  const [deliveryFeeAmount, setDeliveryFeeAmount] = useState("");
+  const [deliveryFeeTouched, setDeliveryFeeTouched] = useState(false);
+  useEffect(() => {
+    if (!deliveryFeeTouched && standardRate > 0) setDeliveryFeeAmount(String(standardRate));
+  }, [standardRate, deliveryFeeTouched]);
 
   // MoMo charge target (opens the Paystack charge modal once the order exists)
   const [chargeOrder, setChargeOrder] = useState<WalkinOrder | null>(null);
@@ -325,7 +498,8 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
     discountType === "percentage" ? (subtotal * discountNum) / 100
     : discountType === "fixed" ? discountNum
     : 0;
-  const total = Math.max(0, subtotal - discountAmount);
+  const deliveryFeeNum = isPreorderMode && includeDeliveryFee ? parseFloat(deliveryFeeAmount) || 0 : 0;
+  const total = Math.max(0, subtotal - discountAmount) + deliveryFeeNum;
 
   // ── Customer actions ─────────────────────────────────────────────────────────
   function pickCustomer(c: WalkinCustomer) {
@@ -378,6 +552,7 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
           payment_method: paymentMethod,
           payment_reference: paymentReference || undefined,
           notes: notes || undefined,
+          delivery_fee: deliveryFeeNum,
         });
         toast.success("Pre-order recorded. Customer notified.");
         onClose();
@@ -597,6 +772,31 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
               </section>
             )}
 
+            {isPreorderMode && (
+              <section className="mb-4">
+                <h3 className="mb-2 text-sm font-semibold text-slate-700">Delivery</h3>
+                <label className="mb-2 flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={includeDeliveryFee}
+                    onChange={(e) => setIncludeDeliveryFee(e.target.checked)}
+                  />
+                  Add standard delivery fee{standardRate > 0 ? ` (GH₵${standardRate.toFixed(2)})` : ""}
+                </label>
+                {includeDeliveryFee && (
+                  <input
+                    value={deliveryFeeAmount}
+                    onChange={(e) => { setDeliveryFeeAmount(e.target.value); setDeliveryFeeTouched(true); }}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    className="w-32 rounded-md border border-slate-300 px-2 py-2 text-sm outline-none focus:border-slate-900"
+                  />
+                )}
+              </section>
+            )}
+
             {/* Payment */}
             <section className="mb-4">
               <h3 className="mb-2 text-sm font-semibold text-slate-700">Payment</h3>
@@ -620,6 +820,9 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
               <div className="mb-1 flex justify-between text-sm text-slate-600"><span>Subtotal</span><span>{GHS(subtotal)}</span></div>
               {discountAmount > 0 && (
                 <div className="mb-1 flex justify-between text-sm text-green-600"><span>Discount</span><span>-{GHS(discountAmount)}</span></div>
+              )}
+              {deliveryFeeNum > 0 && (
+                <div className="mb-1 flex justify-between text-sm text-slate-600"><span>Delivery Fee</span><span>{GHS(deliveryFeeNum)}</span></div>
               )}
               <div className="mb-3 flex justify-between text-base font-semibold text-slate-900"><span>Total</span><span>{GHS(total)}</span></div>
               {isPreorderMode && (
