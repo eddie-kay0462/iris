@@ -1,22 +1,9 @@
-import type { Metadata } from "next";
 import { SITE_URL } from "@/lib/seo/site";
 import { getPublishedProducts, productPath } from "@/lib/api/products.server";
 
-export const metadata: Metadata = {
-  title: "Shop All Products",
-  description:
-    "Browse the full 1NRI collection - contemporary streetwear designed in Accra and made in Ghana. Hoodies, tees, quarter-zips and more, shipped worldwide.",
-  // Collapse tag/category/search filter variants (?tag=, ?category=, ?search=)
-  // onto the single canonical products URL so they don't compete in search.
-  alternates: {
-    canonical: "/products",
-  },
-  openGraph: {
-    title: "Shop 1NRI - Ghana-Made Streetwear",
-    description:
-      "Contemporary streetwear designed in Accra, made in Ghana. Browse the full 1NRI collection and shop now.",
-  },
-};
+// Title/description/canonical now come from page.tsx's generateMetadata, which
+// varies per gender/category/product_type filter combo — layouts can't read
+// searchParams, so that logic can't live here anymore.
 
 /**
  * Server layout for the (client-rendered) products catalogue. Its job for SEO is

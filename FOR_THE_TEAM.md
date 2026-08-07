@@ -5212,3 +5212,39 @@ That line is now gone for regular walk-in sales — the text just confirms the o
 1. Complete a regular (in-stock) walk-in sale with a customer phone number.
 2. Check the confirmation text — it should say the order is confirmed and thank them for shopping, with no mention of shipping.
 3. Take a walk-in pre-order (out-of-stock item) and confirm its text still talks about reaching out once the item is ready — unchanged.
+
+---
+
+## Fixed Broken Old-Website Links & Made Shop Filters Shareable (August 2026)
+
+When we moved off Shopify, a bunch of old links people had bookmarked, saved, or found through Google started 404ing — things like old product pages, old category pages ("collections"), and a couple of old info pages. Google's Search Console had flagged about 95 of these as broken.
+
+Before touching anything, we did the research properly: we pulled the actual list of current products straight from our database (not just guesses based on old URL names) to figure out, for each broken link, whether it should point to a live product, point to a discontinued item's general category, or just go away. All of that decision-making is documented in a spreadsheet (`url-mapping.csv`) for anyone who wants to audit the calls made.
+
+With that mapping settled, we wired up real redirects — someone clicking or pasting one of these old links now lands on the right current page instead of a dead end. A few examples: old individual product links now go to that product's new page (or the closest living match if the exact item's gone), old "shop by category" links go to our filtered product listing, and a couple of old info pages redirect to sensible new spots (like our new **Size Guide** page, built fresh since the old one didn't carry over).
+
+We also fixed something that wasn't obviously broken but should've worked better: **you can now filter products by Men's/Women's and get a proper shareable link for it** (e.g. `/products?gender=women`). Before, clicking those filters changed what you saw on screen but the web address in the bar never updated — so you couldn't copy/paste or bookmark a filtered view, and Google couldn't properly index "Men's Tops" as its own page. That's fixed for gender, and confirmed working for category/subcategory too.
+
+One thing intentionally **not done yet**: our old return-policy page used to redirect to `/returns`, but that page doesn't exist on the new site yet (someone's building it separately). Rather than redirect people to a dead page — or risk stepping on whoever's building it — we left that one redirect switched off for now. It's a one-line change to turn on once `/returns` is ready.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/frontend/proxy.ts` | Now checks incoming requests against the old-URL list first and redirects (a real, permanent redirect) before anything else runs. |
+| `apps/frontend/lib/redirects/legacy-redirects.ts` (new) | The actual list of ~70 old links and where each one now points. |
+| `apps/frontend/app/(shop)/products/page.tsx` | Rebuilt so filtered product views (gender/category/etc.) get their own proper web address and show up correctly to Google, instead of only working as on-screen state. |
+| `apps/frontend/app/(shop)/products/ProductsCatalogClient.tsx` (new) | The interactive filter/grid part of the products page, split out from the above. |
+| `apps/frontend/app/(shop)/products/layout.tsx` | Simplified now that the page above handles its own page titles/links. |
+| `apps/frontend/app/(shop)/size-guide/` (new) | New placeholder Size Guide page ("full guide coming soon") so the old sizing-guide link has somewhere real to go. |
+| `apps/frontend/app/sitemap.ts` | Added the new filtered product pages and Size Guide to our sitemap so Google finds them. |
+| `will_delete/url-mapping.csv`, `will_delete/needs-review.md` | The research spreadsheet and decision notes behind every redirect choice (not shipped code, just documentation of the work). |
+
+> **Heads-up / action required:** The old return-policy redirect (`/pages/boring-stuff` → `/returns`) is intentionally OFF until the new `/returns` page ships. Once it's live, add one line to `legacy-redirects.ts` to turn it on (documented in `will_delete/needs-review.md`).
+
+### How to test
+
+1. Visit an old product link like `1nri.store/products/flare-sweatpants` — it should land you on the current product page, not a 404.
+2. Visit an old category link like `1nri.store/collections/shirts` — it should land on our shop page pre-filtered to Shirts.
+3. On the shop page, click the "Women's" filter — check the address bar updates to include `?gender=women`, and that copy/pasting that link elsewhere shows the same filtered view.
+4. Visit `1nri.store/size-guide` directly — should show a real "coming soon" page, not a dead end.
