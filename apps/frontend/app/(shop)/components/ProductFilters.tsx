@@ -105,10 +105,10 @@ export function ProductFilters({
           {categoryTabs.map((tab) => (
             <button
               key={tab.value}
-              onClick={() => {
-                onCategoryChange(tab.value);
-                onProductTypeChange("");
-              }}
+              // onCategoryChange also resets product_type. Calling
+              // onProductTypeChange here too would issue a second URL update
+              // built from the pre-click params, clobbering the category.
+              onClick={() => onCategoryChange(tab.value)}
               className={`whitespace-nowrap text-xs transition ${
                 category === tab.value
                   ? "font-semibold text-text underline underline-offset-4"
@@ -147,7 +147,7 @@ export function ProductFilters({
           {category && (
             <span className="flex items-center gap-1.5 rounded-full border border-line-strong bg-fill px-3 py-1 text-xs text-text-secondary">
               {category}
-              <button onClick={() => { onCategoryChange(""); onProductTypeChange(""); }} className="ml-0.5 text-text-muted hover:text-text">×</button>
+              <button onClick={() => onCategoryChange("")} className="ml-0.5 text-text-muted hover:text-text">×</button>
             </span>
           )}
           {productType && (
