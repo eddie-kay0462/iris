@@ -98,6 +98,101 @@ function prefetchImage(src: string) {
   img.src = src;
 }
 
+/* ── Smooth scroll ──
+   The fixed header overlays the page, so we land the target just below it.
+   Hand-rolled rather than `scrollIntoView({ behavior: "smooth" })` so the
+   easing and duration are consistent across browsers, and so a wheel/touch
+   nudge mid-flight hands control straight back to the user. */
+function easeInOutCubic(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+/* Breathing room between the header and a "start"-aligned target. */
+const START_GAP = 16;
+/* How far a `fitBottom` target may slide up past the header to show its tail. */
+const MAX_FIT_SHIFT = 140;
+
+function headerOffset() {
+  const h = document.querySelector("header")?.getBoundingClientRect().height ?? 0;
+  return Math.min(h, 96);
+}
+
+/* A sticky element reports the rect of wherever it's currently pinned, not of
+   its place in the layout — which is the spot we actually want to scroll to.
+   Briefly drop it out of sticky to read the real one. */
+function layoutRect(el: HTMLElement) {
+  if (getComputedStyle(el).position !== "sticky") return el.getBoundingClientRect();
+  const prev = el.style.position;
+  el.style.position = "static";
+  const rect = el.getBoundingClientRect();
+  el.style.position = prev;
+  return rect;
+}
+
+function smoothScrollTo(
+  el: HTMLElement,
+  { block = "start", fitBottom = false }: { block?: "start" | "center"; fitBottom?: boolean } = {}
+) {
+  const from = window.scrollY;
+  const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+  const rect = layoutRect(el);
+  const header = headerOffset();
+  // "start" parks the element under the header; "center" splits the leftover
+  // viewport around it, so a tall section still reads as centred.
+  let raw = block === "center"
+    ? from + rect.top - header - Math.max(0, (window.innerHeight - header - rect.height) / 2)
+    : from + rect.top - header - START_GAP;
+
+  // When the element runs just past the fold, nudge down far enough to catch
+  // its tail — capped so the top never scrolls out of sight on short screens.
+  if (fitBottom) {
+    const overflow = rect.height + START_GAP * 2 - (window.innerHeight - header);
+    raw += Math.min(Math.max(0, overflow), MAX_FIT_SHIFT);
+  }
+
+  const to = Math.min(Math.max(0, raw), Math.max(0, maxScroll));
+  const distance = to - from;
+  if (Math.abs(distance) < 2) return;
+
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduced) {
+    window.scrollTo(0, to);
+    return;
+  }
+
+  // Longer trips get a little more time, but never a sluggish crawl.
+  const duration = Math.min(1400, Math.max(650, Math.abs(distance) * 0.6));
+  const start = performance.now();
+  let frame = 0;
+  let cancelled = false;
+
+  function cancel() {
+    cancelled = true;
+    cancelAnimationFrame(frame);
+    teardown();
+  }
+  function teardown() {
+    window.removeEventListener("wheel", cancel);
+    window.removeEventListener("touchstart", cancel);
+    window.removeEventListener("keydown", cancel);
+  }
+  window.addEventListener("wheel", cancel, { passive: true });
+  window.addEventListener("touchstart", cancel, { passive: true });
+  window.addEventListener("keydown", cancel);
+
+  function step(now: number) {
+    if (cancelled) return;
+    const t = Math.min(1, (now - start) / duration);
+    window.scrollTo(0, from + distance * easeInOutCubic(t));
+    if (t < 1) {
+      frame = requestAnimationFrame(step);
+    } else {
+      teardown();
+    }
+  }
+  frame = requestAnimationFrame(step);
+}
+
 /* ── Shared animation variants ── */
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
 
@@ -134,6 +229,8 @@ export default function RoadToHQPage({
   /* Parallax refs */
   const heroRef = useRef<HTMLElement>(null);
   const ctaRef = useRef<HTMLElement>(null);
+  /* Scroll target for the timeline list — lands on the milestone card itself */
+  const cardRef = useRef<HTMLElement>(null);
 
   const { scrollYProgress: heroProgress } = useScroll({
     target: heroRef,
@@ -182,6 +279,17 @@ export default function RoadToHQPage({
       if (t < 1) requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
+  }, []);
+
+  const scrollToLearnMore = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
+    // Let modified clicks (new tab/window) behave normally.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    const el = document.getElementById("learn-more");
+    if (!el) return;
+    e.preventDefault();
+    smoothScrollTo(el);
+    // Keep the URL shareable without letting the browser jump there itself.
+    window.history.replaceState(null, "", "#learn-more");
   }, []);
 
   const goTo = useCallback((i: number) => {
@@ -325,7 +433,7 @@ export default function RoadToHQPage({
             <Link href="/products" className="inline-block w-full sm:w-56 bg-white px-6 sm:px-10 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] text-black transition hover:bg-white/85 text-center">
               Shop Now
             </Link>
-            <a href="#learn-more" className="inline-block w-full sm:w-56 border border-white/80 bg-white/5 px-6 sm:px-10 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] text-white backdrop-blur-sm transition hover:bg-white hover:text-black text-center">
+            <a href="#learn-more" onClick={scrollToLearnMore} className="inline-block w-full sm:w-56 border border-white/80 bg-white/5 px-6 sm:px-10 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] text-white backdrop-blur-sm transition hover:bg-white hover:text-black text-center">
               Learn More
             </a>
           </motion.div>
@@ -333,7 +441,8 @@ export default function RoadToHQPage({
 
         <motion.a
           href="#learn-more"
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-white/50 hover:text-white"
+          onClick={scrollToLearnMore}
+          className="cursor-pointer absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-white/50 transition-colors hover:text-white"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1.2, duration: 0.8 }}
@@ -494,6 +603,7 @@ export default function RoadToHQPage({
 
           {/* Milestone detail card — AnimatePresence swap */}
           <motion.aside
+            ref={cardRef}
             className="lg:sticky lg:top-28"
             initial={{ opacity: 0, x: 20 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -630,7 +740,7 @@ export default function RoadToHQPage({
                   className="grid grid-cols-[40px_1fr] sm:grid-cols-[60px_140px_1fr_180px] items-start sm:items-center gap-3 sm:gap-4 py-5 sm:py-6 px-2 cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition"
                   onClick={() => {
                     goTo(i);
-                    document.getElementById("road-section")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    if (cardRef.current) smoothScrollTo(cardRef.current, { fitBottom: true });
                   }}
                 >
                   <div className="font-mono text-xl sm:text-2xl md:text-3xl font-semibold text-neutral-300 dark:text-neutral-700 tabular-nums">{String(i + 1).padStart(2, "0")}</div>
