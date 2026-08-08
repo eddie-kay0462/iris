@@ -7,6 +7,9 @@ import { useRouter } from "next/navigation";
 import { Search, X, ChevronRight, ChevronDown, User, Sun, Moon } from "lucide-react";
 import { hasToken } from "@/lib/api/client";
 import { useProfile } from "@/lib/api/profile";
+import { useCart } from "@/lib/cart";
+import { useFavourites } from "@/lib/favourites";
+import { useFavouritesDrawer } from "@/lib/favourites-drawer";
 import { useLocale, CURRENCIES } from "@/lib/locale/locale-provider";
 import { useTheme } from "@/lib/theme/theme-provider";
 
@@ -64,10 +67,12 @@ const EXPLORE: SubLink[] = [
   { label: "About", href: "/about" },
 ];
 
+// Bag and Saved Items are deliberately NOT in here: they open their side
+// drawers instead of navigating, so a signed-out shopper isn't bounced to
+// /login (which /favourites does) and never leaves the page they're browsing.
 const INFO: SubLink[] = [
   { label: "Track Your Order", href: "/track" },
   { label: "My Account", href: "/account" },
-  { label: "Saved Items", href: "/favourites" },
 ];
 
 const SECTION_LABEL =
@@ -254,11 +259,54 @@ function LeafRow({ label, href, onClose }: SubLink & { onClose: () => void }) {
   );
 }
 
+// ── Drawer-opening row (Bag / Saved Items) ─────────────────
+// Same shape as LeafRow, but it hands off to a side drawer rather than routing.
+function ActionRow({
+  label,
+  count,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="group flex w-full items-center justify-between border-b border-line-subtle px-5 py-3 text-left text-[14px] text-text transition-colors duration-200 hover:bg-surface-subtle"
+    >
+      <span>{label}</span>
+      <span className="flex items-center gap-2">
+        {count > 0 && (
+          <span className="text-[12px] tabular-nums text-text-muted">
+            {count > 99 ? "99+" : count}
+          </span>
+        )}
+        <ChevronRight
+          className="h-4 w-4 text-text-placeholder opacity-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:opacity-100"
+          strokeWidth={1.5}
+        />
+      </span>
+    </button>
+  );
+}
+
 // ── Drawer ─────────────────────────────────────────────────
 export default function NavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const { itemCount, hydrated, openDrawer: openCart } = useCart();
+  const { openDrawer: openFavourites } = useFavouritesDrawer();
+  const { data: favourites } = useFavourites();
+
+  // Close this drawer and hand off to the other one in the same click. Both
+  // scroll locks settle correctly because NavDrawer's effect (release) runs
+  // before the target drawer's (lock) — it sits earlier in the tree.
+  function openSideDrawer(open: () => void) {
+    onClose();
+    open();
+  }
 
   // reset transient state shortly after closing
   useEffect(() => {
@@ -407,6 +455,20 @@ export default function NavDrawer({ open, onClose }: { open: boolean; onClose: (
           {EXPLORE.map((l) => (
             <LeafRow key={l.href} {...l} onClose={onClose} />
           ))}
+
+          {/* Yours */}
+          <p className={SECTION_LABEL}>Yours</p>
+          <ActionRow
+            label="Bag"
+            // Pre-hydration the cart is still empty, so render 0 to match SSR.
+            count={hydrated ? itemCount : 0}
+            onClick={() => openSideDrawer(openCart)}
+          />
+          <ActionRow
+            label="Saved Items"
+            count={favourites?.length ?? 0}
+            onClick={() => openSideDrawer(openFavourites)}
+          />
 
           {/* Info */}
           <p className={SECTION_LABEL}>Info</p>
