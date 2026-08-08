@@ -22,6 +22,8 @@ import {
   useUpdateRoadToHqBaseline,
   useRoadToHqTarget,
   useUpdateRoadToHqTarget,
+  useNewsletterPopup,
+  useUpdateNewsletterPopup,
 } from "@/lib/api/settings";
 import { toast } from "sonner";
 
@@ -121,6 +123,22 @@ export default function GeneralSettingsPage() {
         onSuccess: () => {
           toast.success("Announcement banner updated.");
         },
+      }
+    );
+  }
+
+  const { data: newsletterPopup, isLoading: loadingNewsletterPopup } = useNewsletterPopup();
+  const { mutate: saveNewsletterPopup, isPending: savingNewsletterPopup } =
+    useUpdateNewsletterPopup();
+
+  function handleToggleNewsletterPopup(enabled: boolean) {
+    saveNewsletterPopup(
+      { enabled },
+      {
+        onSuccess: () =>
+          toast.success(
+            enabled ? "Newsletter pop-up turned on." : "Newsletter pop-up turned off."
+          ),
       }
     );
   }
@@ -444,6 +462,51 @@ export default function GeneralSettingsPage() {
               <Save className="h-4 w-4" />
               {savingBanner ? "Saving…" : "Save banner"}
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Newsletter Pop-up */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="p-6">
+          <div className="flex items-start justify-between gap-6">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Newsletter Pop-up</h2>
+              <p className="text-sm text-slate-500 mt-1">
+                A sign-up pop-up shown on the homepage a few seconds after a shopper&apos;s first
+                visit. Each shopper only sees it once — dismissing it or subscribing stops it
+                coming back.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!!newsletterPopup?.enabled}
+              aria-label="Show the newsletter pop-up"
+              disabled={loadingNewsletterPopup || savingNewsletterPopup}
+              onClick={() => handleToggleNewsletterPopup(!newsletterPopup?.enabled)}
+              className={`relative mt-1 h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+                newsletterPopup?.enabled ? "bg-slate-900" : "bg-slate-300"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  newsletterPopup?.enabled ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="mt-4 flex items-center gap-1.5 text-xs text-slate-500">
+            <AlertCircle className="h-3.5 w-3.5" />
+            <span>
+              {loadingNewsletterPopup
+                ? "Loading…"
+                : savingNewsletterPopup
+                  ? "Saving…"
+                  : "The homepage is cached and can take up to a minute to pick up the change."}
+            </span>
           </div>
         </div>
       </div>

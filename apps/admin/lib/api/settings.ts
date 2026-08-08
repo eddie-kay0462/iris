@@ -171,6 +171,31 @@ export function useUpdateAnnouncementBanner() {
   });
 }
 
+export interface NewsletterPopup {
+  enabled: boolean;
+}
+
+export function useNewsletterPopup() {
+  return useQuery({
+    queryKey: ["newsletter-popup"],
+    queryFn: () => apiClient<NewsletterPopup>("/settings/newsletter-popup"),
+  });
+}
+
+export function useUpdateNewsletterPopup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (popup: NewsletterPopup) =>
+      apiClient<NewsletterPopup>("/settings/newsletter-popup", {
+        method: "PUT",
+        body: popup,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["newsletter-popup"] });
+    },
+  });
+}
+
 export function useStockHoldMinutes() {
   return useQuery({
     queryKey: ["stock-hold-minutes"],

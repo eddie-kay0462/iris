@@ -93,6 +93,19 @@ export class SettingsController {
     return this.settingsService.updateAnnouncementBanner(body);
   }
 
+  @Get('newsletter-popup')
+  @Public()
+  getNewsletterPopup() {
+    return this.settingsService.getNewsletterPopup();
+  }
+
+  @Put('newsletter-popup')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings:update')
+  updateNewsletterPopup(@Body() body: any) {
+    return this.settingsService.updateNewsletterPopup(body);
+  }
+
   @Get('stock-hold-minutes')
   @RequirePermission('settings:read')
   getStockHoldMinutes() {
