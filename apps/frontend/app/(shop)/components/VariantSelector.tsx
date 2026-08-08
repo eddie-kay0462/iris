@@ -115,10 +115,10 @@ export function VariantSelector({
     <div className="space-y-4">
       {groups.map((group) => (
         <div key={group.name} className="space-y-2">
-          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          <h3 className="text-sm font-medium text-text-secondary">
             {group.name}
             {selected[group.name] && (
-              <span className="ml-2 font-normal text-gray-500 dark:text-gray-400">
+              <span className="ml-2 font-normal text-text-secondary">
                 - {selected[group.name]}
               </span>
             )}
@@ -142,12 +142,12 @@ export function VariantSelector({
                   disabled={!available}
                   className={`rounded-md border px-4 py-2 text-sm font-medium transition ${
                     isSelected
-                      ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
+                      ? "border-invert-bg bg-invert-bg text-invert-fg"
                       : !available
-                        ? "border-gray-200 text-gray-300 cursor-not-allowed dark:border-gray-700 dark:text-gray-600"
+                        ? "border-line text-text-placeholder cursor-not-allowed"
                         : !inStock
-                          ? "border-gray-200 text-gray-400 cursor-not-allowed dark:border-gray-700 dark:text-gray-500"
-                          : "border-gray-300 text-gray-700 hover:border-gray-500 dark:border-gray-600 dark:text-gray-300 dark:hover:border-gray-400"
+                          ? "border-line text-text-muted cursor-not-allowed"
+                          : "border-line-strong text-text-secondary hover:border-invert-bg"
                   }`}
                 >
                   {value}

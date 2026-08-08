@@ -33,16 +33,16 @@ interface Props {
 }
 
 const inputCls =
-  "w-full px-3 py-2.5 border border-[#ddd] dark:border-neutral-700 bg-white dark:bg-[#111] text-[13px] text-[#111] dark:text-[#ededed] outline-none transition-colors duration-200 focus:border-[#111] dark:focus:border-white placeholder:text-[#ccc] dark:placeholder:text-neutral-600 box-border rounded-none";
+  "w-full px-3 py-2.5 border border-line bg-surface text-[13px] text-text outline-none transition-colors duration-200 focus:border-invert-bg placeholder:text-text-placeholder box-border rounded-none";
 
 const labelCls =
-  "text-[11px] font-medium text-[#666] dark:text-neutral-400 mb-1.5 tracking-[0.02em]";
+  "text-[11px] font-medium text-text-secondary mb-1.5 tracking-[0.02em]";
 
 const sectionLabelCls =
-  "text-[10px] font-semibold uppercase tracking-[0.16em] text-[#999] dark:text-neutral-500 font-mono mb-3";
+  "text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted font-mono mb-3";
 
 const sectionCls =
-  "border-t border-[#e5e5e5] dark:border-neutral-800 pt-5 flex flex-col gap-4";
+  "border-t border-line pt-5 flex flex-col gap-4";
 
 export default function ProfileTab({ profile }: Props) {
   const [avatar, setAvatar] = useState<string | null>(profile.avatar_url ?? null);
@@ -102,7 +102,7 @@ export default function ProfileTab({ profile }: Props) {
       {/* Avatar */}
       <div className="flex flex-col items-center mb-10">
         <div
-          className="group relative w-[88px] h-[88px] rounded-full bg-[#111] dark:bg-[#ededed] cursor-pointer flex items-center justify-center overflow-hidden"
+          className="group relative w-[88px] h-[88px] rounded-full bg-invert-bg cursor-pointer flex items-center justify-center overflow-hidden"
           onClick={() => fileRef.current?.click()}
           role="button"
           tabIndex={0}
@@ -112,7 +112,7 @@ export default function ProfileTab({ profile }: Props) {
           {avatar ? (
             <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
           ) : (
-            <span className="text-white dark:text-[#0a0a0a] text-2xl font-light tracking-[0.04em] uppercase select-none">
+            <span className="text-invert-fg text-2xl font-light tracking-[0.04em] uppercase select-none">
               {initials || "?"}
             </span>
           )}
@@ -135,7 +135,7 @@ export default function ProfileTab({ profile }: Props) {
           aria-label="Upload profile photo"
         />
         <button
-          className="mt-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-[#999] dark:text-neutral-500 bg-transparent border-none cursor-pointer transition-colors duration-200 hover:text-[#111] dark:hover:text-white"
+          className="mt-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-text-muted bg-transparent border-none cursor-pointer transition-colors duration-200 hover:text-text"
           type="button"
           onClick={() => fileRef.current?.click()}
         >
@@ -152,7 +152,7 @@ export default function ProfileTab({ profile }: Props) {
               <label className={labelCls} htmlFor="first_name">First name</label>
               <input id="first_name" {...register("first_name")} className={inputCls} />
               {errors.first_name && (
-                <span className="text-[11px] text-[#c00] dark:text-[#ff5f5f] mt-1 block">
+                <span className="text-[11px] text-danger mt-1 block">
                   {errors.first_name.message}
                 </span>
               )}
@@ -161,7 +161,7 @@ export default function ProfileTab({ profile }: Props) {
               <label className={labelCls} htmlFor="last_name">Last name</label>
               <input id="last_name" {...register("last_name")} className={inputCls} />
               {errors.last_name && (
-                <span className="text-[11px] text-[#c00] dark:text-[#ff5f5f] mt-1 block">
+                <span className="text-[11px] text-danger mt-1 block">
                   {errors.last_name.message}
                 </span>
               )}
@@ -174,7 +174,7 @@ export default function ProfileTab({ profile }: Props) {
               id="email"
               value={profile.email ?? ""}
               readOnly
-              className={`${inputCls} bg-[#fafafa] dark:bg-[#0d0d0d] text-[#999] dark:text-neutral-600 cursor-default`}
+              className={`${inputCls} bg-surface-subtle text-text-placeholder cursor-default`}
             />
           </div>
 
@@ -187,7 +187,7 @@ export default function ProfileTab({ profile }: Props) {
               placeholder="+233 24 123 4567"
             />
             {errors.phone_number && (
-              <span className="text-[11px] text-[#c00] dark:text-[#ff5f5f] mt-1 block">
+              <span className="text-[11px] text-danger mt-1 block">
                 {errors.phone_number.message}
               </span>
             )}
@@ -197,7 +197,7 @@ export default function ProfileTab({ profile }: Props) {
         {/* Notifications */}
         <div className={`${sectionLabelCls} mt-9`}>Notifications</div>
         <div className={sectionCls}>
-          <label className="flex items-center gap-2.5 cursor-pointer text-[13px] text-[#111] dark:text-[#ededed] select-none" htmlFor="email_notifications">
+          <label className="flex items-center gap-2.5 cursor-pointer text-[13px] text-text select-none" htmlFor="email_notifications">
             <input
               id="email_notifications"
               type="checkbox"
@@ -206,7 +206,7 @@ export default function ProfileTab({ profile }: Props) {
             />
             Email notifications
           </label>
-          <label className="flex items-center gap-2.5 cursor-pointer text-[13px] text-[#111] dark:text-[#ededed] select-none" htmlFor="sms_notifications">
+          <label className="flex items-center gap-2.5 cursor-pointer text-[13px] text-text select-none" htmlFor="sms_notifications">
             <input
               id="sms_notifications"
               type="checkbox"
@@ -219,7 +219,7 @@ export default function ProfileTab({ profile }: Props) {
 
         <button
           type="submit"
-          className="mt-7 w-full h-11 bg-[#111] dark:bg-white text-white dark:text-[#0a0a0a] text-[11px] font-semibold uppercase tracking-[0.16em] cursor-pointer transition-colors duration-200 hover:bg-[#333] dark:hover:bg-neutral-200 disabled:bg-[#555] dark:disabled:bg-neutral-700 disabled:cursor-not-allowed border-none rounded-none"
+          className="mt-7 w-full h-11 bg-invert-bg text-invert-fg text-[11px] font-semibold uppercase tracking-[0.16em] cursor-pointer transition-colors duration-200 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed border-none rounded-none"
           disabled={saving}
         >
           {saved ? "Saved ✓" : saving ? "Saving..." : "Save changes"}

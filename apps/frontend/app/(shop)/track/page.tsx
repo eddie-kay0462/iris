@@ -47,7 +47,7 @@ function preorderStepIndex(status: string): number {
 }
 
 const sectionLabelCls =
-  "text-[10px] font-semibold uppercase tracking-[0.16em] text-[#999] dark:text-neutral-500 font-mono";
+  "text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted font-mono";
 
 /* ---------- Editorial monochrome progress stepper ---------- */
 function Stepper({
@@ -66,12 +66,12 @@ function Stepper({
     <div className="relative">
       {/* Base track — continuous light line linking every milestone */}
       <div
-        className="pointer-events-none absolute top-1.5 h-px -translate-y-1/2 bg-[#d4d4d4] dark:bg-neutral-700"
+        className="pointer-events-none absolute top-1.5 h-px -translate-y-1/2 bg-line-strong"
         style={{ left: `${inset}%`, right: `${inset}%` }}
       />
       {/* Progress overlay — solid up to the current milestone */}
       <div
-        className="pointer-events-none absolute top-1.5 h-px -translate-y-1/2 bg-[#111] dark:bg-[#ededed]"
+        className="pointer-events-none absolute top-1.5 h-px -translate-y-1/2 bg-invert-bg"
         style={{ left: `${inset}%`, width: `${progressW}%` }}
       />
 
@@ -85,17 +85,17 @@ function Stepper({
               <div
                 className={`relative z-10 flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-full border transition-colors ${
                   done
-                    ? "border-[#111] bg-[#111] dark:border-[#ededed] dark:bg-[#ededed]"
-                    : "border-[#ddd] bg-white dark:border-neutral-700 dark:bg-[#0a0a0a]"
-                } ${active ? "ring-2 ring-[#111]/15 dark:ring-white/20" : ""}`}
+                    ? "border-invert-bg bg-invert-bg"
+                    : "border-line bg-bg"
+                } ${active ? "ring-2 ring-line" : ""}`}
               />
               <p
                 className={`mt-2.5 text-center text-[9px] font-medium uppercase tracking-[0.1em] font-mono ${
                   active
-                    ? "text-[#111] dark:text-[#ededed]"
+                    ? "text-text"
                     : done
-                    ? "text-[#999] dark:text-neutral-500"
-                    : "text-[#ccc] dark:text-neutral-700"
+                    ? "text-text-muted"
+                    : "text-text-placeholder"
                 }`}
               >
                 {step.label}
@@ -117,21 +117,21 @@ function ItemRows({
   return (
     <div>
       <div className={`${sectionLabelCls} mb-3`}>Items</div>
-      <div className="border-t border-[#e5e5e5] dark:border-neutral-800">
+      <div className="border-t border-line">
         {items.map((item, i) => (
           <div
             key={i}
-            className="flex items-center justify-between gap-4 border-b border-[#f0f0f0] dark:border-neutral-900 py-3"
+            className="flex items-center justify-between gap-4 border-b border-line-subtle py-3"
           >
             <div className="min-w-0">
-              <div className="text-[12px] font-medium uppercase tracking-[0.04em] text-[#111] dark:text-[#ededed] truncate">
+              <div className="text-[12px] font-medium uppercase tracking-[0.04em] text-text truncate">
                 {item.product_name}
               </div>
-              <div className="mt-0.5 text-[11px] text-[#999] dark:text-neutral-500">
+              <div className="mt-0.5 text-[11px] text-text-muted">
                 {item.variant_title ? `${item.variant_title} · ` : ""}Qty {item.quantity}
               </div>
             </div>
-            <div className="text-[12px] font-medium text-[#111] dark:text-[#ededed] whitespace-nowrap">
+            <div className="text-[12px] font-medium text-text whitespace-nowrap">
               {fmt(item.total_price)}
             </div>
           </div>
@@ -153,10 +153,10 @@ function OrderResult({ order }: { order: TrackingOrder }) {
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className={sectionLabelCls}>Order</div>
-          <div className="mt-1.5 text-[20px] font-bold uppercase tracking-[-0.01em] text-[#111] dark:text-[#ededed] leading-none">
+          <div className="mt-1.5 text-[20px] font-bold uppercase tracking-[-0.01em] text-text leading-none">
             {order.order_number}
           </div>
-          <div className="mt-2 text-[11px] text-[#999] dark:text-neutral-500 font-mono">
+          <div className="mt-2 text-[11px] text-text-muted font-mono">
             Placed {fmtDate(order.created_at)}
           </div>
         </div>
@@ -174,7 +174,7 @@ function OrderResult({ order }: { order: TrackingOrder }) {
       {(order.tracking_number || order.carrier || shippedDate || deliveredDate) && (
         <div>
           <div className={`${sectionLabelCls} mb-3`}>Shipping</div>
-          <div className="border-t border-[#e5e5e5] dark:border-neutral-800">
+          <div className="border-t border-line">
             {order.carrier && (
               <DetailRow label="Carrier" value={order.carrier} />
             )}
@@ -196,27 +196,27 @@ function OrderResult({ order }: { order: TrackingOrder }) {
       {order.preorders && order.preorders.length > 0 && (
         <div className={order.order_items && order.order_items.length > 0 ? "mt-8" : ""}>
           <div className={`${sectionLabelCls} mb-3`}>Pre-order Items</div>
-          <div className="mb-3 border-l-2 border-[#111] dark:border-[#ededed] bg-[#f5f5f5] dark:bg-[#111] px-4 py-3 text-[12px] leading-[1.5] text-[#666] dark:text-neutral-400">
+          <div className="mb-3 border-l-2 border-invert-bg bg-surface-subtle px-4 py-3 text-[12px] leading-[1.5] text-text-secondary">
             These aren&apos;t in stock yet - they ship separately within 10-15 working days.
             We&apos;ll notify you when they&apos;re on the way.
           </div>
-          <div className="border-t border-[#e5e5e5] dark:border-neutral-800">
+          <div className="border-t border-line">
             {order.preorders.map((pre, i) => (
               <div
                 key={i}
-                className="flex items-center justify-between gap-4 border-b border-[#f0f0f0] dark:border-neutral-900 py-3"
+                className="flex items-center justify-between gap-4 border-b border-line-subtle py-3"
               >
                 <div className="min-w-0">
-                  <div className="text-[12px] font-medium uppercase tracking-[0.04em] text-[#111] dark:text-[#ededed] truncate">
+                  <div className="text-[12px] font-medium uppercase tracking-[0.04em] text-text truncate">
                     {pre.product_name}
                   </div>
-                  <div className="mt-0.5 text-[11px] text-[#999] dark:text-neutral-500">
+                  <div className="mt-0.5 text-[11px] text-text-muted">
                     {pre.variant_title ? `${pre.variant_title} · ` : ""}Qty {pre.quantity}
                   </div>
                 </div>
                 <div className="flex items-center gap-3 whitespace-nowrap">
                   <StatusPip status={pre.status} />
-                  <span className="text-[12px] font-medium text-[#111] dark:text-[#ededed]">
+                  <span className="text-[12px] font-medium text-text">
                     {fmt(pre.unit_price * pre.quantity)}
                   </span>
                 </div>
@@ -230,7 +230,7 @@ function OrderResult({ order }: { order: TrackingOrder }) {
       {order.shipping_address && (
         <div>
           <div className={`${sectionLabelCls} mb-3`}>Shipping to</div>
-          <p className="text-[13px] text-[#666] dark:text-neutral-400 leading-relaxed">
+          <p className="text-[13px] text-text-secondary leading-relaxed">
             {order.shipping_address.fullName}
             <br />
             {order.shipping_address.address}
@@ -256,12 +256,12 @@ function DetailRow({
   mono?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-[#f0f0f0] dark:border-neutral-900 py-2.5">
-      <span className="text-[11px] uppercase tracking-[0.1em] text-[#999] dark:text-neutral-500 font-mono">
+    <div className="flex items-center justify-between gap-4 border-b border-line-subtle py-2.5">
+      <span className="text-[11px] uppercase tracking-[0.1em] text-text-muted font-mono">
         {label}
       </span>
       <span
-        className={`text-[12px] font-medium text-[#111] dark:text-[#ededed] ${
+        className={`text-[12px] font-medium text-text ${
           mono ? "font-mono tracking-[0.02em]" : ""
         }`}
       >
@@ -294,10 +294,10 @@ function PreorderResult({ preorder }: { preorder: TrackingPreorder }) {
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className={sectionLabelCls}>Pre-order</div>
-          <div className="mt-1.5 text-[20px] font-bold uppercase tracking-[-0.01em] text-[#111] dark:text-[#ededed] leading-none">
+          <div className="mt-1.5 text-[20px] font-bold uppercase tracking-[-0.01em] text-text leading-none">
             {preorder.order_number}
           </div>
-          <div className="mt-2 text-[11px] text-[#999] dark:text-neutral-500 font-mono">
+          <div className="mt-2 text-[11px] text-text-muted font-mono">
             Reserved {fmtDate(preorder.created_at)}
           </div>
         </div>
@@ -313,7 +313,7 @@ function PreorderResult({ preorder }: { preorder: TrackingPreorder }) {
 
       {/* Status note */}
       {note && (
-        <div className="border-l-2 border-[#111] dark:border-[#ededed] bg-[#f5f5f5] dark:bg-[#111] px-4 py-3 text-[12px] leading-[1.5] text-[#666] dark:text-neutral-400">
+        <div className="border-l-2 border-invert-bg bg-surface-subtle px-4 py-3 text-[12px] leading-[1.5] text-text-secondary">
           {note}
         </div>
       )}
@@ -355,19 +355,19 @@ function TrackContent() {
   }
 
   const inputCls =
-    "w-full px-3 py-2.5 border border-[#ddd] dark:border-neutral-700 bg-white dark:bg-[#111] text-[13px] text-[#111] dark:text-[#ededed] outline-none transition-colors duration-200 focus:border-[#111] dark:focus:border-white placeholder:text-[#ccc] dark:placeholder:text-neutral-600 box-border rounded-none";
+    "w-full px-3 py-2.5 border border-line bg-surface text-[13px] text-text outline-none transition-colors duration-200 focus:border-invert-bg placeholder:text-text-placeholder box-border rounded-none";
   const labelCls =
-    "block text-[11px] font-medium text-[#666] dark:text-neutral-400 mb-1.5 tracking-[0.02em]";
+    "block text-[11px] font-medium text-text-secondary mb-1.5 tracking-[0.02em]";
 
   return (
     <div className="mx-auto max-w-xl px-4 py-16 sm:py-20">
       {/* Header */}
       <div className="mb-10">
         <div className={sectionLabelCls}>Order Tracking</div>
-        <h1 className="mt-2 text-[28px] font-bold uppercase tracking-[-0.01em] text-[#111] dark:text-[#ededed] leading-none">
+        <h1 className="mt-2 text-[28px] font-bold uppercase tracking-[-0.01em] text-text leading-none">
           Track Your Order
         </h1>
-        <p className="mt-3 text-[13px] text-[#999] dark:text-neutral-500 leading-relaxed">
+        <p className="mt-3 text-[13px] text-text-muted leading-relaxed">
           Enter your order number and the email you used at checkout.
         </p>
       </div>
@@ -403,7 +403,7 @@ function TrackContent() {
         </div>
 
         {error && (
-          <div className="border-l-2 border-[#c00] dark:border-[#ff5f5f] bg-[#fdf2f2] dark:bg-[#2a0f0f] px-4 py-3 text-[12px] leading-[1.5] text-[#c00] dark:text-[#ff8f8f]">
+          <div className="border-l-2 border-danger bg-danger-surface px-4 py-3 text-[12px] leading-[1.5] text-danger-on-surface">
             {error}
           </div>
         )}
@@ -411,14 +411,14 @@ function TrackContent() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full h-11 bg-[#111] dark:bg-white text-white dark:text-[#0a0a0a] text-[11px] font-semibold uppercase tracking-[0.16em] cursor-pointer transition-colors duration-200 hover:bg-[#333] dark:hover:bg-neutral-200 disabled:bg-[#555] dark:disabled:bg-neutral-700 disabled:cursor-not-allowed border-none rounded-none"
+          className="w-full h-11 bg-invert-bg text-invert-fg text-[11px] font-semibold uppercase tracking-[0.16em] cursor-pointer transition-colors duration-200 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed border-none rounded-none"
         >
           {loading ? "Looking up order…" : "Track order"}
         </button>
       </form>
 
       {result && (
-        <div className="mt-14 border-t border-[#e5e5e5] dark:border-neutral-800 pt-10">
+        <div className="mt-14 border-t border-line pt-10">
           {result.kind === "preorder" ? (
             <PreorderResult preorder={result} />
           ) : (
@@ -429,7 +429,7 @@ function TrackContent() {
 
           <Link
             href="/products"
-            className="block w-full bg-white px-6 py-3.5 text-center text-xs font-semibold uppercase tracking-[0.25em] text-black transition hover:bg-white/85"
+            className="block w-full bg-invert-bg px-6 py-3.5 text-center text-xs font-semibold uppercase tracking-[0.25em] text-invert-fg transition hover:opacity-90"
           >
             Continue shopping
           </Link>
@@ -443,7 +443,7 @@ export default function TrackPage() {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto max-w-xl px-4 py-16 text-center text-[13px] text-[#999] dark:text-neutral-500 font-mono uppercase tracking-[0.1em]">
+        <div className="mx-auto max-w-xl px-4 py-16 text-center text-[13px] text-text-muted font-mono uppercase tracking-[0.1em]">
           Loading…
         </div>
       }

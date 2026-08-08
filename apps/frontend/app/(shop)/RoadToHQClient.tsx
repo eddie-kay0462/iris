@@ -455,7 +455,7 @@ export default function RoadToHQPage({
       </section>
 
       {/* ── 2. MANIFESTO ── */}
-      <section id="learn-more" className="border-t border-neutral-200 dark:border-neutral-800 py-24 sm:py-32 px-6">
+      <section id="learn-more" className="border-t border-line py-24 sm:py-32 px-6">
         <motion.div
           className="mx-auto max-w-4xl"
           variants={stagger}
@@ -463,17 +463,17 @@ export default function RoadToHQPage({
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
         >
-          <motion.div variants={fadeUp} className="flex items-center justify-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500 font-mono">
+          <motion.div variants={fadeUp} className="flex items-center justify-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-text-muted font-mono">
             <span>Ch. 01</span>
-            <span className="h-px w-8 bg-neutral-300 dark:bg-neutral-700" />
+            <span className="h-px w-8 bg-line-strong" />
             <span>The plan, plainly</span>
           </motion.div>
           <motion.h2 variants={fadeUp} className="display mt-6 text-center text-3xl sm:text-5xl lg:text-6xl font-bold uppercase tracking-tight">
             We have to sell <span className="font-mono tabular-nums">6,000</span> units<br />
-            <span className="text-neutral-400 dark:text-neutral-500">to afford a place to live.</span>
-            {" "}<span className="font-mono text-neutral-300 dark:text-neutral-700">LOL</span>
+            <span className="text-text-muted">to afford a place to live.</span>
+            {" "}<span className="font-mono text-text-placeholder">LOL</span>
           </motion.h2>
-          <motion.p variants={fadeUp} className="mt-8 mx-auto max-w-2xl text-center text-base sm:text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed">
+          <motion.p variants={fadeUp} className="mt-8 mx-auto max-w-2xl text-center text-base sm:text-lg text-text-secondary leading-relaxed">
             1NRI is moving into its first permanent headquarters in Accra by{" "}
             <span className="font-mono">26.12.2026</span>; a studio, a fitting room, and somewhere
             our distributed production network in Northern Ghana can finally call home. The math is simple.
@@ -486,9 +486,9 @@ export default function RoadToHQPage({
               { value: daysLeft > 0 ? daysLeft.toLocaleString() : "-", label: "Days remaining", border: true },
               { value: "06", label: "Milestones" },
             ].map((stat) => (
-              <motion.div key={stat.label} variants={fadeUp} className={stat.border ? "border-x border-neutral-200 dark:border-neutral-800" : ""}>
+              <motion.div key={stat.label} variants={fadeUp} className={stat.border ? "border-x border-line" : ""}>
                 <div className="font-mono text-2xl sm:text-3xl md:text-4xl font-semibold tabular-nums">{stat.value}</div>
-                <div className="mt-2 text-[10px] font-medium uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500 font-mono">{stat.label}</div>
+                <div className="mt-2 text-[10px] font-medium uppercase tracking-[0.3em] text-text-muted font-mono">{stat.label}</div>
               </motion.div>
             ))}
           </motion.div>
@@ -496,7 +496,7 @@ export default function RoadToHQPage({
       </section>
 
       {/* ── 3. THE ROAD ── */}
-      <section id="road-section" className="relative bg-neutral-100 dark:bg-neutral-900 border-y border-neutral-200 dark:border-neutral-800 py-24 sm:py-32 px-6 overflow-hidden">
+      <section id="road-section" className="relative bg-surface-subtle border-y border-line py-24 sm:py-32 px-6 overflow-hidden">
         <motion.div
           className="mx-auto max-w-7xl mb-12 sm:mb-20"
           variants={stagger}
@@ -504,14 +504,14 @@ export default function RoadToHQPage({
           whileInView="visible"
           viewport={{ once: true, margin: "-60px" }}
         >
-          <motion.div variants={fadeUp} className="flex items-center justify-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500 font-mono">
+          <motion.div variants={fadeUp} className="flex items-center justify-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-text-muted font-mono">
             <span>Ch. 02</span>
-            <span className="h-px w-8 bg-neutral-300 dark:bg-neutral-700" />
+            <span className="h-px w-8 bg-line-strong" />
             <span>The road, charted</span>
           </motion.div>
           <motion.h2 variants={fadeUp} className="display mt-6 text-center text-3xl sm:text-5xl font-bold uppercase tracking-tight">
             Six milestones.<br />
-            <span className="text-neutral-400 dark:text-neutral-600">One headquarters.</span>
+            <span className="text-text-muted">One headquarters.</span>
           </motion.h2>
         </motion.div>
 
@@ -532,22 +532,22 @@ export default function RoadToHQPage({
                   <stop offset="60%" stopColor="currentColor" stopOpacity="0" />
                 </radialGradient>
               </defs>
-              <circle cx={CIRCLE.cx} cy={CIRCLE.cy} r={280} fill="url(#centerGlow)" className="text-neutral-900 dark:text-white" />
-              <path d={FULL_PATH} fill="none" className="stroke-neutral-300 dark:stroke-neutral-700" strokeWidth={64} strokeLinecap="round" opacity={0.35} />
-              <path d={FULL_PATH} fill="none" className="road-draw stroke-neutral-900 dark:stroke-neutral-100" strokeWidth={2} strokeLinecap="round" />
-              <path d={FULL_PATH} fill="none" className="road-centerline stroke-neutral-900 dark:stroke-neutral-100" strokeWidth={2} opacity={0.55} />
+              <circle cx={CIRCLE.cx} cy={CIRCLE.cy} r={280} fill="url(#centerGlow)" className="text-text" />
+              <path d={FULL_PATH} fill="none" className="stroke-line-strong" strokeWidth={64} strokeLinecap="round" opacity={0.35} />
+              <path d={FULL_PATH} fill="none" className="road-draw stroke-text" strokeWidth={2} strokeLinecap="round" />
+              <path d={FULL_PATH} fill="none" className="road-centerline stroke-text" strokeWidth={2} opacity={0.55} />
               {progressPath && (
-                <path d={progressPath} fill="none" className="stroke-neutral-900 dark:stroke-neutral-100" strokeWidth={8} strokeLinecap="round" />
+                <path d={progressPath} fill="none" className="stroke-text" strokeWidth={8} strokeLinecap="round" />
               )}
               <g>
-                <line x1={START_PT.x} y1={START_PT.y - 22} x2={START_PT.x} y2={START_PT.y + 22} className="stroke-neutral-900 dark:stroke-neutral-100" strokeWidth={2} />
-                <text x={START_PT.x - 14} y={START_PT.y - 30} textAnchor="end" className="fill-neutral-500 dark:fill-neutral-400 font-mono" style={{ fontSize: 11, letterSpacing: ".32em", textTransform: "uppercase" }}>Start</text>
-                <text x={START_PT.x - 14} y={START_PT.y - 14} textAnchor="end" className="fill-neutral-900 dark:fill-neutral-100" style={{ fontSize: 14, fontWeight: 600 }}>0 sold</text>
+                <line x1={START_PT.x} y1={START_PT.y - 22} x2={START_PT.x} y2={START_PT.y + 22} className="stroke-text" strokeWidth={2} />
+                <text x={START_PT.x - 14} y={START_PT.y - 30} textAnchor="end" className="fill-text-secondary font-mono" style={{ fontSize: 11, letterSpacing: ".32em", textTransform: "uppercase" }}>Start</text>
+                <text x={START_PT.x - 14} y={START_PT.y - 14} textAnchor="end" className="fill-text" style={{ fontSize: 14, fontWeight: 600 }}>0 sold</text>
               </g>
               <g>
-                <line x1={END_PT.x} y1={END_PT.y - 22} x2={END_PT.x} y2={END_PT.y + 22} className="stroke-neutral-900 dark:stroke-neutral-100" strokeWidth={2} />
-                <text x={END_PT.x + 14} y={END_PT.y - 30} className="fill-neutral-500 dark:fill-neutral-400 font-mono" style={{ fontSize: 11, letterSpacing: ".32em", textTransform: "uppercase" }}>Finish</text>
-                <text x={END_PT.x + 14} y={END_PT.y - 14} className="fill-neutral-900 dark:fill-neutral-100" style={{ fontSize: 14, fontWeight: 600 }}>HQ open</text>
+                <line x1={END_PT.x} y1={END_PT.y - 22} x2={END_PT.x} y2={END_PT.y + 22} className="stroke-text" strokeWidth={2} />
+                <text x={END_PT.x + 14} y={END_PT.y - 30} className="fill-text-secondary font-mono" style={{ fontSize: 11, letterSpacing: ".32em", textTransform: "uppercase" }}>Finish</text>
+                <text x={END_PT.x + 14} y={END_PT.y - 14} className="fill-text" style={{ fontSize: 14, fontWeight: 600 }}>HQ open</text>
               </g>
               {MS_POSITIONS_DEG.map((deg, i) => {
                 const p = ptOnArc(deg);
@@ -569,15 +569,15 @@ export default function RoadToHQPage({
                     style={{ transformOrigin: `${p.x}px ${p.y}px` }}
                   >
                     <circle cx={p.x} cy={p.y} r={22}
-                      className={past ? "fill-neutral-900 dark:fill-neutral-100 stroke-neutral-900 dark:stroke-neutral-100" : "fill-neutral-50 dark:fill-neutral-900 stroke-neutral-900 dark:stroke-neutral-100"}
+                      className={past ? "fill-text stroke-text" : "fill-bg stroke-text"}
                       strokeWidth={2} />
                     <text x={p.x} y={p.y + 5} textAnchor="middle"
-                      className={past ? "fill-neutral-50 dark:fill-neutral-900 font-mono" : "fill-neutral-900 dark:fill-neutral-100 font-mono"}
+                      className={past ? "fill-bg font-mono" : "fill-text font-mono"}
                       style={{ fontSize: 13, fontWeight: 600 }}>
                       {String(i + 1).padStart(2, "0")}
                     </text>
                     <text x={lx} y={ly + dy} textAnchor={anchor as "start" | "end" | "middle"}
-                      className="fill-neutral-500 dark:fill-neutral-400 font-mono"
+                      className="fill-text-secondary font-mono"
                       style={{ fontSize: 10, letterSpacing: ".32em", textTransform: "uppercase" }}>
                       {MILESTONES[i].units.toLocaleString()} units
                     </text>
@@ -586,17 +586,17 @@ export default function RoadToHQPage({
               })}
               <foreignObject x={posPt.x - 14} y={posPt.y - 14} width={28} height={28}>
                 <div className="relative w-full h-full">
-                  <div className="absolute inset-0 ring-pulse text-neutral-900 dark:text-white" />
-                  <div className="absolute inset-0 rounded-full bg-neutral-900 dark:bg-white border-2 border-neutral-50 dark:border-neutral-900" />
+                  <div className="absolute inset-0 ring-pulse text-text" />
+                  <div className="absolute inset-0 rounded-full bg-invert-bg border-2 border-bg" />
                 </div>
               </foreignObject>
               <g textAnchor="middle">
-                <text x={400} y={376} className="fill-neutral-400 dark:fill-neutral-600 font-mono" style={{ fontSize: 11, letterSpacing: ".32em", textTransform: "uppercase" }}>Goal</text>
-                <text x={400} y={420} className="fill-neutral-900 dark:fill-neutral-100" style={{ fontSize: 72, fontWeight: 700, letterSpacing: "-0.02em" }}>HQ</text>
-                <text x={400} y={448} className="fill-neutral-500 dark:fill-neutral-400 font-mono" style={{ fontSize: 11, letterSpacing: ".32em", textTransform: "uppercase" }}>Accra · 26.12.2026</text>
+                <text x={400} y={376} className="fill-text-muted font-mono" style={{ fontSize: 11, letterSpacing: ".32em", textTransform: "uppercase" }}>Goal</text>
+                <text x={400} y={420} className="fill-text" style={{ fontSize: 72, fontWeight: 700, letterSpacing: "-0.02em" }}>HQ</text>
+                <text x={400} y={448} className="fill-text-secondary font-mono" style={{ fontSize: 11, letterSpacing: ".32em", textTransform: "uppercase" }}>Accra · 26.12.2026</text>
               </g>
             </svg>
-            <p className="mt-4 text-center text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-600 font-mono">
+            <p className="mt-4 text-center text-[10px] font-medium uppercase tracking-[0.4em] text-text-muted font-mono">
               Click a milestone · ←/→ to cycle
             </p>
           </motion.div>
@@ -617,13 +617,13 @@ export default function RoadToHQPage({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.28, ease }}
-                className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950"
+                className="border border-line bg-bg"
               >
-                <div className="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-800 px-5 py-4 font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-500 dark:text-neutral-400">
+                <div className="flex items-center justify-between border-b border-line px-5 py-4 font-mono text-[10px] uppercase tracking-[0.3em] text-text-secondary">
                   <span>Milestone {String(active + 1).padStart(2, "0")} / 06</span>
                   <span>{m.units.toLocaleString()} units</span>
                 </div>
-                <div className="relative aspect-[4/3] bg-neutral-100 dark:bg-neutral-900 overflow-hidden">
+                <div className="relative aspect-[4/3] bg-surface-subtle overflow-hidden">
                   <Image src={m.image} alt={m.title} fill sizes="(max-width: 768px) 100vw, 50vw" className={`object-cover ${m.objectPos ?? "object-center"}`} />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
                   <div className="absolute top-3 left-3 inline-flex items-center gap-2 bg-black/60 backdrop-blur-sm px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.3em] text-white font-mono">
@@ -632,27 +632,27 @@ export default function RoadToHQPage({
                   </div>
                 </div>
                 <div className="px-5 py-6">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">{m.kicker}</p>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-text-muted">{m.kicker}</p>
                   <h3 className="display mt-2 text-2xl sm:text-3xl font-bold uppercase tracking-tight">{m.title}</h3>
-                  <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">{m.body}</p>
-                  <div className="mt-5 grid grid-cols-2 gap-3 text-[11px] font-mono uppercase tracking-[0.2em] text-neutral-500 dark:text-neutral-400 border-t border-neutral-200 dark:border-neutral-800 pt-4">
+                  <p className="mt-3 text-sm text-text-secondary leading-relaxed">{m.body}</p>
+                  <div className="mt-5 grid grid-cols-2 gap-3 text-[11px] font-mono uppercase tracking-[0.2em] text-text-secondary border-t border-line pt-4">
                     <div>
-                      <div className="text-neutral-400 dark:text-neutral-600">Trigger</div>
-                      <div className="mt-1 text-neutral-900 dark:text-neutral-100">{m.units.toLocaleString()} sold</div>
+                      <div className="text-text-muted">Trigger</div>
+                      <div className="mt-1 text-text">{m.units.toLocaleString()} sold</div>
                     </div>
                     <div>
-                      <div className="text-neutral-400 dark:text-neutral-600">Window</div>
-                      <div className="mt-1 text-neutral-900 dark:text-neutral-100">{m.window}</div>
+                      <div className="text-text-muted">Window</div>
+                      <div className="mt-1 text-text">{m.window}</div>
                     </div>
                   </div>
                 </div>
-                <div className="flex border-t border-neutral-200 dark:border-neutral-800">
-                  <button onClick={() => goTo(active - 1)} className="flex-1 px-4 py-3 text-[11px] font-medium uppercase tracking-[0.25em] text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition flex items-center justify-center gap-2">
+                <div className="flex border-t border-line">
+                  <button onClick={() => goTo(active - 1)} className="flex-1 px-4 py-3 text-[11px] font-medium uppercase tracking-[0.25em] text-text-secondary hover:text-text transition flex items-center justify-center gap-2">
                     <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M15 18l-6-6 6-6" /></svg>
                     Prev
                   </button>
-                  <div className="w-px bg-neutral-200 dark:bg-neutral-800" />
-                  <button onClick={() => goTo(active + 1)} className="flex-1 px-4 py-3 text-[11px] font-medium uppercase tracking-[0.25em] text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition flex items-center justify-center gap-2">
+                  <div className="w-px bg-fill" />
+                  <button onClick={() => goTo(active + 1)} className="flex-1 px-4 py-3 text-[11px] font-medium uppercase tracking-[0.25em] text-text-secondary hover:text-text transition flex items-center justify-center gap-2">
                     Next
                     <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M9 6l6 6-6 6" /></svg>
                   </button>
@@ -667,10 +667,10 @@ export default function RoadToHQPage({
               transition={{ delay: 0.4, duration: 0.5 }}
               viewport={{ once: true }}
             >
-              <Link href="/products" className="block w-full text-center bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-6 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] hover:bg-neutral-700 dark:hover:bg-neutral-200 transition">
+              <Link href="/products" className="block w-full text-center bg-invert-bg text-invert-fg px-6 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] hover:opacity-90 transition">
                 Add one to the count
               </Link>
-              <p className="text-center text-[10px] font-mono uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-600">
+              <p className="text-center text-[10px] font-mono uppercase tracking-[0.3em] text-text-muted">
                 Every piece sold = one notch closer
               </p>
             </motion.div>
@@ -681,10 +681,10 @@ export default function RoadToHQPage({
         <div className="lg:hidden mt-14 -mx-6 px-6 overflow-x-auto no-scrollbar">
           <div className="flex gap-4 min-w-max">
             {MILESTONES.map((ms, i) => (
-              <button key={i} onClick={() => goTo(i)} className="w-64 shrink-0 text-left border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-4">
-                <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">{String(i + 1).padStart(2, "0")} · {ms.units.toLocaleString()} units</div>
+              <button key={i} onClick={() => goTo(i)} className="w-64 shrink-0 text-left border border-line bg-bg p-4">
+                <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-text-muted">{String(i + 1).padStart(2, "0")} · {ms.units.toLocaleString()} units</div>
                 <div className="mt-2 text-sm font-semibold uppercase tracking-tight">{ms.title}</div>
-                <div className="mt-2 text-xs text-neutral-500 dark:text-neutral-400 leading-snug">{ms.body.slice(0, 110)}…</div>
+                <div className="mt-2 text-xs text-text-secondary leading-snug">{ms.body.slice(0, 110)}…</div>
               </button>
             ))}
           </div>
@@ -692,14 +692,14 @@ export default function RoadToHQPage({
       </section>
 
       {/* ── 4. MARQUEE ── */}
-      <section className="overflow-hidden border-b border-neutral-200 dark:border-neutral-800 py-6 bg-neutral-50 dark:bg-neutral-950">
+      <section className="overflow-hidden border-b border-line py-6 bg-surface-subtle">
         <div className="flex whitespace-nowrap marquee-track">
           {[0, 1].map((k) => (
-            <div key={k} className="flex items-center gap-8 px-8 text-2xl sm:text-4xl font-bold uppercase tracking-tight text-neutral-900 dark:text-neutral-100" aria-hidden={k === 1 ? true : undefined}>
-              <span>Road to HQ</span><span className="text-neutral-300 dark:text-neutral-700">·</span>
-              <span className="font-mono">26.12.2026</span><span className="text-neutral-300 dark:text-neutral-700">·</span>
-              <span>Accra, Ghana</span><span className="text-neutral-300 dark:text-neutral-700">·</span>
-              <span>6,000 units</span><span className="text-neutral-300 dark:text-neutral-700">·</span>
+            <div key={k} className="flex items-center gap-8 px-8 text-2xl sm:text-4xl font-bold uppercase tracking-tight text-text" aria-hidden={k === 1 ? true : undefined}>
+              <span>Road to HQ</span><span className="text-text-placeholder">·</span>
+              <span className="font-mono">26.12.2026</span><span className="text-text-placeholder">·</span>
+              <span>Accra, Ghana</span><span className="text-text-placeholder">·</span>
+              <span>6,000 units</span><span className="text-text-placeholder">·</span>
             </div>
           ))}
         </div>
@@ -714,9 +714,9 @@ export default function RoadToHQPage({
             whileInView="visible"
             viewport={{ once: true, margin: "-60px" }}
           >
-            <motion.div variants={fadeUp} className="flex items-center justify-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500 font-mono">
+            <motion.div variants={fadeUp} className="flex items-center justify-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-text-muted font-mono">
               <span>Ch. 03</span>
-              <span className="h-px w-8 bg-neutral-300 dark:bg-neutral-700" />
+              <span className="h-px w-8 bg-line-strong" />
               <span>The whole list</span>
             </motion.div>
             <motion.h2 variants={fadeUp} className="display mt-6 text-center text-3xl sm:text-5xl font-bold uppercase tracking-tight">
@@ -725,7 +725,7 @@ export default function RoadToHQPage({
           </motion.div>
 
           <motion.ol
-            className="mt-14 divide-y divide-neutral-200 dark:divide-neutral-800 border-t border-b border-neutral-200 dark:border-neutral-800"
+            className="mt-14 divide-y divide-line border-t border-b border-line"
             variants={staggerFast}
             initial="hidden"
             whileInView="visible"
@@ -737,24 +737,24 @@ export default function RoadToHQPage({
                 <motion.li
                   key={i}
                   variants={fadeUp}
-                  className="grid grid-cols-[40px_1fr] sm:grid-cols-[60px_140px_1fr_180px] items-start sm:items-center gap-3 sm:gap-4 py-5 sm:py-6 px-2 cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition"
+                  className="grid grid-cols-[40px_1fr] sm:grid-cols-[60px_140px_1fr_180px] items-start sm:items-center gap-3 sm:gap-4 py-5 sm:py-6 px-2 cursor-pointer hover:bg-surface-subtle transition"
                   onClick={() => {
                     goTo(i);
                     if (cardRef.current) smoothScrollTo(cardRef.current, { fitBottom: true });
                   }}
                 >
-                  <div className="font-mono text-xl sm:text-2xl md:text-3xl font-semibold text-neutral-300 dark:text-neutral-700 tabular-nums">{String(i + 1).padStart(2, "0")}</div>
-                  <div className="hidden sm:block font-mono text-sm tabular-nums text-neutral-900 dark:text-neutral-100">{ms.units.toLocaleString()} units</div>
+                  <div className="font-mono text-xl sm:text-2xl md:text-3xl font-semibold text-text-placeholder tabular-nums">{String(i + 1).padStart(2, "0")}</div>
+                  <div className="hidden sm:block font-mono text-sm tabular-nums text-text">{ms.units.toLocaleString()} units</div>
                   <div>
                     <div className="text-sm sm:text-base md:text-lg font-semibold uppercase tracking-tight">{ms.title}</div>
-                    <div className="sm:hidden mt-0.5 text-[11px] font-mono text-neutral-400 dark:text-neutral-500 uppercase tracking-[0.2em]">
+                    <div className="sm:hidden mt-0.5 text-[11px] font-mono text-text-muted uppercase tracking-[0.2em]">
                       {ms.units.toLocaleString()} units · {done ? "Reached" : ms.window}
                     </div>
-                    <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 leading-snug max-w-xl">{ms.body}</div>
+                    <div className="text-xs text-text-secondary mt-1 leading-snug max-w-xl">{ms.body}</div>
                   </div>
                   <div className="text-right hidden sm:block">
-                    <span className={`inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.3em] ${done ? "text-emerald-600" : "text-neutral-500 dark:text-neutral-400"}`}>
-                      <span className={`h-1.5 w-1.5 rounded-full ${done ? "bg-emerald-500" : "bg-neutral-300 dark:bg-neutral-700"}`} />
+                    <span className={`inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.3em] ${done ? "text-emerald-600" : "text-text-secondary"}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${done ? "bg-emerald-500" : "bg-line-strong"}`} />
                       {done ? "Reached" : ms.window}
                     </span>
                   </div>

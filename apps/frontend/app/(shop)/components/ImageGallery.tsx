@@ -24,7 +24,7 @@ export function ImageGallery({
 
   if (sorted.length === 0) {
     return (
-      <div className="flex aspect-square items-center justify-center rounded-lg bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500">
+      <div className="flex aspect-square items-center justify-center rounded-lg bg-fill text-text-muted">
         No images
       </div>
     );
@@ -32,7 +32,7 @@ export function ImageGallery({
 
   return (
     <div className="space-y-3">
-      <div className="relative aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
+      <div className="relative aspect-square overflow-hidden rounded-lg bg-fill">
         <Image
           src={sorted[selected].src}
           alt={sorted[selected].alt_text || "Product image"}
@@ -50,7 +50,7 @@ export function ImageGallery({
               onClick={() => setSelected(i)}
               className={`relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md border-2 ${
                 i === selected
-                  ? "border-black dark:border-white"
+                  ? "border-invert-bg"
                   : "border-transparent"
               }`}
             >

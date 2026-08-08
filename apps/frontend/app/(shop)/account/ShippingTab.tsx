@@ -38,16 +38,16 @@ function mapAddressToForm(raw: Record<string, unknown> | null): Partial<FormValu
 }
 
 const inputCls =
-  "w-full px-3 py-2.5 border border-[#ddd] dark:border-neutral-700 bg-white dark:bg-[#111] text-[13px] text-[#111] dark:text-[#ededed] outline-none transition-colors duration-200 focus:border-[#111] dark:focus:border-white placeholder:text-[#ccc] dark:placeholder:text-neutral-600 box-border rounded-none";
+  "w-full px-3 py-2.5 border border-line bg-surface text-[13px] text-text outline-none transition-colors duration-200 focus:border-invert-bg placeholder:text-text-placeholder box-border rounded-none";
 
 const labelCls =
-  "text-[11px] font-medium text-[#666] dark:text-neutral-400 mb-1.5 tracking-[0.02em]";
+  "text-[11px] font-medium text-text-secondary mb-1.5 tracking-[0.02em]";
 
 const sectionLabelCls =
-  "text-[10px] font-semibold uppercase tracking-[0.16em] text-[#999] dark:text-neutral-500 font-mono mb-3";
+  "text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted font-mono mb-3";
 
 const sectionCls =
-  "border-t border-[#e5e5e5] dark:border-neutral-800 pt-5 flex flex-col gap-4";
+  "border-t border-line pt-5 flex flex-col gap-4";
 
 export default function ShippingTab({ defaultAddress, profileName }: Props) {
   const [saving, setSaving] = useState(false);
@@ -91,7 +91,7 @@ export default function ShippingTab({ defaultAddress, profileName }: Props) {
   return (
     <div className="max-w-[520px] mx-auto">
       {/* Header bar */}
-      <div className="bg-[#111] dark:bg-white text-white dark:text-[#0a0a0a] py-8 px-6 text-center mb-7 flex flex-col items-center">
+      <div className="bg-invert-bg text-invert-fg py-8 px-6 text-center mb-7 flex flex-col items-center">
         <svg
           width="32"
           height="32"
@@ -106,7 +106,7 @@ export default function ShippingTab({ defaultAddress, profileName }: Props) {
           <circle cx="12" cy="10" r="3" />
         </svg>
         <div className="text-[16px] font-semibold tracking-[0.06em]">Default Shipping Address</div>
-        <div className="text-[11px] text-white/50 dark:text-black/50 mt-1">Used at checkout unless changed</div>
+        <div className="text-[11px] text-invert-fg/50 mt-1">Used at checkout unless changed</div>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)}>
@@ -116,7 +116,7 @@ export default function ShippingTab({ defaultAddress, profileName }: Props) {
             <label className={labelCls} htmlFor="fullName">Full name</label>
             <input id="fullName" {...register("fullName")} className={inputCls} />
             {errors.fullName && (
-              <span className="text-[11px] text-[#c00] dark:text-[#ff5f5f] mt-1 block">
+              <span className="text-[11px] text-danger mt-1 block">
                 {errors.fullName.message}
               </span>
             )}
@@ -126,7 +126,7 @@ export default function ShippingTab({ defaultAddress, profileName }: Props) {
             <label className={labelCls} htmlFor="address">Address line 1</label>
             <input id="address" {...register("address")} className={inputCls} />
             {errors.address && (
-              <span className="text-[11px] text-[#c00] dark:text-[#ff5f5f] mt-1 block">
+              <span className="text-[11px] text-danger mt-1 block">
                 {errors.address.message}
               </span>
             )}
@@ -147,7 +147,7 @@ export default function ShippingTab({ defaultAddress, profileName }: Props) {
               <label className={labelCls} htmlFor="city">City</label>
               <input id="city" {...register("city")} className={inputCls} />
               {errors.city && (
-                <span className="text-[11px] text-[#c00] dark:text-[#ff5f5f] mt-1 block">
+                <span className="text-[11px] text-danger mt-1 block">
                   {errors.city.message}
                 </span>
               )}
@@ -156,7 +156,7 @@ export default function ShippingTab({ defaultAddress, profileName }: Props) {
               <label className={labelCls} htmlFor="region">Region</label>
               <input id="region" {...register("region")} className={inputCls} />
               {errors.region && (
-                <span className="text-[11px] text-[#c00] dark:text-[#ff5f5f] mt-1 block">
+                <span className="text-[11px] text-danger mt-1 block">
                   {errors.region.message}
                 </span>
               )}
@@ -182,14 +182,14 @@ export default function ShippingTab({ defaultAddress, profileName }: Props) {
 
         <button
           type="submit"
-          className="mt-7 w-full h-11 bg-[#111] dark:bg-white text-white dark:text-[#0a0a0a] text-[11px] font-semibold uppercase tracking-[0.16em] cursor-pointer transition-colors duration-200 hover:bg-[#333] dark:hover:bg-neutral-200 disabled:bg-[#555] dark:disabled:bg-neutral-700 disabled:cursor-not-allowed border-none rounded-none"
+          className="mt-7 w-full h-11 bg-invert-bg text-invert-fg text-[11px] font-semibold uppercase tracking-[0.16em] cursor-pointer transition-colors duration-200 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed border-none rounded-none"
           disabled={saving}
         >
           {saved ? "Address saved ✓" : saving ? "Saving..." : "Save address"}
         </button>
       </form>
 
-      <div className="mt-6 pl-4 border-l-2 border-[#ddd] dark:border-neutral-700 text-[12px] text-[#999] dark:text-neutral-500 leading-[1.6]">
+      <div className="mt-6 pl-4 border-l-2 border-line text-[12px] text-text-muted leading-[1.6]">
         We currently ship across Ghana. International shipping coming soon. Orders within
         Accra are typically delivered within 2–3 business days.
       </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { outlineButton } from "@/components/ui";
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -38,7 +39,7 @@ function StockHoldTimer({ expiresAt }: { expiresAt: string }) {
 
   if (remainingMs <= 0) {
     return (
-      <p className="mt-3 text-xs font-medium text-red-500">
+      <p className="mt-3 text-xs font-medium text-danger">
         Your item hold has expired. Click &ldquo;Pay Now&rdquo; to try again.
       </p>
     );
@@ -49,7 +50,7 @@ function StockHoldTimer({ expiresAt }: { expiresAt: string }) {
   const seconds = totalSeconds % 60;
 
   return (
-    <p className="mt-3 text-xs font-medium text-amber-600 dark:text-amber-400">
+    <p className="mt-3 text-xs font-medium text-warning">
       Items reserved for {minutes}:{seconds.toString().padStart(2, "0")} - complete payment before your hold expires.
     </p>
   );
@@ -163,7 +164,7 @@ function PayNowButton({
         });
       }}
       disabled={disabled}
-      className="w-full rounded-md bg-gray-900 py-3.5 text-sm font-semibold uppercase tracking-wider text-white transition hover:bg-black disabled:bg-gray-300 disabled:cursor-not-allowed dark:bg-white dark:text-black dark:hover:bg-gray-100 dark:disabled:bg-gray-700"
+      className="w-full rounded-md bg-invert-bg py-3.5 text-sm font-semibold uppercase tracking-wider text-invert-fg transition hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
     >
       {disabled ? "Processing..." : "Pay Now"}
     </button>
@@ -338,19 +339,19 @@ export default function CheckoutClient() {
   if (items.length === 0) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
-        <p className="select-none text-[64px] font-semibold leading-none tracking-tight text-gray-100 dark:text-neutral-800 sm:text-[96px]">
+        <p className="select-none text-[64px] font-semibold leading-none tracking-tight text-fill sm:text-[96px]">
           0/1NRI
         </p>
-        <p className="mt-6 text-[13px] uppercase tracking-[0.2em] text-[#59626E] dark:text-neutral-300">
+        <p className="mt-6 text-[13px] uppercase tracking-[0.2em] text-text-secondary">
           Nothing to check out
         </p>
-        <p className="mt-2 max-w-xs text-[12px] leading-relaxed tracking-[0.04em] text-gray-400 dark:text-neutral-600">
+        <p className="mt-2 max-w-xs text-[12px] leading-relaxed tracking-[0.04em] text-text-placeholder">
           Can&apos;t check out an empty cart - that&apos;s just window shopping.
           Add something first.
         </p>
         <Link
           href="/products"
-          className="mt-8 border border-black px-8 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-black transition hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+          className={`mt-8 px-8 py-3 ${outlineButton}`}
         >
           Start shopping
         </Link>
@@ -518,41 +519,41 @@ export default function CheckoutClient() {
   }
 
   const inputClass =
-    "w-full rounded-md border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-gray-900 focus:ring-1 focus:ring-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-white dark:focus:ring-white";
+    "w-full rounded-md border border-line-strong px-4 py-3 text-sm outline-none transition focus:border-invert-bg focus:ring-1 focus:ring-invert-bg bg-surface text-text";
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950">
+    <div className="min-h-screen bg-bg">
       <div className="mx-auto grid max-w-6xl grid-cols-1 lg:grid-cols-2">
         {/* ── Left Column: Form ── */}
         <div className="px-6 py-8 lg:px-12 lg:py-10">
           {/* Step 1: Customer */}
           <div className="mb-8">
             <div className="mb-4 flex items-center gap-3">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-900 text-xs font-semibold text-white dark:bg-white dark:text-black">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-invert-bg text-xs font-semibold text-invert-fg">
                 1
               </span>
-              <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+              <h2 className="text-base font-semibold text-text">
                 Customer
               </h2>
             </div>
 
             {isSignedIn ? (
               <div className="ml-10">
-                <p className="text-sm text-gray-500 dark:text-gray-400">{email}</p>
+                <p className="text-sm text-text-secondary">{email}</p>
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-text-secondary">
                   Already have an account?{" "}
                   <Link
                     href="/login?redirect=/checkout"
-                    className="underline hover:text-gray-700 dark:hover:text-gray-300"
+                    className="underline hover:text-text"
                   >
                     Sign in for faster checkout
                   </Link>
                 </p>
                 <div>
-                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                  <label className="mb-1.5 block text-xs text-text-secondary">
                     Email address
                   </label>
                   <input
@@ -566,7 +567,7 @@ export default function CheckoutClient() {
                     className={inputClass}
                   />
                   {emailError && (
-                    <p className="mt-1 text-xs text-red-500">{emailError}</p>
+                    <p className="mt-1 text-xs text-danger">{emailError}</p>
                   )}
                 </div>
               </div>
@@ -576,22 +577,22 @@ export default function CheckoutClient() {
           {/* Step 2: Delivery */}
           <div className="mb-8">
             <div className="mb-5 flex items-center gap-3">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-900 text-xs font-semibold text-white dark:bg-white dark:text-black">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-invert-bg text-xs font-semibold text-invert-fg">
                 2
               </span>
-              <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+              <h2 className="text-base font-semibold text-text">
                 Delivery
               </h2>
             </div>
 
-            <p className="mb-4 text-sm font-medium text-gray-700 dark:text-gray-300">
+            <p className="mb-4 text-sm font-medium text-text-secondary">
               {shippingOption === "pickup" ? "Your details" : "Shipping address"}
             </p>
 
             <div className="space-y-4">
               {/* Row: Country / Region */}
               <div>
-                <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                <label className="mb-1.5 block text-xs text-text-secondary">
                   Country / Region
                 </label>
                 <div className="relative">
@@ -606,14 +607,14 @@ export default function CheckoutClient() {
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
                 </div>
               </div>
 
               {/* Row: First name / Last name */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                  <label className="mb-1.5 block text-xs text-text-secondary">
                     First name
                   </label>
                   <input
@@ -624,11 +625,11 @@ export default function CheckoutClient() {
                     className={inputClass}
                   />
                   {errors.firstName && (
-                    <p className="mt-1 text-xs text-red-500">{errors.firstName}</p>
+                    <p className="mt-1 text-xs text-danger">{errors.firstName}</p>
                   )}
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                  <label className="mb-1.5 block text-xs text-text-secondary">
                     Last name
                   </label>
                   <input
@@ -639,7 +640,7 @@ export default function CheckoutClient() {
                     className={inputClass}
                   />
                   {errors.lastName && (
-                    <p className="mt-1 text-xs text-red-500">{errors.lastName}</p>
+                    <p className="mt-1 text-xs text-danger">{errors.lastName}</p>
                   )}
                 </div>
               </div>
@@ -647,7 +648,7 @@ export default function CheckoutClient() {
               {/* Row: Address — hidden for pickup */}
               {shippingOption !== "pickup" && (
                 <div>
-                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                  <label className="mb-1.5 block text-xs text-text-secondary">
                     Address Line 1
                   </label>
                   <input
@@ -658,7 +659,7 @@ export default function CheckoutClient() {
                     className={inputClass}
                   />
                   {errors.address && (
-                    <p className="mt-1 text-xs text-red-500">{errors.address}</p>
+                    <p className="mt-1 text-xs text-danger">{errors.address}</p>
                   )}
                 </div>
               )}
@@ -666,8 +667,8 @@ export default function CheckoutClient() {
               {/* Row: Address line 2 — hidden for pickup */}
               {shippingOption !== "pickup" && (
                 <div>
-                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
-                    Address Line 2 <span className="text-gray-400">(optional)</span>
+                  <label className="mb-1.5 block text-xs text-text-secondary">
+                    Address Line 2 <span className="text-text-muted">(optional)</span>
                   </label>
                   <input
                     type="text"
@@ -683,7 +684,7 @@ export default function CheckoutClient() {
               {shippingOption !== "pickup" && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                    <label className="mb-1.5 block text-xs text-text-secondary">
                       City
                     </label>
                     <input
@@ -694,11 +695,11 @@ export default function CheckoutClient() {
                       className={inputClass}
                     />
                     {errors.city && (
-                      <p className="mt-1 text-xs text-red-500">{errors.city}</p>
+                      <p className="mt-1 text-xs text-danger">{errors.city}</p>
                     )}
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                    <label className="mb-1.5 block text-xs text-text-secondary">
                       Postal / ZIP code
                     </label>
                     <input
@@ -709,7 +710,7 @@ export default function CheckoutClient() {
                       className={inputClass}
                     />
                     {errors.postalCode && (
-                      <p className="mt-1 text-xs text-red-500">{errors.postalCode}</p>
+                      <p className="mt-1 text-xs text-danger">{errors.postalCode}</p>
                     )}
                   </div>
                 </div>
@@ -718,7 +719,7 @@ export default function CheckoutClient() {
               {/* Row: State / Province — international destinations only */}
               {shippingOption !== "pickup" && isInternational && (
                 <div>
-                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                  <label className="mb-1.5 block text-xs text-text-secondary">
                     State / Province
                   </label>
                   <input
@@ -729,14 +730,14 @@ export default function CheckoutClient() {
                     className={inputClass}
                   />
                   {errors.state && (
-                    <p className="mt-1 text-xs text-red-500">{errors.state}</p>
+                    <p className="mt-1 text-xs text-danger">{errors.state}</p>
                   )}
                 </div>
               )}
 
               {/* Row: Phone */}
               <div>
-                <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">
+                <label className="mb-1.5 block text-xs text-text-secondary">
                   Phone number
                 </label>
                 <PhoneInput
@@ -747,12 +748,12 @@ export default function CheckoutClient() {
                   error={errors.phone}
                 />
                 {isSignedIn && (
-                  <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs text-text-secondary">
                     <input
                       type="checkbox"
                       checked={saveAsDefault}
                       onChange={(e) => setSaveAsDefault(e.target.checked)}
-                      className="h-3.5 w-3.5 accent-gray-900 dark:accent-white"
+                      className="h-3.5 w-3.5 accent-invert-bg"
                     />
                     Save as default address
                   </label>
@@ -764,21 +765,21 @@ export default function CheckoutClient() {
           {/* Step 3: Payment */}
           <div>
             <div className="mb-5 flex items-center gap-3">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-900 text-xs font-semibold text-white dark:bg-white dark:text-black">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-invert-bg text-xs font-semibold text-invert-fg">
                 3
               </span>
-              <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+              <h2 className="text-base font-semibold text-text">
                 Payment
               </h2>
             </div>
 
-            <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+            <p className="mb-4 text-sm text-text-secondary">
               You will be securely redirected to Paystack to complete your
               payment.
             </p>
 
             {Object.keys(errors).length > 0 && (
-              <p className="mb-4 text-sm text-red-500">
+              <p className="mb-4 text-sm text-danger">
                 Please fill in all required delivery fields above.
               </p>
             )}
@@ -805,14 +806,14 @@ export default function CheckoutClient() {
         </div>
 
         {/* ── Right Column: Order Summary ── */}
-        <div className="border-l border-gray-200 bg-gray-50 px-6 py-8 dark:border-gray-800 dark:bg-gray-900 lg:px-12 lg:py-10">
-          <h2 className="mb-6 text-lg font-semibold text-gray-900 dark:text-white">
+        <div className="border-l border-line bg-surface-subtle px-6 py-8 lg:px-12 lg:py-10">
+          <h2 className="mb-6 text-lg font-semibold text-text">
             Order Summary
           </h2>
 
           {hasPreorderItems && (
-            <div className="mb-6 border border-black/15 bg-white px-4 py-3 text-xs leading-relaxed text-gray-700 dark:border-white/20 dark:bg-gray-900 dark:text-gray-300">
-              <p className="mb-1 font-semibold uppercase tracking-[0.12em] text-gray-900 dark:text-white">
+            <div className="mb-6 border border-line bg-surface px-4 py-3 text-xs leading-relaxed text-text-secondary">
+              <p className="mb-1 font-semibold uppercase tracking-[0.12em] text-text">
                 Your order includes pre-order items
               </p>
               Items marked <strong>Pre-order</strong> aren&apos;t in stock yet. You&apos;re charged
@@ -831,32 +832,32 @@ export default function CheckoutClient() {
                     className="h-20 w-20 rounded-md object-cover"
                   />
                 ) : (
-                  <div className="flex h-20 w-20 items-center justify-center rounded-md bg-gray-200 text-xs text-gray-400 dark:bg-gray-800">
+                  <div className="flex h-20 w-20 items-center justify-center rounded-md bg-fill text-xs text-text-muted">
                     No image
                   </div>
                 )}
                 <div className="flex flex-1 items-start justify-between">
                   <div>
-                    <p className="text-sm font-medium uppercase text-gray-900 dark:text-white">
+                    <p className="text-sm font-medium uppercase text-text">
                       {item.productTitle}
                     </p>
                     {item.variantTitle && (
-                      <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      <p className="mt-0.5 text-xs text-text-secondary">
                         {item.variantTitle}
                       </p>
                     )}
                     {isItemPreorder(item) && (
-                      <span className="mt-1 inline-flex w-fit items-center border border-black px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-black dark:border-white dark:text-white">
+                      <span className="mt-1 inline-flex w-fit items-center border border-invert-bg px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-text">
                         Pre-order
                       </span>
                     )}
                     {item.quantity > 1 && (
-                      <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      <p className="mt-0.5 text-xs text-text-secondary">
                         Qty: {item.quantity}
                       </p>
                     )}
                   </div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  <p className="text-sm font-medium text-text">
                     {formatPrice(item.price * item.quantity)}
                   </p>
                 </div>
@@ -867,8 +868,8 @@ export default function CheckoutClient() {
           {/* Promo Code */}
           <div className="mt-6">
             {appliedPromo ? (
-              <div className="flex items-center justify-between rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm dark:bg-green-950 dark:border-green-800">
-                <span className="text-green-700 dark:text-green-400">
+              <div className="flex items-center justify-between rounded-md bg-success-surface border border-success/40 px-4 py-3 text-sm">
+                <span className="text-success">
                   <strong>{appliedPromo.code}</strong> applied - {formatPrice(appliedPromo.discountAmount)} off
                 </span>
                 <button
@@ -878,7 +879,7 @@ export default function CheckoutClient() {
                     setPromoInput("");
                     setPromoError(null);
                   }}
-                  className="ml-4 text-xs text-green-700 underline hover:text-green-900 dark:text-green-400 dark:hover:text-green-200"
+                  className="ml-4 text-xs text-success underline hover:text-success"
                 >
                   Remove
                 </button>
@@ -895,78 +896,78 @@ export default function CheckoutClient() {
                     }}
                     onKeyDown={(e) => e.key === "Enter" && handleApplyPromo()}
                     placeholder="Promo code"
-                    className="w-full rounded-md border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-gray-900 focus:ring-1 focus:ring-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-white dark:focus:ring-white"
+                    className="w-full rounded-md border border-line-strong px-4 py-3 text-sm outline-none transition focus:border-invert-bg focus:ring-1 focus:ring-invert-bg bg-surface text-text"
                   />
                   <button
                     type="button"
                     onClick={handleApplyPromo}
                     disabled={validatePromo.isPending || !promoInput.trim()}
-                    className="shrink-0 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                    className="shrink-0 rounded-md border border-line-strong bg-surface px-4 py-2 text-sm font-medium text-text-secondary hover:bg-fill disabled:opacity-50"
                   >
                     {validatePromo.isPending ? "Checking…" : "Apply"}
                   </button>
                 </div>
                 {promoError && (
-                  <p className="mt-1.5 text-xs text-red-500">{promoError}</p>
+                  <p className="mt-1.5 text-xs text-danger">{promoError}</p>
                 )}
               </>
             )}
           </div>
 
           {/* Summary breakdown */}
-          <div className="mt-6 space-y-2 border-t border-gray-200 pt-4 dark:border-gray-700">
-            <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">
+          <div className="mt-6 space-y-2 border-t border-line pt-4">
+            <h3 className="mb-2 text-sm font-semibold text-text">
               Summary
             </h3>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500 dark:text-gray-400">
+              <span className="text-text-secondary">
                 Subtotal
               </span>
-              <span className="text-gray-900 dark:text-white">
+              <span className="text-text">
                 {formatPrice(subtotal)}
               </span>
             </div>
             {/* <div className="flex justify-between text-sm">
-              <span className="text-gray-500 dark:text-gray-400">Taxes</span>
-              <span className="text-gray-900 dark:text-white">Included</span>
+              <span className="text-text-secondary">Taxes</span>
+              <span className="text-text">Included</span>
             </div> */}
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500 dark:text-gray-400">
+              <span className="text-text-secondary">
                 Shipping/Delivery
               </span>
-              <span className={shippingOption === "pickup" ? "font-medium text-green-600 dark:text-green-400" : "text-gray-900 dark:text-white"}>
+              <span className={shippingOption === "pickup" ? "font-medium text-success" : "text-text"}>
                 {shippingOption === "pickup" ? "Free" : formatPrice(shippingCost)}
               </span>
             </div>
             {appliedPromo && (
               <div className="flex justify-between text-sm">
-                <span className="text-green-600 dark:text-green-400">
+                <span className="text-success">
                   Discount ({appliedPromo.code})
                 </span>
-                <span className="text-green-600 dark:text-green-400">
+                <span className="text-success">
                   - {formatPrice(discountAmount)}
                 </span>
               </div>
             )}
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500 dark:text-gray-400">
+              <span className="text-text-secondary">
                 Fees (1.95%)
               </span>
-              <span className="text-gray-900 dark:text-white">
+              <span className="text-text">
                 {formatPrice(fees)}
               </span>
             </div>
-            <div className="flex justify-between border-t border-gray-200 pt-3 text-sm font-semibold dark:border-gray-700">
-              <span className="text-gray-900 dark:text-white">Total</span>
-              <span className="text-gray-900 dark:text-white">
+            <div className="flex justify-between border-t border-line pt-3 text-sm font-semibold">
+              <span className="text-text">Total</span>
+              <span className="text-text">
                 {formatPrice(total)}
               </span>
             </div>
-            <p className="text-xs text-gray-400 dark:text-gray-500">
+            <p className="text-xs text-text-muted">
               All prices are VAT inclusive.
             </p>
             {currency !== "GHS" && rates[currency] && (
-              <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+              <p className="mt-2 text-xs text-text-muted">
                 Exchange rate: 1 {currency} = {(1 / rates[currency]).toFixed(2)} GH₵ · You will be charged GH₵ {total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             )}
@@ -974,24 +975,24 @@ export default function CheckoutClient() {
 
           {/* Delivery options */}
           <div className="mt-6">
-            <p className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
+            <p className="mb-3 text-sm font-semibold text-text">
               Delivery is estimated for
             </p>
             <div className="space-y-3">
               {isInternational ? (
                 // International destinations ship on a single flat per-country rate.
-                <div className="flex items-center justify-between rounded-lg border border-gray-900 bg-white p-4 dark:border-white dark:bg-gray-800">
+                <div className="flex items-center justify-between rounded-lg border border-invert-bg bg-surface p-4">
                   <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    <p className="text-sm font-medium text-text">
                       {internationalRate?.label ?? "International shipping"}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <p className="text-xs text-text-secondary">
                       {internationalRate?.estimate
                         ? `Estimated delivery, ${internationalRate.estimate}`
                         : "Flat-rate international delivery"}
                     </p>
                   </div>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  <span className="text-sm font-medium text-text">
                     {formatPrice(shippingCost)}
                   </span>
                 </div>
@@ -1005,10 +1006,10 @@ export default function CheckoutClient() {
                   key={option.id}
                   className={`flex items-center justify-between rounded-lg border p-4 transition ${
                     disabled
-                      ? "cursor-not-allowed border-gray-200 bg-gray-50 opacity-60 dark:border-gray-700 dark:bg-gray-900"
+                      ? "cursor-not-allowed border-line bg-surface-subtle opacity-60"
                       : shippingOption === option.id
-                      ? "cursor-pointer border-gray-900 bg-white dark:border-white dark:bg-gray-800"
-                      : "cursor-pointer border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600"
+                      ? "cursor-pointer border-invert-bg bg-surface"
+                      : "cursor-pointer border-line bg-surface hover:border-line-strong"
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -1019,20 +1020,20 @@ export default function CheckoutClient() {
                       checked={shippingOption === option.id}
                       disabled={disabled}
                       onChange={() => setShippingOption(option.id as "standard" | "express" | "pickup")}
-                      className="h-4 w-4 accent-gray-900 disabled:cursor-not-allowed dark:accent-white"
+                      className="h-4 w-4 accent-invert-bg disabled:cursor-not-allowed"
                     />
                     <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      <p className="text-sm font-medium text-text">
                         {option.label}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                      <p className="text-xs text-text-secondary">
                         {disabled
                           ? "Not available for pre-order items"
                           : `Estimated delivery, ${option.estimate}`}
                       </p>
                     </div>
                   </div>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  <span className="text-sm font-medium text-text">
                     {formatPrice(option.price)}
                   </span>
                 </label>

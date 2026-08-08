@@ -26,8 +26,8 @@
   -webkit-appearance: none;
   width: 18px;
   height: 18px;
-  border: 1px solid #ccc;
-  background: #fff;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -38,19 +38,9 @@
   position: relative;
 }
 
-.dark .acct-checkbox {
-  border-color: #444;
-  background: #111;
-}
-
 .acct-checkbox:checked {
-  background: #111;
-  border-color: #111;
-}
-
-.dark .acct-checkbox:checked {
-  background: #ededed;
-  border-color: #ededed;
+  background: var(--invert-bg);
+  border-color: var(--invert-bg);
 }
 
 .acct-checkbox:checked::after {
@@ -60,12 +50,8 @@
   top: 2px;
   width: 5px;
   height: 9px;
-  border: 2px solid #fff;
+  border: 2px solid var(--invert-fg);
   border-top: none;
   border-left: none;
   transform: rotate(45deg);
-}
-
-.dark .acct-checkbox:checked::after {
-  border-color: #0a0a0a;
 }

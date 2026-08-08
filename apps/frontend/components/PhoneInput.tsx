@@ -73,7 +73,7 @@ export default function PhoneInput({
           value={activeEntry.code}
           onChange={(e) => handleCountryChange(e.target.value)}
           aria-label="Country dial code"
-          className="rounded-l border border-r-0 border-gray-300 bg-gray-50 px-2 py-3 text-sm text-gray-700 outline-none transition focus:border-gray-900 focus:ring-1 focus:ring-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:focus:border-white dark:focus:ring-white"
+          className="rounded-l border border-r-0 border-line-strong bg-fill px-2 py-3 text-sm text-text-secondary outline-none transition focus:border-invert-bg focus:ring-1 focus:ring-invert-bg"
         >
           {DIAL_CODES.map((d) => (
             <option key={`${d.code}-${d.dial}`} value={d.code}>
@@ -88,10 +88,10 @@ export default function PhoneInput({
           onChange={(e) => handleChange(e.target.value)}
           placeholder={placeholder}
           required={required}
-          className="flex-1 rounded-r border ps-2 border-l-0 border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-gray-900 focus:ring-1 focus:ring-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-white dark:focus:ring-white"
+          className="flex-1 rounded-r border ps-2 border-l-0 border-line-strong px-4 py-3 text-sm outline-none transition focus:border-invert-bg focus:ring-1 focus:ring-invert-bg bg-surface text-text"
         />
       </div>
-      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </div>
   );
 }

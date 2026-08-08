@@ -103,7 +103,7 @@ export default function ProductsPage() {
     <Suspense
       fallback={
         <div className="mx-auto max-w-7xl px-4 py-8">
-          <div className="h-4 w-48 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+          <div className="h-4 w-48 animate-pulse rounded bg-fill" />
         </div>
       }
     >

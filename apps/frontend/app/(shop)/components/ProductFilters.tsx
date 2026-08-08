@@ -72,15 +72,15 @@ export function ProductFilters({
   return (
     <div className="space-y-6">
       {/* Gender tabs */}
-      <div className="flex items-center gap-6 border-b border-gray-200 dark:border-gray-800">
+      <div className="flex items-center gap-6 border-b border-line">
         {genderTabs.map((tab) => (
           <button
             key={tab.value}
             onClick={() => onGenderChange(tab.value)}
             className={`pb-3 text-xs font-semibold uppercase tracking-widest transition ${
               gender === tab.value
-                ? "border-b-2 border-black text-black dark:border-white dark:text-white"
-                : "text-gray-400 hover:text-black dark:hover:text-white"
+                ? "border-b-2 border-invert-bg text-text"
+                : "text-text-muted hover:text-text"
             }`}
           >
             {tab.label}
@@ -96,7 +96,7 @@ export function ProductFilters({
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Match..."
-            className="w-40 border-b border-gray-300 bg-transparent py-1.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-black dark:border-gray-600 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-white"
+            className="w-40 border-b border-line-strong bg-transparent py-1.5 text-sm text-text outline-none placeholder:text-text-placeholder focus:border-invert-bg"
           /> */}
         </div>
 
@@ -111,8 +111,8 @@ export function ProductFilters({
               }}
               className={`whitespace-nowrap text-xs transition ${
                 category === tab.value
-                  ? "font-semibold text-black underline underline-offset-4 dark:text-white"
-                  : "text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white"
+                  ? "font-semibold text-text underline underline-offset-4"
+                  : "text-text-secondary hover:text-text"
               }`}
             >
               {tab.label}
@@ -124,7 +124,7 @@ export function ProductFilters({
         <select
           value={sort}
           onChange={(e) => onSortChange(e.target.value)}
-          className="border-b border-gray-300 bg-transparent py-1.5 text-xs text-gray-600 outline-none dark:border-gray-600 dark:text-gray-400"
+          className="border-b border-line-strong bg-transparent py-1.5 text-xs text-text-secondary outline-none"
         >
           <option value="created_at:desc">Newest</option>
           <option value="created_at:asc">Oldest</option>
@@ -138,33 +138,33 @@ export function ProductFilters({
       {hasActiveFilters && (
         <div className="flex flex-wrap items-center gap-2">
           {search && (
-            <span className="flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-50 px-3 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
-              <svg className="h-3 w-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35" strokeLinecap="round"/></svg>
+            <span className="flex items-center gap-1.5 rounded-full border border-line-strong bg-fill px-3 py-1 text-xs text-text-secondary">
+              <svg className="h-3 w-3 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35" strokeLinecap="round"/></svg>
               "{search}"
-              <button onClick={() => onSearchChange("")} className="ml-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">×</button>
+              <button onClick={() => onSearchChange("")} className="ml-0.5 text-text-muted hover:text-text">×</button>
             </span>
           )}
           {category && (
-            <span className="flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-50 px-3 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+            <span className="flex items-center gap-1.5 rounded-full border border-line-strong bg-fill px-3 py-1 text-xs text-text-secondary">
               {category}
-              <button onClick={() => { onCategoryChange(""); onProductTypeChange(""); }} className="ml-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">×</button>
+              <button onClick={() => { onCategoryChange(""); onProductTypeChange(""); }} className="ml-0.5 text-text-muted hover:text-text">×</button>
             </span>
           )}
           {productType && (
-            <span className="flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-50 px-3 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+            <span className="flex items-center gap-1.5 rounded-full border border-line-strong bg-fill px-3 py-1 text-xs text-text-secondary">
               {productType}
-              <button onClick={() => onProductTypeChange("")} className="ml-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">×</button>
+              <button onClick={() => onProductTypeChange("")} className="ml-0.5 text-text-muted hover:text-text">×</button>
             </span>
           )}
           {gender && (
-            <span className="flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-50 px-3 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+            <span className="flex items-center gap-1.5 rounded-full border border-line-strong bg-fill px-3 py-1 text-xs text-text-secondary">
               {gender === "men" ? "Men's" : "Women's"}
-              <button onClick={() => onGenderChange("")} className="ml-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">×</button>
+              <button onClick={() => onGenderChange("")} className="ml-0.5 text-text-muted hover:text-text">×</button>
             </span>
           )}
           <button
             onClick={onClearAll}
-            className="text-xs text-gray-400 underline underline-offset-2 transition hover:text-black dark:hover:text-white"
+            className="text-xs text-text-muted underline underline-offset-2 transition hover:text-text"
           >
             Clear all
           </button>
@@ -182,8 +182,8 @@ export function ProductFilters({
               }
               className={`rounded-full border px-3 py-1 text-xs transition ${
                 productType === sub.value
-                  ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
-                  : "border-gray-300 text-gray-600 hover:border-black hover:text-black dark:border-gray-600 dark:text-gray-400 dark:hover:border-white dark:hover:text-white"
+                  ? "border-invert-bg bg-invert-bg text-invert-fg"
+                  : "border-line-strong text-text-secondary hover:border-invert-bg hover:text-text"
               }`}
             >
               {sub.label}
