@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSelectedLayoutSegment } from "next/navigation";
 import { Menu, X, ShoppingBag, Search, User, Heart, ChevronDown } from "lucide-react";
 import { ThemeProvider, useTheme } from "@/lib/theme/theme-provider";
 import { CartProvider, useCart } from "@/lib/cart";
@@ -495,10 +495,18 @@ function ShopHeader({
   // scroll-threshold approach could leave a transparent bar with dark, invisible
   // text over the hero when returning to the home page).
   const pathname = usePathname();
-  // Deterministic from the URL (same value during SSR and hydration), so the
-  // home page can default to transparent from the first paint instead of
-  // waiting for the IntersectionObserver below to correct it post-hydration.
-  const [overHero, setOverHero] = useState(() => pathname === "/");
+  // Same value during prerender and hydration, so the home page defaults to
+  // transparent from the very first paint instead of waiting for the
+  // IntersectionObserver below to correct it post-hydration. NOT `pathname ===
+  // "/"`: `usePathname()` isn't "/" while Next statically prerenders the root
+  // route, so that shipped the solid header in the prerendered HTML — and since
+  // React never patches className mismatches during hydration, and the observer
+  // below then "sets" a value the client state already held (no re-render), the
+  // bar stayed white until the first real state change (a scroll past the hero
+  // and back, or a client navigation). The layout segment is null for this
+  // layout's index route in both environments.
+  const isHomeRoute = useSelectedLayoutSegment() === null;
+  const [overHero, setOverHero] = useState(isHomeRoute);
 
   const isTransparent = overHero;
   const isTransparentWhite = overHero;
@@ -558,7 +566,10 @@ function ShopHeader({
 
   function isActive(href: string) {
     if (href.includes("?")) return false;
-    return pathname === href || pathname.startsWith(href + "/");
+    // `usePathname()` isn't reliably "/" (or non-null) during a static
+    // prerender of the root route, so normalise before comparing.
+    const p = pathname || "/";
+    return p === href || p.startsWith(href + "/");
   }
 
   // Report the real rendered height of the banner+nav bar so the layout can
@@ -826,8 +837,11 @@ function ShopLayoutInner({
   children: React.ReactNode;
   initialBanner: AnnouncementBanner | null;
 }) {
-  const pathname = usePathname();
-  const isHome = pathname === "/";
+  // Route-tree derived rather than `pathname === "/"`, which is false while Next
+  // statically prerenders the root route (see the note in ShopHeader) — that
+  // shipped the home page's prerendered <main> with the full header offset
+  // instead of letting the hero sit under the transparent bar.
+  const isHome = useSelectedLayoutSegment() === null;
 
   const { data: banner } = useAnnouncementBanner(initialBanner);
   // Start hidden so SSR/first paint matches; the effect reveals it after we've
