@@ -5248,3 +5248,31 @@ One thing intentionally **not done yet**: our old return-policy page used to red
 2. Visit an old category link like `1nri.store/collections/shirts` — it should land on our shop page pre-filtered to Shirts.
 3. On the shop page, click the "Women's" filter — check the address bar updates to include `?gender=women`, and that copy/pasting that link elsewhere shows the same filtered view.
 4. Visit `1nri.store/size-guide` directly — should show a real "coming soon" page, not a dead end.
+
+---
+
+## New Return Policy Page + Closed the Last Redirect (August 2026)
+
+We didn't have a Return Policy page on the new site — the old one lived on Shopify and never carried over. It's built now: a real `/returns` page laying out our 14-day return window, how refunds work, what happens if something arrives damaged, and how to reach us to start a return. It's styled to match the rest of the site, and it's now linked from the footer under "Help."
+
+New dedicated returns contact: **returns@1nri.store**. That's now the primary email pointed to on the page, alongside our phone number and general contact email as backups.
+
+This also closes out something flagged as "not done yet" in last update's log entry: the old site's return-policy link (`/pages/boring-stuff`) used to redirect to `/returns`, but that redirect was intentionally left off because `/returns` didn't exist yet. Now that it does, that redirect is switched on — anyone hitting that old link lands on the real policy page instead of a dead end.
+
+Small polish pass too: the "Shop the Brand" button (shows up on the About page and the new Returns page) now stretches to a full-width, easier-to-tap button on phones instead of staying small and left-aligned, matching how buttons already behave elsewhere on mobile.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/frontend/app/(shop)/returns/page.tsx` (new) | The new Return Policy page. |
+| `apps/frontend/app/(shop)/ShopLayoutClient.tsx` | Added a "Return Policy" link to the footer's Help section. |
+| `apps/frontend/app/(shop)/about/page.tsx` | Made "Shop the Brand" buttons full-width and easier to tap on mobile. |
+| `apps/frontend/lib/redirects/legacy-redirects.ts` | Turned on the previously-held `/pages/boring-stuff` → `/returns` redirect. |
+
+### How to test
+
+1. Visit `1nri.store/returns` — should show the new Return Policy page with the 14-day window, refund/damaged-item info, and `returns@1nri.store` as a contact.
+2. Scroll to the site footer and confirm "Return Policy" appears under Help and links to the new page.
+3. Visit the old link `1nri.store/pages/boring-stuff` — it should redirect straight to `/returns`.
+4. On a phone (or a narrow browser window), check the "Shop the Brand" button on the About and Returns pages — it should span the full width instead of sitting small on the left.

@@ -49,7 +49,7 @@ export default function ReturnsPage() {
             </div>
             <div>
               <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">Resale</div>
-              <div className="mt-2 text-sm font-medium">Returned items not resold</div>
+              <div className="mt-2 text-sm font-medium">Items not eligible for resale</div>
             </div>
           </div>
         </div>
@@ -71,7 +71,7 @@ export default function ReturnsPage() {
               Items can be refunded, with customers responsible for return shipping. If your item arrives damaged, we&rsquo;ll either replace it at no cost, or issue a full refund and cover the return shipping ourselves.
             </p>
             <p>
-              Returned items are not eligible for resale, so please return pieces in the condition you received them.
+              Note: 1NRI products are not eligible for resale. 
             </p>
           </div>
         </div>
