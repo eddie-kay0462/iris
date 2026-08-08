@@ -249,7 +249,7 @@ export default function AboutPage() {
           <motion.div variants={fadeUp}>
             <Link
               href="/products"
-              className="mt-10 inline-block border border-white/80 bg-white/5 px-12 py-4 text-xs font-semibold uppercase tracking-[0.25em] text-white backdrop-blur-sm transition hover:bg-white hover:text-black"
+              className="mt-10 block w-full text-center sm:inline-block sm:w-auto border border-white/80 bg-white/5 px-12 py-4 text-xs font-semibold uppercase tracking-[0.25em] text-white backdrop-blur-sm transition hover:bg-white hover:text-black"
             >
               Shop the brand
             </Link>
@@ -386,7 +386,7 @@ export default function AboutPage() {
             <motion.div variants={fadeUp}>
               <Link
                 href="/products"
-                className="inline-block bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-8 py-3 text-xs font-semibold uppercase tracking-[0.25em] hover:opacity-90 transition"
+                className="block w-full text-center sm:inline-block sm:w-auto bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-8 py-3.5 sm:py-3 text-xs font-semibold uppercase tracking-[0.25em] hover:opacity-90 transition"
               >
                 Shop the brand
               </Link>
