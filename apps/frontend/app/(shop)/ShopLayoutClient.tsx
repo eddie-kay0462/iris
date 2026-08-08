@@ -750,6 +750,11 @@ function ShopFooter() {
                 </Link>
               </li>
               <li>
+                <Link href="/returns" className="text-[12px] text-[#666] transition-colors hover:text-[#111] dark:text-neutral-400 dark:hover:text-[#ededed]">
+                  Return Policy
+                </Link>
+              </li>
+              <li>
                 <Link href="/account" className="text-[12px] text-[#666] transition-colors hover:text-[#111] dark:text-neutral-400 dark:hover:text-[#ededed]">
                   My Account
                 </Link>

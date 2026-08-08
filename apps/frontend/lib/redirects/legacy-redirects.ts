@@ -5,9 +5,6 @@
  * targets are the nearest category rather than a fake specific match).
  *
  * Keys are `pathname + search` exactly as the old URL appeared (no domain).
- * `/pages/boring-stuff` → `/returns` is intentionally NOT in this map yet:
- * `/returns` is being built separately and doesn't exist, so that one
- * redirect is held until it ships (see url-mapping.csv reason for that row).
  *
  * Consumed by middleware.ts, which issues a real 301.
  */
@@ -45,6 +42,7 @@ export const LEGACY_REDIRECTS: Record<string, string> = {
   "/collections/shirts": "/products?category=Tops&product_type=Shirts",
   "/collections/valentines-day-packages": "/products",
   "/collections/valentines-day-packages.atom": "/products",
+  "/pages/boring-stuff": "/returns",
   "/pages/see-you-at-kumasi": "/",
   "/pages/tracksuit-sizing": "/size-guide",
   "/product/divine-provision-tee": "/products",
