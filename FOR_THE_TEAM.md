@@ -5248,3 +5248,59 @@ One thing intentionally **not done yet**: our old return-policy page used to red
 2. Visit an old category link like `1nri.store/collections/shirts` — it should land on our shop page pre-filtered to Shirts.
 3. On the shop page, click the "Women's" filter — check the address bar updates to include `?gender=women`, and that copy/pasting that link elsewhere shows the same filtered view.
 4. Visit `1nri.store/size-guide` directly — should show a real "coming soon" page, not a dead end.
+
+---
+
+## New Return Policy Page + Closed the Last Redirect (August 2026)
+
+We didn't have a Return Policy page on the new site — the old one lived on Shopify and never carried over. It's built now: a real `/returns` page laying out our 14-day return window, how refunds work, what happens if something arrives damaged, and how to reach us to start a return. It's styled to match the rest of the site, and it's now linked from the footer under "Help."
+
+New dedicated returns contact: **returns@1nri.store**. That's now the primary email pointed to on the page, alongside our phone number and general contact email as backups.
+
+This also closes out something flagged as "not done yet" in last update's log entry: the old site's return-policy link (`/pages/boring-stuff`) used to redirect to `/returns`, but that redirect was intentionally left off because `/returns` didn't exist yet. Now that it does, that redirect is switched on — anyone hitting that old link lands on the real policy page instead of a dead end.
+
+Small polish pass too: the "Shop the Brand" button (shows up on the About page and the new Returns page) now stretches to a full-width, easier-to-tap button on phones instead of staying small and left-aligned, matching how buttons already behave elsewhere on mobile.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/frontend/app/(shop)/returns/page.tsx` (new) | The new Return Policy page. |
+| `apps/frontend/app/(shop)/ShopLayoutClient.tsx` | Added a "Return Policy" link to the footer's Help section. |
+| `apps/frontend/app/(shop)/about/page.tsx` | Made "Shop the Brand" buttons full-width and easier to tap on mobile. |
+| `apps/frontend/lib/redirects/legacy-redirects.ts` | Turned on the previously-held `/pages/boring-stuff` → `/returns` redirect. |
+
+### How to test
+
+1. Visit `1nri.store/returns` — should show the new Return Policy page with the 14-day window, refund/damaged-item info, and `returns@1nri.store` as a contact.
+2. Scroll to the site footer and confirm "Return Policy" appears under Help and links to the new page.
+3. Visit the old link `1nri.store/pages/boring-stuff` — it should redirect straight to `/returns`.
+4. On a phone (or a narrow browser window), check the "Shop the Brand" button on the About and Returns pages — it should span the full width instead of sitting small on the left.
+
+---
+
+## Fixed the White Navbar on the Homepage's First Load (August 2026)
+
+The homepage is meant to open with the menu bar sitting invisibly over the big photo — see-through background, white text. On the live site it wasn't doing that on the *first* load: you'd land on `1nri.store` and get the plain white bar with dark text sitting on top of the photo. Scrolling down past the photo and back up, or clicking to another page and back, snapped it into the right look — so it seemed like it was working whenever you went looking for it.
+
+The cause: the homepage is pre-built ahead of time and served from a cache (that's what makes it load fast), and the code that decides "am I on the homepage?" was checking the web address. That check quietly comes back wrong for the homepage specifically during the pre-build step — every other page checked out fine. So the pre-built copy of the homepage was made with the "not the homepage" look baked in, and the browser had no reason to repaint it until something else on the page changed.
+
+Fixed by asking a different, reliable question — the page now identifies itself by its position in the site structure rather than by its address text, which gives the same answer during the pre-build and in the browser.
+
+That also fixed a second thing nobody had flagged: the homepage photo was being pushed down by about 65 pixels on first load, leaving a gap where it should have been running edge-to-edge under the menu bar.
+
+Worth noting for future reference: this only ever showed up on the live site, never when testing locally — which is why it survived an earlier attempt to fix it. It was verified this time against a real production build, checking the actual pre-built homepage file rather than just eyeballing the browser.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/frontend/app/(shop)/ShopLayoutClient.tsx` | Changed how the menu bar and page layout work out whether you're on the homepage, so the see-through bar and edge-to-edge photo are correct from the very first paint. |
+
+### How to test
+
+1. Open `1nri.store` in a fresh browser tab (or hard-refresh it) — the menu bar should be see-through with white text over the photo straight away, with no white flash and no need to scroll first.
+2. Check the photo runs right up under the menu bar with no gap above it.
+3. Scroll down past the photo — the bar should turn solid white with dark text as usual. Scroll back up — it should go see-through again.
+4. Click through to About (bar should be solid white), then back to the homepage (see-through again).
+5. Worth a look on a phone and in dark mode too, since the same setting controls the colour of every button and link in that bar.
