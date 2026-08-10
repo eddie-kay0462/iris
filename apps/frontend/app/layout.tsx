@@ -87,22 +87,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" style={{ colorScheme: "light" }} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Applies the stored theme before first paint so dark users
+            don't get a white flash. Light remains the default. */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
                 try {
-                  // One-time reset: force light default for all users
-                  if (!localStorage.getItem('iris-theme-v2')) {
-                    localStorage.removeItem('iris-theme');
-                    localStorage.setItem('iris-theme-v2', '1');
-                  }
-                  var theme = localStorage.getItem('iris-theme');
-                  if (theme === 'dark') {
+                  if (localStorage.getItem('iris-theme') === 'dark') {
                     document.documentElement.classList.add('dark');
-                    document.documentElement.style.colorScheme = 'dark';
                   }
                 } catch(e) {}
               })();

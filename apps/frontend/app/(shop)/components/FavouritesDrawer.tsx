@@ -34,7 +34,7 @@ export default function FavouritesDrawer() {
       <div
         onClick={closeDrawer}
         aria-hidden
-        className={`fixed inset-0 z-[80] bg-black/40 transition-opacity duration-300 ${
+        className={`fixed inset-0 z-[80] bg-scrim transition-opacity duration-300 ${
           open ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       />
@@ -43,22 +43,22 @@ export default function FavouritesDrawer() {
       <aside
         aria-hidden={!open}
         aria-label="Saved items"
-        className={`fixed inset-y-0 right-0 z-[90] flex w-[92vw] max-w-[420px] flex-col bg-white transition-transform duration-300 ease-out dark:bg-[#0a0a0a] ${
+        className={`fixed inset-y-0 right-0 z-[90] flex w-[92vw] max-w-[420px] flex-col bg-bg transition-transform duration-300 ease-out ${
           open
             ? "translate-x-0 shadow-[-20px_0_60px_rgba(0,0,0,0.16)]"
             : "translate-x-full"
         }`}
       >
         {/* Header */}
-        <div className="flex shrink-0 items-start justify-between border-b border-[#e5e5e5] px-5 pb-4 pt-5 dark:border-neutral-800">
-          <h2 className="text-[15px] font-semibold tracking-tight text-[#111] dark:text-[#ededed]">
+        <div className="flex shrink-0 items-start justify-between border-b border-line px-5 pb-4 pt-5">
+          <h2 className="text-[15px] font-semibold tracking-tight text-text">
             Saved Items{" "}
-            <span className="text-[#999] dark:text-neutral-500">({count})</span>
+            <span className="text-text-muted">({count})</span>
           </h2>
           <button
             onClick={closeDrawer}
             aria-label="Close saved items"
-            className="-mr-2 -mt-1 flex h-9 w-9 items-center justify-center text-[#111] transition-colors duration-200 hover:bg-[#fafafa] dark:text-[#ededed] dark:hover:bg-[#111]"
+            className="-mr-2 -mt-1 flex h-9 w-9 items-center justify-center text-text transition-colors duration-200 hover:bg-surface-subtle"
           >
             <X className="h-5 w-5" strokeWidth={1.5} />
           </button>
@@ -77,10 +77,10 @@ export default function FavouritesDrawer() {
           <div className="flex-1 space-y-4 px-5 py-5">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="flex gap-3.5">
-                <div className="h-[88px] w-[70px] shrink-0 animate-pulse bg-[#f0f0f0] dark:bg-neutral-800" />
+                <div className="h-[88px] w-[70px] shrink-0 animate-pulse bg-fill" />
                 <div className="flex-1 space-y-2 py-1">
-                  <div className="h-3 w-2/3 animate-pulse rounded bg-[#f0f0f0] dark:bg-neutral-800" />
-                  <div className="h-3 w-1/3 animate-pulse rounded bg-[#f0f0f0] dark:bg-neutral-800" />
+                  <div className="h-3 w-2/3 animate-pulse rounded bg-fill" />
+                  <div className="h-3 w-1/3 animate-pulse rounded bg-fill" />
                 </div>
               </div>
             ))}
@@ -94,7 +94,7 @@ export default function FavouritesDrawer() {
             onClose={closeDrawer}
           />
         ) : (
-          <ul className="flex-1 divide-y divide-[#f0f0f0] overflow-y-auto px-5 [-ms-overflow-style:none] [scrollbar-width:none] dark:divide-neutral-900 [&::-webkit-scrollbar]:hidden">
+          <ul className="flex-1 divide-y divide-line-subtle overflow-y-auto px-5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {favourites!.map((fav) => (
               <FavouriteRow key={fav.id} fav={fav} onClose={closeDrawer} />
             ))}
@@ -132,7 +132,7 @@ function FavouriteRow({
             className="h-[88px] w-[70px] object-cover"
           />
         ) : (
-          <div className="flex h-[88px] w-[70px] items-center justify-center bg-[#f4f4f4] text-[9px] text-[#bbb] dark:bg-neutral-900">
+          <div className="flex h-[88px] w-[70px] items-center justify-center bg-fill text-[9px] text-text-placeholder">
             No image
           </div>
         )}
@@ -143,12 +143,12 @@ function FavouriteRow({
           <Link
             href={`/product/${p.handle || p.id}`}
             onClick={onClose}
-            className="text-[12px] font-medium uppercase leading-snug tracking-wide text-[#111] hover:underline dark:text-[#ededed]"
+            className="text-[12px] font-medium uppercase leading-snug tracking-wide text-text hover:underline"
           >
             {p.title}
           </Link>
           {p.base_price != null && (
-            <span className="shrink-0 text-[12px] font-medium text-[#111] dark:text-[#ededed]">
+            <span className="shrink-0 text-[12px] font-medium text-text">
               {formatPrice(p.base_price)}
             </span>
           )}
@@ -158,7 +158,7 @@ function FavouriteRow({
           <Link
             href={`/product/${p.handle || p.id}`}
             onClick={onClose}
-            className="text-[11px] uppercase tracking-[0.12em] text-[#999] underline-offset-4 transition-colors hover:text-[#111] hover:underline dark:text-neutral-500 dark:hover:text-[#ededed]"
+            className="text-[11px] uppercase tracking-[0.12em] text-text-muted underline-offset-4 transition-colors hover:text-text hover:underline"
           >
             View product
           </Link>
@@ -166,7 +166,7 @@ function FavouriteRow({
             onClick={() => toggle()}
             disabled={isPending}
             aria-label="Remove from saved items"
-            className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] text-[#999] transition-colors hover:text-[#111] disabled:opacity-50 dark:text-neutral-500 dark:hover:text-[#ededed]"
+            className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] text-text-muted transition-colors hover:text-text disabled:opacity-50"
           >
             <Heart className="h-3.5 w-3.5 fill-current" strokeWidth={1.5} />
             Remove
@@ -194,15 +194,15 @@ function EmptyState({
 }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-      <Heart className="h-8 w-8 text-[#ccc] dark:text-neutral-700" strokeWidth={1.25} />
-      <p className="mt-4 text-[14px] font-medium text-[#111] dark:text-[#ededed]">
+      <Heart className="h-8 w-8 text-text-placeholder" strokeWidth={1.25} />
+      <p className="mt-4 text-[14px] font-medium text-text">
         {title}
       </p>
-      <p className="mt-1 text-[12px] text-[#999] dark:text-neutral-500">{body}</p>
+      <p className="mt-1 text-[12px] text-text-muted">{body}</p>
       <Link
         href={ctaHref}
         onClick={onClose}
-        className="mt-6 inline-block bg-[#111] px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-white dark:bg-[#ededed] dark:text-[#0a0a0a]"
+        className="mt-6 inline-block bg-invert-bg px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-invert-fg"
       >
         {ctaLabel}
       </Link>

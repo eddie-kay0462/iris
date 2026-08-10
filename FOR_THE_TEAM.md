@@ -5304,3 +5304,55 @@ Worth noting for future reference: this only ever showed up on the live site, ne
 3. Scroll down past the photo — the bar should turn solid white with dark text as usual. Scroll back up — it should go see-through again.
 4. Click through to About (bar should be solid white), then back to the homepage (see-through again).
 5. Worth a look on a phone and in dark mode too, since the same setting controls the colour of every button and link in that bar.
+
+---
+
+## Dark Mode Rebuilt on Apple's Blacks (August 2026)
+
+Dark mode had never actually been designed — it grew one page at a time, and every page picked its own shade of "dark." The site was using **eight different near-blacks** for what should have been the same surface, and three different families of grey mixed together. Two of those greys (the ones Tailwind calls "gray" and "slate") have a blue tint baked in, so a lot of the site read as dark navy rather than black.
+
+It's rebuilt now on the same neutral blacks Apple uses: a true black page, a slightly lifted charcoal for things that sit *on top* of the page (drawers, modals, cards), and matching greys for text and hairlines. No blue anywhere.
+
+Readability was the bigger problem. The most-used grey text colour in dark mode — it appeared 97 times — sat below the accessibility minimum for body text, and a second one was so faint it failed even the relaxed standard for large text. Those are fixed; dark-mode secondary text went from failing to comfortably passing.
+
+The way this works under the hood also changed, and this is the part that matters going forward. Colours now live in **one file** as named roles — "page background," "raised surface," "hairline," "muted text" — instead of being hand-typed into each of the 40-odd page files. Changing a colour across the whole storefront is now a one-line edit. Roughly 1,200 scattered dark-mode colour overrides collapsed to 8, and the 8 that remain are deliberate (the logo needs inverting, one shadow is intentionally deeper in dark).
+
+A few things were visibly broken in dark mode and are now fixed:
+
+- The **newsletter popup** had no dark styling at all — it was a white box every time.
+- The **breadcrumb trail** on product pages was the same.
+- **Size buttons** on product pages were white with black text in *both* modes, so in dark mode you got white pills glaring off a black page.
+- The **newsletter band** at the bottom of the homepage flipped to solid white in dark mode — a full-width white slab against black. It's now a subtle dark band in both modes.
+- The **"Continue shopping"** button on the order-tracking page was white text on white — invisible in *light* mode. That one had been broken for a while and nobody had caught it.
+
+**Light mode is unchanged.** That was checked carefully — an early pass had quietly nudged light-mode greys darker and made the top menu bar semi-transparent, which made the whole site read heavier. Both were reverted; light mode is back on its original values, and every colour change was measured against the old site to confirm it.
+
+Scope note: this covers the **storefront only** — everything a customer sees. The admin dashboard and the allies dashboard were deliberately left alone. The admin dashboard has no dark mode at all today, and adding one is a proper project rather than a recolour, so it's still open.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/frontend/app/globals.css` | The new home for every colour in the storefront — light and dark values side by side. This is the file to edit to change a colour sitewide. |
+| `apps/frontend/app/layout.tsx` | Removed a leftover one-time script that used to force everyone back to light mode; cleaned up how the saved theme is applied before the page paints. |
+| `apps/frontend/lib/theme/theme-provider.tsx` | Tidied up the light/dark toggle so it always agrees with what's actually on screen. |
+| `apps/frontend/app/(shop)/ShopLayoutClient.tsx` | Menu bar, footer and announcement bar recoloured. The announcement bar no longer flips to white in dark mode. |
+| `apps/frontend/app/(shop)/components/` (9 files) | Cart / menu / saved-items drawers, product cards, grids, filters, newsletter popup. |
+| `apps/frontend/app/(shop)/checkout/` (4 files) + `cart/page.tsx` | Whole checkout flow, order summary and confirmation page. |
+| `apps/frontend/app/(shop)/account/` (8 files) | All four account tabs, plus the custom checkbox styling. |
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | Product page, including the size-button fix described above. |
+| `apps/frontend/app/(shop)/` — homepage, about, lookbook, track, returns, size-guide, products | Recoloured. Photo overlays and the homepage hero were deliberately left as-is, since those sit on images that don't change with the theme. |
+| `apps/frontend/components/shop/NewsletterSection.tsx` | The homepage newsletter band — no longer flips to white in dark mode. |
+| `apps/frontend/components/ClientToaster.tsx` | Pop-up notifications now match the site's palette instead of using bright default colours. |
+| `apps/frontend/components/ui/button-styles.ts` (new) | One shared definition for the outlined button that was previously copy-pasted into five different files. |
+| `apps/frontend/components/ui/Breadcrumb.tsx`, `PhoneInput.tsx`, `lib/locale/CurrencyModal.tsx` | Recoloured; the breadcrumb had no dark styling at all before. |
+
+### How to test
+
+1. Toggle dark mode from the switch at the bottom of the site footer (or in the mobile slide-out menu).
+2. Walk the main path in dark mode: homepage → shop → a product page → add to cart → checkout. Look for anything that's still white, glowing, or hard to read.
+3. On a product page in dark mode, check the size buttons — they should be dark with light text, not white pills.
+4. Scroll to the bottom of the homepage — the newsletter band should be a dark band, not a white slab.
+5. Open the cart drawer in dark mode and check it reads as sitting *above* the page rather than blending into it.
+6. Check `/account` in dark mode across all four tabs, and `/track` with a real order number.
+7. **Then switch back to light mode and check the same pages** — light should look exactly as it did before. If anything looks heavier or more outlined than you remember, flag it.

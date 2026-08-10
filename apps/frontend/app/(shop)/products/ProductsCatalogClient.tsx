@@ -45,7 +45,7 @@ export function ProductsCatalogClient() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
-      <h1 className="mb-1 text-xs font-semibold uppercase tracking-widest text-gray-900 dark:text-white">
+      <h1 className="mb-1 text-xs font-semibold uppercase tracking-widest text-text">
         Discover All Products
       </h1>
 

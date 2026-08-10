@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import RoadToHQPage from "./RoadToHQClient";
+import NewsletterModal from "./components/NewsletterModal";
 import { getRoadToHQ } from "@/lib/api/road-to-hq.server";
+import { getNewsletterPopup } from "@/lib/api/settings.server";
 
 export const metadata: Metadata = {
   title: "Road to HQ - Shop the Drop",
@@ -20,11 +22,17 @@ export const metadata: Metadata = {
 };
 
 export default async function Page() {
-  const roadToHQ = await getRoadToHQ();
+  const [roadToHQ, newsletterPopup] = await Promise.all([
+    getRoadToHQ(),
+    getNewsletterPopup(),
+  ]);
   return (
-    <RoadToHQPage
-      unitsSold={roadToHQ?.units ?? 0}
-      targetUnits={roadToHQ?.target ?? 6000}
-    />
+    <>
+      <RoadToHQPage
+        unitsSold={roadToHQ?.units ?? 0}
+        targetUnits={roadToHQ?.target ?? 6000}
+      />
+      <NewsletterModal enabled={newsletterPopup.enabled} />
+    </>
   );
 }

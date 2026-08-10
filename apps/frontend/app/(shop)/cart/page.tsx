@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { outlineButton } from "@/components/ui";
 import { useCart } from "@/lib/cart";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -13,19 +14,19 @@ export default function CartPage() {
   if (items.length === 0) {
     return (
       <div className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center px-4 text-center">
-        <p className="select-none text-[64px] font-semibold leading-none tracking-tight text-gray-100 dark:text-neutral-800 sm:text-[96px]">
+        <p className="select-none text-[64px] font-semibold leading-none tracking-tight text-fill sm:text-[96px]">
           0/1NRI
         </p>
-        <p className="mt-6 text-[13px] uppercase tracking-[0.2em] text-[#59626E] dark:text-neutral-300">
+        <p className="mt-6 text-[13px] uppercase tracking-[0.2em] text-text-secondary">
           Your cart is running on empty
         </p>
-        <p className="mt-2 max-w-xs text-[12px] leading-relaxed tracking-[0.04em] text-gray-400 dark:text-neutral-600">
+        <p className="mt-2 max-w-xs text-[12px] leading-relaxed tracking-[0.04em] text-text-placeholder">
           Nothing in here yet. The fit doesn&apos;t build itself - go find
           something worth carrying.
         </p>
         <Link
           href="/products"
-          className="mt-8 border border-black px-8 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-black transition hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+          className={`mt-8 px-8 py-3 ${outlineButton}`}
         >
           Start shopping
         </Link>
@@ -35,7 +36,7 @@ export default function CartPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <h1 className="mb-8 text-2xl font-bold text-gray-900 dark:text-white">
+      <h1 className="mb-8 text-2xl font-bold text-text">
         Cart ({items.length} {items.length === 1 ? "item" : "items"})
       </h1>
 
@@ -43,7 +44,7 @@ export default function CartPage() {
         {items.map((item) => (
           <div
             key={item.variantId}
-            className="flex gap-4 rounded-lg border border-gray-200 p-4 dark:border-gray-800"
+            className="flex gap-4 rounded-lg border border-line p-4"
           >
             {/* Image */}
             {item.image ? (
@@ -53,7 +54,7 @@ export default function CartPage() {
                 className="h-24 w-24 rounded-md object-cover"
               />
             ) : (
-              <div className="flex h-24 w-24 items-center justify-center rounded-md bg-gray-100 text-xs text-gray-400 dark:bg-gray-800">
+              <div className="flex h-24 w-24 items-center justify-center rounded-md bg-fill text-xs text-text-muted">
                 No image
               </div>
             )}
@@ -63,17 +64,17 @@ export default function CartPage() {
               <div>
                 <Link
                   href={`/product/${item.productId}`}
-                  className="font-medium text-gray-900 hover:underline dark:text-white"
+                  className="font-medium text-text hover:underline"
                 >
                   {item.productTitle}
                 </Link>
                 {item.variantTitle && (
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <p className="text-sm text-text-secondary">
                     {item.variantTitle}
                   </p>
                 )}
                 {item.isPreorder && (
-                  <span className="mt-1 inline-flex w-fit items-center border border-black px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-black dark:border-white dark:text-white">
+                  <span className="mt-1 inline-flex w-fit items-center border border-invert-bg px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-text">
                     Pre-order · ships in 10-15 working days
                   </span>
                 )}
@@ -86,18 +87,18 @@ export default function CartPage() {
                     onClick={() =>
                       updateQuantity(item.variantId, item.quantity - 1)
                     }
-                    className="flex h-8 w-8 items-center justify-center rounded border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                    className="flex h-8 w-8 items-center justify-center rounded border border-line-strong text-text-secondary hover:bg-fill"
                   >
                     <Minus className="h-3 w-3" />
                   </button>
-                  <span className="w-8 text-center text-sm font-medium text-gray-900 dark:text-white">
+                  <span className="w-8 text-center text-sm font-medium text-text">
                     {item.quantity}
                   </span>
                   <button
                     onClick={() =>
                       updateQuantity(item.variantId, item.quantity + 1)
                     }
-                    className="flex h-8 w-8 items-center justify-center rounded border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                    className="flex h-8 w-8 items-center justify-center rounded border border-line-strong text-text-secondary hover:bg-fill"
                   >
                     <Plus className="h-3 w-3" />
                   </button>
@@ -106,14 +107,14 @@ export default function CartPage() {
                       removeItem(item.variantId);
                       toast.success(`${item.productTitle} removed from cart.`);
                     }}
-                    className="ml-2 flex h-8 w-8 items-center justify-center rounded text-gray-400 hover:text-red-500"
+                    className="ml-2 flex h-8 w-8 items-center justify-center rounded text-text-muted hover:text-danger"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
 
                 {/* Price */}
-                <span className="font-medium text-gray-900 dark:text-white">
+                <span className="font-medium text-text">
                   {formatPrice(item.price * item.quantity)}
                 </span>
               </div>
@@ -123,25 +124,25 @@ export default function CartPage() {
       </div>
 
       {/* Summary */}
-      <div className="mt-8 border-t border-gray-200 pt-6 dark:border-gray-800">
-        <div className="flex items-center justify-between text-lg font-semibold text-gray-900 dark:text-white">
+      <div className="mt-8 border-t border-line pt-6">
+        <div className="flex items-center justify-between text-lg font-semibold text-text">
           <span>Subtotal</span>
           <span>{formatPrice(subtotal)}</span>
         </div>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <p className="mt-1 text-sm text-text-secondary">
           Shipping calculated at checkout.
         </p>
 
         <Link
           href="/checkout"
-          className="mt-6 block w-full rounded-lg bg-black py-3 text-center text-sm font-semibold text-white dark:bg-white dark:text-black"
+          className="mt-6 block w-full rounded-lg bg-invert-bg py-3 text-center text-sm font-semibold text-invert-fg"
         >
           Proceed to checkout
         </Link>
 
         <Link
           href="/products"
-          className="mt-3 block w-full text-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          className="mt-3 block w-full text-center text-sm text-text-secondary hover:text-text"
         >
           Continue shopping
         </Link>

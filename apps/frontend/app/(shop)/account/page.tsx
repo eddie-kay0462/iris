@@ -22,7 +22,7 @@ export default function AccountPage() {
   if (isLoading || !profile) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-[11px] text-[#999] dark:text-neutral-500 tracking-[0.1em] uppercase font-mono">
+        <div className="text-[11px] text-text-muted tracking-[0.1em] uppercase font-mono">
           Loading…
         </div>
       </div>

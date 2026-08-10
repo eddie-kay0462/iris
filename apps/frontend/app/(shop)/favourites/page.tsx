@@ -66,7 +66,7 @@ export default function FavouritesPage() {
         <h1 className="text-[13px] tracking-[0.22em] uppercase font-medium mb-8">Saved Items</h1>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="aspect-[3/4] animate-pulse bg-[#f4f3f1]" />
+            <div key={i} className="aspect-[3/4] animate-pulse bg-fill" />
           ))}
         </div>
       </div>
@@ -76,14 +76,14 @@ export default function FavouritesPage() {
   if (!favourites || favourites.length === 0) {
     return (
       <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-24 flex flex-col items-center text-center gap-5">
-        <Heart className="w-10 h-10 text-black/20" strokeWidth={1} />
+        <Heart className="w-10 h-10 text-text-placeholder" strokeWidth={1} />
         <h1 className="text-[13px] tracking-[0.22em] uppercase font-medium">No saved items yet</h1>
-        <p className="text-sm text-[#59626E] max-w-xs">
+        <p className="text-sm text-text-secondary max-w-xs">
           Tap the heart on any product to save it here for later.
         </p>
         <Link
           href="/products"
-          className="mt-2 inline-block bg-black text-white px-8 py-3 text-[12px] tracking-[0.2em] uppercase font-bold"
+          className="mt-2 inline-block bg-invert-bg text-invert-fg px-8 py-3 text-[12px] tracking-[0.2em] uppercase font-bold"
         >
           Shop Now
         </Link>
@@ -97,7 +97,7 @@ export default function FavouritesPage() {
         <h1 className="text-[13px] tracking-[0.22em] uppercase font-medium">
           Saved Items
         </h1>
-        <span className="text-[11px] tracking-[0.14em] uppercase text-[#59626E]">
+        <span className="text-[11px] tracking-[0.14em] uppercase text-text-muted">
           {favourites.length} {favourites.length === 1 ? "item" : "items"}
         </span>
       </div>

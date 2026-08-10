@@ -17,10 +17,10 @@ export const metadata: Metadata = {
 export default function SizeGuidePage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-24 text-center">
-      <h1 className="text-xs font-semibold uppercase tracking-widest text-gray-900 dark:text-white">
+      <h1 className="text-xs font-semibold uppercase tracking-widest text-text">
         Size Guide
       </h1>
-      <p className="mt-6 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+      <p className="mt-6 text-sm leading-relaxed text-text-secondary">
         Full sizing guide coming soon. In the meantime, check the fit notes on
         each product page, or reach out and we&apos;ll help you find your
         size.
@@ -28,13 +28,13 @@ export default function SizeGuidePage() {
       <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
         <Link
           href="/products"
-          className="text-xs font-semibold uppercase tracking-widest text-gray-900 underline underline-offset-4 hover:no-underline dark:text-white"
+          className="text-xs font-semibold uppercase tracking-widest text-text underline underline-offset-4 hover:no-underline"
         >
           Browse products
         </Link>
         <Link
           href="/about"
-          className="text-xs font-semibold uppercase tracking-widest text-gray-500 underline underline-offset-4 hover:no-underline dark:text-gray-400"
+          className="text-xs font-semibold uppercase tracking-widest text-text-secondary underline underline-offset-4 hover:no-underline"
         >
           Contact us
         </Link>

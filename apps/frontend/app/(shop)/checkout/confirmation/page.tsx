@@ -10,7 +10,7 @@ import { track } from "@/lib/analytics/tracker";
 import { fmt } from "../../account/atoms";
 
 const sectionLabelCls =
-  "text-[10px] font-semibold uppercase tracking-[0.16em] text-[#999] dark:text-neutral-500 font-mono";
+  "text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted font-mono";
 
 /* ---------- Shared item + totals rendering (editorial monochrome) ---------- */
 function ItemRow({
@@ -25,16 +25,16 @@ function ItemRow({
   price: number;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-[#f0f0f0] dark:border-neutral-900 py-3">
+    <div className="flex items-center justify-between gap-4 border-b border-line-subtle py-3">
       <div className="min-w-0">
-        <div className="text-[12px] font-medium uppercase tracking-[0.04em] text-[#111] dark:text-[#ededed] truncate">
+        <div className="text-[12px] font-medium uppercase tracking-[0.04em] text-text truncate">
           {name}
         </div>
-        <div className="mt-0.5 text-[11px] text-[#999] dark:text-neutral-500">
+        <div className="mt-0.5 text-[11px] text-text-muted">
           {variant ? `${variant} · ` : ""}Qty {quantity}
         </div>
       </div>
-      <div className="whitespace-nowrap text-[12px] font-medium text-[#111] dark:text-[#ededed]">
+      <div className="whitespace-nowrap text-[12px] font-medium text-text">
         {fmt(price)}
       </div>
     </div>
@@ -53,7 +53,7 @@ function Totals({
   total: number;
 }) {
   const line =
-    "flex items-center justify-between text-[11px] text-[#999] dark:text-neutral-500";
+    "flex items-center justify-between text-[11px] text-text-muted";
   return (
     <div className="mt-4 space-y-2.5">
       <div className={line}>
@@ -68,7 +68,7 @@ function Totals({
         <span className="font-mono uppercase tracking-[0.1em]">Fees (1.95%)</span>
         <span className="tabular-nums">{fmt(processingFee)}</span>
       </div>
-      <div className="flex items-center justify-between border-t border-[#e5e5e5] dark:border-neutral-800 pt-3 text-[13px] font-semibold text-[#111] dark:text-[#ededed]">
+      <div className="flex items-center justify-between border-t border-line pt-3 text-[13px] font-semibold text-text">
         <span className="uppercase tracking-[0.04em]">Total</span>
         <span>{fmt(total)}</span>
       </div>
@@ -92,7 +92,7 @@ function StatusShell({
     <div className="mx-auto max-w-xl px-4 py-16 text-center sm:py-20">
       <div className="flex justify-center">{icon}</div>
       <div className={`${sectionLabelCls} mt-6`}>{eyebrow}</div>
-      <h1 className="mt-2 text-[28px] font-bold uppercase leading-none tracking-[-0.01em] text-[#111] dark:text-[#ededed]">
+      <h1 className="mt-2 text-[28px] font-bold uppercase leading-none tracking-[-0.01em] text-text">
         {title}
       </h1>
       {children}
@@ -139,17 +139,17 @@ function ConfirmationContent() {
     return (
       <StatusShell
         icon={
-          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[#e5e5e5] dark:border-neutral-800" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-line" />
         }
         eyebrow="Order"
         title="No Order Found"
       >
-        <p className="mx-auto mt-3 max-w-sm text-[13px] leading-relaxed text-[#999] dark:text-neutral-500">
+        <p className="mx-auto mt-3 max-w-sm text-[13px] leading-relaxed text-text-muted">
           We couldn&apos;t find an order reference in this link.
         </p>
         <Link
           href="/products"
-          className="mt-6 inline-block text-[11px] font-medium uppercase tracking-[0.1em] text-[#999] transition-colors hover:text-[#111] dark:text-neutral-500 dark:hover:text-white"
+          className="mt-6 inline-block text-[11px] font-medium uppercase tracking-[0.1em] text-text-muted transition-colors hover:text-text"
         >
           Continue shopping
         </Link>
@@ -161,16 +161,16 @@ function ConfirmationContent() {
     return (
       <StatusShell
         icon={
-          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[#e5e5e5] dark:border-neutral-800" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-line" />
         }
         eyebrow="Order"
         title="Couldn't Load Order"
       >
-        <p className="mx-auto mt-3 max-w-sm text-[13px] leading-relaxed text-[#999] dark:text-neutral-500">
+        <p className="mx-auto mt-3 max-w-sm text-[13px] leading-relaxed text-text-muted">
           {isSignedIn ? (
             <>
               Please check{" "}
-              <Link href="/orders" className="text-[#111] underline dark:text-[#ededed]">
+              <Link href="/orders" className="text-text underline">
                 your orders
               </Link>{" "}
               for status.
@@ -187,19 +187,19 @@ function ConfirmationContent() {
     return (
       <StatusShell
         icon={
-          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[#e5e5e5] dark:border-neutral-800">
-            <Loader2 className="h-6 w-6 animate-spin text-[#111] dark:text-[#ededed]" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-line">
+            <Loader2 className="h-6 w-6 animate-spin text-text" />
           </div>
         }
         eyebrow="Payment"
         title="Verifying Payment"
       >
         {orderNumber && (
-          <p className="mt-3 text-[11px] font-medium uppercase tracking-[0.1em] text-[#999] dark:text-neutral-500 font-mono">
+          <p className="mt-3 text-[11px] font-medium uppercase tracking-[0.1em] text-text-muted font-mono">
             {orderNumber}
           </p>
         )}
-        <p className="mx-auto mt-3 max-w-sm text-[13px] leading-relaxed text-[#999] dark:text-neutral-500">
+        <p className="mx-auto mt-3 max-w-sm text-[13px] leading-relaxed text-text-muted">
           Please wait while we confirm your payment. This usually takes a few seconds.
         </p>
       </StatusShell>
@@ -221,22 +221,22 @@ function ConfirmationContent() {
     <div className="mx-auto max-w-xl px-4 py-16 sm:py-20">
       {/* Success header */}
       <div className="flex flex-col items-center text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#111] dark:bg-white">
-          <Check className="h-6 w-6 text-white dark:text-[#0a0a0a]" strokeWidth={2.5} />
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-invert-bg">
+          <Check className="h-6 w-6 text-invert-fg" strokeWidth={2.5} />
         </div>
         <div className={`${sectionLabelCls} mt-6`}>Order Confirmed</div>
-        <h1 className="mt-2 text-[28px] font-bold uppercase leading-none tracking-[-0.01em] text-[#111] dark:text-[#ededed]">
+        <h1 className="mt-2 text-[28px] font-bold uppercase leading-none tracking-[-0.01em] text-text">
           Thank You
         </h1>
-        <p className="mx-auto mt-3 max-w-sm text-[13px] leading-relaxed text-[#999] dark:text-neutral-500">
+        <p className="mx-auto mt-3 max-w-sm text-[13px] leading-relaxed text-text-muted">
           Your order{" "}
-          <span className="font-mono font-medium text-[#111] dark:text-[#ededed]">
+          <span className="font-mono font-medium text-text">
             {order.order_number}
           </span>{" "}
           is confirmed. And with it, you&apos;ve moved us one step further down the{" "}
           <Link
             href="/"
-            className="font-medium text-[#111] underline decoration-[#ccc] underline-offset-2 transition-colors hover:decoration-[#111] dark:text-[#ededed] dark:decoration-neutral-600 dark:hover:decoration-white"
+            className="font-medium text-text underline decoration-line-strong underline-offset-2 transition-colors hover:decoration-invert-bg"
           >
             Road to HQ
           </Link>{" "}
@@ -251,11 +251,11 @@ function ConfirmationContent() {
       {preorders.length > 0 && (
         <div className="mt-12">
           <div className={`${sectionLabelCls} mb-3`}>Pre-order Items</div>
-          <div className="mb-1 border-l-2 border-[#111] bg-[#f5f5f5] px-4 py-3 text-[12px] leading-[1.5] text-[#666] dark:border-[#ededed] dark:bg-[#111] dark:text-neutral-400">
+          <div className="mb-1 border-l-2 border-invert-bg bg-surface-subtle px-4 py-3 text-[12px] leading-[1.5] text-text-secondary">
             These aren&apos;t in stock yet - they ship separately within 10-15 working days. We&apos;ll
             notify you when they&apos;re on the way.
           </div>
-          <div className="border-t border-[#e5e5e5] dark:border-neutral-800">
+          <div className="border-t border-line">
             {preorders.map((pre) => (
               <ItemRow
                 key={pre.id}
@@ -276,7 +276,7 @@ function ConfirmationContent() {
       {items.length > 0 && (
         <div className="mt-12">
           <div className={`${sectionLabelCls} mb-3`}>Order Summary</div>
-          <div className="border-t border-[#e5e5e5] dark:border-neutral-800">
+          <div className="border-t border-line">
             {items.map((item) => (
               <ItemRow
                 key={item.id}
@@ -295,13 +295,13 @@ function ConfirmationContent() {
       <div className="mt-12 flex flex-col gap-3">
         <Link
           href={primaryHref}
-          className="flex h-11 w-full items-center justify-center bg-[#111] text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:bg-[#333] dark:bg-white dark:text-[#0a0a0a] dark:hover:bg-neutral-200"
+          className="flex h-11 w-full items-center justify-center bg-invert-bg text-[11px] font-semibold uppercase tracking-[0.16em] text-invert-fg transition-colors hover:opacity-90"
         >
           {primaryLabel}
         </Link>
         <Link
           href="/products"
-          className="flex h-11 w-full items-center justify-center border border-[#ddd] text-[11px] font-semibold uppercase tracking-[0.16em] text-[#111] transition-colors hover:border-[#111] dark:border-neutral-700 dark:text-white dark:hover:border-white"
+          className="flex h-11 w-full items-center justify-center border border-line text-[11px] font-semibold uppercase tracking-[0.16em] text-text transition-colors hover:border-invert-bg"
         >
           Continue shopping
         </Link>
@@ -314,7 +314,7 @@ export default function ConfirmationPage() {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto max-w-xl px-4 py-16 text-center text-[13px] font-mono uppercase tracking-[0.1em] text-[#999] dark:text-neutral-500">
+        <div className="mx-auto max-w-xl px-4 py-16 text-center text-[13px] font-mono uppercase tracking-[0.1em] text-text-muted">
           Loading…
         </div>
       }

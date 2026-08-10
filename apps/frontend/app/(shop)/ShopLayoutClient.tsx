@@ -24,6 +24,11 @@ import FavouritesDrawer from "./components/FavouritesDrawer";
 const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
+// Note on the `isTransparent` / `isTransparentWhite` branches below: those sit
+// over the dark hero photograph, which does not change with the theme, so their
+// white/black literals are deliberate and must NOT be swapped for tokens. Only
+// the solid-header branch is themed.
+
 function ThemeToggle({ isTransparent = false }: { isTransparent?: boolean }) {
   const { theme, toggleTheme } = useTheme();
   return (
@@ -33,7 +38,7 @@ function ThemeToggle({ isTransparent = false }: { isTransparent?: boolean }) {
       className={`p-1 transition ${
         isTransparent
           ? "text-white/80 hover:text-white"
-          : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
+          : "text-text-secondary hover:text-text"
       }`}
     >
       {theme === "light" ? (
@@ -71,7 +76,7 @@ function FavouritesLink({ isTransparent = false }: { isTransparent?: boolean }) 
       className={`group relative p-1 transition ${
         isTransparent
           ? "text-white/80 hover:text-white"
-          : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
+          : "text-text-secondary hover:text-text"
       }`}
     >
       <Heart className="h-[16px] w-[16px] md:h-[18px] md:w-[18px] transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-6" strokeWidth={1.5} />
@@ -79,7 +84,7 @@ function FavouritesLink({ isTransparent = false }: { isTransparent?: boolean }) 
         <span className={`absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${
           isTransparent
             ? "bg-white text-black"
-            : "bg-black text-white dark:bg-white dark:text-black"
+            : "bg-invert-bg text-invert-fg"
         }`}>
           {count > 99 ? "99+" : count}
         </span>
@@ -122,7 +127,7 @@ function CartLink({ isTransparent = false }: { isTransparent?: boolean }) {
       className={`group relative p-1 transition ${
         isTransparent
           ? "text-white/80 hover:text-white"
-          : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
+          : "text-text-secondary hover:text-text"
       }`}
     >
       <ShoppingBag
@@ -138,7 +143,7 @@ function CartLink({ isTransparent = false }: { isTransparent?: boolean }) {
           } ${
             isTransparent
               ? "bg-white text-black"
-              : "bg-black text-white dark:bg-white dark:text-black"
+              : "bg-invert-bg text-invert-fg"
           }`}
         >
           {itemCount > 99 ? "99+" : itemCount}
@@ -174,7 +179,7 @@ function UserLink({ isTransparent = false }: { isTransparent?: boolean }) {
       className={`group p-1 transition ${
         isTransparent
           ? "text-white/80 hover:text-white"
-          : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
+          : "text-text-secondary hover:text-text"
       }`}
     >
       {loggedIn && avatarUrl ? (
@@ -192,7 +197,7 @@ function UserLink({ isTransparent = false }: { isTransparent?: boolean }) {
         <span className={`flex h-[22px] w-[22px] items-center justify-center rounded-full text-[11px] font-semibold transition-transform duration-200 group-hover:scale-110 ${
           isTransparent
             ? "bg-white text-black"
-            : "bg-black text-white dark:bg-white dark:text-black"
+            : "bg-invert-bg text-invert-fg"
         }`}>
           {avatarLetter}
         </span>
@@ -251,35 +256,35 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50  pt-[18vh]"
+      className="fixed inset-0 z-[100] flex items-start justify-center bg-scrim  pt-[18vh]"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[600px] mx-4 overflow-hidden rounded-2xl bg-white shadow-[0_32px_80px_rgba(0,0,0,0.25)] dark:bg-[#1c1c1e] dark:shadow-[0_32px_80px_rgba(0,0,0,0.6)]"
+        className="w-full max-w-[600px] mx-4 overflow-hidden rounded-2xl bg-surface shadow-[0_32px_80px_rgba(0,0,0,0.25)] dark:shadow-[0_32px_80px_rgba(0,0,0,0.6)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search input row */}
         <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
           <div className="flex items-center gap-3 px-5 py-4">
-            <Search className="h-5 w-5 shrink-0 text-gray-400 dark:text-gray-500" strokeWidth={2} />
+            <Search className="h-5 w-5 shrink-0 text-text-muted" strokeWidth={2} />
             <input
               ref={inputRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search products…"
-              className="flex-1 bg-transparent text-[17px] text-gray-900 outline-none placeholder:text-gray-400 dark:text-white dark:placeholder:text-gray-500"
+              className="flex-1 bg-transparent text-[17px] text-text outline-none placeholder:text-text-placeholder"
             />
             {query ? (
               <button
                 type="button"
                 onClick={() => setQuery("")}
-                className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-300 text-gray-600 transition hover:bg-gray-400 dark:bg-gray-600 dark:text-gray-300"
+                className="flex h-5 w-5 items-center justify-center rounded-full bg-line-strong text-text-secondary transition hover:bg-text-placeholder"
               >
                 <X className="h-3 w-3" strokeWidth={2.5} />
               </button>
             ) : (
-              <kbd className="hidden select-none items-center gap-0.5 rounded border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-500 sm:flex dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+              <kbd className="hidden select-none items-center gap-0.5 rounded border border-line bg-fill px-1.5 py-0.5 text-[11px] text-text-muted sm:flex">
                 ESC
               </kbd>
             )}
@@ -287,7 +292,7 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
         </form>
 
         {/* Divider */}
-        <div className="h-px bg-gray-100 dark:bg-gray-700/60" />
+        <div className="h-px bg-line-subtle" />
 
         {/* Body */}
         <div className="max-h-[340px] overflow-y-auto">
@@ -295,23 +300,23 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
             /* Search suggestion row */
             <button
               onClick={submit}
-              className="flex w-full items-center gap-3.5 px-5 py-3.5 text-left transition hover:bg-gray-50 dark:hover:bg-white/5"
+              className="flex w-full items-center gap-3.5 px-5 py-3.5 text-left transition hover:bg-surface-subtle"
             >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800">
-                <Search className="h-4 w-4 text-gray-500 dark:text-gray-400" strokeWidth={1.8} />
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-fill">
+                <Search className="h-4 w-4 text-text-secondary" strokeWidth={1.8} />
               </span>
               <div>
-                <p className="text-[14px] text-gray-900 dark:text-white">
+                <p className="text-[14px] text-text">
                   Search for <span className="font-semibold">"{query.trim()}"</span>
                 </p>
-                <p className="text-[12px] text-gray-400 dark:text-gray-500">Browse all matching products</p>
+                <p className="text-[12px] text-text-muted">Browse all matching products</p>
               </div>
-              <span className="ml-auto text-[11px] text-gray-300 dark:text-gray-600">↵</span>
+              <span className="ml-auto text-[11px] text-text-placeholder">↵</span>
             </button>
           ) : (
             /* Quick links */
             <div className="px-5 pb-4 pt-3">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-text-muted">
                 Quick Access
               </p>
               <div className="space-y-0.5">
@@ -319,13 +324,13 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
                   <button
                     key={link.href}
                     onClick={() => handleQuickLink(link.href)}
-                    className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-gray-50 dark:hover:bg-white/5"
+                    className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-surface-subtle"
                   >
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-100 dark:bg-gray-800">
-                      <Search className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500" strokeWidth={1.8} />
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-fill">
+                      <Search className="h-3.5 w-3.5 text-text-muted" strokeWidth={1.8} />
                     </span>
-                    <span className="text-[14px] text-gray-700 dark:text-gray-300">{link.label}</span>
-                    <span className="ml-auto text-[11px] text-gray-300 dark:text-gray-600">→</span>
+                    <span className="text-[14px] text-text-secondary">{link.label}</span>
+                    <span className="ml-auto text-[11px] text-text-placeholder">→</span>
                   </button>
                 ))}
               </div>
@@ -334,13 +339,13 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
         </div>
 
         {/* Footer hint */}
-        <div className="flex items-center justify-between border-t border-gray-100 px-5 py-2.5 dark:border-gray-700/60">
-          <span className="text-[11px] text-gray-400 dark:text-gray-500">
+        <div className="flex items-center justify-between border-t border-line-subtle px-5 py-2.5">
+          <span className="text-[11px] text-text-muted">
             {query.trim() ? "Press ↵ to search" : "Start typing to search"}
           </span>
-          <div className="flex items-center gap-3 text-[11px] text-gray-300 dark:text-gray-600">
-            <span className="flex items-center gap-1"><kbd className="rounded border border-gray-200 bg-gray-50 px-1 dark:border-gray-700 dark:bg-gray-800">↑</kbd><kbd className="rounded border border-gray-200 bg-gray-50 px-1 dark:border-gray-700 dark:bg-gray-800">↓</kbd> navigate</span>
-            <span className="flex items-center gap-1"><kbd className="rounded border border-gray-200 bg-gray-50 px-1 dark:border-gray-700 dark:bg-gray-800">esc</kbd> close</span>
+          <div className="flex items-center gap-3 text-[11px] text-text-placeholder">
+            <span className="flex items-center gap-1"><kbd className="rounded border border-line bg-surface-subtle px-1">↑</kbd><kbd className="rounded border border-line bg-surface-subtle px-1">↓</kbd> navigate</span>
+            <span className="flex items-center gap-1"><kbd className="rounded border border-line bg-surface-subtle px-1">esc</kbd> close</span>
           </div>
         </div>
       </div>
@@ -365,7 +370,7 @@ function LocaleSelectorButton({ isTransparent = false }: { isTransparent?: boole
 
   const textClass = isTransparent
     ? "text-white/80 hover:text-white"
-    : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white";
+    : "text-text-secondary hover:text-text";
 
   return (
     <div
@@ -388,8 +393,8 @@ function LocaleSelectorButton({ isTransparent = false }: { isTransparent?: boole
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-3 min-w-[240px] border border-neutral-200 bg-white shadow-2xl dark:border-neutral-800 dark:bg-neutral-950">
-          <p className="border-b border-neutral-200 px-4 py-3 text-[9px] uppercase tracking-[0.28em] text-neutral-400 dark:border-neutral-800 dark:text-neutral-500">
+        <div className="absolute right-0 top-full z-50 mt-3 min-w-[240px] border border-line bg-surface shadow-2xl">
+          <p className="border-b border-line px-4 py-3 text-[9px] uppercase tracking-[0.28em] text-text-muted">
             Currency
           </p>
           {CURRENCIES.map((cur) => {
@@ -400,26 +405,26 @@ function LocaleSelectorButton({ isTransparent = false }: { isTransparent?: boole
                 onClick={() => { setCurrency(cur.code); setOpen(false); }}
                 className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
                   isActive
-                    ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
-                    : "text-neutral-900 hover:bg-neutral-100 dark:text-white dark:hover:bg-neutral-900"
+                    ? "bg-invert-bg text-invert-fg"
+                    : "text-text hover:bg-fill"
                 }`}
               >
                 <span
                   className={`h-1.5 w-1.5 shrink-0 ${
-                    isActive ? "bg-white dark:bg-neutral-900" : "bg-transparent"
+                    isActive ? "bg-invert-fg" : "bg-transparent"
                   }`}
                 />
                 <span className="text-[12px] font-bold tracking-[0.1em]">{cur.code}</span>
                 <span
                   className={`text-[9px] uppercase tracking-[0.18em] ${
-                    isActive ? "text-white/60 dark:text-neutral-900/60" : "text-neutral-400 dark:text-neutral-500"
+                    isActive ? "text-invert-fg/60" : "text-text-muted"
                   }`}
                 >
                   {cur.name}
                 </span>
                 <span
                   className={`ml-auto text-[12px] ${
-                    isActive ? "text-white/70 dark:text-neutral-900/70" : "text-neutral-400 dark:text-neutral-500"
+                    isActive ? "text-invert-fg/70" : "text-text-muted"
                   }`}
                 >
                   {cur.symbol}
@@ -454,7 +459,7 @@ function AnnouncementBar({
     "block w-full truncate px-10 text-center text-[11px] font-medium uppercase leading-none tracking-[0.18em]";
   return (
     <div
-      className={`relative flex ${BANNER_HEIGHT} w-full items-center justify-center overflow-hidden bg-neutral-950 text-white dark:bg-white dark:text-neutral-950`}
+      className={`relative flex ${BANNER_HEIGHT} w-full items-center justify-center overflow-hidden bg-invert-bg text-invert-fg`}
     >
       {banner.link ? (
         <Link href={banner.link} className={`${textClass} transition-opacity hover:opacity-70`}>
@@ -595,7 +600,10 @@ function ShopHeader({
           className={`flex w-full items-center justify-between px-6 py-4 transition-all duration-150 ${
             isTransparent
               ? "border-b border-transparent bg-transparent"
-              : "border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950"
+              // Opaque in light (unchanged). In dark the page and the header
+              // are both near-black, so the bar needs the blur to read as a
+              // separate layer rather than dissolving into the content.
+              : "border-b border-line bg-bg dark:bg-bg/80 dark:backdrop-blur-xl"
           }`}
         >
         {/* Left nav (desktop) */}
@@ -606,7 +614,7 @@ function ShopHeader({
             className={`group flex items-center gap-1.5 text-xs font-medium uppercase tracking-widest transition ${
               isTransparentWhite
                 ? "text-white/70 hover:text-white"
-                : "text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white"
+                : "text-text-secondary hover:text-text"
             }`}
           >
             Shop
@@ -625,8 +633,8 @@ function ShopHeader({
                     ? "text-white"
                     : "text-white/70 hover:text-white"
                   : isActive(link.href)
-                    ? "text-black dark:text-white"
-                    : "text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white"
+                    ? "text-text"
+                    : "text-text-secondary hover:text-text"
               }`}
             >
               {link.label}
@@ -672,7 +680,7 @@ function ShopHeader({
             className={`group p-1 transition ${
               isTransparentWhite
                 ? "text-white/80 hover:text-white"
-                : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
+                : "text-text-secondary hover:text-text"
             }`}
           >
             <Search className="h-[16px] w-[16px] md:h-[18px] md:w-[18px] transition-transform duration-200 group-hover:scale-110" strokeWidth={1.5} />
@@ -693,7 +701,7 @@ function ShopHeader({
 
 function ShopFooter() {
   return (
-    <footer className="border-t border-[#e5e5e5] bg-white dark:border-neutral-800 dark:bg-[#0a0a0a]">
+    <footer className="border-t border-line bg-bg">
       <div className="mx-auto max-w-7xl px-4 py-12">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {/* Brand */}
@@ -706,24 +714,24 @@ function ShopFooter() {
               className="h-6 w-auto min-w-[48px] dark:brightness-0 dark:invert"
               unoptimized
             />
-            <p className="mt-3 text-[12px] leading-relaxed text-[#666] dark:text-neutral-400">
+            <p className="mt-3 text-[12px] leading-relaxed text-text-secondary">
               Quality streetwear for the tasteful and stylish.
             </p>
           </div>
 
           {/* Shop */}
           <div>
-            <h4 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#111] dark:text-[#ededed]">
+            <h4 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text">
               Shop
             </h4>
             <ul className="mt-3 space-y-2">
               <li>
-                <Link href="/products" className="text-[12px] text-[#666] transition-colors hover:text-[#111] dark:text-neutral-400 dark:hover:text-[#ededed]">
+                <Link href="/products" className="text-[12px] text-text-secondary transition-colors hover:text-text">
                   All Products
                 </Link>
               </li>
               <li>
-                <Link href="/products?tag=new" className="text-[12px] text-[#666] transition-colors hover:text-[#111] dark:text-neutral-400 dark:hover:text-[#ededed]">
+                <Link href="/products?tag=new" className="text-[12px] text-text-secondary transition-colors hover:text-text">
                   New Arrivals
                 </Link>
               </li>
@@ -732,17 +740,17 @@ function ShopFooter() {
 
           {/* Brand */}
           <div>
-            <h4 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#111] dark:text-[#ededed]">
+            <h4 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text">
               Brand
             </h4>
             <ul className="mt-3 space-y-2">
               <li>
-                <Link href="/about" className="text-[12px] text-[#666] transition-colors hover:text-[#111] dark:text-neutral-400 dark:hover:text-[#ededed]">
+                <Link href="/about" className="text-[12px] text-text-secondary transition-colors hover:text-text">
                   About
                 </Link>
               </li>
               {/* <li>
-                <Link href="/lookbook" className="text-[12px] text-[#666] transition-colors hover:text-[#111] dark:text-neutral-400 dark:hover:text-[#ededed]">
+                <Link href="/lookbook" className="text-[12px] text-text-secondary transition-colors hover:text-text">
                   Lookbook
                 </Link>
               </li> */}
@@ -751,22 +759,22 @@ function ShopFooter() {
 
           {/* Help */}
           <div>
-            <h4 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#111] dark:text-[#ededed]">
+            <h4 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text">
               Help
             </h4>
             <ul className="mt-3 space-y-2">
               <li>
-                <Link href="/track" className="text-[12px] text-[#666] transition-colors hover:text-[#111] dark:text-neutral-400 dark:hover:text-[#ededed]">
+                <Link href="/track" className="text-[12px] text-text-secondary transition-colors hover:text-text">
                   Track Order
                 </Link>
               </li>
               <li>
-                <Link href="/returns" className="text-[12px] text-[#666] transition-colors hover:text-[#111] dark:text-neutral-400 dark:hover:text-[#ededed]">
+                <Link href="/returns" className="text-[12px] text-text-secondary transition-colors hover:text-text">
                   Return Policy
                 </Link>
               </li>
               <li>
-                <Link href="/account" className="text-[12px] text-[#666] transition-colors hover:text-[#111] dark:text-neutral-400 dark:hover:text-[#ededed]">
+                <Link href="/account" className="text-[12px] text-text-secondary transition-colors hover:text-text">
                   My Account
                 </Link>
               </li>
@@ -775,7 +783,7 @@ function ShopFooter() {
 
           {/* Connect */}
           <div>
-            <h4 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#111] dark:text-[#ededed]">
+            <h4 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text">
               Connect
             </h4>
             <div className="mt-3 flex items-center gap-4">
@@ -785,7 +793,7 @@ function ShopFooter() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Instagram"
-                className="text-[#666] transition-colors hover:text-[#111] dark:text-neutral-400 dark:hover:text-[#ededed]"
+                className="text-text-secondary transition-colors hover:text-text"
               >
                 <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
@@ -797,7 +805,7 @@ function ShopFooter() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="X (Twitter)"
-                className="text-[#666] transition-colors hover:text-[#111] dark:text-neutral-400 dark:hover:text-[#ededed]"
+                className="text-text-secondary transition-colors hover:text-text"
               >
                 <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -809,7 +817,7 @@ function ShopFooter() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="TikTok"
-                className="text-[#666] transition-colors hover:text-[#111] dark:text-neutral-400 dark:hover:text-[#ededed]"
+                className="text-text-secondary transition-colors hover:text-text"
               >
                 <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z" />
@@ -819,8 +827,8 @@ function ShopFooter() {
           </div>
         </div>
 
-        <div className="mt-10 flex items-center justify-between border-t border-[#e5e5e5] pt-6 dark:border-neutral-800">
-          <p className="text-[11px] uppercase tracking-[0.12em] text-[#999] dark:text-neutral-500">
+        <div className="mt-10 flex items-center justify-between border-t border-line pt-6">
+          <p className="text-[11px] uppercase tracking-[0.12em] text-text-muted">
             &copy; {new Date().getFullYear()} 1NRI Worldwide LTD. All rights reserved.
           </p>
           <ThemeToggle />
@@ -876,7 +884,7 @@ function ShopLayoutInner({
   const mainPaddingTop = isHome ? (bannerVisible ? BANNER_PX : 0) : headerHeight;
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-white dark:bg-gray-950">
+    <div className="relative min-h-screen overflow-x-hidden bg-bg">
       <AnalyticsBeacon />
       <ShopHeader
         banner={banner}

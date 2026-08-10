@@ -235,7 +235,7 @@ export function ProductCard({
       <Link href={`/product/${product.handle || product.id}${selectedColor ? `?color=${encodeURIComponent(selectedColor)}` : ""}`}>
         {/* Image container */}
         <div
-          className="relative aspect-[3/4] overflow-hidden bg-gray-50 dark:bg-gray-900"
+          className="relative aspect-[3/4] overflow-hidden bg-surface-subtle"
           onMouseEnter={() => images.length > 1 && setImgIndex((prev) => {
             // Only auto-swap on hover if we haven't already changed via colour
             return prev;
@@ -244,7 +244,7 @@ export function ProductCard({
           {currentImage && displaySrc ? (
             <>
               {!imgLoaded && (
-                <div className="absolute inset-0 animate-pulse bg-gray-100 dark:bg-gray-800" />
+                <div className="absolute inset-0 animate-pulse bg-fill" />
               )}
               {/* Base layer — the settled image */}
               <Image
@@ -286,12 +286,14 @@ export function ProductCard({
               )}
             </>
           ) : (
-            <div className="flex h-full items-center justify-center text-xs text-gray-400 dark:text-gray-600">
+            <div className="flex h-full items-center justify-center text-xs text-text-placeholder">
               No image
             </div>
           )}
 
-          {/* ── Stock / Pre-order badge ──────────────── */}
+          {/* ── Stock / Pre-order badge ────────────────
+              Sits on the product photo, which doesn't change with the
+              theme — these literals are deliberate, not un-migrated. */}
           {(allOutOfStock || hasPreorder) && (
             <div className="absolute bottom-2.5 left-2.5 z-10">
               {hasPreorder ? (
@@ -299,7 +301,7 @@ export function ProductCard({
                   Pre-order
                 </span>
               ) : (
-                <span className="bg-white/90 px-2 py-[3px] text-[9px] font-bold tracking-[0.16em] uppercase text-[#59626E]">
+                <span className="bg-white/90 px-2 py-[3px] text-[9px] font-bold tracking-[0.16em] uppercase text-neutral-700">
                   Sold Out
                 </span>
               )}
@@ -323,7 +325,7 @@ export function ProductCard({
                     }
                     setQuickAddOpen(true);
                   }}
-                  className="w-full bg-white/95 py-3 text-center text-[10px] font-medium uppercase tracking-widest text-gray-900 opacity-0 transition-opacity duration-200 group-hover:opacity-100 dark:bg-black/90 dark:text-white"
+                  className="w-full bg-surface/95 py-3 text-center text-[10px] font-medium uppercase tracking-widest text-text opacity-0 transition-opacity duration-200 group-hover:opacity-100"
                   aria-label="Quick add to cart"
                 >
                   {!hasSizeChoice && (addingSize === sizes[0] ? <SpinnerIcon /> : successSize === sizes[0] ? <CheckIcon /> : "Quick Add +")}
@@ -336,7 +338,7 @@ export function ProductCard({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 4 }}
                   transition={{ duration: 0.2 }}
-                  className="flex w-full items-center justify-center gap-0.5 bg-white/95 py-2 dark:bg-black/90"
+                  className="flex w-full items-center justify-center gap-0.5 bg-surface/95 py-2"
                 >
                   {sizes.map((size, i) => {
                     const variant = findVariantByColorAndSize(variants, selectedColor, size);
@@ -358,12 +360,12 @@ export function ProductCard({
                         aria-disabled={unavailable}
                         className={`flex h-7 min-w-[30px] items-center justify-center px-2 text-[10px] font-semibold uppercase tracking-widest transition-all duration-200 ${
                           unavailable
-                            ? "cursor-not-allowed bg-transparent text-gray-300 line-through dark:text-gray-700"
+                            ? "cursor-not-allowed bg-transparent text-text-placeholder line-through"
                             : addingSize === size
-                              ? "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500"
+                              ? "bg-fill text-text-muted"
                               : successSize === size
-                                ? "bg-black text-white dark:bg-white dark:text-black"
-                                : "bg-transparent text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
+                                ? "bg-invert-bg text-invert-fg"
+                                : "bg-transparent text-text hover:bg-fill"
                         }`}
                       >
                         {addingSize === size ? <SpinnerIcon /> : successSize === size ? <CheckIcon /> : size}
@@ -378,16 +380,16 @@ export function ProductCard({
 
         {/* Info: title + price + colour swatches */}
         <div className="mt-3">
-          <h3 className={`text-xs font-medium uppercase tracking-wide ${allOutOfStock && !hasPreorder ? "text-gray-400 dark:text-gray-600" : "text-gray-900 dark:text-gray-100"}`}>
+          <h3 className={`text-xs font-medium uppercase tracking-wide ${allOutOfStock && !hasPreorder ? "text-text-placeholder" : "text-text"}`}>
             {product.title}
           </h3>
           {price != null && (
             <div className="mt-1 flex items-center gap-1.5">
-              <p className={`text-xs ${isOnSale ? "font-medium text-red-600 dark:text-red-400" : "text-gray-500 dark:text-gray-400"}`}>
+              <p className={`text-xs ${isOnSale ? "font-medium text-sale" : "text-text-secondary"}`}>
                 {formatPrice(price)}
               </p>
               {isOnSale && compareAtPrice != null && (
-                <p className="text-xs text-gray-400 line-through dark:text-gray-600">
+                <p className="text-xs text-text-placeholder line-through">
                   {formatPrice(compareAtPrice)}
                 </p>
               )}
@@ -405,8 +407,8 @@ export function ProductCard({
                   onTouchStart={() => handleColorPrefetch(color)}
                   className={`h-4 w-4 rounded-full transition-transform duration-150 hover:scale-110 focus:outline-none ${
                     selectedColor.toLowerCase() === color.toLowerCase()
-                      ? "ring-1 ring-gray-900 ring-offset-1 dark:ring-white"
-                      : "ring-1 ring-gray-200 dark:ring-gray-700"
+                      ? "ring-1 ring-invert-bg ring-offset-1"
+                      : "ring-1 ring-line"
                   }`}
                   style={{ backgroundColor: colorToHex(color) }}
                   aria-label={color}

@@ -7,6 +7,9 @@ import { useRouter } from "next/navigation";
 import { Search, X, ChevronRight, ChevronDown, User, Sun, Moon } from "lucide-react";
 import { hasToken } from "@/lib/api/client";
 import { useProfile } from "@/lib/api/profile";
+import { useCart } from "@/lib/cart";
+import { useFavourites } from "@/lib/favourites";
+import { useFavouritesDrawer } from "@/lib/favourites-drawer";
 import { useLocale, CURRENCIES } from "@/lib/locale/locale-provider";
 import { useTheme } from "@/lib/theme/theme-provider";
 
@@ -64,14 +67,16 @@ const EXPLORE: SubLink[] = [
   { label: "About", href: "/about" },
 ];
 
+// Bag and Saved Items are deliberately NOT in here: they open their side
+// drawers instead of navigating, so a signed-out shopper isn't bounced to
+// /login (which /favourites does) and never leaves the page they're browsing.
 const INFO: SubLink[] = [
   { label: "Track Your Order", href: "/track" },
   { label: "My Account", href: "/account" },
-  { label: "Saved Items", href: "/favourites" },
 ];
 
 const SECTION_LABEL =
-  "px-5 pb-2 pt-5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#999] dark:text-neutral-500";
+  "px-5 pb-2 pt-5 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted";
 
 // ── Account footer block ───────────────────────────────────
 function AccountBlock({ onNavigate }: { onNavigate: () => void }) {
@@ -79,7 +84,7 @@ function AccountBlock({ onNavigate }: { onNavigate: () => void }) {
   const { data: profile } = useProfile(loggedIn);
 
   const rowCls =
-    "group flex w-full items-center gap-3 px-5 py-3 text-left transition-colors duration-200 hover:bg-[#fafafa] dark:hover:bg-[#111]";
+    "group flex w-full items-center gap-3 px-5 py-3 text-left transition-colors duration-200 hover:bg-surface-subtle";
 
   if (loggedIn) {
     const name = profile?.first_name ?? "there";
@@ -102,20 +107,20 @@ function AccountBlock({ onNavigate }: { onNavigate: () => void }) {
             />
           </span>
         ) : (
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#111] text-[13px] font-semibold text-white dark:bg-[#ededed] dark:text-[#0a0a0a]">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-invert-bg text-[13px] font-semibold text-invert-fg">
             {letter}
           </span>
         )}
         <span className="flex min-w-0 flex-col gap-1">
-          <span className="truncate text-[13px] text-[#111] dark:text-[#ededed]">
+          <span className="truncate text-[13px] text-text">
             Welcome back, {name}
           </span>
-          <span className="text-[11px] uppercase tracking-[0.12em] text-[#999] dark:text-neutral-500">
+          <span className="text-[11px] uppercase tracking-[0.12em] text-text-muted">
             View your account
           </span>
         </span>
         <ChevronRight
-          className="ml-auto h-4 w-4 shrink-0 text-[#ccc] transition-transform duration-200 group-hover:translate-x-0.5 dark:text-neutral-600"
+          className="ml-auto h-4 w-4 shrink-0 text-text-placeholder transition-transform duration-200 group-hover:translate-x-0.5"
           strokeWidth={1.5}
         />
       </Link>
@@ -124,17 +129,17 @@ function AccountBlock({ onNavigate }: { onNavigate: () => void }) {
 
   return (
     <Link href="/login" onClick={onNavigate} className={rowCls}>
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#111] text-[#111] dark:border-[#ededed] dark:text-[#ededed]">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-invert-bg text-text">
         <User className="h-[18px] w-[18px]" strokeWidth={1.5} />
       </span>
       <span className="flex min-w-0 flex-col gap-1">
-        <span className="text-[13px] text-[#111] dark:text-[#ededed]">Sign In</span>
-        <span className="text-[11px] uppercase tracking-[0.12em] text-[#999] dark:text-neutral-500">
+        <span className="text-[13px] text-text">Sign In</span>
+        <span className="text-[11px] uppercase tracking-[0.12em] text-text-muted">
           or create an account
         </span>
       </span>
       <ChevronRight
-        className="ml-auto h-4 w-4 shrink-0 text-[#ccc] transition-transform duration-200 group-hover:translate-x-0.5 dark:text-neutral-600"
+        className="ml-auto h-4 w-4 shrink-0 text-text-placeholder transition-transform duration-200 group-hover:translate-x-0.5"
         strokeWidth={1.5}
       />
     </Link>
@@ -161,7 +166,7 @@ function CurrencySwitcher() {
     <div ref={ref} className="relative px-5 pb-1">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2.5 border border-[#ddd] px-3 py-2.5 font-mono text-[12px] uppercase tracking-[0.18em] text-[#666] transition-colors duration-200 hover:border-[#111] hover:text-[#111] dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-white dark:hover:text-[#ededed]"
+        className="flex w-full items-center gap-2.5 border border-line px-3 py-2.5 font-mono text-[12px] uppercase tracking-[0.18em] text-text-secondary transition-colors duration-200 hover:border-invert-bg hover:text-text"
       >
         <span className="text-[14px] leading-none">{region.flag}</span>
         <span>
@@ -174,7 +179,7 @@ function CurrencySwitcher() {
       </button>
 
       {open && (
-        <div className="absolute bottom-[calc(100%+6px)] left-5 right-5 z-10 border border-[#111] bg-white shadow-[0_-12px_40px_rgba(0,0,0,0.12)] dark:border-white dark:bg-[#0a0a0a]">
+        <div className="absolute bottom-[calc(100%+6px)] left-5 right-5 z-10 border border-invert-bg bg-bg shadow-[0_-12px_40px_rgba(0,0,0,0.12)]">
           {CURRENCIES.map((c) => {
             const isActive = c.code === currency;
             return (
@@ -186,8 +191,8 @@ function CurrencySwitcher() {
                 }}
                 className={`flex w-full items-center gap-3 px-3.5 py-2.5 text-left font-mono transition-colors duration-150 ${
                   isActive
-                    ? "bg-[#111] text-white dark:bg-[#ededed] dark:text-[#0a0a0a]"
-                    : "text-[#666] hover:bg-[#111] hover:text-white dark:text-neutral-400 dark:hover:bg-[#ededed] dark:hover:text-[#0a0a0a]"
+                    ? "bg-invert-bg text-invert-fg"
+                    : "text-text-secondary hover:bg-invert-bg hover:text-invert-fg"
                 }`}
               >
                 <span className={`h-1.5 w-1.5 shrink-0 ${isActive ? "bg-current" : "bg-transparent"}`} />
@@ -210,12 +215,12 @@ function ThemeSwitch() {
   const segCls = (active: boolean) =>
     `flex flex-1 items-center justify-center gap-1.5 py-2 text-[11px] uppercase tracking-[0.12em] transition-colors duration-200 ${
       active
-        ? "bg-[#111] text-white dark:bg-[#ededed] dark:text-[#0a0a0a]"
-        : "text-[#999] hover:text-[#111] dark:text-neutral-500 dark:hover:text-[#ededed]"
+        ? "bg-invert-bg text-invert-fg"
+        : "text-text-muted hover:text-text"
     }`;
   return (
     <div className="px-5 pt-2">
-      <div className="flex items-center border border-[#ddd] dark:border-neutral-700">
+      <div className="flex items-center border border-line">
         <button
           onClick={() => isDark && toggleTheme()}
           aria-pressed={!isDark}
@@ -243,14 +248,46 @@ function LeafRow({ label, href, onClose }: SubLink & { onClose: () => void }) {
     <Link
       href={href}
       onClick={onClose}
-      className="group flex items-center justify-between border-b border-[#f0f0f0] px-5 py-3 text-[14px] text-[#111] transition-colors duration-200 hover:bg-[#fafafa] dark:border-neutral-900 dark:text-[#ededed] dark:hover:bg-[#111]"
+      className="group flex items-center justify-between border-b border-line-subtle px-5 py-3 text-[14px] text-text transition-colors duration-200 hover:bg-surface-subtle"
     >
       <span>{label}</span>
       <ChevronRight
-        className="h-4 w-4 text-[#ccc] opacity-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:opacity-100 dark:text-neutral-600"
+        className="h-4 w-4 text-text-placeholder opacity-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:opacity-100"
         strokeWidth={1.5}
       />
     </Link>
+  );
+}
+
+// ── Drawer-opening row (Bag / Saved Items) ─────────────────
+// Same shape as LeafRow, but it hands off to a side drawer rather than routing.
+function ActionRow({
+  label,
+  count,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="group flex w-full items-center justify-between border-b border-line-subtle px-5 py-3 text-left text-[14px] text-text transition-colors duration-200 hover:bg-surface-subtle"
+    >
+      <span>{label}</span>
+      <span className="flex items-center gap-2">
+        {count > 0 && (
+          <span className="text-[12px] tabular-nums text-text-muted">
+            {count > 99 ? "99+" : count}
+          </span>
+        )}
+        <ChevronRight
+          className="h-4 w-4 text-text-placeholder opacity-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:opacity-100"
+          strokeWidth={1.5}
+        />
+      </span>
+    </button>
   );
 }
 
@@ -259,6 +296,17 @@ export default function NavDrawer({ open, onClose }: { open: boolean; onClose: (
   const router = useRouter();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const { itemCount, hydrated, openDrawer: openCart } = useCart();
+  const { openDrawer: openFavourites } = useFavouritesDrawer();
+  const { data: favourites } = useFavourites();
+
+  // Close this drawer and hand off to the other one in the same click. Both
+  // scroll locks settle correctly because NavDrawer's effect (release) runs
+  // before the target drawer's (lock) — it sits earlier in the tree.
+  function openSideDrawer(open: () => void) {
+    onClose();
+    open();
+  }
 
   // reset transient state shortly after closing
   useEffect(() => {
@@ -301,7 +349,7 @@ export default function NavDrawer({ open, onClose }: { open: boolean; onClose: (
       <div
         onClick={onClose}
         aria-hidden
-        className={`fixed inset-0 z-[80] bg-black/40 transition-opacity duration-300 ${
+        className={`fixed inset-0 z-[80] bg-scrim transition-opacity duration-300 ${
           open ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       />
@@ -309,16 +357,16 @@ export default function NavDrawer({ open, onClose }: { open: boolean; onClose: (
       {/* Panel */}
       <aside
         aria-hidden={!open}
-        className={`fixed inset-y-0 left-0 z-[90] flex w-[86vw] max-w-[380px] flex-col border-r border-[#e5e5e5] bg-white transition-transform duration-300 ease-out dark:border-neutral-800 dark:bg-[#0a0a0a] ${
+        className={`fixed inset-y-0 left-0 z-[90] flex w-[86vw] max-w-[380px] flex-col border-r border-line bg-bg transition-transform duration-300 ease-out ${
           open ? "translate-x-0 shadow-[20px_0_60px_rgba(0,0,0,0.14)]" : "-translate-x-full"
         }`}
       >
         {/* Head */}
-        <div className="relative flex h-[65px] shrink-0 items-center border-b border-[#e5e5e5] px-5 dark:border-neutral-800">
+        <div className="relative flex h-[65px] shrink-0 items-center border-b border-line px-5">
           <button
             onClick={onClose}
             aria-label="Close menu"
-            className="-ml-2 flex h-9 w-9 items-center justify-center text-[#111] transition-colors duration-200 hover:bg-[#fafafa] dark:text-[#ededed] dark:hover:bg-[#111]"
+            className="-ml-2 flex h-9 w-9 items-center justify-center text-text transition-colors duration-200 hover:bg-surface-subtle"
           >
             <X className="h-5 w-5" strokeWidth={1.5} />
           </button>
@@ -341,14 +389,14 @@ export default function NavDrawer({ open, onClose }: { open: boolean; onClose: (
 
         {/* Search */}
         <form onSubmit={submitSearch} className="shrink-0 px-5 pt-4">
-          <div className="flex items-center gap-2.5 border border-[#ddd] px-3 py-2.5 transition-colors duration-200 focus-within:border-[#111] dark:border-neutral-700 dark:focus-within:border-white">
-            <Search className="h-[18px] w-[18px] shrink-0 text-[#999] dark:text-neutral-500" strokeWidth={1.8} />
+          <div className="flex items-center gap-2.5 border border-line px-3 py-2.5 transition-colors duration-200 focus-within:border-invert-bg">
+            <Search className="h-[18px] w-[18px] shrink-0 text-text-muted" strokeWidth={1.8} />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search the store"
               aria-label="Search"
-              className="w-full bg-transparent text-[13px] text-[#111] outline-none placeholder:text-[#bbb] dark:text-[#ededed] dark:placeholder:text-neutral-600"
+              className="w-full bg-transparent text-[13px] text-text outline-none placeholder:text-text-placeholder"
             />
           </div>
         </form>
@@ -367,12 +415,12 @@ export default function NavDrawer({ open, onClose }: { open: boolean; onClose: (
                     if (c.sub) setExpanded(isOpen ? null : c.label);
                     else if (c.href) go(c.href);
                   }}
-                  className="group flex w-full items-center justify-between border-b border-[#f0f0f0] px-5 py-3 text-left text-[14px] text-[#111] transition-colors duration-200 hover:bg-[#fafafa] dark:border-neutral-900 dark:text-[#ededed] dark:hover:bg-[#111]"
+                  className="group flex w-full items-center justify-between border-b border-line-subtle px-5 py-3 text-left text-[14px] text-text transition-colors duration-200 hover:bg-surface-subtle"
                 >
                   <span>{c.label}</span>
                   <ChevronRight
-                    className={`h-4 w-4 text-[#ccc] transition-all duration-200 group-hover:text-[#999] dark:text-neutral-600 ${
-                      c.sub ? (isOpen ? "rotate-90 text-[#111] dark:text-[#ededed]" : "") : "opacity-0 group-hover:translate-x-0.5 group-hover:opacity-100"
+                    className={`h-4 w-4 text-text-placeholder transition-all duration-200 group-hover:text-text-muted ${
+                      c.sub ? (isOpen ? "rotate-90 text-text" : "") : "opacity-0 group-hover:translate-x-0.5 group-hover:opacity-100"
                     }`}
                     strokeWidth={1.5}
                   />
@@ -381,7 +429,7 @@ export default function NavDrawer({ open, onClose }: { open: boolean; onClose: (
                 {/* Accordion subcategories */}
                 {c.sub && (
                   <div
-                    className="overflow-hidden bg-[#fafafa] transition-[max-height] duration-300 ease-out dark:bg-[#0d0d0d]"
+                    className="overflow-hidden bg-surface-subtle transition-[max-height] duration-300 ease-out"
                     style={{ maxHeight: isOpen ? c.sub.length * 42 + 16 : 0 }}
                   >
                     <div className="py-2 pl-5 pr-5">
@@ -390,7 +438,7 @@ export default function NavDrawer({ open, onClose }: { open: boolean; onClose: (
                           key={s.href}
                           href={s.href}
                           onClick={onClose}
-                          className="block border-l border-[#e5e5e5] py-2 pl-4 text-[13px] text-[#666] transition-colors duration-150 hover:border-[#111] hover:text-[#111] dark:border-neutral-800 dark:text-neutral-400 dark:hover:border-white dark:hover:text-[#ededed]"
+                          className="block border-l border-line py-2 pl-4 text-[13px] text-text-secondary transition-colors duration-150 hover:border-invert-bg hover:text-text"
                         >
                           {s.label}
                         </Link>
@@ -408,6 +456,20 @@ export default function NavDrawer({ open, onClose }: { open: boolean; onClose: (
             <LeafRow key={l.href} {...l} onClose={onClose} />
           ))}
 
+          {/* Yours */}
+          <p className={SECTION_LABEL}>Yours</p>
+          <ActionRow
+            label="Bag"
+            // Pre-hydration the cart is still empty, so render 0 to match SSR.
+            count={hydrated ? itemCount : 0}
+            onClick={() => openSideDrawer(openCart)}
+          />
+          <ActionRow
+            label="Saved Items"
+            count={favourites?.length ?? 0}
+            onClick={() => openSideDrawer(openFavourites)}
+          />
+
           {/* Info */}
           <p className={SECTION_LABEL}>Info</p>
           {INFO.map((l) => (
@@ -416,7 +478,7 @@ export default function NavDrawer({ open, onClose }: { open: boolean; onClose: (
         </div>
 
         {/* Footer */}
-        <div className="shrink-0 border-t border-[#e5e5e5] pb-3 dark:border-neutral-800">
+        <div className="shrink-0 border-t border-line pb-3">
           <AccountBlock onNavigate={onClose} />
           <CurrencySwitcher />
           <ThemeSwitch />

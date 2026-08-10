@@ -118,3 +118,7 @@ export function useAnnouncementBanner(initialData?: AnnouncementBanner | null) {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+export interface NewsletterPopup {
+  enabled: boolean;
+}

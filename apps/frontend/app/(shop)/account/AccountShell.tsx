@@ -92,17 +92,17 @@ export default function AccountShell({ profile }: Props) {
       {/* Account header */}
       <div className="flex items-end justify-between pt-10">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#111] dark:text-[#ededed]">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text">
             My Account
           </div>
           {firstName && (
-            <div className="mt-1 text-[13px] text-[#999] dark:text-neutral-500">
+            <div className="mt-1 text-[13px] text-text-muted">
               Welcome back, {firstName}
             </div>
           )}
         </div>
         <button
-          className="border border-[#ddd] dark:border-neutral-700 bg-transparent px-3 py-1.5 text-[11px] text-[#666] dark:text-neutral-400 cursor-pointer transition-colors duration-200 hover:border-[#111] dark:hover:border-white hover:text-[#111] dark:hover:text-white disabled:opacity-50"
+          className="border border-line bg-transparent px-3 py-1.5 text-[11px] text-text-secondary cursor-pointer transition-colors duration-200 hover:border-invert-bg hover:text-text disabled:opacity-50"
           onClick={handleSignOut}
           disabled={loggingOut}
           type="button"
@@ -113,7 +113,7 @@ export default function AccountShell({ profile }: Props) {
 
       {/* Tab bar */}
       <div
-        className="flex gap-6 border-b border-[#e5e5e5] dark:border-neutral-800 mt-6 sticky top-[65px] z-40 bg-white dark:bg-[#0a0a0a] overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+        className="flex gap-6 border-b border-line mt-6 sticky top-[65px] z-40 bg-bg overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
         role="tablist"
         aria-label="Account sections"
       >
@@ -126,8 +126,8 @@ export default function AccountShell({ profile }: Props) {
             id={`tab-${tab.id}`}
             className={`pb-3 -mb-px text-[11px] font-semibold uppercase tracking-[0.12em] bg-transparent border-b-2 cursor-pointer whitespace-nowrap transition-colors duration-200 flex-shrink-0 ${
               activeTab === tab.id
-                ? "text-[#111] dark:text-white border-[#111] dark:border-white"
-                : "text-[#bbb] dark:text-neutral-600 border-transparent hover:text-[#111] dark:hover:text-white"
+                ? "text-text border-invert-bg"
+                : "text-text-placeholder border-transparent hover:text-text"
             }`}
             onClick={() => switchTab(tab.id)}
             onMouseEnter={() => prefetchTab(tab.id)}

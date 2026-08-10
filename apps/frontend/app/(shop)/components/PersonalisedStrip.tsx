@@ -21,13 +21,13 @@ export function PersonalisedStrip({ k = 12 }: { k?: number }) {
     if (isLoading) {
         return (
             <div className="mb-10">
-                <div className="mb-3 h-3 w-32 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                <div className="mb-3 h-3 w-32 animate-pulse rounded bg-fill" />
                 <div className="flex gap-4 overflow-x-auto pb-2">
                     {Array.from({ length: 4 }).map((_, i) => (
                         <div key={i} className="w-40 shrink-0 space-y-2">
-                            <div className="aspect-[3/4] animate-pulse bg-gray-100 dark:bg-gray-800" />
-                            <div className="h-2.5 w-3/4 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
-                            <div className="h-2.5 w-1/3 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                            <div className="aspect-[3/4] animate-pulse bg-fill" />
+                            <div className="h-2.5 w-3/4 animate-pulse rounded bg-fill" />
+                            <div className="h-2.5 w-1/3 animate-pulse rounded bg-fill" />
                         </div>
                     ))}
                 </div>
@@ -40,7 +40,7 @@ export function PersonalisedStrip({ k = 12 }: { k?: number }) {
 
     return (
         <div className="mb-10">
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-900 dark:text-white">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-text">
                 Picked for you
             </h2>
 

@@ -61,14 +61,14 @@ export default function CurrencyModal() {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-scrim p-4 backdrop-blur-sm"
       onClick={dismissCurrencyModal}
       role="dialog"
       aria-modal="true"
       aria-label="Select currency"
     >
       <div
-        className="relative w-full max-w-md border border-neutral-200 bg-white px-7 pb-7 pt-9 shadow-2xl sm:px-9 sm:pb-9 dark:border-neutral-800 dark:bg-neutral-950"
+        className="relative w-full max-w-md border border-line bg-bg px-7 pb-7 pt-9 shadow-2xl sm:px-9 sm:pb-9"
         style={{ fontFamily: 'Helvetica, "Helvetica Neue", Arial, sans-serif' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -77,7 +77,7 @@ export default function CurrencyModal() {
           type="button"
           onClick={dismissCurrencyModal}
           aria-label="Close"
-          className="absolute right-4 top-4 text-neutral-400 transition hover:text-neutral-900 dark:text-neutral-600 dark:hover:text-white"
+          className="absolute right-4 top-4 text-text-muted hover:text-text transition"
         >
           <X className="h-4 w-4" strokeWidth={1.75} />
         </button>
@@ -94,25 +94,25 @@ export default function CurrencyModal() {
 
         {/* Eyebrow + readout */}
         <div className="mt-8 text-center">
-          <p className="text-[10px] uppercase tracking-[0.4em] text-neutral-900 dark:text-white">
+          <p className="text-[10px] uppercase tracking-[0.4em] text-text">
             Select Currency
           </p>
-          <div className="mx-auto mt-4 flex items-center justify-center gap-2 text-[9px] uppercase tracking-[0.28em] text-neutral-400 dark:text-neutral-500">
-            <span className="h-px w-4 bg-neutral-300 dark:bg-neutral-700" />
+          <div className="mx-auto mt-4 flex items-center justify-center gap-2 text-[9px] uppercase tracking-[0.28em] text-text-muted">
+            <span className="h-px w-4 bg-line-strong" />
             {detectedKnown ? (
               <span>
                 Detected&nbsp;·&nbsp;
-                <span className="text-neutral-900 dark:text-white">{region.country}</span>
+                <span className="text-text">{region.country}</span>
               </span>
             ) : (
               <span>Choose your currency</span>
             )}
-            <span className="h-px w-4 bg-neutral-300 dark:bg-neutral-700" />
+            <span className="h-px w-4 bg-line-strong" />
           </div>
         </div>
 
         {/* Currency grid — connected hairline spec-sheet */}
-        <div className="mt-8 grid grid-cols-2 border-l border-t border-neutral-200 dark:border-neutral-800">
+        <div className="mt-8 grid grid-cols-2 border-l border-t border-line">
           {modalCurrencies.map((cur) => {
             const isSelected = selected === cur.code;
             // GHS (the home currency) sits on its own full-width row at the bottom.
@@ -123,19 +123,19 @@ export default function CurrencyModal() {
                 type="button"
                 onClick={() => setSelected(cur.code)}
                 aria-pressed={isSelected}
-                className={`group relative flex flex-col items-center justify-center gap-1.5 border-b border-r border-neutral-200 py-7 transition-colors dark:border-neutral-800 ${
+                className={`group relative flex flex-col items-center justify-center gap-1.5 border-b border-r border-line py-7 transition-colors ${
                   fullWidth ? "col-span-2" : ""
                 } ${
                   isSelected
-                    ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
-                    : "bg-white text-neutral-900 hover:bg-neutral-50 dark:bg-neutral-950 dark:text-white dark:hover:bg-neutral-900"
+                    ? "bg-invert-bg text-invert-fg"
+                    : "bg-bg text-text hover:bg-surface-subtle"
                 }`}
               >
                 {/* Selected marker: filled square, echoing the site's technical dots */}
                 <span
                   className={`absolute right-3 top-3 h-1.5 w-1.5 ${
                     isSelected
-                      ? "bg-white dark:bg-neutral-900"
+                      ? "bg-surface"
                       : "bg-transparent"
                   }`}
                 />
@@ -145,8 +145,8 @@ export default function CurrencyModal() {
                 <span
                   className={`text-[9px] uppercase tracking-[0.2em] ${
                     isSelected
-                      ? "text-white/60 dark:text-neutral-900/60"
-                      : "text-neutral-400 dark:text-neutral-500"
+                      ? "text-invert-fg/60"
+                      : "text-text-muted"
                   }`}
                 >
                   {cur.name}
@@ -160,14 +160,14 @@ export default function CurrencyModal() {
         <button
           type="button"
           onClick={handleConfirm}
-          className="mt-8 w-full bg-neutral-900 py-4 text-[11px] uppercase tracking-[0.3em] text-white transition hover:bg-black dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+          className="mt-8 w-full bg-invert-bg py-4 text-[11px] uppercase tracking-[0.3em] text-invert-fg transition hover:opacity-90"
         >
           Confirm
         </button>
         <button
           type="button"
           onClick={dismissCurrencyModal}
-          className="mt-5 block w-full text-center text-[10px] uppercase tracking-[0.28em] text-neutral-400 transition hover:text-neutral-900 dark:text-neutral-500 dark:hover:text-white"
+          className="mt-5 block w-full text-center text-[10px] uppercase tracking-[0.28em] text-text-muted hover:text-text transition"
         >
           Dismiss
         </button>

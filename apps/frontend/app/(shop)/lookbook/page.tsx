@@ -149,7 +149,7 @@ export default function LookbookPage() {
   return (
     <div
       ref={containerRef}
-      className="bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100"
+      className="bg-surface-subtle text-text"
     >
       {/* ═══════════════════════════════════════════════════════════════
           SCENE 1 — Hero
@@ -229,7 +229,7 @@ export default function LookbookPage() {
             </p>
 
             <p
-              className="mt-8 font-serif text-lg italic text-neutral-500 dark:text-neutral-400 sm:mt-12 sm:text-2xl"
+              className="mt-8 font-serif text-lg italic text-text-secondary sm:mt-12 sm:text-2xl"
               style={{
                 opacity:
                   "calc(min(max(0, (var(--p,0) - 0.12) * 4), 1) * (1 - max(0, (var(--p,0) - 0.7) * 3.33)))",
@@ -304,7 +304,7 @@ export default function LookbookPage() {
 
         {/* Floating centre caption */}
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <p className="bg-neutral-50/80 px-8 py-4 font-serif text-lg italic text-neutral-600 backdrop-blur-sm dark:bg-neutral-950/80 dark:text-neutral-400 sm:text-2xl">
+          <p className="bg-surface-subtle/80 px-8 py-4 font-serif text-lg italic text-text-secondary backdrop-blur-sm sm:text-2xl">
             Between stillness &amp; motion
           </p>
         </div>
@@ -410,7 +410,7 @@ export default function LookbookPage() {
           SCENE 7 — Closing
           ═══════════════════════════════════════════════════════════════ */}
       <section data-scene="closing" className="relative" style={{ height: "130vh" }}>
-        <div className="sticky top-0 flex h-screen flex-col items-center justify-center border-t border-neutral-200 dark:border-neutral-800">
+        <div className="sticky top-0 flex h-screen flex-col items-center justify-center border-t border-line">
           <div
             className="text-center"
             style={{
@@ -418,7 +418,7 @@ export default function LookbookPage() {
               transform: "translateY(calc((1 - min(var(--p,0) * 3.5, 1)) * 50px))",
             }}
           >
-            <p className="font-serif text-lg italic text-neutral-500 dark:text-neutral-400 sm:text-2xl">
+            <p className="font-serif text-lg italic text-text-secondary sm:text-2xl">
               Fall / Winter 2024
             </p>
             <div className="mt-4 flex items-center justify-center gap-3">

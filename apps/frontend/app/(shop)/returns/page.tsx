@@ -21,34 +21,34 @@ export default function ReturnsPage() {
       <style>{`.display { letter-spacing: -0.015em; }`}</style>
 
       {/* ─── TITLE ─────────────────────────────────────────── */}
-      <section className="border-b border-neutral-200 dark:border-neutral-800 px-6 pt-24 pb-16">
+      <section className="border-b border-line px-6 pt-24 pb-16">
         <div className="mx-auto max-w-5xl">
-          <div className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500 font-mono">
+          <div className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-text-muted font-mono">
             <span>Policies</span>
-            <span className="h-px w-8 bg-neutral-300 dark:bg-neutral-700"></span>
+            <span className="h-px w-8 bg-line-strong"></span>
             <span>1NRI Worldwide Ltd.</span>
           </div>
 
           <h1 className="display mt-8 text-4xl sm:text-6xl lg:text-7xl font-bold uppercase tracking-tight leading-[0.95]">
             Returns &amp;<br />
-            <span className="text-neutral-400 dark:text-neutral-500">Refunds.</span>
+            <span className="text-text-muted">Refunds.</span>
           </h1>
 
-          <p className="mt-10 max-w-2xl text-lg sm:text-xl text-neutral-600 dark:text-neutral-400 leading-relaxed">
+          <p className="mt-10 max-w-2xl text-lg sm:text-xl text-text-secondary leading-relaxed">
             At 1NRI, we want every piece you receive to feel right. If it doesn&rsquo;t, here&rsquo;s how we make it right.
           </p>
 
-          <div className="mt-12 grid grid-cols-2 sm:grid-cols-3 gap-y-6 gap-x-8 border-t border-neutral-200 dark:border-neutral-800 pt-8">
+          <div className="mt-12 grid grid-cols-2 sm:grid-cols-3 gap-y-6 gap-x-8 border-t border-line pt-8">
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">Return window</div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-text-muted">Return window</div>
               <div className="mt-2 text-sm font-medium">14 days from delivery</div>
             </div>
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">Damaged items</div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-text-muted">Damaged items</div>
               <div className="mt-2 text-sm font-medium">Replaced or refunded, free</div>
             </div>
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">Resale</div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-text-muted">Resale</div>
               <div className="mt-2 text-sm font-medium">Items not eligible for resale</div>
             </div>
           </div>
@@ -59,12 +59,12 @@ export default function ReturnsPage() {
       <section className="px-6 py-24 sm:py-32">
         <div className="mx-auto max-w-5xl grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-10 lg:gap-16">
           <div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500">01</div>
-            <div className="mt-2 text-xs uppercase tracking-widest text-neutral-500 dark:text-neutral-400">Our Policy</div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.4em] text-text-muted">01</div>
+            <div className="mt-2 text-xs uppercase tracking-widest text-text-secondary">Our Policy</div>
           </div>
 
-          <div className="space-y-6 text-base sm:text-lg leading-relaxed text-neutral-700 dark:text-neutral-300">
-            <p className="text-xl sm:text-2xl text-neutral-900 dark:text-neutral-100">
+          <div className="space-y-6 text-base sm:text-lg leading-relaxed text-text-secondary">
+            <p className="text-xl sm:text-2xl text-text">
               We accept returns within 14 days of delivery.
             </p>
             <p>
@@ -78,27 +78,27 @@ export default function ReturnsPage() {
       </section>
 
       {/* ─── POLICY GRID ─── */}
-      <section className="border-t border-b border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 px-6 py-24 sm:py-32">
+      <section className="border-t border-b border-line bg-surface-subtle px-6 py-24 sm:py-32">
         <div className="mx-auto max-w-5xl">
-          <div className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500 font-mono">
+          <div className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-text-muted font-mono">
             <span>02</span>
-            <span className="h-px w-8 bg-neutral-300 dark:bg-neutral-700"></span>
+            <span className="h-px w-8 bg-line-strong"></span>
             <span>What to expect</span>
           </div>
 
-          <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-px bg-neutral-200 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-800">
-            <article className="bg-neutral-50 dark:bg-neutral-950 p-8">
+          <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-px bg-fill border border-line">
+            <article className="bg-surface-subtle p-8">
               <div className="font-mono text-2xl font-semibold tabular-nums">01</div>
               <h3 className="mt-6 text-xl font-semibold uppercase tracking-tight">Refunds</h3>
-              <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
+              <p className="mt-3 text-sm text-text-secondary leading-relaxed">
                 Not the right fit? Items can be refunded within the 14-day window. Customers are responsible for return shipping costs.
               </p>
             </article>
 
-            <article className="bg-neutral-50 dark:bg-neutral-950 p-8">
+            <article className="bg-surface-subtle p-8">
               <div className="font-mono text-2xl font-semibold tabular-nums">02</div>
               <h3 className="mt-6 text-xl font-semibold uppercase tracking-tight">Damaged items</h3>
-              <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
+              <p className="mt-3 text-sm text-text-secondary leading-relaxed">
                 If your item arrives damaged, we&rsquo;ll replace it at no cost, or issue a full refund and cover the return shipping.
               </p>
             </article>
@@ -109,22 +109,22 @@ export default function ReturnsPage() {
       {/* ─── CONTACT ─── */}
       <section className="px-6 py-24 sm:py-32">
         <div className="mx-auto max-w-5xl">
-          <div className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-neutral-400 dark:text-neutral-500 font-mono">
+          <div className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-text-muted font-mono">
             <span>03</span>
-            <span className="h-px w-8 bg-neutral-300 dark:bg-neutral-700"></span>
+            <span className="h-px w-8 bg-line-strong"></span>
             <span>Start a return</span>
           </div>
 
           <h2 className="display mt-6 text-3xl sm:text-5xl font-bold uppercase tracking-tight">
             Questions or concerns?
           </h2>
-          <p className="mt-4 max-w-xl text-base sm:text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed">
+          <p className="mt-4 max-w-xl text-base sm:text-lg text-text-secondary leading-relaxed">
             Reach out and we&rsquo;ll walk you through it. You can email us, call, or message us on any of our social media handles.
           </p>
 
-          <div className="mt-12 flex flex-col sm:flex-row sm:items-center gap-10 sm:gap-16 border-t border-neutral-200 dark:border-neutral-800 pt-8">
+          <div className="mt-12 flex flex-col sm:flex-row sm:items-center gap-10 sm:gap-16 border-t border-line pt-8">
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">
+              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-text-muted">
                 For returns &amp; refunds
               </div>
               <a
@@ -135,7 +135,7 @@ export default function ReturnsPage() {
               </a>
             </div>
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">
+              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-text-muted">
                 Call or message us
               </div>
               <a
@@ -147,9 +147,9 @@ export default function ReturnsPage() {
             </div>
           </div>
 
-          <div className="mt-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-neutral-200 dark:border-neutral-800 pt-8">
+          <div className="mt-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-line pt-8">
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500">
+              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-text-muted">
                 General enquiries
               </div>
               <a
@@ -161,7 +161,7 @@ export default function ReturnsPage() {
             </div>
             <Link
               href="/products"
-              className="block w-full text-center sm:inline-block sm:w-auto bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-8 py-3.5 sm:py-3 text-xs font-semibold uppercase tracking-[0.25em] hover:opacity-90 transition"
+              className="block w-full text-center sm:inline-block sm:w-auto bg-invert-bg text-invert-fg px-8 py-3.5 sm:py-3 text-xs font-semibold uppercase tracking-[0.25em] hover:opacity-90 transition"
             >
               Shop the brand
             </Link>

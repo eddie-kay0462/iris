@@ -20,10 +20,10 @@ const STATUS_MAP: Record<string, string> = {
 };
 
 const DOT_CLASS: Record<string, string> = {
-  done:    "bg-[#111] dark:bg-[#ededed]",
-  active:  "bg-[#999] dark:bg-neutral-500",
-  bad:     "bg-[#ccc] dark:bg-neutral-600",
-  pending: "bg-[#ddd] dark:bg-neutral-700",
+  done:    "bg-invert-bg",
+  active:  "bg-text-muted",
+  bad:     "bg-text-placeholder",
+  pending: "bg-line-strong",
 };
 
 export function StatusPip({ status }: { status: string }) {
@@ -32,7 +32,7 @@ export function StatusPip({ status }: { status: string }) {
   const isBad     = ["cancelled", "refunded"].includes(status);
   const dotKey    = isDone ? "done" : isActive ? "active" : isBad ? "bad" : "pending";
   return (
-    <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.1em] text-[#111] dark:text-[#ededed] whitespace-nowrap font-mono">
+    <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.1em] text-text whitespace-nowrap font-mono">
       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${DOT_CLASS[dotKey]}`} />
       {STATUS_MAP[status] ?? status}
     </span>
@@ -41,7 +41,7 @@ export function StatusPip({ status }: { status: string }) {
 
 export function EndLabel({ children }: { children: ReactNode }) {
   return (
-    <div className="text-center pt-10 pb-4 text-[10px] font-medium uppercase tracking-[0.2em] text-[#ccc] dark:text-neutral-700 font-mono">
+    <div className="text-center pt-10 pb-4 text-[10px] font-medium uppercase tracking-[0.2em] text-text-placeholder font-mono">
       {children}
     </div>
   );

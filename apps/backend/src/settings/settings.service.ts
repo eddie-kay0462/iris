@@ -257,6 +257,33 @@ export class SettingsService {
     return clean;
   }
 
+  /**
+   * First-visit newsletter pop-up on the storefront homepage. Public — read by
+   * the homepage on every request.
+   */
+  async getNewsletterPopup(): Promise<NewsletterPopup> {
+    const db = this.supabase.getAdminClient();
+    const { data } = await db
+      .from('store_settings')
+      .select('value')
+      .eq('key', 'newsletter_popup')
+      .single();
+
+    if (!data?.value) return DEFAULT_NEWSLETTER_POPUP;
+    return { ...DEFAULT_NEWSLETTER_POPUP, ...(data.value as NewsletterPopup) };
+  }
+
+  async updateNewsletterPopup(popup: NewsletterPopup): Promise<NewsletterPopup> {
+    const clean: NewsletterPopup = { enabled: !!popup.enabled };
+    const db = this.supabase.getAdminClient();
+    const { error } = await db
+      .from('store_settings')
+      .upsert({ key: 'newsletter_popup', value: clean, updated_at: new Date().toISOString() });
+
+    if (error) throw error;
+    return clean;
+  }
+
   async getStockHoldMinutes(): Promise<number> {
     const db = this.supabase.getAdminClient();
     const { data } = await db
@@ -406,6 +433,14 @@ const DEFAULT_ANNOUNCEMENT_BANNER: AnnouncementBanner = {
   enabled: false,
   text: '',
   link: '',
+};
+
+export interface NewsletterPopup {
+  enabled: boolean;
+}
+
+const DEFAULT_NEWSLETTER_POPUP: NewsletterPopup = {
+  enabled: false,
 };
 
 const DEFAULT_STOCK_HOLD_MINUTES = 10;

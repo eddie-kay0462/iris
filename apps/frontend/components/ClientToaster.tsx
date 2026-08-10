@@ -16,11 +16,25 @@ export function ClientToaster() {
   }, []);
 
   return (
+    // No `richColors` — sonner's saturated defaults fight the neutral palette.
+    // Toasts are drawn as ordinary elevated surfaces, with status carried by
+    // the icon colour instead of the whole card.
     <Toaster
       position="bottom-right"
-      richColors
       theme={theme}
-      toastOptions={{ duration: 4500 }}
+      toastOptions={{
+        duration: 4500,
+        classNames: {
+          toast: "bg-surface text-text border border-line shadow-lg",
+          title: "text-text",
+          description: "text-text-secondary",
+          actionButton: "bg-invert-bg text-invert-fg",
+          cancelButton: "bg-fill text-text-secondary",
+          error: "[&_[data-icon]]:text-danger",
+          success: "[&_[data-icon]]:text-success",
+          warning: "[&_[data-icon]]:text-warning",
+        },
+      }}
     />
   );
 }

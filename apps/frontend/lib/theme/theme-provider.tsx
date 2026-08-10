@@ -19,23 +19,17 @@ export function useTheme() {
 }
 
 function applyTheme(theme: Theme) {
-  if (theme === "dark") {
-    document.documentElement.classList.add("dark");
-    document.documentElement.style.colorScheme = "dark";
-  } else {
-    document.documentElement.classList.remove("dark");
-    document.documentElement.style.colorScheme = "light";
-  }
+  // color-scheme is handled by the `html.dark` rule in globals.css —
+  // setting it inline here would outrank the stylesheet.
+  document.documentElement.classList.toggle("dark", theme === "dark");
 }
 
 function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "light";
-  try {
-    const stored = localStorage.getItem("iris-theme");
-    return stored === "dark" ? "dark" : "light";
-  } catch {
-    return "light";
-  }
+  // Read the DOM, not storage: the blocking script in layout.tsx has
+  // already applied the theme, so this keeps React state in agreement
+  // with what's on screen.
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
