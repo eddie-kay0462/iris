@@ -3,6 +3,30 @@ import { SupabaseService } from '../common/supabase/supabase.service';
 import { LetsfishService } from '../letsfish/letsfish.service';
 import { BulkSmsDto } from './dto/bulk-sms.dto';
 import { RecipientPreviewDto } from './dto/recipient-preview.dto';
+import { parsePhone } from '../common/utils/phone';
+
+/** A profile row resolved into a sendable recipient. */
+type Recipient = {
+  name: string;
+  firstName: string | null;
+  /** The value as stored in profiles.phone_number, warts and all. */
+  rawPhone: string;
+  /** Normalized E.164, e.g. "+233241234567". */
+  e164: string;
+  isGhana: boolean;
+  smsOptedIn: boolean;
+};
+
+type ResolvedRecipients = {
+  /** Every parseable recipient, in the order profiles were fetched. */
+  valid: Recipient[];
+  internationalCount: number;
+  /** Rows whose stored phone_number could not be parsed into a valid number. */
+  invalidCount: number;
+};
+
+/** PostgREST caps a single response at 1000 rows, so profiles are paged in. */
+const PROFILE_PAGE_SIZE = 1000;
 
 @Injectable()
 export class CommunicationsService {
@@ -12,8 +36,9 @@ export class CommunicationsService {
   ) {}
 
   async getStatus() {
-    const { configured, baseUrl } = await this.letsfishService.healthCheck();
-    return { configured, baseUrl, provider: 'letsfish' };
+    const { configured, baseUrl, senderId } =
+      await this.letsfishService.healthCheck();
+    return { configured, baseUrl, senderId, provider: 'letsfish' };
   }
 
   async getLogs(page = 1, limit = 50) {
@@ -46,20 +71,91 @@ export class CommunicationsService {
     return this.letsfishService.makeOtpCall(phone, otp);
   }
 
-  async getPhoneCounts() {
+  /**
+   * Load every phone-bearing profile and classify it by country.
+   *
+   * Ghana detection cannot be pushed into SQL: phone_number is free text with no
+   * constraint, and the live data holds E.164, local "0XXXXXXXXX", spreadsheet
+   * artifacts like "'0241234567", spaced values and a double-trunk-zero form. So
+   * each row is normalized with toE164(raw, 'GH') and classified in memory.
+   */
+  private async loadRecipients(): Promise<ResolvedRecipients> {
     const db = this.supabase.getAdminClient();
-    const [allResult, optedResult] = await Promise.all([
-      db
+
+    const rows: Array<{
+      first_name: string | null;
+      last_name: string | null;
+      phone_number: string | null;
+      sms_notifications: boolean | null;
+    }> = [];
+
+    for (let from = 0; ; from += PROFILE_PAGE_SIZE) {
+      const { data, error } = await db
         .from('profiles')
-        .select('id', { count: 'exact', head: true })
-        .not('phone_number', 'is', null),
-      db
-        .from('profiles')
-        .select('id', { count: 'exact', head: true })
+        .select('first_name, last_name, phone_number, sms_notifications')
         .not('phone_number', 'is', null)
-        .eq('sms_notifications', true),
-    ]);
-    return { total: allResult.count || 0, sms_opted_in: optedResult.count || 0 };
+        .order('first_name', { ascending: true, nullsFirst: false })
+        .range(from, from + PROFILE_PAGE_SIZE - 1);
+
+      if (error) throw error;
+      rows.push(...(data || []));
+      if (!data || data.length < PROFILE_PAGE_SIZE) break;
+    }
+
+    const valid: Recipient[] = [];
+    let internationalCount = 0;
+    let invalidCount = 0;
+
+    for (const row of rows) {
+      const rawPhone = row.phone_number as string;
+      const parsed = parsePhone(rawPhone, 'GH');
+      if (!parsed) {
+        invalidCount++;
+        continue;
+      }
+      const recipient: Recipient = {
+        name:
+          [row.first_name, row.last_name].filter(Boolean).join(' ') ||
+          '(no name)',
+        firstName: row.first_name,
+        rawPhone,
+        e164: parsed.e164,
+        isGhana: parsed.country === 'GH',
+        smsOptedIn: row.sms_notifications === true,
+      };
+      if (!recipient.isGhana) internationalCount++;
+      valid.push(recipient);
+    }
+
+    return { valid, internationalCount, invalidCount };
+  }
+
+  /** Apply the recipient_filter / ghana_only controls to a resolved set. */
+  private selectRecipients(
+    resolved: ResolvedRecipients,
+    filter: 'all' | 'sms_opted_in',
+    ghanaOnly: boolean,
+  ): Recipient[] {
+    return resolved.valid.filter(
+      (r) =>
+        (!ghanaOnly || r.isGhana) &&
+        (filter !== 'sms_opted_in' || r.smsOptedIn),
+    );
+  }
+
+  async getPhoneCounts() {
+    const resolved = await this.loadRecipients();
+    const count = (filter: 'all' | 'sms_opted_in', ghanaOnly: boolean) =>
+      this.selectRecipients(resolved, filter, ghanaOnly).length;
+
+    return {
+      total: count('all', false),
+      sms_opted_in: count('sms_opted_in', false),
+      ghana_total: count('all', true),
+      ghana_sms_opted_in: count('sms_opted_in', true),
+      international: resolved.internationalCount,
+      invalid: resolved.invalidCount,
+    };
   }
 
   private personalizeMessage(message: string, firstName: string | null): string {
@@ -68,38 +164,35 @@ export class CommunicationsService {
   }
 
   async getRecipientPreview(dto: RecipientPreviewDto) {
-    const db = this.supabase.getAdminClient();
     const page = dto.page ?? 1;
     const limit = dto.limit ?? 20;
     const from = (page - 1) * limit;
-    const to = from + limit - 1;
 
-    let query = db
-      .from('profiles')
-      .select('first_name, last_name, phone_number', { count: 'exact' })
-      .not('phone_number', 'is', null)
-      .order('first_name', { ascending: true, nullsFirst: false })
-      .range(from, to);
+    const resolved = await this.loadRecipients();
+    const selected = this.selectRecipients(
+      resolved,
+      dto.recipient_filter,
+      dto.ghana_only === true,
+    );
 
-    if (dto.recipient_filter === 'sms_opted_in') {
-      query = query.eq('sms_notifications', true);
-    }
-
-    const { data, count, error } = await query;
-    if (error) throw error;
-
-    const recipients = (data || []).map((r) => ({
-      name: [r.first_name, r.last_name].filter(Boolean).join(' ') || '(no name)',
-      phone: r.phone_number as string,
-      preview: this.personalizeMessage(dto.message, r.first_name),
+    const recipients = selected.slice(from, from + limit).map((r) => ({
+      name: r.name,
+      phone: r.e164,
+      raw_phone: r.rawPhone,
+      preview: this.personalizeMessage(dto.message, r.firstName),
     }));
 
     return {
       data: recipients,
-      total: count || 0,
+      total: selected.length,
       page,
       limit,
-      totalPages: Math.ceil((count || 0) / limit),
+      totalPages: Math.ceil(selected.length / limit),
+      excluded: {
+        international:
+          dto.ghana_only === true ? resolved.internationalCount : 0,
+        invalid: resolved.invalidCount,
+      },
     };
   }
 
@@ -107,22 +200,23 @@ export class CommunicationsService {
     total: number;
     succeeded: number;
     failed: number;
+    skipped_international: number;
+    skipped_invalid: number;
     errors: Array<{ phone: string; error: string }>;
   }> {
-    const db = this.supabase.getAdminClient();
-    let query = db
-      .from('profiles')
-      .select('phone_number, first_name')
-      .not('phone_number', 'is', null);
-    if (dto.recipient_filter === 'sms_opted_in') {
-      query = query.eq('sms_notifications', true);
-    }
-    const { data, error } = await query;
-    if (error) throw error;
+    const ghanaOnly = dto.ghana_only === true;
+    const resolved = await this.loadRecipients();
+    const selected = this.selectRecipients(
+      resolved,
+      dto.recipient_filter,
+      ghanaOnly,
+    );
 
-    const recipients = (data || []).map((r) => ({
-      phone: r.phone_number as string,
-      message: this.personalizeMessage(dto.message, r.first_name),
+    const recipients = selected.map((r) => ({
+      // Always send the normalized number — a raw stored value like "'0241234567"
+      // would otherwise reach the provider verbatim.
+      phone: r.e164,
+      message: this.personalizeMessage(dto.message, r.firstName),
     }));
 
     let succeeded = 0;
@@ -152,6 +246,17 @@ export class CommunicationsService {
         await new Promise((r) => setTimeout(r, 200));
       }
     }
-    return { total: recipients.length, succeeded, failed, errors };
+
+    return {
+      total: recipients.length,
+      succeeded,
+      failed,
+      skipped_international: ghanaOnly
+        ? this.selectRecipients(resolved, dto.recipient_filter, false).length -
+          selected.length
+        : 0,
+      skipped_invalid: resolved.invalidCount,
+      errors,
+    };
   }
 }

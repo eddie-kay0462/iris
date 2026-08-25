@@ -124,10 +124,15 @@ export class LetsfishService {
     return { success, callId };
   }
 
-  async healthCheck(): Promise<{ configured: boolean; baseUrl: string }> {
+  async healthCheck(): Promise<{
+    configured: boolean;
+    baseUrl: string;
+    senderId: string;
+  }> {
     return {
       configured: this.isConfigured(),
       baseUrl: this.baseUrl,
+      senderId: this.senderId,
     };
   }
 

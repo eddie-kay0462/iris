@@ -8,6 +8,7 @@ import { apiClient } from "@/lib/api/client";
 type StatusData = {
   configured: boolean;
   baseUrl: string;
+  senderId: string;
   provider: string;
 };
 
@@ -33,17 +34,41 @@ type BulkSmsResult = {
   total: number;
   succeeded: number;
   failed: number;
+  skipped_international: number;
+  skipped_invalid: number;
   errors: Array<{ phone: string; error: string }>;
 };
 
-type PhoneCounts = { total: number; sms_opted_in: number };
+type PhoneCounts = {
+  total: number;
+  sms_opted_in: number;
+  ghana_total: number;
+  ghana_sms_opted_in: number;
+  international: number;
+  invalid: number;
+};
 
-type RecipientPreview = { name: string; phone: string; preview: string };
+const EMPTY_PHONE_COUNTS: PhoneCounts = {
+  total: 0,
+  sms_opted_in: 0,
+  ghana_total: 0,
+  ghana_sms_opted_in: 0,
+  international: 0,
+  invalid: 0,
+};
+
+type RecipientPreview = {
+  name: string;
+  phone: string;
+  raw_phone: string;
+  preview: string;
+};
 type RecipientPreviewData = {
   data: RecipientPreview[];
   total: number;
   page: number;
   totalPages: number;
+  excluded: { international: number; invalid: number };
 };
 
 function getSmsSegments(msg: string) {
@@ -80,6 +105,8 @@ export default function CommunicationsSettingsPage() {
   const [phoneCounts, setPhoneCounts] = useState<PhoneCounts | null>(null);
   const [phoneCountsLoading, setPhoneCountsLoading] = useState(false);
   const [bulkFilter, setBulkFilter] = useState<"all" | "sms_opted_in">("all");
+  // Default on: international SMS is billed at a premium by LetsFish.
+  const [ghanaOnly, setGhanaOnly] = useState(true);
   const [bulkMessage, setBulkMessage] = useState("");
   const [bulkSending, setBulkSending] = useState(false);
   const [bulkResult, setBulkResult] = useState<BulkSmsResult | null>(null);
@@ -95,8 +122,20 @@ export default function CommunicationsSettingsPage() {
     setPhoneCountsLoading(true);
     apiClient<PhoneCounts>("/communications/phone-counts")
       .then(setPhoneCounts)
-      .catch(() => setPhoneCounts({ total: 0, sms_opted_in: 0 }))
+      .catch(() => setPhoneCounts(EMPTY_PHONE_COUNTS))
       .finally(() => setPhoneCountsLoading(false));
+  }
+
+  /** Recipients that will actually be sent to, given both recipient controls. */
+  function effectiveCount(
+    filter: "all" | "sms_opted_in" = bulkFilter,
+    onlyGhana: boolean = ghanaOnly,
+  ): number | undefined {
+    if (!phoneCounts) return undefined;
+    if (onlyGhana) {
+      return filter === "all" ? phoneCounts.ghana_total : phoneCounts.ghana_sms_opted_in;
+    }
+    return filter === "all" ? phoneCounts.total : phoneCounts.sms_opted_in;
   }
 
   useEffect(() => {
@@ -162,7 +201,13 @@ export default function CommunicationsSettingsPage() {
     try {
       const data = await apiClient<RecipientPreviewData>("/communications/recipient-preview", {
         method: "POST",
-        body: { message: bulkMessage, recipient_filter: bulkFilter, page, limit: 20 },
+        body: {
+          message: bulkMessage,
+          recipient_filter: bulkFilter,
+          ghana_only: ghanaOnly,
+          page,
+          limit: 20,
+        },
       });
       setPreviewData(data);
       setPreviewPage(page);
@@ -186,7 +231,11 @@ export default function CommunicationsSettingsPage() {
     try {
       const res = await apiClient<BulkSmsResult>("/communications/bulk-sms", {
         method: "POST",
-        body: { message: bulkMessage, recipient_filter: bulkFilter },
+        body: {
+          message: bulkMessage,
+          recipient_filter: bulkFilter,
+          ghana_only: ghanaOnly,
+        },
       });
       setBulkResult(res);
       setShowReview(false);
@@ -196,7 +245,14 @@ export default function CommunicationsSettingsPage() {
         setLogsPage(1);
       });
     } catch (err: any) {
-      setBulkResult({ total: 0, succeeded: 0, failed: 0, errors: [{ phone: "", error: err.message }] });
+      setBulkResult({
+        total: 0,
+        succeeded: 0,
+        failed: 0,
+        skipped_international: 0,
+        skipped_invalid: 0,
+        errors: [{ phone: "", error: err.message }],
+      });
       setShowReview(false);
       setConfirmingSend(false);
     } finally {
@@ -384,8 +440,16 @@ export default function CommunicationsSettingsPage() {
           <div className="flex flex-col gap-2">
             {(
               [
-                { value: "all", label: "All customers with phone numbers", count: phoneCounts?.total },
-                { value: "sms_opted_in", label: "SMS opted-in only", count: phoneCounts?.sms_opted_in },
+                {
+                  value: "all",
+                  label: "All customers with phone numbers",
+                  count: effectiveCount("all"),
+                },
+                {
+                  value: "sms_opted_in",
+                  label: "SMS opted-in only",
+                  count: effectiveCount("sms_opted_in"),
+                },
               ] as const
             ).map((opt) => (
               <label key={opt.value} className="flex items-center gap-3 cursor-pointer">
@@ -406,6 +470,28 @@ export default function CommunicationsSettingsPage() {
               </label>
             ))}
           </div>
+
+          {/* Ghana-only toggle — international SMS is billed at a premium */}
+          <label className="flex items-start gap-3 cursor-pointer rounded border border-slate-200 bg-slate-50 px-3 py-2">
+            <input
+              type="checkbox"
+              checked={ghanaOnly}
+              onChange={(e) => setGhanaOnly(e.target.checked)}
+              className="mt-0.5 accent-slate-900"
+            />
+            <span className="text-sm text-slate-700">
+              Ghana numbers only
+              <span className="block text-xs text-slate-500">
+                {phoneCounts
+                  ? `Excludes ${phoneCounts.international} international number${
+                      phoneCounts.international !== 1 ? "s" : ""
+                    } \u00b7 ${phoneCounts.invalid} unreadable number${
+                      phoneCounts.invalid !== 1 ? "s" : ""
+                    } are always skipped`
+                  : "International numbers cost more to send to."}
+              </span>
+            </span>
+          </label>
         </div>
 
         {/* Message composer */}
@@ -440,7 +526,7 @@ export default function CommunicationsSettingsPage() {
             <div className="rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-800 whitespace-pre-wrap max-w-xs">
               {bulkMessage}
             </div>
-            <p className="text-xs text-slate-400">Sender ID: 1NRI</p>
+            <p className="text-xs text-slate-400">Sender ID: {status?.senderId ?? "…"}</p>
           </div>
         )}
 
@@ -450,11 +536,7 @@ export default function CommunicationsSettingsPage() {
           className="flex items-center gap-2 rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-40"
         >
           <Send className="h-3.5 w-3.5" />
-          Review &amp; Send to{" "}
-          {bulkFilter === "all"
-            ? phoneCounts?.total ?? "..."
-            : phoneCounts?.sms_opted_in ?? "..."}{" "}
-          recipients
+          Review &amp; Send to {effectiveCount() ?? "..."} recipients
         </button>
 
         {bulkResult && (
@@ -466,6 +548,13 @@ export default function CommunicationsSettingsPage() {
             }`}
           >
             Sent {bulkResult.succeeded} / {bulkResult.total} — {bulkResult.failed} failed.
+            {(bulkResult.skipped_international > 0 || bulkResult.skipped_invalid > 0) && (
+              <span className="block text-xs opacity-80">
+                Skipped {bulkResult.skipped_international} international and{" "}
+                {bulkResult.skipped_invalid} unreadable number
+                {bulkResult.skipped_invalid !== 1 ? "s" : ""}.
+              </span>
+            )}
             {bulkResult.errors.length > 0 && bulkResult.errors[0].phone && (
               <details className="mt-1">
                 <summary className="text-xs cursor-pointer">Show errors</summary>
@@ -491,9 +580,18 @@ export default function CommunicationsSettingsPage() {
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Review Recipients</h2>
                 {previewData && (
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {previewData.total} recipient{previewData.total !== 1 ? "s" : ""} · page {previewPage} of {previewData.totalPages}
-                  </p>
+                  <>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {previewData.total} recipient{previewData.total !== 1 ? "s" : ""} · page {previewPage} of {previewData.totalPages}
+                    </p>
+                    {(previewData.excluded.international > 0 ||
+                      previewData.excluded.invalid > 0) && (
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Excluded {previewData.excluded.international} international ·{" "}
+                        {previewData.excluded.invalid} unreadable
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
               <button
@@ -525,7 +623,14 @@ export default function CommunicationsSettingsPage() {
                     {previewData.data.map((r, i) => (
                       <tr key={i} className="hover:bg-slate-50">
                         <td className="py-2.5 pr-4 text-slate-700 whitespace-nowrap">{r.name}</td>
-                        <td className="py-2.5 pr-4 text-slate-400 text-xs whitespace-nowrap">{r.phone}</td>
+                        <td className="py-2.5 pr-4 text-slate-400 text-xs whitespace-nowrap">
+                          {r.phone}
+                          {r.raw_phone !== r.phone && (
+                            <span className="block text-[10px] text-slate-300">
+                              stored as {r.raw_phone}
+                            </span>
+                          )}
+                        </td>
                         <td className="py-2.5 text-slate-600 text-xs">{r.preview}</td>
                       </tr>
                     ))}
@@ -581,6 +686,13 @@ export default function CommunicationsSettingsPage() {
                   <p className="text-xs text-amber-600 bg-amber-50 rounded px-3 py-2">
                     This will send <strong>{previewData?.total}</strong> personalised messages. This cannot be undone.
                   </p>
+                  {!ghanaOnly && (phoneCounts?.international ?? 0) > 0 && (
+                    <p className="text-xs text-red-600 bg-red-50 rounded px-3 py-2">
+                      Includes <strong>{phoneCounts?.international}</strong> international
+                      number{phoneCounts?.international !== 1 ? "s" : ""}, which LetsFish
+                      bills at a higher rate. Turn on “Ghana numbers only” to skip them.
+                    </p>
+                  )}
                   <div className="flex gap-2">
                     <button
                       onClick={() => setConfirmingSend(false)}
