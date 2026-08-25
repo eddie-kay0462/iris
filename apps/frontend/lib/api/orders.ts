@@ -39,6 +39,19 @@ export interface OrderStatusHistory {
   created_at: string;
 }
 
+/** 'Friday 28 August' from a stored 'YYYY-MM-DD' pickup date. */
+export function formatPickupDate(date: string | null | undefined): string {
+  if (!date) return "the next pop-up";
+  const d = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return "the next pop-up";
+  return d.toLocaleDateString("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  });
+}
+
 export interface Order {
   id: string;
   user_id: string | null;
@@ -53,6 +66,9 @@ export interface Order {
   processing_fee: number;
   total: number;
   currency: string;
+  shipping_method?: "standard" | "express" | "popup_pickup" | null;
+  /** Set only for shipping_method = popup_pickup: the pop-up to collect at. */
+  pickup_date?: string | null;
   shipping_address: {
     fullName: string;
     address: string;
@@ -210,7 +226,7 @@ export function useCreateOrder() {
       };
       paymentReference: string;
       shippingCost: number;
-      shippingMethod: "standard" | "express";
+      shippingMethod: "standard" | "express" | "popup_pickup";
       promoCode?: string;
       guestEmail?: string;
     }) => apiClient<Order>("/orders", { method: "POST", body: data }),
@@ -284,6 +300,8 @@ export interface TrackingOrder {
   delivered_at: string | null;
   created_at: string;
   shipping_address: Order["shipping_address"];
+  shipping_method?: Order["shipping_method"];
+  pickup_date?: Order["pickup_date"];
   order_items?: TrackingItem[];
   preorders?: TrackingPreorderLine[];
 }

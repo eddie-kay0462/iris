@@ -8,6 +8,7 @@ import {
   type TrackingResult,
   type TrackingOrder,
   type TrackingPreorder,
+  formatPickupDate,
 } from "@/lib/api/orders";
 import { StatusPip, EndLabel, fmt, fmtDate } from "../account/atoms";
 
@@ -226,8 +227,18 @@ function OrderResult({ order }: { order: TrackingOrder }) {
         </div>
       )}
       <br/>
-      {/* Shipping address */}
-      {order.shipping_address && (
+      {/* Collection — a pop-up pickup has no delivery address by design */}
+      {order.shipping_method === "popup_pickup" ? (
+        <div>
+          <div className={`${sectionLabelCls} mb-3`}>Collection</div>
+          <p className="text-[13px] text-text-secondary leading-relaxed">
+            Collect at our pop-up on {formatPickupDate(order.pickup_date)}.
+            <br />
+            Bring your order number with you.
+          </p>
+        </div>
+      ) : (
+      order.shipping_address && (
         <div>
           <div className={`${sectionLabelCls} mb-3`}>Shipping to</div>
           <p className="text-[13px] text-text-secondary leading-relaxed">
@@ -241,7 +252,7 @@ function OrderResult({ order }: { order: TrackingOrder }) {
             , {order.shipping_address.region}
           </p>
         </div>
-      )}
+      ))}
     </div>
   );
 }

@@ -24,8 +24,21 @@ import {
   useUpdateRoadToHqTarget,
   useNewsletterPopup,
   useUpdateNewsletterPopup,
+  usePopupPickup,
+  useUpdatePopupPickup,
+  PopupPickupInput,
 } from "@/lib/api/settings";
 import { toast } from "sonner";
+
+const WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
 
 export default function GeneralSettingsPage() {
   const currentYear = new Date().getFullYear();
@@ -172,6 +185,31 @@ export default function GeneralSettingsPage() {
       setDraftPreorderEta(preorderEtaText);
     }
   }, [preorderEtaText]);
+
+  const { data: popupPickup, isLoading: loadingPopupPickup } = usePopupPickup();
+  const { mutate: savePopupPickup, isPending: savingPopupPickup } = useUpdatePopupPickup();
+  const [draftPickup, setDraftPickup] = useState<PopupPickupInput>({
+    enabled: false,
+    label: "Pick up at the next pop-up",
+    pickupWeekday: 5,
+    leadDays: 3,
+    location: "",
+    note: "",
+  });
+
+  useEffect(() => {
+    if (popupPickup) {
+      const { nextPickupDate: _d, nextPickupLabel: _l, ...config } = popupPickup;
+      setDraftPickup(config);
+    }
+  }, [popupPickup]);
+
+  function handleSavePopupPickup() {
+    savePopupPickup(draftPickup, {
+      onSuccess: () => toast.success("Pop-up pickup updated."),
+      onError: (err: any) => toast.error(err?.message || "Could not save pop-up pickup."),
+    });
+  }
 
   function handleSavePreorderEta() {
     if (!draftPreorderEta.trim()) return;
@@ -588,6 +626,149 @@ export default function GeneralSettingsPage() {
             >
               <Save className="h-4 w-4" />
               {savingPreorderEta ? "Saving…" : "Save ETA text"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Pop-up Pickup */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="p-6">
+          <div className="flex items-start justify-between gap-6">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Pop-up Pickup</h2>
+              <p className="text-sm text-slate-500 mt-1">
+                Lets customers collect pre-ordered items in person at the next pop-up instead of
+                waiting for them to ship. It is always free — there is no price to set — and it only
+                appears at checkout on orders that contain pre-order items.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={draftPickup.enabled}
+              aria-label="Offer pop-up pickup at checkout"
+              disabled={loadingPopupPickup || savingPopupPickup}
+              onClick={() => setDraftPickup((p) => ({ ...p, enabled: !p.enabled }))}
+              className={`relative mt-1 h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+                draftPickup.enabled ? "bg-slate-900" : "bg-slate-300"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  draftPickup.enabled ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+
+          {loadingPopupPickup ? (
+            <p className="mt-5 text-sm text-slate-400">Loading…</p>
+          ) : (
+            <>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Pop-up day
+                  </label>
+                  <select
+                    value={draftPickup.pickupWeekday}
+                    onChange={(e) =>
+                      setDraftPickup((p) => ({ ...p, pickupWeekday: Number(e.target.value) }))
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  >
+                    {WEEKDAYS.map((day, index) => (
+                      <option key={day} value={index}>
+                        {day}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Days needed to prepare
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={draftPickup.leadDays}
+                    onChange={(e) =>
+                      setDraftPickup((p) => ({ ...p, leadDays: Number(e.target.value) }))
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  />
+                  <p className="text-xs text-slate-400">
+                    Once there is less than this much time left before the pop-up, checkout offers
+                    the following week&apos;s instead.
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Checkout label
+                  </label>
+                  <input
+                    type="text"
+                    value={draftPickup.label}
+                    onChange={(e) => setDraftPickup((p) => ({ ...p, label: e.target.value }))}
+                    placeholder="Pick up at the next pop-up"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Location
+                  </label>
+                  <input
+                    type="text"
+                    value={draftPickup.location}
+                    onChange={(e) => setDraftPickup((p) => ({ ...p, location: e.target.value }))}
+                    placeholder="e.g. Osu — venue shared by email"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  />
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Extra note <span className="normal-case text-slate-400">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={draftPickup.note}
+                    onChange={(e) => setDraftPickup((p) => ({ ...p, note: e.target.value }))}
+                    placeholder="e.g. We're open 4–8pm."
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  />
+                </div>
+              </div>
+
+              {popupPickup?.nextPickupLabel && (
+                <div className="mt-4 flex items-center gap-1.5 text-xs text-slate-500">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  <span>
+                    Right now this offers:{" "}
+                    <strong className="font-medium text-slate-700">
+                      {popupPickup.nextPickupLabel}
+                    </strong>
+                    . Save to see the effect of a change.
+                  </span>
+                </div>
+              )}
+            </>
+          )}
+
+          <div className="mt-6 flex items-center gap-4">
+            <button
+              onClick={handleSavePopupPickup}
+              disabled={savingPopupPickup || loadingPopupPickup}
+              className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" />
+              {savingPopupPickup ? "Saving…" : "Save pop-up pickup"}
             </button>
           </div>
         </div>

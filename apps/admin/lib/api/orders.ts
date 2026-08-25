@@ -41,6 +41,9 @@ export interface Order {
   processing_fee: number;
   total: number;
   currency: string;
+  shipping_method: "standard" | "express" | "popup_pickup" | null;
+  /** Set only for shipping_method = popup_pickup: the pop-up to hand this over at. */
+  pickup_date: string | null;
   shipping_address: {
     fullName: string;
     address: string;

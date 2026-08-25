@@ -284,6 +284,69 @@ export class SettingsService {
     return clean;
   }
 
+  /**
+   * Free collection at the next pop-up, offered at checkout only for carts that
+   * contain pre-order items. Public — read by the checkout page (guests included).
+   */
+  async getPopupPickup(): Promise<PopupPickup> {
+    const db = this.supabase.getAdminClient();
+    const { data } = await db
+      .from('store_settings')
+      .select('value')
+      .eq('key', 'popup_pickup')
+      .single();
+
+    if (!data?.value) return DEFAULT_POPUP_PICKUP;
+    return { ...DEFAULT_POPUP_PICKUP, ...(data.value as PopupPickup) };
+  }
+
+  /**
+   * The stored config plus the pop-up date it currently resolves to, so the
+   * storefront and admin never reimplement the lead-time maths.
+   */
+  async getPopupPickupResolved(): Promise<ResolvedPopupPickup> {
+    const config = await this.getPopupPickup();
+    const next = resolveNextPickupDate(config.pickupWeekday, config.leadDays);
+    return {
+      ...config,
+      nextPickupDate: toDateString(next),
+      nextPickupLabel: formatPickupDate(next),
+    };
+  }
+
+  async updatePopupPickup(pickup: PopupPickup): Promise<ResolvedPopupPickup> {
+    const weekday = Number(pickup.pickupWeekday);
+    const leadDays = Number(pickup.leadDays);
+    if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
+      throw new BadRequestException('Pop-up day must be a weekday between 0 (Sunday) and 6 (Saturday)');
+    }
+    if (!Number.isInteger(leadDays) || leadDays < 0) {
+      throw new BadRequestException('Days needed to prepare must be a whole number of 0 or more');
+    }
+
+    const clean: PopupPickup = {
+      enabled: !!pickup.enabled,
+      label: (pickup.label ?? '').trim() || DEFAULT_POPUP_PICKUP.label,
+      pickupWeekday: weekday,
+      leadDays,
+      location: (pickup.location ?? '').trim(),
+      note: (pickup.note ?? '').trim(),
+    };
+    if (clean.enabled && !clean.location) {
+      throw new BadRequestException('A pickup location is required when pop-up pickup is enabled');
+    }
+
+    const db = this.supabase.getAdminClient();
+    const { error } = await db
+      .from('store_settings')
+      .upsert({ key: 'popup_pickup', value: clean, updated_at: new Date().toISOString() });
+
+    if (error) throw error;
+
+    const next = resolveNextPickupDate(clean.pickupWeekday, clean.leadDays);
+    return { ...clean, nextPickupDate: toDateString(next), nextPickupLabel: formatPickupDate(next) };
+  }
+
   async getStockHoldMinutes(): Promise<number> {
     const db = this.supabase.getAdminClient();
     const { data } = await db
@@ -451,6 +514,68 @@ const DEFAULT_ROAD_TO_HQ_BASELINE = 0;
 const DEFAULT_ROAD_TO_HQ_TARGET = 6000;
 
 const DEFAULT_PREORDER_ETA_TEXT = '10-15 working days';
+
+export interface PopupPickup {
+  enabled: boolean;
+  label: string; // radio label shown at checkout
+  pickupWeekday: number; // 0 = Sunday … 5 = Friday
+  leadDays: number; // whole days of preparation a pre-order needs
+  location: string; // where to collect
+  note: string; // optional extra line; '' hides it
+}
+
+export interface ResolvedPopupPickup extends PopupPickup {
+  nextPickupDate: string; // 'YYYY-MM-DD'
+  nextPickupLabel: string; // e.g. 'Friday, 28 August'
+}
+
+const DEFAULT_POPUP_PICKUP: PopupPickup = {
+  enabled: false,
+  label: 'Pick up at the next pop-up',
+  pickupWeekday: 5, // Friday
+  leadDays: 3,
+  location: '',
+  note: '',
+};
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * The next pop-up a pre-order placed now could realistically make. Finds the
+ * next occurrence of `weekday` on or after today and, if that leaves less than
+ * `leadDays` whole days to prepare the item, rolls forward to the week after.
+ *
+ * Ghana is UTC+0 year-round with no DST, so UTC calendar-day arithmetic is
+ * exact. Comparing at midnight boundaries makes `leadDays` mean whole days
+ * rather than a rolling 72 hours.
+ */
+export function resolveNextPickupDate(
+  weekday: number,
+  leadDays: number,
+  now: Date = new Date(),
+): Date {
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const offset = (((weekday - new Date(today).getUTCDay()) % 7) + 7) % 7;
+  const candidate = today + offset * MS_PER_DAY;
+  return new Date(offset < leadDays ? candidate + 7 * MS_PER_DAY : candidate);
+}
+
+function toDateString(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/** 'Friday 28 August' — accepts a Date or a stored 'YYYY-MM-DD' string. */
+export function formatPickupDate(date: Date | string | null | undefined): string {
+  if (!date) return 'the next pop-up';
+  const d = typeof date === 'string' ? new Date(`${date}T00:00:00Z`) : date;
+  if (Number.isNaN(d.getTime())) return 'the next pop-up';
+  return d.toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  });
+}
 
 const ROLE_DESCRIPTIONS: Record<string, string> = {
   admin: 'Full access to all settings, users, and data.',

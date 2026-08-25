@@ -82,6 +82,9 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
   }
 
   const shipping = order.shipping_address;
+  // A pop-up collection has no delivery address by design — show where and when
+  // to hand it over instead, so it doesn't read as an order missing its address.
+  const isPickup = order.shipping_method === "popup_pickup";
   const preorders = order.preorders || [];
   const isPopup = order.is_popup_preorder === true;
   const timeline = (order.order_status_history || []).sort(
@@ -365,8 +368,31 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
             )}
           </div>
 
+          {/* Collection */}
+          {isPickup && (
+            <div className="rounded-lg border border-slate-200 p-4">
+              <h2 className="mb-3 font-semibold">Collection</h2>
+              <span className="inline-flex items-center rounded-full bg-slate-900 px-2.5 py-1 text-xs font-medium text-white">
+                Collect at pop-up
+                {order.pickup_date
+                  ? ` · ${new Date(`${order.pickup_date}T00:00:00Z`).toLocaleDateString("en-GB", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      timeZone: "UTC",
+                    })}`
+                  : ""}
+              </span>
+              <div className="mt-3 space-y-1 text-sm text-slate-600">
+                <p>{shipping?.fullName}</p>
+                {shipping?.phone && <p>{shipping.phone}</p>}
+                <p className="text-slate-400">Do not dispatch — set aside for the customer.</p>
+              </div>
+            </div>
+          )}
+
           {/* Shipping */}
-          {shipping && (
+          {!isPickup && shipping && (
             <div className="rounded-lg border border-slate-200 p-4">
               <h2 className="mb-3 font-semibold">Shipping Address</h2>
               <div className="space-y-1 text-sm text-slate-600">

@@ -8,6 +8,7 @@ import {
   useMyOrder,
   useCancelOrder,
   type OrderStatusHistory,
+  formatPickupDate,
 } from "@/lib/api/orders";
 
 const statusColors: Record<string, string> = {
@@ -45,6 +46,9 @@ export default function CustomerOrderDetailPage({ params }: PageProps) {
 
   const canCancel = ["pending", "paid"].includes(order.status);
   const shipping = order.shipping_address;
+  // A pop-up collection has no delivery address — showing the (empty) one would
+  // read as a broken order.
+  const isPickup = order.shipping_method === "popup_pickup";
   const timeline = (order.order_status_history || []).sort(
     (a: OrderStatusHistory, b: OrderStatusHistory) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
@@ -120,8 +124,22 @@ export default function CustomerOrderDetailPage({ params }: PageProps) {
         </div>
       </div>
 
+      {/* Collection */}
+      {isPickup && (
+        <div className="mt-4 rounded-lg border border-gray-200 p-4">
+          <h2 className="mb-3 font-semibold">Collection</h2>
+          <div className="space-y-1 text-sm text-gray-600">
+            <p>
+              Collect at our pop-up on{" "}
+              <strong className="text-gray-900">{formatPickupDate(order.pickup_date)}</strong>.
+            </p>
+            <p>Bring your order number with you.</p>
+          </div>
+        </div>
+      )}
+
       {/* Shipping address */}
-      {shipping && (
+      {!isPickup && shipping && (
         <div className="mt-4 rounded-lg border border-gray-200 p-4">
           <h2 className="mb-3 font-semibold">Shipping Address</h2>
           <div className="space-y-1 text-sm text-gray-600">

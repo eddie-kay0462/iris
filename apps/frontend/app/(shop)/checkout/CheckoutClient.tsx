@@ -12,7 +12,7 @@ import PhoneInput from "@/components/PhoneInput";
 import { useProfile, parseDefaultAddress } from "@/lib/api/profile";
 import { apiClient, hasToken, getToken } from "@/lib/api/client";
 import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
-import { useShippingOptions, DEFAULT_SHIPPING_OPTIONS, useCountryShippingRates } from "@/lib/api/settings";
+import { useShippingOptions, DEFAULT_SHIPPING_OPTIONS, useCountryShippingRates, usePopupPickup } from "@/lib/api/settings";
 import { useValidatePromo, DiscountType } from "@/lib/api/promos";
 import { ChevronDown } from "lucide-react";
 import { useLocale } from "@/lib/locale/locale-provider";
@@ -100,7 +100,9 @@ function validateForm(form: ShippingForm, isPickup: boolean): Record<string, str
   if (!form.lastName.trim()) errors.lastName = "Last name is required";
   if (!form.phone) errors.phone = "Phone number is required";
   else if (!/^\+\d{7,15}$/.test(form.phone)) errors.phone = "Enter a valid phone number";
-  if (!form.city.trim()) errors.city = "City is required";
+  // Collection needs no address at all — the city input is hidden for pickup, so
+  // requiring it here would make the form impossible to submit.
+  if (!isPickup && !form.city.trim()) errors.city = "City is required";
   // International (non-Ghana) destinations need a complete postal address to ship.
   if (!isPickup && form.country !== "GH") {
     if (!form.address.trim()) errors.address = "Address is required";
@@ -200,7 +202,7 @@ export default function CheckoutClient() {
   const [holdExpiresAt, setHoldExpiresAt] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [saveAsDefault, setSaveAsDefault] = useState(false);
-  const [shippingOption, setShippingOption] = useState<"standard" | "express" | "pickup">("standard");
+  const [shippingOption, setShippingOption] = useState<"standard" | "express" | "popup_pickup">("standard");
   const [promoInput, setPromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<{
     code: string;
@@ -213,6 +215,7 @@ export default function CheckoutClient() {
 
   const { data: shippingOptions = DEFAULT_SHIPPING_OPTIONS } = useShippingOptions();
   const { data: countryShippingRates = [] } = useCountryShippingRates();
+  const { data: popupPickup } = usePopupPickup();
 
   // Ghana ships via the tiered domestic options; other countries use the flat
   // per-country rate configured in settings. `internationalRate` is undefined for
@@ -221,9 +224,14 @@ export default function CheckoutClient() {
   const internationalRate = countryShippingRates.find((r) => r.country === form.country);
   const domesticShippingCost =
     shippingOptions.find((o) => o.id === shippingOption)?.price ?? shippingOptions[0]?.price ?? 40;
-  const shippingCost = isInternational
-    ? internationalRate?.price ?? 0
-    : domesticShippingCost;
+  const isPickup = shippingOption === "popup_pickup";
+  // Collection at a pop-up costs nothing — unlike every other option. The server
+  // independently forces this to 0, so the displayed and charged amounts can't drift.
+  const shippingCost = isPickup
+    ? 0
+    : isInternational
+      ? internationalRate?.price ?? 0
+      : domesticShippingCost;
   const discountAmount = appliedPromo?.discountAmount ?? 0;
   const amountBeforeFees = Math.max(0, subtotal + shippingCost - discountAmount);
   const fees = Math.round(amountBeforeFees * PROCESSING_FEE_RATE * 100) / 100;
@@ -239,6 +247,14 @@ export default function CheckoutClient() {
   const isItemPreorder = (item: { variantId: string; isPreorder?: boolean }) =>
     fulfillment?.[item.variantId] === "preorder" || (!fulfillment && !!item.isPreorder);
   const hasPreorderItems = items.some(isItemPreorder);
+
+  // Collection at the pop-up is the free alternative to waiting for a pre-order
+  // to be restocked and shipped, so it's only offered on carts that contain
+  // pre-order lines — and only domestically. The pop-up date already accounts
+  // for the preparation lead time; past this week's cut-off the API hands back
+  // next week's date instead.
+  const pickupAvailable =
+    !!popupPickup?.enabled && hasPreorderItems && !isInternational;
 
   // One checkout_started event per checkout visit
   useEffect(() => {
@@ -303,6 +319,15 @@ export default function CheckoutClient() {
       setShippingOption("standard");
     }
   }, [hasPreorderItems, shippingOption]);
+
+  // Pickup can stop being valid mid-session: the last pre-order item is removed,
+  // the destination changes, or staff turn the option off. Fall back to Standard
+  // rather than leaving an invalid selection the server would reject.
+  useEffect(() => {
+    if (shippingOption === "popup_pickup" && !pickupAvailable) {
+      setShippingOption("standard");
+    }
+  }, [pickupAvailable, shippingOption]);
 
   // International orders ship on a single flat rate — the domestic Express /
   // Pickup tiers don't apply. Reset to Standard when shipping abroad.
@@ -398,7 +423,7 @@ export default function CheckoutClient() {
   }
 
   async function handleValidateAndPay(): Promise<boolean> {
-    const validationErrors = validateForm(form, shippingOption === "pickup");
+    const validationErrors = validateForm(form, shippingOption === "popup_pickup");
 
     if (!isSignedIn) {
       if (!email.trim()) {
@@ -439,7 +464,7 @@ export default function CheckoutClient() {
         },
         paymentReference: reference,
         shippingCost: shippingCost,
-        shippingMethod: (shippingOption === "pickup" ? "standard" : shippingOption),
+        shippingMethod: shippingOption,
         promoCode: appliedPromo?.code,
         guestEmail: !isSignedIn ? email.trim() : undefined,
       });
@@ -521,6 +546,43 @@ export default function CheckoutClient() {
   const inputClass =
     "w-full rounded-md border border-line-strong px-4 py-3 text-sm outline-none transition focus:border-invert-bg focus:ring-1 focus:ring-invert-bg bg-surface text-text";
 
+  const pickupCard =
+    pickupAvailable && popupPickup ? (
+      <label
+        key="popup_pickup"
+        className={`flex cursor-pointer items-center justify-between rounded-lg border p-4 transition ${
+          isPickup
+            ? "border-invert-bg bg-surface"
+            : "border-line bg-surface hover:border-line-strong"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <input
+            type="radio"
+            name="shipping"
+            value="popup_pickup"
+            checked={isPickup}
+            onChange={() => setShippingOption("popup_pickup")}
+            className="h-4 w-4 accent-invert-bg"
+          />
+          <div>
+            <p className="text-sm font-medium text-text">{popupPickup.label}</p>
+            <p className="text-xs text-text-secondary">
+              {popupPickup.nextPickupLabel}
+              {popupPickup.location ? ` · ${popupPickup.location}` : ""}
+            </p>
+          </div>
+        </div>
+        <span className="text-sm font-medium text-success">Free</span>
+      </label>
+    ) : null;
+
+  // Pickup only shows on pre-order carts, which is exactly when Express is
+  // greyed out — so it sits above Express rather than below the dead option.
+  // Falls back to the end of the list if no Express tier is configured.
+  const expressIndex = shippingOptions.findIndex((o) => o.id === "express");
+  const pickupIndex = expressIndex === -1 ? shippingOptions.length : expressIndex;
+
   return (
     <div className="min-h-screen bg-bg">
       <div className="mx-auto grid max-w-6xl grid-cols-1 lg:grid-cols-2">
@@ -586,7 +648,7 @@ export default function CheckoutClient() {
             </div>
 
             <p className="mb-4 text-sm font-medium text-text-secondary">
-              {shippingOption === "pickup" ? "Your details" : "Shipping address"}
+              {shippingOption === "popup_pickup" ? "Your details" : "Shipping address"}
             </p>
 
             <div className="space-y-4">
@@ -646,7 +708,7 @@ export default function CheckoutClient() {
               </div>
 
               {/* Row: Address — hidden for pickup */}
-              {shippingOption !== "pickup" && (
+              {shippingOption !== "popup_pickup" && (
                 <div>
                   <label className="mb-1.5 block text-xs text-text-secondary">
                     Address Line 1
@@ -665,7 +727,7 @@ export default function CheckoutClient() {
               )}
 
               {/* Row: Address line 2 — hidden for pickup */}
-              {shippingOption !== "pickup" && (
+              {shippingOption !== "popup_pickup" && (
                 <div>
                   <label className="mb-1.5 block text-xs text-text-secondary">
                     Address Line 2 <span className="text-text-muted">(optional)</span>
@@ -681,7 +743,7 @@ export default function CheckoutClient() {
               )}
 
               {/* Row: City / Postal code — hidden for pickup */}
-              {shippingOption !== "pickup" && (
+              {shippingOption !== "popup_pickup" && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="mb-1.5 block text-xs text-text-secondary">
@@ -717,7 +779,7 @@ export default function CheckoutClient() {
               )}
 
               {/* Row: State / Province — international destinations only */}
-              {shippingOption !== "pickup" && isInternational && (
+              {shippingOption !== "popup_pickup" && isInternational && (
                 <div>
                   <label className="mb-1.5 block text-xs text-text-secondary">
                     State / Province
@@ -814,10 +876,23 @@ export default function CheckoutClient() {
           {hasPreorderItems && (
             <div className="mb-6 border border-line bg-surface px-4 py-3 text-xs leading-relaxed text-text-secondary">
               <p className="mb-1 font-semibold uppercase tracking-[0.12em] text-text">
-                Your order includes pre-order items
+                {isPickup ? "Collect at our pop-up" : "Your order includes pre-order items"}
               </p>
-              Items marked <strong>Pre-order</strong> aren&apos;t in stock yet. You&apos;re charged
-              today and they ship separately within 10-15 working days, the rest of your order ships as usual.
+              {isPickup && popupPickup ? (
+                <>
+                  Your whole order will be ready to collect on{" "}
+                  <strong>{popupPickup.nextPickupLabel}</strong>
+                  {popupPickup.location ? ` at ${popupPickup.location}` : ""}. You&apos;re charged
+                  today, there&apos;s no delivery fee, and nothing ships — bring your order number
+                  with you on the day.
+                  {popupPickup.note ? ` ${popupPickup.note}` : ""}
+                </>
+              ) : (
+                <>
+                  Items marked <strong>Pre-order</strong> aren&apos;t in stock yet. You&apos;re charged
+                  today and they ship separately within 10-15 working days, the rest of your order ships as usual.
+                </>
+              )}
             </div>
           )}
 
@@ -935,8 +1010,8 @@ export default function CheckoutClient() {
               <span className="text-text-secondary">
                 Shipping/Delivery
               </span>
-              <span className={shippingOption === "pickup" ? "font-medium text-success" : "text-text"}>
-                {shippingOption === "pickup" ? "Free" : formatPrice(shippingCost)}
+              <span className={shippingOption === "popup_pickup" ? "font-medium text-success" : "text-text"}>
+                {shippingOption === "popup_pickup" ? "Free" : formatPrice(shippingCost)}
               </span>
             </div>
             {appliedPromo && (
@@ -997,13 +1072,14 @@ export default function CheckoutClient() {
                   </span>
                 </div>
               ) : (
-                shippingOptions.map((option) => {
+                shippingOptions.map((option, index) => {
                 // Express is unavailable when the order contains pre-order items —
                 // those lines ship separately once restocked, so it can't be honoured.
                 const disabled = option.id === "express" && hasPreorderItems;
                 return (
+                <React.Fragment key={option.id}>
+                {index === pickupIndex && pickupCard}
                 <label
-                  key={option.id}
                   className={`flex items-center justify-between rounded-lg border p-4 transition ${
                     disabled
                       ? "cursor-not-allowed border-line bg-surface-subtle opacity-60"
@@ -1019,7 +1095,7 @@ export default function CheckoutClient() {
                       value={option.id}
                       checked={shippingOption === option.id}
                       disabled={disabled}
-                      onChange={() => setShippingOption(option.id as "standard" | "express" | "pickup")}
+                      onChange={() => setShippingOption(option.id as "standard" | "express")}
                       className="h-4 w-4 accent-invert-bg disabled:cursor-not-allowed"
                     />
                     <div>
@@ -1037,9 +1113,11 @@ export default function CheckoutClient() {
                     {formatPrice(option.price)}
                   </span>
                 </label>
+                </React.Fragment>
                 );
               })
               )}
+              {!isInternational && pickupIndex === shippingOptions.length && pickupCard}
             </div>
             {holdExpiresAt && <StockHoldTimer expiresAt={holdExpiresAt} />}
           </div>

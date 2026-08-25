@@ -104,6 +104,43 @@ export function useCountryShippingRates() {
   });
 }
 
+/**
+ * Free collection at the next pop-up. Only offered at checkout for carts that
+ * contain pre-order items. `nextPickupDate` / `nextPickupLabel` are resolved by
+ * the API from the configured weekday + lead time, so the client never repeats
+ * the date maths.
+ */
+export interface PopupPickup {
+  enabled: boolean;
+  label: string;
+  pickupWeekday: number; // 0 = Sunday … 5 = Friday
+  leadDays: number;
+  location: string;
+  note: string;
+  nextPickupDate: string; // 'YYYY-MM-DD'
+  nextPickupLabel: string; // e.g. 'Friday 28 August'
+}
+
+export const DEFAULT_POPUP_PICKUP: PopupPickup = {
+  enabled: false,
+  label: "Pick up at the next pop-up",
+  pickupWeekday: 5,
+  leadDays: 3,
+  location: "",
+  note: "",
+  nextPickupDate: "",
+  nextPickupLabel: "",
+};
+
+export function usePopupPickup() {
+  return useQuery({
+    queryKey: ["popup-pickup"],
+    queryFn: () => apiClient<PopupPickup>("/settings/popup-pickup"),
+    placeholderData: DEFAULT_POPUP_PICKUP,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export interface AnnouncementBanner {
   enabled: boolean;
   text: string;

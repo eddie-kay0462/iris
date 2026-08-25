@@ -83,8 +83,11 @@ export class CreateOrderDto {
   @Min(0)
   shippingCost: number;
 
-  @IsEnum(['standard', 'express'])
-  shippingMethod: 'standard' | 'express';
+  // `popup_pickup` is free collection at the next pop-up. It's only valid for
+  // carts containing pre-order items — enforced in OrdersService.create(). The
+  // pickup date is never accepted from the client; the server resolves it.
+  @IsEnum(['standard', 'express', 'popup_pickup'])
+  shippingMethod: 'standard' | 'express' | 'popup_pickup';
 
   @IsOptional()
   @IsString()
