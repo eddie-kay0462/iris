@@ -30,6 +30,17 @@ export class UpdatePopupOrderDto {
   @IsEnum(['none', 'percentage', 'fixed'])
   discount_type?: 'none' | 'percentage' | 'fixed';
 
+  /** Staff-typed percentage or cedi figure; resolved server-side. */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discount_value?: number;
+
+  /** A promo code applied when editing the order. */
+  @IsOptional()
+  @IsString()
+  promo_code?: string;
+
   @IsOptional()
   @IsNumber()
   @Min(0)

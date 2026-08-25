@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { SupabaseModule } from './common/supabase/supabase.module';
+import { ActivityLogModule } from './common/activity/activity-log.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { AuthModule } from './auth/auth.module';
 import { ProfileModule } from './profile/profile.module';
@@ -39,6 +40,7 @@ import { AlliesModule } from './allies/allies.module';
     // (public analytics ingest routes), not globally.
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     SupabaseModule,
+    ActivityLogModule,
     LetsfishModule,
     AuthModule,
     ProfileModule,

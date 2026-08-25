@@ -6,28 +6,40 @@ import {
   IsEnum,
   IsArray,
   IsUUID,
+  IsIn,
   IsDateString,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { PairingTierDto } from './pairing-tier.dto';
 
-export type DiscountType = 'fixed' | 'percentage' | 'free_shipping' | 'product';
+export type DiscountType =
+  | 'fixed'
+  | 'percentage'
+  | 'free_shipping'
+  | 'product'
+  | 'pairing';
 
 export class CreatePromoDto {
+  /** Optional for pairing rules, which auto-apply and carry no code. */
+  @IsOptional()
   @IsString()
   @MinLength(3)
-  code: string;
+  code?: string;
 
   @IsOptional()
   @IsString()
   description?: string;
 
-  @IsEnum(['fixed', 'percentage', 'free_shipping', 'product'])
+  @IsEnum(['fixed', 'percentage', 'free_shipping', 'product', 'pairing'])
   discount_type: DiscountType;
 
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  discount_value: number;
+  discount_value?: number;
 
   @IsOptional()
   @IsArray()
@@ -60,4 +72,37 @@ export class CreatePromoDto {
   @IsOptional()
   @IsBoolean()
   is_active?: boolean;
+
+  /** Sales channels this promo may be applied on. Defaults to all three. */
+  @IsOptional()
+  @IsArray()
+  @IsIn(['online', 'popup', 'walkin'], { each: true })
+  channels?: ('online' | 'popup' | 'walkin')[];
+
+  // ─── Pairing rules ─────────────────────────────────────────────────────────
+
+  @IsOptional()
+  @IsBoolean()
+  auto_apply?: boolean;
+
+  /** The product that must be in the cart for a pairing rule to fire. */
+  @IsOptional()
+  @IsUUID()
+  anchor_product_id?: string;
+
+  /** units = sum of non-anchor quantities; products = distinct non-anchor products. */
+  @IsOptional()
+  @IsIn(['units', 'products'])
+  pairing_basis?: 'units' | 'products';
+
+  /** anchor = discount the anchor line; cart = discount the whole subtotal. */
+  @IsOptional()
+  @IsIn(['anchor', 'cart'])
+  applies_to?: 'anchor' | 'cart';
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PairingTierDto)
+  tiers?: PairingTierDto[];
 }

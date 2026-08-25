@@ -65,9 +65,30 @@ export class CreateWalkinOrderDto {
   @IsString()
   payment_reference?: string;
 
+  /**
+   * A promo code read off the customer's phone at the counter. Resolved
+   * server-side by the discount engine, same as the storefront.
+   */
+  @IsOptional()
+  @IsString()
+  promo_code?: string;
+
+  /**
+   * A free-form staff discount. This is an override: when set it beats any
+   * code or automatic bundle rule, and the passed-over rule is still logged.
+   */
   @IsOptional()
   @IsEnum(['none', 'percentage', 'fixed'])
   discount_type?: 'none' | 'percentage' | 'fixed';
+
+  /**
+   * The percentage or cedi figure the staff member typed. The resolved amount
+   * is computed on the server — discount_amount from the client is ignored.
+   */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discount_value?: number;
 
   @IsOptional()
   @IsNumber()

@@ -5520,3 +5520,91 @@ Two smaller things fixed along the way: the recipient counts shown on the page a
 4. Click **Review & Send**. The table that opens should be nothing but `+233…` numbers with the box ticked. Page through to the end to check it doesn't run out early.
 5. Go to the last step of the review (**"Looks good"**) with the box **unticked** — there should be a red warning telling you it includes 51 international numbers and what that costs. **Then click Cancel — don't send.**
 6. Somewhere in the review table you should see a number with smaller grey text under it reading "stored as …" — that's one that had to be cleaned up before it could be sent.
+
+---
+
+## Discounts Now Work Everywhere, Plus Automatic Bundle Deals (August 2026)
+
+Promo codes only ever worked in one place: the online store. If a customer walked into HQ or came to a pop-up with a code they'd been sent, there was nothing staff could do with it — the code box simply didn't exist on either of those tills. The only discount available in person was a free-typed "take 10% off" with a reason box, which worked, but meant a code and a counter discount were two completely unrelated things.
+
+**Promo codes now work on all three: the online store, walk-in sales at HQ, and pop-up sales.** Same code, same value, wherever it's used. Each code can also be limited to particular channels — so you can make one that's online-only, or one that's only good at pop-ups.
+
+**There's also a new kind of discount: a bundle deal.** You pick one product to build the deal around (the "anchor"), and then set discount levels based on how many *other* things are in the basket. Something like: buy the Signature Tee on its own, full price. Buy it with one other item, 10% off. With two, 20% off. With three or more, 30% off. You choose the levels, and there's no limit on how many you set.
+
+Two things are yours to decide per deal:
+
+- **What counts as "other items"** — either the total number of other things in the basket (so two hoodies count as two), or the number of *different* other products (two hoodies count as one). The first rewards buying more; the second rewards buying variety.
+- **What gets discounted** — just the anchor product's own price, or the whole basket.
+
+**Nobody has to type anything for a bundle deal to work.** It applies on its own the moment the basket qualifies, online and at both tills. If a customer *also* has a promo code, the two don't stack — whichever saves them more is the one that applies, and the log records what the other one would have been worth.
+
+**Staff keep the free-typed discount** they've always had, for one-off goodwill. It now overrides everything else, and if it happens to be worth *less* than a bundle deal the customer already qualified for, the till warns you before you ring it up.
+
+### Where the money went — a proper record at last
+
+Before this, the only trace a discount ever left was a single counter that ticked up by one. There was no way to answer "who used that code, on which sale, for how much" — and nothing at all was recorded for pop-up and walk-in discounts.
+
+There's now a **Usage log** (Settings → Discounts → Usage log) listing every discount given on every channel: the date, the code or rule, whether it was a code, a bundle deal or a manual staff discount, the channel, the order number, which staff member gave it, and how much came off. It even records the reasoning — "2 other items → tier 2", or "overrode Signature Tee bundle, worth GH₵40".
+
+Two new reports go with it, under Analytics → Reports: **Discount sources over time** (how much you're giving away via codes vs bundle deals vs manual staff discounts) and **Discount usage by code** (which codes are actually being used, and on which channels).
+
+### Three real bugs fixed along the way
+
+1. **The tills were being trusted to do their own maths.** The percentage was worked out in the browser and the server saved whatever figure it was handed, without checking. In plain terms, anyone who knew what they were doing could have made an order discount itself by any amount. Every channel now works the discount out on the server, and ignores whatever the browser claims.
+2. **Editing a pop-up order's discount didn't change the total.** You could change a discount from 10% to 50% and the amount owed would stay exactly where it was. Fixed — the total is recalculated properly now.
+3. **"Max uses" could be exceeded, and refunds never gave a use back.** A code limited to one use could be claimed by two people checking out at the same time, because the count only went up *after* payment. It now claims the slot when the order is placed, and hands it back if the order is cancelled or refunded — so a refunded order no longer burns someone else's chance to use a code.
+
+Promo changes are also now recorded in the **Activity** feed, which they weren't before.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `supabase/migrations/20260826000000…000004_*.sql` | Five new database files: the new bundle discount type, the settings behind it and its levels, the usage log table, the safeguards around "max uses", and the new discount columns on the walk-in and pop-up sales tables. |
+| `apps/backend/src/promos/discount-engine.rules.ts` | The actual sums — counting the other items in a basket, picking which level applies, and deciding whether a code or a bundle deal wins. Deliberately kept separate from everything else so it can be tested on its own. |
+| `apps/backend/src/promos/discount-engine.rules.spec.ts` | 30 tests covering that maths — every level, both ways of counting, both discount targets, the caps, and the code-vs-bundle-vs-manual decision. |
+| `apps/backend/src/promos/discount-engine.service.ts` | The one place all three channels go to ask "what is this basket worth", plus claiming, confirming and returning a code's usage. |
+| `apps/backend/src/promos/promos.service.ts`, `promos.controller.ts`, `promos.module.ts`, `dto/*` | Creating and editing discounts, including bundle levels, and the new usage-log endpoint. |
+| `apps/backend/src/orders/orders.service.ts` | The online store — routed through the shared engine, claims the code slot when the order is placed, and gives it back on cancellation or refund. |
+| `apps/backend/src/walkin-sales/walkin-sales.service.ts` + its dto | Walk-in sales — codes and bundle deals now work, and the browser's discount figure is no longer taken on faith. |
+| `apps/backend/src/popup-sales/popup-sales.service.ts` + its dtos | Same for pop-up sales, plus the fix for editing a discount not changing the total. |
+| `apps/backend/src/common/activity/*` | Records admin changes to the Activity feed, and actually records *who* made them, which the old one never did. |
+| `apps/backend/src/analytics/reports/report-registry.ts`, `report-context.ts` | The two new discount reports. |
+| `apps/admin/app/(dashboard)/settings/promos/page.tsx` | The Discounts page — the new bundle deal type, a proper product search box, the level editor, and channel tickboxes. |
+| `apps/admin/app/(dashboard)/settings/promos/ProductPicker.tsx` | A type-to-search product box, replacing the old field that wanted you to paste in database IDs by hand. |
+| `apps/admin/app/(dashboard)/settings/promos/redemptions/page.tsx` | The new Usage log page. |
+| `apps/admin/app/components/DiscountPanel.tsx`, `apps/admin/lib/hooks/useChannelDiscount.ts` | The discount controls on the tills, written once and shared by both, instead of each having its own copy. |
+| `apps/admin/app/(dashboard)/walkin-sales/page.tsx`, `popup-sales/page.tsx` | Both tills — a promo code box, bundle deals showing up on their own, and the override warning. |
+| `apps/frontend/app/(shop)/checkout/CheckoutClient.tsx` | Online checkout — bundle deals now appear as the basket changes, without anyone typing a code. |
+| `apps/admin/lib/api/promos.ts`, `walkin-sales.ts`, `popup-sales.ts`, `apps/frontend/lib/api/promos.ts` | Plumbing between the pages and the server. |
+| `apps/backend/package.json`, `vitest.config.mts`, `tsconfig.build.json` | The backend had no way to run tests at all — it does now. |
+
+> **Heads-up — database migration required**
+>
+> There are **five** new files in `supabase/migrations/`. Run `npx supabase db push`, or paste them into the Supabase SQL editor **one at a time, in filename order**. The order genuinely matters here: the first one adds the new discount type and has to be saved and finished before the second one, which uses it, will run. Doing them out of order or all at once in a single paste will fail.
+>
+> Nothing changes for existing discounts — every code you have now keeps working exactly as it does today, on all three channels by default.
+
+### Still to do
+
+- **None of this has been tested against the real database yet.** The code builds and the maths is covered by tests, but the migrations haven't been run anywhere and no test sale has been put through. That needs doing before it goes near customers — the "How to test" list below is the order to do it in.
+- **The allies / Markets channel is deliberately left out.** Ally sales have no discount field at all, so codes and bundle deals don't reach them. That's a separate piece of work; the engine was built so it can be plugged in without rewriting anything.
+- **No cart-page nudge yet.** The obvious follow-up — telling a customer "add one more item to save 20%" while they're still shopping — isn't built. That's the bit that would actually make bundle deals earn their keep, so it's worth doing.
+
+### How to test
+
+1. Run the five migrations first (see the heads-up above), in order.
+2. Go to **Settings → Discounts**. The page has a new name and a **Usage log** button in the corner.
+3. Make a **normal promo code** as usual. Notice the new **Available on** tickboxes — leave all three ticked.
+4. Now make a **bundle deal**: pick "Bundle / pairing rule" as the type. There's no code box — it applies on its own. Pick an anchor product by name, choose how you want other items counted and what gets discounted, then add a few levels: 1 or more → 10%, 2 or more → 20%, 3 or more → 30%.
+5. On the **online store**, put just the anchor product in your basket — no discount. Add a second item — the bundle deal should appear on its own, no code typed. Add a third — it should jump to the next level.
+6. Now type the promo code from step 3 into the same basket. Whichever is worth more should win, and the other should say "your promo code saves you more" (or stay listed but unapplied).
+7. Pay for it with a test card. Then check **Settings → Discounts → Usage log** — the sale should be listed, showing which discount applied and why.
+8. Go to **Walk-in Sales** and ring up the exact same basket. The discount should match the online one to the pesewa. There's now a promo code box, and bundle deals should appear on their own here too.
+9. Complete it as **cash** — the usage log should show it as confirmed straight away. Try one as **MoMo** — it should sit as pending until the charge goes through.
+10. **Refund** that walk-in sale. The log entry should flip to "reverted", and the code's use count should go back down.
+11. Do the same on **Pop-up Sales**. Then edit an existing pop-up order's discount and check the **total actually changes** — this is the bug from above, and it didn't before.
+12. Try a **manual staff discount** on a basket that already qualifies for a bundle deal, and set it lower than the bundle. The till should warn you that you're overriding a better deal.
+13. Make a code with **Max total uses set to 1**, then try to use it on two orders. The second should be turned away cleanly.
+14. Check **Analytics → Reports** for the two new entries: *Discount sources over time* and *Discount usage by code*.
+15. Finally, check the **Activity** page — creating and editing a discount should now show up there.

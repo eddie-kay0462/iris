@@ -10,6 +10,10 @@ import { SupabaseService } from '../common/supabase/supabase.service';
 import { EmailService } from '../email/email.service';
 import { SmsService, SMS_TEMPLATES } from '../sms/sms.service';
 import { PromosService } from '../promos/promos.service';
+import {
+  DiscountEngineService,
+  DiscountResolution,
+} from '../promos/discount-engine.service';
 import { SettingsService, resolveNextPickupDate, formatPickupDate } from '../settings/settings.service';
 import { PreordersService } from '../preorders/preorders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -50,6 +54,7 @@ export class OrdersService {
     private emailService: EmailService,
     private smsService: SmsService,
     private promosService: PromosService,
+    private discountEngine: DiscountEngineService,
     private settingsService: SettingsService,
     private preordersService: PreordersService,
     private configService: ConfigService,
@@ -375,28 +380,23 @@ export class OrdersService {
     );
     const shippingCost = await this.resolveShippingCost(dto);
 
-    // 2b. Validate promo code if supplied
-    let discountAmount = 0;
-    let appliedPromoCodeId: string | null = null;
-
-    if (dto.promoCode) {
-      try {
-        const promoResult = await this.promosService.validate({
-          code: dto.promoCode,
-          subtotal,
-          shippingCost,
-          items: dto.items.map((i) => ({
-            productId: i.productId,
-            price: i.price,
-            quantity: i.quantity,
-          })),
-        });
-        discountAmount = promoResult.discountAmount;
-        appliedPromoCodeId = promoResult.promoCodeId;
-      } catch (err: any) {
-        throw new BadRequestException(err.message || 'Invalid promo code');
-      }
-    }
+    // 2b. Resolve discounts through the shared engine. A typed code and any
+    // auto-applied pairing rules compete and the larger one wins; the engine
+    // recomputes the subtotal from the line items, so nothing here trusts a
+    // client-supplied amount. An invalid typed code throws.
+    const discount = await this.discountEngine.resolve({
+      channel: 'online',
+      items: dto.items.map((i) => ({
+        productId: i.productId,
+        variantId: i.variantId,
+        unitPrice: i.price,
+        quantity: i.quantity,
+      })),
+      shippingCost,
+      code: dto.promoCode,
+    });
+    const discountAmount = discount.discountAmount;
+    const appliedPromoCodeId = discount.promoCodeId;
 
     const amountBeforeFees = Math.max(0, subtotal + shippingCost - discountAmount);
     const processingFee = Math.round(amountBeforeFees * PROCESSING_FEE_RATE * 100) / 100;
@@ -443,6 +443,11 @@ export class OrdersService {
       .single();
 
     if (orderError) throw orderError;
+
+    await this.reserveDiscount(discount, order, {
+      email: resolvedEmail,
+      userId,
+    });
 
     // 5. Insert order items — only the in-stock lines. Pre-order lines are
     // recorded separately in the preorders table below.
@@ -841,6 +846,40 @@ export class OrdersService {
     return this.findOne(orderId);
   }
 
+  /**
+   * Take the promo usage seat for a freshly inserted order.
+   *
+   * If the code was exhausted in the moment between resolving and reserving,
+   * roll the order back rather than leaving an orphaned pending row behind —
+   * the customer gets a clean "usage limit" error and can retry without it.
+   */
+  private async reserveDiscount(
+    resolution: DiscountResolution,
+    order: { id: string; order_number: string },
+    ctx: { email?: string | null; userId?: string | null },
+  ): Promise<void> {
+    if (!resolution.source || resolution.discountAmount <= 0) return;
+
+    try {
+      await this.discountEngine.reserve({
+        resolution,
+        channel: 'online',
+        orderTable: 'orders',
+        orderId: order.id,
+        orderNumber: order.order_number,
+        customerEmail: ctx.email ?? null,
+        customerProfileId: ctx.userId ?? null,
+      });
+    } catch (err) {
+      await this.supabase
+        .getAdminClient()
+        .from('orders')
+        .delete()
+        .eq('id', order.id);
+      throw err;
+    }
+  }
+
   async updateStatus(
     orderId: string,
     dto: UpdateOrderStatusDto,
@@ -876,6 +915,18 @@ export class OrdersService {
       notes: dto.notes || null,
       changed_by: userId,
     });
+
+    // Cancelling or refunding from the admin side returns the promo usage too.
+    if (['cancelled', 'refunded'].includes(dto.status)) {
+      await this.discountEngine
+        .revertForOrder('orders', orderId, `Order marked ${dto.status}`)
+        .catch((err) =>
+          console.error(
+            `Failed to revert promo redemption for order ${order.order_number}:`,
+            err,
+          ),
+        );
+    }
 
     const updatedOrder = await this.findOne(orderId);
 
@@ -924,6 +975,16 @@ export class OrdersService {
       .eq('id', orderId);
 
     if (error) throw error;
+
+    // Hand the promo usage seat back — a cancelled order should not burn a use.
+    await this.discountEngine
+      .revertForOrder('orders', orderId, `Order ${order.order_number} cancelled`)
+      .catch((err) =>
+        console.error(
+          `Failed to revert promo redemption for order ${order.order_number}:`,
+          err,
+        ),
+      );
 
     // Restore inventory — only needed if it was actually deducted, which only
     // happens once the order reaches 'paid' via confirmPayment(). A still-
@@ -1907,28 +1968,23 @@ export class OrdersService {
     );
     const shippingCost = await this.resolveShippingCost(dto);
 
-    // 2b. Validate promo code if supplied
-    let discountAmount = 0;
-    let appliedPromoCodeId: string | null = null;
-
-    if (dto.promoCode) {
-      try {
-        const promoResult = await this.promosService.validate({
-          code: dto.promoCode,
-          subtotal,
-          shippingCost,
-          items: dto.items.map((i) => ({
-            productId: i.productId,
-            price: i.price,
-            quantity: i.quantity,
-          })),
-        });
-        discountAmount = promoResult.discountAmount;
-        appliedPromoCodeId = promoResult.promoCodeId;
-      } catch (err: any) {
-        throw new BadRequestException(err.message || 'Invalid promo code');
-      }
-    }
+    // 2b. Resolve discounts through the shared engine. A typed code and any
+    // auto-applied pairing rules compete and the larger one wins; the engine
+    // recomputes the subtotal from the line items, so nothing here trusts a
+    // client-supplied amount. An invalid typed code throws.
+    const discount = await this.discountEngine.resolve({
+      channel: 'online',
+      items: dto.items.map((i) => ({
+        productId: i.productId,
+        variantId: i.variantId,
+        unitPrice: i.price,
+        quantity: i.quantity,
+      })),
+      shippingCost,
+      code: dto.promoCode,
+    });
+    const discountAmount = discount.discountAmount;
+    const appliedPromoCodeId = discount.promoCodeId;
 
     const amountBeforeFees = Math.max(0, subtotal + shippingCost - discountAmount);
     const processingFee = Math.round(amountBeforeFees * PROCESSING_FEE_RATE * 100) / 100;
@@ -1965,6 +2021,11 @@ export class OrdersService {
       .single();
 
     if (orderError || !order) throw new Error(orderError?.message || 'Failed to create order');
+
+    await this.reserveDiscount(discount, order, {
+      email: resolvedEmail,
+      userId,
+    });
 
     // 5. Insert order items
     const orderItems = dto.items.map((item) => ({
@@ -2138,15 +2199,16 @@ export class OrdersService {
       );
     }
 
-    // Increment promo used_count now that payment is confirmed
-    if (order.applied_promo_code_id) {
-      this.promosService.applyToOrder(order.applied_promo_code_id).catch((err) => {
+    // Cash in the usage seat reserved at order creation. Idempotent, so a
+    // replayed webhook cannot double-count.
+    this.discountEngine
+      .confirmForOrder('orders', order.id)
+      .catch((err) => {
         console.error(
-          `Failed to increment promo used_count for ${order.applied_promo_code_id}:`,
+          `Failed to confirm promo redemption for order ${order.order_number}:`,
           err,
         );
       });
-    }
 
     // Fetch full order to get items, email, and phone for notifications
     let fullOrder: any;

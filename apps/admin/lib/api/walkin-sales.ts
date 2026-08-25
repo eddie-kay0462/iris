@@ -37,7 +37,9 @@ export interface WalkinOrder {
   payment_method: WalkinPaymentMethod | null;
   payment_reference: string | null;
   subtotal: number;
-  discount_type: "none" | "percentage" | "fixed" | null;
+  /** code / pairing = engine-resolved; percentage / fixed = manual staff override. */
+  discount_type: "none" | "percentage" | "fixed" | "code" | "pairing" | null;
+  applied_promo_code_id: string | null;
   discount_amount: number;
   discount_reason: string | null;
   total: number;
@@ -81,8 +83,11 @@ export interface CreateWalkinOrderInput {
   customer_profile_id?: string;
   payment_method?: WalkinPaymentMethod;
   payment_reference?: string;
+  /** A promo code presented at the counter. Resolved server-side. */
+  promo_code?: string;
+  /** Free-form staff override. The server resolves the amount from this. */
   discount_type?: "none" | "percentage" | "fixed";
-  discount_amount?: number;
+  discount_value?: number;
   discount_reason?: string;
   notes?: string;
   items: WalkinOrderItemInput[];

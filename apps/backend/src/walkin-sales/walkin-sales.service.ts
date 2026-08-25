@@ -9,6 +9,7 @@ import { SupabaseService } from '../common/supabase/supabase.service';
 import { EmailService } from '../email/email.service';
 import { SmsService, SMS_TEMPLATES } from '../sms/sms.service';
 import { PreordersService } from '../preorders/preorders.service';
+import { DiscountEngineService } from '../promos/discount-engine.service';
 import { CreateWalkinOrderDto } from './dto/create-walkin-order.dto';
 import { UpdateWalkinOrderDto } from './dto/update-walkin-order.dto';
 import { QueryWalkinOrdersDto } from './dto/query-walkin-orders.dto';
@@ -38,6 +39,7 @@ export class WalkinSalesService {
     private emailService: EmailService,
     private smsService: SmsService,
     private preordersService: PreordersService,
+    private discountEngine: DiscountEngineService,
   ) {
     this.frontendUrl = this.configService.get<string>(
       'NEXT_PUBLIC_FRONTEND_URL',
@@ -154,16 +156,35 @@ export class WalkinSalesService {
     }
     const order_number = `WLK-${year}-${String(sequence).padStart(4, '0')}`;
 
-    // Totals — the frontend resolves the discount to a fixed amount.
-    const subtotal = dto.items.reduce(
-      (sum, item) => sum + item.unit_price * item.quantity,
-      0,
-    );
-    const discountAmount = Math.round((dto.discount_amount ?? 0) * 100) / 100;
-    const total = Math.max(
-      0,
-      Math.round((subtotal - discountAmount) * 100) / 100,
-    );
+    // Totals — resolved server-side by the shared discount engine, the same one
+    // the storefront uses. A typed promo code and any automatic bundle rules
+    // compete; a manual staff discount overrides both. The client's
+    // discount_amount is deliberately ignored.
+    const discount = await this.discountEngine.resolve({
+      channel: 'walkin',
+      items: dto.items.map((i) => ({
+        // Ad-hoc counter lines carry no product_id. They still count toward the
+        // subtotal and toward an anchor's paired-item count — they just can
+        // never be an anchor themselves.
+        productId: i.product_id ?? '',
+        variantId: i.variant_id ?? null,
+        unitPrice: i.unit_price,
+        quantity: i.quantity,
+      })),
+      code: dto.promo_code,
+      manualOverride:
+        dto.discount_type && dto.discount_type !== 'none'
+          ? {
+              type: dto.discount_type,
+              value: dto.discount_value ?? 0,
+              reason: dto.discount_reason,
+            }
+          : null,
+    });
+
+    const subtotal = discount.subtotal;
+    const discountAmount = discount.discountAmount;
+    const total = round2(Math.max(0, subtotal - discountAmount));
 
     // Derive brand from the products so confirmation emails theme correctly.
     const brand = await this.deriveBrand(dto.items.map((i) => i.product_id));
@@ -189,10 +210,11 @@ export class WalkinSalesService {
         status: isMomo ? 'awaiting_payment' : 'completed',
         payment_method: dto.payment_method || null,
         payment_reference: dto.payment_reference || null,
-        subtotal: Math.round(subtotal * 100) / 100,
-        discount_type: dto.discount_type || 'none',
+        subtotal: round2(subtotal),
+        discount_type: discount.channelDiscountType,
         discount_amount: discountAmount,
-        discount_reason: dto.discount_reason || null,
+        discount_reason: discount.label,
+        applied_promo_code_id: discount.promoCodeId,
         total,
         notes: dto.notes || null,
         brand,
@@ -201,6 +223,27 @@ export class WalkinSalesService {
       .single();
 
     if (orderError || !order) throw orderError;
+
+    // Reserve the promo usage seat. Cash and bank transfer are collected on the
+    // spot, so they confirm immediately; MoMo waits for the Paystack charge.
+    try {
+      await this.discountEngine.reserve({
+        resolution: discount,
+        channel: 'walkin',
+        orderTable: 'walkin_orders',
+        orderId: order.id,
+        orderNumber: order.order_number,
+        customerEmail: dto.customer_email ?? null,
+        customerPhone: customerPhone,
+        customerProfileId: dto.customer_profile_id ?? null,
+        appliedBy: userId,
+        confirmImmediately: !isMomo,
+      });
+    } catch (err) {
+      // Do not strand a half-built order behind an exhausted code.
+      await db.from('walkin_orders').delete().eq('id', order.id);
+      throw err;
+    }
 
     // Insert items
     const items = dto.items.map((item) => ({
@@ -246,6 +289,15 @@ export class WalkinSalesService {
     if (!order) return;
 
     const items: any[] = order.walkin_order_items ?? [];
+
+    await this.discountEngine
+      .confirmForOrder('walkin_orders', orderId)
+      .catch((err) =>
+        console.error(
+          `Failed to confirm promo redemption for walk-in ${order.order_number}:`,
+          err,
+        ),
+      );
 
     // Deduct inventory + log movements.
     for (const item of items) {
@@ -360,6 +412,18 @@ export class WalkinSalesService {
 
     if (isBeingCancelled) {
       await this.restoreInventory(id, data.order_number);
+      await this.discountEngine
+        .revertForOrder(
+          'walkin_orders',
+          id,
+          `Order ${data.order_number} cancelled`,
+        )
+        .catch((err) =>
+          console.error(
+            `Failed to revert promo redemption for walk-in ${data.order_number}:`,
+            err,
+          ),
+        );
     }
     if (isBeingCompleted) {
       await this.applyCompletion(id);
@@ -406,6 +470,19 @@ export class WalkinSalesService {
       .eq('id', id);
 
     await this.restoreInventory(id, order.order_number);
+
+    await this.discountEngine
+      .revertForOrder(
+        'walkin_orders',
+        id,
+        `Order ${order.order_number} refunded`,
+      )
+      .catch((err) =>
+        console.error(
+          `Failed to revert promo redemption for walk-in ${order.order_number}:`,
+          err,
+        ),
+      );
 
     if (order.customer_phone) {
       const name = order.customer_name ? `, ${order.customer_name}` : '';

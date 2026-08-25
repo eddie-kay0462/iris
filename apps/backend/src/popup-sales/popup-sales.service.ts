@@ -17,7 +17,8 @@ import { ChargePopupOrderDto } from './dto/charge-popup-order.dto';
 import { CreatePopupCustomerDto } from './dto/create-popup-customer.dto';
 import { RefundPopupOrderDto } from './dto/refund-popup-order.dto';
 import { toE164, toPaystackMomoFormat } from '../common/utils/phone';
-import { POPUP_REVENUE_STATUSES } from '../analytics/analytics.constants';
+import { POPUP_REVENUE_STATUSES, round2 } from '../analytics/analytics.constants';
+import { DiscountEngineService } from '../promos/discount-engine.service';
 
 @Injectable()
 export class PopupSalesService {
@@ -28,6 +29,7 @@ export class PopupSalesService {
     private configService: ConfigService,
     private letsfish: LetsfishService,
     private emailService: EmailService,
+    private discountEngine: DiscountEngineService,
   ) {
     this.paystackSecretKey = this.configService.get<string>('PAYSTACK_SECRET_KEY', '');
   }
@@ -377,13 +379,32 @@ export class PopupSalesService {
     }
     const order_number = `POP-${year}-${String(sequence).padStart(4, '0')}`;
 
-    // Calculate totals
-    const subtotal = dto.items.reduce(
-      (sum, item) => sum + item.unit_price * item.quantity,
-      0,
-    );
-    const discountAmount = Math.round((dto.discount_amount ?? 0) * 100) / 100;
-    const total = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
+    // Totals — resolved server-side by the shared discount engine, same as the
+    // storefront and walk-in. A typed promo code and any automatic bundle rules
+    // compete; a manual staff discount overrides both. The client's
+    // discount_amount is deliberately ignored.
+    const discount = await this.discountEngine.resolve({
+      channel: 'popup',
+      items: dto.items.map((i) => ({
+        productId: i.product_id ?? '',
+        variantId: i.variant_id ?? null,
+        unitPrice: i.unit_price,
+        quantity: i.quantity,
+      })),
+      code: dto.promo_code,
+      manualOverride:
+        dto.discount_type && dto.discount_type !== 'none'
+          ? {
+              type: dto.discount_type,
+              value: dto.discount_value ?? 0,
+              reason: dto.discount_reason,
+            }
+          : null,
+    });
+
+    const subtotal = discount.subtotal;
+    const discountAmount = discount.discountAmount;
+    const total = round2(Math.max(0, subtotal - discountAmount));
 
     // Create order
     const { data: order, error: orderError } = await db
@@ -398,10 +419,11 @@ export class PopupSalesService {
         status: 'active',
         payment_method: dto.payment_method || null,
         payment_reference: dto.payment_reference || null,
-        subtotal: Math.round(subtotal * 100) / 100,
-        discount_type: dto.discount_type || 'none',
+        subtotal: round2(subtotal),
+        discount_type: discount.channelDiscountType,
         discount_amount: discountAmount,
-        discount_reason: dto.discount_reason || null,
+        discount_reason: discount.label,
+        applied_promo_code_id: discount.promoCodeId,
         hold_duration_minutes: dto.hold_duration_minutes || null,
         hold_note: dto.hold_note || null,
         total,
@@ -411,6 +433,23 @@ export class PopupSalesService {
       .single();
 
     if (orderError || !order) throw orderError;
+
+    try {
+      await this.discountEngine.reserve({
+        resolution: discount,
+        channel: 'popup',
+        orderTable: 'popup_orders',
+        orderId: order.id,
+        orderNumber: order.order_number,
+        customerEmail: dto.customer_email ?? null,
+        customerPhone: dto.customer_phone ?? null,
+        appliedBy: userId,
+      });
+    } catch (err) {
+      // Do not strand a half-built order behind an exhausted code.
+      await db.from('popup_orders').delete().eq('id', order.id);
+      throw err;
+    }
 
     // Insert order items
     const items = dto.items.map((item) => ({
@@ -461,7 +500,7 @@ export class PopupSalesService {
     // Fetch current order status so we can detect a transition to 'completed'
     const { data: existingOrder } = await db
       .from('popup_orders')
-      .select('id, status')
+      .select('id, status, discount_type, order_number, customer_email, customer_phone, served_by')
       .eq('id', id)
       .single();
 
@@ -493,12 +532,60 @@ export class PopupSalesService {
     if (dto.customer_name !== undefined) updatePayload.customer_name = dto.customer_name;
     if (dto.customer_phone !== undefined) updatePayload.customer_phone = dto.customer_phone;
     if (dto.customer_email !== undefined) updatePayload.customer_email = dto.customer_email;
-    if (dto.discount_type !== undefined) updatePayload.discount_type = dto.discount_type;
-    if (dto.discount_amount !== undefined) updatePayload.discount_amount = dto.discount_amount;
-    if (dto.discount_reason !== undefined) updatePayload.discount_reason = dto.discount_reason;
     if (dto.hold_duration_minutes !== undefined) updatePayload.hold_duration_minutes = dto.hold_duration_minutes;
     if (dto.hold_note !== undefined) updatePayload.hold_note = dto.hold_note;
     if (dto.notes !== undefined) updatePayload.notes = dto.notes;
+
+    // ── Re-price when the discount is edited ──────────────────────────────────
+    // This block previously wrote discount_type/amount/reason but left `total`
+    // untouched, so an edited discount silently desynced the order total from
+    // its own subtotal. Re-resolve against the order's real line items instead,
+    // and replace the ledger row so the log matches what was actually charged.
+    const discountTouched =
+      dto.discount_type !== undefined ||
+      dto.discount_value !== undefined ||
+      dto.discount_reason !== undefined ||
+      dto.promo_code !== undefined;
+
+    let reResolved: Awaited<ReturnType<DiscountEngineService['resolve']>> | null =
+      null;
+
+    if (discountTouched) {
+      const { data: currentItems } = await db
+        .from('popup_order_items')
+        .select('product_id, variant_id, unit_price, quantity')
+        .eq('order_id', id);
+
+      const discountType = dto.discount_type ?? existingOrder?.discount_type;
+
+      reResolved = await this.discountEngine.resolve({
+        channel: 'popup',
+        items: (currentItems ?? []).map((i: any) => ({
+          productId: i.product_id ?? '',
+          variantId: i.variant_id ?? null,
+          unitPrice: Number(i.unit_price),
+          quantity: Number(i.quantity),
+        })),
+        code: dto.promo_code,
+        manualOverride:
+          discountType && discountType !== 'none' && discountType !== 'code' && discountType !== 'pairing'
+            ? {
+                type: discountType as 'percentage' | 'fixed',
+                value: dto.discount_value ?? 0,
+                reason: dto.discount_reason,
+              }
+            : null,
+      });
+
+      updatePayload.subtotal = round2(reResolved.subtotal);
+      updatePayload.discount_type = reResolved.channelDiscountType;
+      updatePayload.discount_amount = reResolved.discountAmount;
+      updatePayload.discount_reason = reResolved.label;
+      updatePayload.applied_promo_code_id = reResolved.promoCodeId;
+      updatePayload.total = round2(
+        Math.max(0, reResolved.subtotal - reResolved.discountAmount),
+      );
+    }
 
     const { data, error } = await db
       .from('popup_orders')
@@ -508,6 +595,50 @@ export class PopupSalesService {
       .single();
 
     if (error || !data) throw new NotFoundException('Order not found');
+
+    // Swap the ledger row for one that matches the re-priced order.
+    if (reResolved) {
+      await this.discountEngine.revertForOrder(
+        'popup_orders',
+        id,
+        `Discount edited on ${data.order_number}`,
+      );
+      await this.discountEngine.reserve({
+        resolution: reResolved,
+        channel: 'popup',
+        orderTable: 'popup_orders',
+        orderId: id,
+        orderNumber: data.order_number,
+        customerEmail: data.customer_email ?? null,
+        customerPhone: data.customer_phone ?? null,
+        appliedBy: existingOrder?.served_by ?? null,
+        // An already-completed order has been paid for, so its new seat is
+        // taken outright rather than left pending.
+        confirmImmediately: data.status === 'completed',
+      });
+    }
+
+    // A completed order has money behind it; a cancelled one gives its seat back.
+    if (isBeingCompleted) {
+      await this.discountEngine
+        .confirmForOrder('popup_orders', id)
+        .catch((err) =>
+          console.error(
+            `Failed to confirm promo redemption for pop-up ${data.order_number}:`,
+            err,
+          ),
+        );
+    }
+    if (dto.status === 'cancelled') {
+      await this.discountEngine
+        .revertForOrder('popup_orders', id, `Order ${data.order_number} cancelled`)
+        .catch((err) =>
+          console.error(
+            `Failed to revert promo redemption for pop-up ${data.order_number}:`,
+            err,
+          ),
+        );
+    }
 
     // ── Inventory deduction on completion ─────────────────────────────────────
     if (isBeingCompleted) {
@@ -886,6 +1017,16 @@ export class PopupSalesService {
       .from('popup_orders')
       .update({ status: 'refunded' })
       .eq('id', id);
+
+    // A refunded order should not keep burning a promo use.
+    await this.discountEngine
+      .revertForOrder('popup_orders', id, `Order ${order.order_number} refunded`)
+      .catch((err) =>
+        console.error(
+          `Failed to revert promo redemption for pop-up ${order.order_number}:`,
+          err,
+        ),
+      );
 
     // ── Restore inventory (only if order was completed — that's when stock was deducted) ──
     if (order.status === 'completed') {
