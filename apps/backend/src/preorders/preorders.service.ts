@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../common/supabase/supabase.service';
 import { LetsfishService } from '../letsfish/letsfish.service';
 import { EmailService } from '../email/email.service';
-import { SettingsService } from '../settings/settings.service';
+import { SettingsService, formatPickupDate } from '../settings/settings.service';
 import { SMS_TEMPLATES } from '../sms/sms.service';
 import { toE164 } from '../common/utils/phone';
 import { CreatePreorderDto, PreorderItemDto } from './dto/create-preorder.dto';
@@ -275,12 +275,42 @@ export class PreordersService {
     return preorder;
   }
 
+  /**
+   * Collection details for a pre-order whose parent order is a pop-up pickup,
+   * or null for anything that ships. Reads the date off the order rather than
+   * recomputing it, so the email always names the pop-up the order is filed to.
+   */
+  private async resolvePickupForOrder(
+    orderId: string | null,
+  ): Promise<{ dateLabel: string; location: string; note: string } | null> {
+    if (!orderId) return null;
+    const db = this.supabase.getAdminClient();
+    const { data: order } = await db
+      .from('orders')
+      .select('shipping_method, pickup_date')
+      .eq('id', orderId)
+      .maybeSingle();
+    if (!order || order.shipping_method !== 'popup_pickup') return null;
+
+    const config = await this.settingsService.getPopupPickup();
+    return {
+      dateLabel: formatPickupDate(order.pickup_date),
+      location: config.location,
+      note: config.note,
+    };
+  }
+
   async sendPreorderNotifications(
-    preorder: { id: string; order_number: string; customer_email: string | null; customer_name?: string | null; customer_phone?: string | null; user_id: string | null; product_name: string; variant_title: string | null; quantity: number; unit_price: number; payment_method: string; payment_status: string },
+    preorder: { id: string; order_number: string; order_id?: string | null; customer_email: string | null; customer_name?: string | null; customer_phone?: string | null; user_id: string | null; product_name: string; variant_title: string | null; quantity: number; unit_price: number; payment_method: string; payment_status: string },
     notify?: { email?: boolean; sms?: boolean },
   ): Promise<void> {
     const etaText = await this.settingsService.getPreorderEtaText();
     const db = this.supabase.getAdminClient();
+
+    // An online pre-order paid through a parent order may be collected at a
+    // pop-up instead of shipped. When it is, the collection date and place
+    // replace the "we'll reach out in N days" ETA in both emails.
+    const pickup = await this.resolvePickupForOrder(preorder.order_id ?? null);
 
     if (notify?.email !== false && preorder.customer_email) {
       const items = [
@@ -299,6 +329,7 @@ export class PreordersService {
         payment_method: preorder.payment_method,
         payment_status: preorder.payment_status,
         etaText,
+        pickup,
       });
 
       // Fulfilment notification to orders@1nri.store — fire and forget so a
@@ -311,6 +342,7 @@ export class PreordersService {
           customer_phone: preorder.customer_phone ?? null,
           payment_status: preorder.payment_status,
           etaText,
+          pickup,
           items: [
             {
               product_name: preorder.product_name,

@@ -106,6 +106,19 @@ export class SettingsController {
     return this.settingsService.updateNewsletterPopup(body);
   }
 
+  @Get('popup-pickup')
+  @Public()
+  getPopupPickup() {
+    return this.settingsService.getPopupPickupResolved();
+  }
+
+  @Put('popup-pickup')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings:update')
+  updatePopupPickup(@Body() body: any) {
+    return this.settingsService.updatePopupPickup(body);
+  }
+
   @Get('stock-hold-minutes')
   @RequirePermission('settings:read')
   getStockHoldMinutes() {

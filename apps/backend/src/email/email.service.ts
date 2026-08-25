@@ -38,6 +38,11 @@ export class EmailService {
     total: number;
     currency: string;
     brand?: string;
+    pickup?: {
+      dateLabel: string; // e.g. 'Friday 28 August'
+      location: string;
+      note?: string;
+    } | null;
     order_items?: {
       product_name: string;
       variant_title?: string | null;
@@ -60,6 +65,11 @@ export class EmailService {
     currency: string;
     shipping_method?: string | null;
     placed_at?: string | null;
+    pickup?: {
+      dateLabel: string;
+      location: string;
+      note?: string;
+    } | null;
     shipping_address?: {
       fullName?: string;
       address?: string;
@@ -93,6 +103,11 @@ export class EmailService {
     customer_phone?: string | null;
     payment_status: string;
     etaText: string;
+    pickup?: {
+      dateLabel: string;
+      location: string;
+      note?: string;
+    } | null;
     currency?: string;
     items: {
       product_name: string;
@@ -187,6 +202,11 @@ export class EmailService {
     payment_method?: string | null;
     payment_status: string;
     etaText: string;
+    pickup?: {
+      dateLabel: string;
+      location: string;
+      note?: string;
+    } | null;
     brand?: string;
     delivery_fee?: number;
   }): Promise<void> {
@@ -203,6 +223,11 @@ export class EmailService {
     payment_method?: string | null;
     payment_status: string;
     etaText: string;
+    pickup?: {
+      dateLabel: string;
+      location: string;
+      note?: string;
+    } | null;
     brand?: string;
   }): Promise<void> {
     const subject = `Pre-order Confirmed - ${order.order_number}`;
@@ -313,6 +338,11 @@ export class EmailService {
     total: number;
     currency: string;
     brand?: string;
+    pickup?: {
+      dateLabel: string; // e.g. 'Friday 28 August'
+      location: string;
+      note?: string;
+    } | null;
     order_items?: {
       product_name: string;
       variant_title?: string | null;
@@ -322,6 +352,19 @@ export class EmailService {
   }): string {
     const brandName = order.brand || '1NRI';
     const symbol = order.currency === 'GHS' ? 'GH₵' : order.currency;
+
+    // Pop-up collection replaces the usual "we'll let you know when it ships"
+    // close — the customer needs the date and the place, not a dispatch promise.
+    const pickupBlock = order.pickup
+      ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;background:#f5f5f5;border-radius:6px;">
+          <tr><td style="padding:16px 18px;">
+            <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#111;">Collect at our pop-up</p>
+            <p style="margin:8px 0 0;font-size:14px;font-weight:600;color:#111;">${order.pickup.dateLabel}</p>
+            <p style="margin:2px 0 0;font-size:14px;color:#555;">${order.pickup.location}</p>
+            ${order.pickup.note ? `<p style="margin:8px 0 0;font-size:13px;line-height:1.5;color:#666;">${order.pickup.note}</p>` : ''}
+          </td></tr>
+        </table>`
+      : '';
 
     const itemRows = (order.order_items || [])
       .map(
@@ -361,8 +404,8 @@ export class EmailService {
               <td style="font-size:13px;color:#999;text-align:right;">${symbol} ${order.subtotal.toLocaleString()}</td>
             </tr>
             <tr>
-              <td style="font-size:13px;color:#999;padding:3px 0;">Shipping</td>
-              <td style="font-size:13px;color:#999;text-align:right;">${symbol} ${(order.shipping_cost || 0).toLocaleString()}</td>
+              <td style="font-size:13px;color:#999;padding:3px 0;">${order.pickup ? 'Collection' : 'Shipping'}</td>
+              <td style="font-size:13px;color:#999;text-align:right;">${order.pickup ? 'Free' : `${symbol} ${(order.shipping_cost || 0).toLocaleString()}`}</td>
             </tr>
             <tr>
               <td style="font-size:13px;color:#999;padding:3px 0;">Fees (1.95%)</td>
@@ -374,10 +417,12 @@ export class EmailService {
             </tr>
           </table>
 
+          ${pickupBlock}
+
           <div style="margin:28px 0 0;text-align:center;">
             <a href="${this.frontendUrl}/track?order=${order.order_number}" style="display:inline-block;background:#111;color:#fff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:6px;text-decoration:none;letter-spacing:0.01em;">Track your order</a>
           </div>
-          <p style="margin:16px 0 0;font-size:13px;color:#999;text-align:center;">We'll send you another update when your order ships.</p>
+          <p style="margin:16px 0 0;font-size:13px;color:#999;text-align:center;">${order.pickup ? 'Bring your order number with you on the day.' : "We'll send you another update when your order ships."}</p>
         </td></tr>
       </table>
     </td></tr>
@@ -396,6 +441,11 @@ export class EmailService {
     currency: string;
     shipping_method?: string | null;
     placed_at?: string | null;
+    pickup?: {
+      dateLabel: string;
+      location: string;
+      note?: string;
+    } | null;
     shipping_address?: {
       fullName?: string;
       address?: string;
@@ -419,7 +469,14 @@ export class EmailService {
     // Express deliveries are prioritised: orders placed before 3PM GMT (Ghana
     // is UTC+0, so GMT hour == UTC hour) must go out the same day.
     const isExpress = order.shipping_method === 'express';
-    const deliveryLabel = isExpress ? 'Express' : 'Standard';
+    // Pop-up collection: nothing to dispatch — the item is set aside and handed
+    // over in person on the day, so this must not read as a shipping job.
+    const isPickup = order.shipping_method === 'popup_pickup';
+    const deliveryLabel = isPickup
+      ? 'Pop-up collection'
+      : isExpress
+        ? 'Express'
+        : 'Standard';
     const placed = order.placed_at ? new Date(order.placed_at) : null;
     const placedTime = placed
       ? placed
@@ -440,6 +497,15 @@ export class EmailService {
           ? `<p style="margin:8px 0 0;font-size:13px;font-weight:600;color:#4ade80;">✓ Placed ${placedTime} GMT — within the 3PM cutoff. Dispatch today.</p>`
           : `<p style="margin:8px 0 0;font-size:13px;font-weight:600;color:#fbbf24;">Placed ${placedTime} GMT — after the 3PM cutoff. Dispatch next business day.</p>`;
 
+    const pickupBanner = isPickup
+      ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#111;border-radius:6px;">
+          <tr><td style="padding:16px 18px;">
+            <p style="margin:0;font-size:13px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#fff;">Collect at pop-up${order.pickup ? ` — ${order.pickup.dateLabel}` : ''}</p>
+            <p style="margin:6px 0 0;font-size:13px;line-height:1.5;color:#e5e5e5;">Do <strong style="color:#fff;">not</strong> dispatch. Set this order aside and have it ready at${order.pickup ? ` ${order.pickup.location}` : ' the pop-up'}.</p>
+          </td></tr>
+        </table>`
+      : '';
+
     const expressBanner = isExpress
       ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#111;border-radius:6px;">
           <tr><td style="padding:16px 18px;">
@@ -449,6 +515,13 @@ export class EmailService {
           </td></tr>
         </table>`
       : '';
+
+    const collectionLines = [
+      order.pickup?.dateLabel,
+      order.pickup?.location,
+    ]
+      .filter(Boolean)
+      .join('<br>') || 'At the next pop-up';
 
     const addressLines = [
       addr.fullName,
@@ -488,11 +561,11 @@ export class EmailService {
           ${this.brandHeader('1NRI')}
         </td></tr>
         <tr><td style="padding:32px;">
-          <p style="margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#111;border:1px solid #111;display:inline-block;padding:4px 10px;">${isExpress ? '⚡ Express Order' : 'New Order'}</p>
+          <p style="margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#111;border:1px solid #111;display:inline-block;padding:4px 10px;">${isPickup ? 'Pop-up Collection' : isExpress ? '⚡ Express Order' : 'New Order'}</p>
           <h1 style="margin:0 0 4px;font-size:20px;font-weight:700;color:#111;">New order to fulfil</h1>
           <p style="margin:0 0 24px;font-size:14px;color:#666;">Order <strong>${order.order_number}</strong></p>
 
-          ${expressBanner}
+          ${pickupBanner}${expressBanner}
 
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
             <tr>
@@ -503,8 +576,8 @@ export class EmailService {
                 ${addr.phone ? `<p style="margin:2px 0 0;font-size:14px;color:#555;">${addr.phone}</p>` : ''}
               </td>
               <td width="50%" style="vertical-align:top;">
-                <p style="margin:0 0 6px;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#999;">Ship to</p>
-                <p style="margin:0;font-size:14px;color:#111;line-height:1.5;">${addressLines || '-'}</p>
+                <p style="margin:0 0 6px;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#999;">${isPickup ? 'Collection' : 'Ship to'}</p>
+                <p style="margin:0;font-size:14px;color:#111;line-height:1.5;">${isPickup ? collectionLines : addressLines || '-'}</p>
                 <p style="margin:8px 0 0;font-size:13px;color:#111;"><span style="color:#999;">Delivery:</span> <strong>${deliveryLabel}</strong>${isExpress ? ' <span style="color:#111;">⚡</span>' : ''}</p>
               </td>
             </tr>
@@ -526,8 +599,8 @@ export class EmailService {
               <td style="font-size:13px;color:#999;text-align:right;">${symbol} ${order.subtotal.toLocaleString()}</td>
             </tr>
             <tr>
-              <td style="font-size:13px;color:#999;padding:3px 0;">Shipping</td>
-              <td style="font-size:13px;color:#999;text-align:right;">${symbol} ${(order.shipping_cost || 0).toLocaleString()}</td>
+              <td style="font-size:13px;color:#999;padding:3px 0;">${isPickup ? 'Collection' : 'Shipping'}</td>
+              <td style="font-size:13px;color:#999;text-align:right;">${isPickup ? 'Free' : `${symbol} ${(order.shipping_cost || 0).toLocaleString()}`}</td>
             </tr>
             <tr>
               <td style="font-size:13px;color:#999;padding:3px 0;">Fees (1.95%)</td>
@@ -557,6 +630,11 @@ export class EmailService {
     customer_phone?: string | null;
     payment_status: string;
     etaText: string;
+    pickup?: {
+      dateLabel: string;
+      location: string;
+      note?: string;
+    } | null;
     currency?: string;
     items: {
       product_name: string;
@@ -635,7 +713,9 @@ export class EmailService {
           </table>
 
           <p style="margin:24px 0 0;font-size:13px;color:#666;line-height:1.6;">
-            Stock is not deducted for pre-orders. Expected fulfilment window: <strong>${order.etaText}</strong>. Log in to the admin dashboard to manage this pre-order once stock is ready.
+            Stock is not deducted for pre-orders. ${order.pickup
+              ? `Customer is collecting at the pop-up on <strong>${order.pickup.dateLabel}</strong>${order.pickup.location ? ` (${order.pickup.location})` : ''} — do not dispatch, set it aside for collection.`
+              : `Expected fulfilment window: <strong>${order.etaText}</strong>.`} Log in to the admin dashboard to manage this pre-order once stock is ready.
           </p>
         </td></tr>
       </table>
@@ -987,6 +1067,11 @@ export class EmailService {
     payment_method?: string | null;
     payment_status: string;
     etaText: string;
+    pickup?: {
+      dateLabel: string;
+      location: string;
+      note?: string;
+    } | null;
     brand?: string;
     delivery_fee?: number;
   }): string {
@@ -1078,7 +1163,9 @@ export class EmailService {
             <tr>
               <td style="background:#f9fafb;border-radius:8px;padding:16px;">
                 <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#111;">What happens next?</p>
-                <p style="margin:0;font-size:13px;color:#666;line-height:1.6;">We expect to reach out within ${order.etaText} once your item is ready for collection or dispatch. Keep an eye on your phone - we'll send you a message when your order is confirmed.</p>
+                <p style="margin:0;font-size:13px;color:#666;line-height:1.6;">${order.pickup
+                  ? `Collect your order at our pop-up on <strong style="color:#111;">${order.pickup.dateLabel}</strong>${order.pickup.location ? ` — ${order.pickup.location}` : ''}. Bring your order number with you.${order.pickup.note ? ` ${order.pickup.note}` : ''}`
+                  : `We expect to reach out within ${order.etaText} once your item is ready for collection or dispatch. Keep an eye on your phone - we'll send you a message when your order is confirmed.`}</p>
               </td>
             </tr>
           </table>

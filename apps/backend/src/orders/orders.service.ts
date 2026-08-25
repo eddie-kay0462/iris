@@ -10,7 +10,7 @@ import { SupabaseService } from '../common/supabase/supabase.service';
 import { EmailService } from '../email/email.service';
 import { SmsService, SMS_TEMPLATES } from '../sms/sms.service';
 import { PromosService } from '../promos/promos.service';
-import { SettingsService } from '../settings/settings.service';
+import { SettingsService, resolveNextPickupDate, formatPickupDate } from '../settings/settings.service';
 import { PreordersService } from '../preorders/preorders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { toE164 } from '../common/utils/phone';
@@ -194,6 +194,11 @@ export class OrdersService {
    * option the client picked.
    */
   private async resolveShippingCost(dto: CreateOrderDto): Promise<number> {
+    // Collection at a pop-up is free by definition — never charged, whatever the
+    // client posts. Checked before the country branch so it also wins over an
+    // international flat rate (pickup abroad is rejected in create() anyway).
+    if (dto.shippingMethod === 'popup_pickup') return 0;
+
     const country = dto.shippingAddress?.region;
     if (country && country !== 'GH') {
       const rate = await this.settingsService.getShippingRateForCountry(country);
@@ -311,6 +316,38 @@ export class OrdersService {
       );
     }
 
+    // 1a-ii. Pop-up collection is the free alternative to waiting for a pre-order
+    // to be restocked and shipped, so it's only offered on carts that actually
+    // contain pre-order lines, only within Ghana, and only while staff have it on.
+    // Re-checked here because the checkout page may have been open for a while.
+    let pickupDate: string | null = null;
+    if (dto.shippingMethod === 'popup_pickup') {
+      if (preorderItems.length === 0) {
+        throw new BadRequestException(
+          'Pop-up collection is only available for orders containing pre-order items.',
+        );
+      }
+      if (dto.shippingAddress?.region !== 'GH') {
+        throw new BadRequestException(
+          'Pop-up collection is only available for orders within Ghana.',
+        );
+      }
+      const pickupConfig = await this.settingsService.getPopupPickup();
+      if (!pickupConfig.enabled) {
+        throw new BadRequestException(
+          'Pop-up collection is not currently available. Please choose a delivery option.',
+        );
+      }
+      // Resolved server-side, never taken from the client: a checkout left open
+      // across the lead-time cut-off gets the correctly rolled-forward pop-up.
+      pickupDate = resolveNextPickupDate(
+        pickupConfig.pickupWeekday,
+        pickupConfig.leadDays,
+      )
+        .toISOString()
+        .slice(0, 10);
+    }
+
     // 1b. Validate pre-order eligibility BEFORE inserting anything, so an
     // ineligible line (limit reached, duplicate, price mismatch) doesn't leave an
     // orphaned order behind.
@@ -389,6 +426,7 @@ export class OrdersService {
         currency: 'GHS',
         shipping_address: dto.shippingAddress,
         shipping_method: dto.shippingMethod || 'standard',
+        pickup_date: pickupDate,
         payment_provider: 'paystack',
         payment_reference: dto.paymentReference,
         payment_status: 'pending',
@@ -1813,7 +1851,7 @@ export class OrdersService {
 
     const { data, error } = await db
       .from('orders')
-      .select('order_number, status, payment_status, tracking_number, carrier, shipped_at, delivered_at, created_at, shipping_address, order_items(product_name, variant_title, quantity, total_price), preorders(product_name, variant_title, quantity, unit_price, status)')
+      .select('order_number, status, payment_status, tracking_number, carrier, shipped_at, delivered_at, created_at, shipping_address, shipping_method, pickup_date, order_items(product_name, variant_title, quantity, total_price), preorders(product_name, variant_title, quantity, unit_price, status)')
       .eq('order_number', normalized)
       .ilike('email', email.trim())
       .is('deleted_at', null)
@@ -1932,6 +1970,21 @@ export class OrdersService {
         ? 'Unlikely Alliances'
         : '1NRI';
 
+      // Collection details for a pop-up pickup order, resolved from the date
+      // stored on the order (not recomputed) so the emails always name the same
+      // pop-up the customer was shown and the order is filed against.
+      const pickupConfig =
+        fullOrder.shipping_method === 'popup_pickup'
+          ? await this.settingsService.getPopupPickup()
+          : null;
+      const pickup = pickupConfig
+        ? {
+            dateLabel: formatPickupDate(fullOrder.pickup_date),
+            location: pickupConfig.location,
+            note: pickupConfig.note,
+          }
+        : null;
+
       // An all-pre-order checkout has no in-stock order items — it's just a
       // payment/shipping container. Skip the generic "your order" emails/SMS in
       // that case; the pre-order confirmations already went out via
@@ -1948,6 +2001,7 @@ export class OrdersService {
           total: fullOrder.total,
           currency: fullOrder.currency || 'GHS',
           brand,
+          pickup,
           order_items: fullOrder.order_items,
         })
         .catch(() => null);
@@ -1964,6 +2018,7 @@ export class OrdersService {
           currency: fullOrder.currency || 'GHS',
           shipping_address: fullOrder.shipping_address as any,
           shipping_method: fullOrder.shipping_method,
+          pickup,
           placed_at: fullOrder.created_at,
           order_items: fullOrder.order_items,
         })

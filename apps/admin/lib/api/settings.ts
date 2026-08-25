@@ -144,6 +144,46 @@ export function useUpdateCountryShippingRates() {
   });
 }
 
+/**
+ * Free collection at the next pop-up, offered at checkout only on carts holding
+ * pre-order items. There is deliberately no price — the option is always free.
+ * `nextPickup*` are derived by the API from the weekday + lead time and are
+ * read-only here.
+ */
+export interface PopupPickup {
+  enabled: boolean;
+  label: string;
+  pickupWeekday: number; // 0 = Sunday … 5 = Friday
+  leadDays: number;
+  location: string;
+  note: string;
+  nextPickupDate: string;
+  nextPickupLabel: string;
+}
+
+export type PopupPickupInput = Omit<PopupPickup, "nextPickupDate" | "nextPickupLabel">;
+
+export function usePopupPickup() {
+  return useQuery({
+    queryKey: ["popup-pickup"],
+    queryFn: () => apiClient<PopupPickup>("/settings/popup-pickup"),
+  });
+}
+
+export function useUpdatePopupPickup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (pickup: PopupPickupInput) =>
+      apiClient<PopupPickup>("/settings/popup-pickup", {
+        method: "PUT",
+        body: pickup,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["popup-pickup"] });
+    },
+  });
+}
+
 export interface AnnouncementBanner {
   enabled: boolean;
   text: string;
