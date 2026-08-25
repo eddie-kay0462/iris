@@ -5356,3 +5356,55 @@ Scope note: this covers the **storefront only** — everything a customer sees. 
 5. Open the cart drawer in dark mode and check it reads as sitting *above* the page rather than blending into it.
 6. Check `/account` in dark mode across all four tabs, and `/track` with a real order number.
 7. **Then switch back to light mode and check the same pages** — light should look exactly as it did before. If anything looks heavier or more outlined than you remember, flag it.
+
+---
+
+## Pick Up Pre-orders at the Pop-up (August 2026)
+
+If someone pre-orders something, their only option used to be "pay now, wait 10–15 working days for it to ship." Express delivery isn't offered on pre-orders at all — a pre-ordered item ships separately once it's restocked, so there's nothing to rush. That left one choice, and it cost them a delivery fee.
+
+Now there's a second one: **collect it in person at the next pop-up, free.** It shows up at checkout as a delivery option, but only on orders that actually contain pre-order items, and only for customers in Ghana.
+
+The tricky part was the timing. A pre-order needs a few days to get ready, so the option can't just say "this Friday" forever. Instead you tell it two things in settings — which day the pop-up is on (Friday) and how many days you need to prepare (3) — and checkout works out the rest. Order on Monday or Tuesday and it offers this Friday. Order on Wednesday or later and it quietly offers *next* Friday instead, because there's no longer enough time. Nobody has to remember to update a date every week, and a customer can never book a pop-up you can't get their item ready for.
+
+It's free, and it's free by design rather than by setting — there's deliberately no price field to fill in, and the server forces the delivery charge to zero on these orders regardless of what the checkout page sends it. The same goes for the eligibility rules: even if someone tried to force it through, the server re-checks that the order really does contain pre-order items, that it's going to a Ghana address, and that you haven't switched the option off.
+
+Everywhere an order normally shows a delivery address now shows collection details instead when it's a pickup — the customer's confirmation email, the order page in their account, the public tracking page, and the order screen in admin. The staff fulfilment email gets a **"Collect at pop-up — do not dispatch"** banner with the date, so nobody accidentally posts an order that's meant to be handed over in person.
+
+One thing to be aware of: these settings are independent of the pop-up events you already create in the admin dashboard. They don't talk to each other yet. So if a week goes by with no actual pop-up, checkout will still cheerfully offer that Friday. Worth keeping in mind, and worth linking up properly later.
+
+Also cleaned up along the way: there was a half-finished "pickup" option sitting in the checkout code from some earlier attempt. It was unreachable, but if it had ever been switched on it would have shown "Free" to the customer while charging them the full delivery fee anyway. That's gone.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `supabase/migrations/20260825000000_add_popup_pickup_shipping_method.sql` | **New.** Lets an order be marked as a pop-up collection and records which pop-up date it's for. Needs running — see below. |
+| `apps/backend/src/settings/settings.service.ts` | The new settings (pop-up day, prep days, label, location, note) and the logic that works out which pop-up date to offer. |
+| `apps/backend/src/settings/settings.controller.ts` | Makes those settings readable by the checkout page and editable from admin. |
+| `apps/backend/src/orders/orders.service.ts` | Forces the delivery charge to zero on collections, re-checks the order is actually eligible, and stamps the pop-up date onto the order. |
+| `apps/backend/src/orders/dto/create-order.dto.ts` | Accepts "pop-up collection" as a delivery method. |
+| `apps/backend/src/email/email.service.ts` | Collection details replace the delivery address in the customer receipt and the staff fulfilment email, plus the "do not dispatch" banner. |
+| `apps/backend/src/preorders/preorders.service.ts` | Pre-order confirmation emails say where and when to collect instead of quoting the usual 10–15 day estimate. |
+| `apps/frontend/app/(shop)/checkout/CheckoutClient.tsx` | The option itself at checkout, positioned above the greyed-out Express option. Also removes the old broken pickup code. |
+| `apps/frontend/lib/api/settings.ts`, `apps/frontend/lib/api/orders.ts` | Plumbing so the storefront can read the pickup settings and knows an order can be a collection. |
+| `apps/frontend/app/(dashboard)/orders/[id]/page.tsx`, `apps/frontend/app/(shop)/track/page.tsx` | The customer's own order page and the public tracking page show collection details instead of a blank delivery address. |
+| `apps/admin/app/(dashboard)/settings/general/page.tsx` | The new "Pop-up Pickup" panel in Settings → General. |
+| `apps/admin/app/(dashboard)/orders/[id]/page.tsx`, `apps/admin/lib/api/orders.ts`, `apps/admin/lib/api/settings.ts` | "Collect at pop-up" badge on the order screen, and the wiring for the settings panel. |
+
+> **Heads-up / action required**
+>
+> The database migration hasn't been run yet — **none of this works until it is.** Run `supabase db push`, or paste the contents of `supabase/migrations/20260825000000_add_popup_pickup_shipping_method.sql` into the Supabase SQL editor and hit Run.
+>
+> After that, the option is **off by default**. Turn it on in Admin → Settings → General → Pop-up Pickup and fill in a location, or customers won't see it.
+
+### How to test
+
+1. Run the migration, then go to **Admin → Settings → General → Pop-up Pickup**. Switch it on, leave the day as Friday and prep days as 3, and put something in Location (e.g. "Osu — venue shared by email"). Save.
+2. Check the line underneath that reads *"Right now this offers: …"* — if today is Monday or Tuesday it should say this coming Friday; Wednesday or later, next Friday.
+3. On the storefront, add a **pre-order** item to your bag (something out of stock that's marked as pre-orderable) and go to checkout. You should see the pickup option sitting above the greyed-out Express one, priced **Free**, with the pop-up date and location under it.
+4. Select it — the address fields should disappear, and the Shipping/Delivery line in the order summary should read **Free**.
+5. Switch the country to United States — the option should vanish and go back to standard shipping.
+6. Empty the bag and add a **normal in-stock item** instead — the option shouldn't appear at all.
+7. Place a test order with pickup selected, then check: the confirmation email names the date and place, the order in your account and on `/track` shows collection details rather than an address, and in Admin → Orders the order carries a "Collect at pop-up" badge.
+8. To sanity-check the cut-off, temporarily set prep days to something large like 7 and reload checkout — the offered date should jump a week forward rather than the option disappearing.
