@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Store, ArrowRight } from "lucide-react";
-import { useAdminStats, useAnalytics } from "@/lib/api/orders";
+import { SALES_CHANNELS, useAdminStats, useAnalytics } from "@/lib/api/orders";
 import {
   useDateRange,
   useSalesBreakdown,
@@ -16,7 +16,7 @@ import { Sparkline } from "@/app/components/charts/Sparkline";
 import { DonutChart } from "@/app/components/charts/DonutChart";
 import { ChartCard } from "@/app/components/charts/ChartCard";
 import { DeltaBadge } from "@/app/components/DeltaBadge";
-import { formatGHS, formatGHSShort, formatMetric } from "@/lib/charts/theme";
+import { chart, formatGHS, formatGHSShort, formatMetric } from "@/lib/charts/theme";
 
 // ─── Filter Types ──────────────────────────────────────────────────────────────
 
@@ -92,7 +92,10 @@ function SalesBreakdownCard({ range }: { range: { from: string; to: string } }) 
   ];
 
   return (
-    <ChartCard title="Total sales breakdown">
+    <ChartCard
+      title="Total sales breakdown"
+      note="Built up from order subtotals, so it separates discounts, returns, shipping and tax. Total Sales in the KPI above is the amount actually charged — the two differ when there are refunds."
+    >
       <div className="divide-y divide-slate-100">
         {lines.map((line) => {
           const value = data ? (data[line.key] as number) : null;
@@ -139,7 +142,10 @@ function BrandSplit({
   const total = Object.values(brandRevenue).reduce((s, v) => s + v, 0) || 1;
 
   return (
-    <ChartCard title="Sales by Brand" note="Includes storefront + pop-up revenue, attributed by product vendor.">
+    <ChartCard
+      title="Sales by Brand"
+      note="Product sales across all channels, attributed by product vendor. Excludes shipping, tax and fees, so this won't match Total Sales exactly."
+    >
       <div className="grid grid-cols-2 gap-4">
         {brands.map((b) => {
           const rev = brandRevenue[b.name] ?? 0;
@@ -166,7 +172,7 @@ function BrandSplit({
                     style={{ width: `${pct}%`, backgroundColor: b.color }}
                   />
                 </div>
-                <p className="text-xs text-slate-500">{pct.toFixed(1)}% of period revenue</p>
+                <p className="text-xs text-slate-500">{pct.toFixed(1)}% of product sales</p>
               </div>
             </div>
           );
@@ -260,13 +266,27 @@ export default function AdminDashboardPage() {
 
   const currentYear = new Date().getFullYear();
 
-  // Channel split for the donut
-  const popupRevenue = analytics?.popupRevenue ?? 0;
-  const onlineRevenue = Math.max((analytics?.totalRevenue ?? 0) - popupRevenue, 0);
+  // Channel split for the donut. These come straight from the API rather than
+  // being derived by subtraction, so a channel can never be silently folded
+  // into another one's slice.
+  const channelSlices = useMemo(
+    () =>
+      SALES_CHANNELS.map(({ key, label }) => ({
+        name: label,
+        value: analytics?.channelRevenue?.[key] ?? 0,
+      })),
+    [analytics],
+  );
+  const channelTotal = channelSlices.reduce((sum, c) => sum + c.value, 0);
 
-  const popupShare = analytics?.popupRevenue
-    ? `incl. ${formatGHSShort(analytics.popupRevenue)} pop-up`
-    : undefined;
+  // Name the in-person channels that actually contributed this period.
+  const inPersonShare = useMemo(() => {
+    const parts = SALES_CHANNELS.filter((c) => c.key !== "online")
+      .map((c) => ({ ...c, value: analytics?.channelRevenue?.[c.key] ?? 0 }))
+      .filter((c) => c.value > 0)
+      .map((c) => `${formatGHSShort(c.value)} ${c.label.toLowerCase()}`);
+    return parts.length > 0 ? `incl. ${parts.join(", ")}` : undefined;
+  }, [analytics]);
 
   return (
     <section className="space-y-6">
@@ -274,7 +294,9 @@ export default function AdminDashboardPage() {
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-          <p className="text-sm text-slate-400">Operations overview — storefront + pop-up combined.</p>
+          <p className="text-sm text-slate-400">
+            Operations overview — storefront, pop-up and walk-in combined.
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -321,7 +343,7 @@ export default function AdminDashboardPage() {
           label="Total Sales"
           value={analyticsLoading ? "—" : formatGHS(displayRevenue)}
           badge={brandFilter === "both" ? "All channels" : brandFilter}
-          sub={brandFilter === "both" ? popupShare : "storefront + pop-up"}
+          sub={brandFilter === "both" ? inPersonShare : "all channels"}
           delta={
             brandFilter === "both" && analytics ? (
               <DeltaBadge current={analytics.totalRevenue} previous={analytics.previousPeriodRevenue} />
@@ -389,7 +411,7 @@ export default function AdminDashboardPage() {
             <h2 className="text-sm font-semibold text-slate-700">Revenue over time (All-time)</h2>
             {brandFilter !== "both" && (
               <p className="mt-0.5 text-xs text-slate-400">
-                Showing {brandFilter} revenue only (storefront + pop-up)
+                Showing {brandFilter} revenue only (all channels)
               </p>
             )}
           </div>
@@ -409,13 +431,14 @@ export default function AdminDashboardPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         <SalesBreakdownCard range={dateRange} />
         <div className="space-y-5">
-          <ChartCard title="Sales by Channel">
+          <ChartCard
+            title="Sales by Channel"
+            note="Revenue-generating orders from the online store, pop-up events and walk-in sales at HQ."
+          >
             <DonutChart
-              data={[
-                { name: "Online store", value: onlineRevenue },
-                { name: "Pop-up", value: popupRevenue },
-              ]}
-              centerValue={formatGHSShort(onlineRevenue + popupRevenue)}
+              data={channelSlices}
+              colors={chart.channels}
+              centerValue={formatGHSShort(channelTotal)}
               centerLabel="Total"
               height={170}
             />

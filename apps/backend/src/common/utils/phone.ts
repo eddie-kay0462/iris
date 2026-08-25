@@ -1,6 +1,26 @@
 import { parsePhoneNumberFromString, CountryCode } from 'libphonenumber-js';
 import { registerDecorator, ValidationOptions } from 'class-validator';
 
+/** A phone number resolved to E.164 plus the country it belongs to. */
+export type ParsedPhone = { e164: string; country: CountryCode | null };
+
+/**
+ * Parse any phone input once, resolving local formats like "0241234567" against
+ * defaultCountry. Non-digit noise (spaces, the leading "'" left by spreadsheet
+ * exports) is stripped first. Returns null if the input is not a valid number.
+ */
+export function parsePhone(
+  raw: string | null | undefined,
+  defaultCountry: CountryCode = 'GH',
+): ParsedPhone | null {
+  if (!raw) return null;
+  const cleaned = raw.replace(/[^\d+]/g, '');
+  if (!cleaned) return null;
+  const parsed = parsePhoneNumberFromString(cleaned, defaultCountry);
+  if (!parsed?.isValid()) return null;
+  return { e164: parsed.number, country: parsed.country ?? null };
+}
+
 /**
  * Convert any phone input to E.164 format (+[country][number]).
  * defaultCountry is required to resolve local formats like "0241234567" → "+233241234567".
@@ -10,11 +30,26 @@ export function toE164(
   raw: string | null | undefined,
   defaultCountry: CountryCode = 'GH',
 ): string | null {
-  if (!raw) return null;
-  const cleaned = raw.replace(/[^\d+]/g, '');
-  if (!cleaned) return null;
-  const parsed = parsePhoneNumberFromString(cleaned, defaultCountry);
-  return parsed?.isValid() ? parsed.number : null;
+  return parsePhone(raw, defaultCountry)?.e164 ?? null;
+}
+
+/**
+ * Country of a phone number, resolving local formats against defaultCountry
+ * (e.g. "0241234567" → GH). Returns null if the input is unparseable or invalid.
+ */
+export function getPhoneCountry(
+  raw: string | null | undefined,
+  defaultCountry: CountryCode = 'GH',
+): CountryCode | null {
+  return parsePhone(raw, defaultCountry)?.country ?? null;
+}
+
+/** True only for numbers that parse as valid Ghanaian (+233) numbers. */
+export function isGhanaianPhone(
+  raw: string | null | undefined,
+  defaultCountry: CountryCode = 'GH',
+): boolean {
+  return getPhoneCountry(raw, defaultCountry) === 'GH';
 }
 
 /** E.164 → LetsFish SMS API format: strip leading + (e.g. "+233241234567" → "233241234567") */

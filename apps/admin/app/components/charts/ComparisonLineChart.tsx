@@ -145,13 +145,16 @@ export function DualLineChart({
   keys,
   height = 280,
   format = "currency",
+  colors,
 }: {
   rows: Array<Record<string, string | number | null>>;
   keys: { key: string; label: string }[];
   height?: number;
   format?: MetricFormat;
+  /** Overrides the default ink ramp — use when series must be told apart. */
+  colors?: readonly string[];
 }) {
-  const palette = [chart.primary, chart.secondary, chart.tertiary];
+  const palette = colors?.length ? colors : [chart.primary, chart.secondary, chart.tertiary];
   if (rows.length === 0) {
     return (
       <div

@@ -2,8 +2,14 @@
 
 import { use, useMemo, useRef, useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Mail, Phone, Calendar, MapPin, Tag, ShoppingBag, Store, Camera } from "lucide-react";
-import { useAdminCustomer, type Order, type Address, type PopupOrderSummary } from "@/lib/api/orders";
+import { ArrowLeft, Mail, Phone, Calendar, MapPin, Tag, ShoppingBag, Store, Camera, DoorOpen } from "lucide-react";
+import {
+  useAdminCustomer,
+  type Order,
+  type Address,
+  type PopupOrderSummary,
+  type WalkinOrderSummary,
+} from "@/lib/api/orders";
 import { useResetUserPassword } from "@/lib/api/settings";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { Avatar } from "../../../components/Avatar";
@@ -120,31 +126,41 @@ function OnlineOrderTimeline({ orders }: { orders: Order[] }) {
   );
 }
 
-function PopupOrderList({ orders }: { orders: PopupOrderSummary[] }) {
+/** Shared list for the in-person channels — pop-up events and walk-ins at HQ. */
+function InPersonOrderList({
+  orders,
+  emptyLabel,
+}: {
+  orders: (PopupOrderSummary | WalkinOrderSummary)[];
+  emptyLabel: string;
+}) {
   if (orders.length === 0) {
-    return <p className="text-sm text-slate-500">No popup orders found.</p>;
+    return <p className="text-sm text-slate-500">{emptyLabel}</p>;
   }
 
   return (
     <div className="space-y-3">
-      {orders.map((order) => (
-        <div key={order.id} className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="flex items-center justify-between">
-            <span className="font-medium text-slate-900">{order.order_number}</span>
-            <StatusBadge status={order.status} />
+      {orders.map((order) => {
+        const eventName = (order as PopupOrderSummary).popup_events?.name;
+        return (
+          <div key={order.id} className="rounded-lg border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-slate-900">{order.order_number}</span>
+              <StatusBadge status={order.status} />
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-slate-500">
+              <span>GH₵{Number(order.total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              {order.payment_method && <span className="capitalize">{order.payment_method.replace("_", " ")}</span>}
+              {eventName && (
+                <span className="flex items-center gap-1">
+                  <Store className="h-3 w-3" /> {eventName}
+                </span>
+              )}
+              <span>{new Date(order.created_at).toLocaleDateString()}</span>
+            </div>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-slate-500">
-            <span>GH₵{Number(order.total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-            {order.payment_method && <span className="capitalize">{order.payment_method.replace("_", " ")}</span>}
-            {order.popup_events?.name && (
-              <span className="flex items-center gap-1">
-                <Store className="h-3 w-3" /> {order.popup_events.name}
-              </span>
-            )}
-            <span>{new Date(order.created_at).toLocaleDateString()}</span>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -302,7 +318,13 @@ export default function AdminCustomerDetailPage({
             <ShoppingBag className="h-4 w-4 text-blue-500" />
             <span className="text-slate-600">Online</span>
             <span className="ml-auto font-medium">
-              {(customer.iris_order_count ?? 0) - (customer.popup_orders?.length ?? 0)} orders
+              {Math.max(
+                (customer.iris_order_count ?? 0) -
+                  (customer.popup_orders?.length ?? 0) -
+                  (customer.walkin_orders?.length ?? 0),
+                0,
+              )}{" "}
+              orders
             </span>
           </div>
           <div className="flex items-center gap-2 text-sm">
@@ -310,8 +332,16 @@ export default function AdminCustomerDetailPage({
             <span className="text-slate-600">Popup events</span>
             <span className="ml-auto font-medium">{customer.popup_orders?.length ?? 0} orders</span>
           </div>
+          <div className="flex items-center gap-2 text-sm">
+            <DoorOpen className="h-4 w-4 text-amber-500" />
+            <span className="text-slate-600">Walk-in</span>
+            <span className="ml-auto font-medium">{customer.walkin_orders?.length ?? 0} orders</span>
+          </div>
           <p className="text-xs text-slate-400 pt-1">
             Iris spend: GH₵{(customer.iris_total_spent ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <p className="text-[11px] text-slate-400">
+            Counts paid orders only — unpaid checkout attempts are excluded.
           </p>
         </div>
 
@@ -368,7 +398,17 @@ export default function AdminCustomerDetailPage({
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600 flex items-center gap-2">
             <Store className="h-4 w-4" /> Popup Event Orders
           </h2>
-          <PopupOrderList orders={customer.popup_orders} />
+          <InPersonOrderList orders={customer.popup_orders} emptyLabel="No popup orders found." />
+        </div>
+      )}
+
+      {/* Order history — Walk-in */}
+      {customer.walkin_orders && customer.walkin_orders.length > 0 && (
+        <div>
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-600 flex items-center gap-2">
+            <DoorOpen className="h-4 w-4" /> Walk-in Orders
+          </h2>
+          <InPersonOrderList orders={customer.walkin_orders} emptyLabel="No walk-in orders found." />
         </div>
       )}
     </section>

@@ -223,9 +223,19 @@ export interface Address {
   province?: string;
 }
 
+export interface WalkinOrderSummary {
+  id: string;
+  order_number: string;
+  total: number;
+  status: string;
+  payment_method: string | null;
+  created_at: string;
+}
+
 export interface AdminCustomerDetail extends AdminCustomer {
   orders: Order[];
   popup_orders: PopupOrderSummary[];
+  walkin_orders: WalkinOrderSummary[];
   // Metadata
   billing_address: Address | null;
   default_address: Address | null;
@@ -268,8 +278,24 @@ export interface AnalyticsData {
   brandRevenue: Record<string, number>;
   brandRevenueByDay: Record<string, Record<string, number>>;
   brandOrderCount: Record<string, number>;
-  popupRevenue: number;
+  /** Revenue per sales channel. Sums to `totalRevenue`. */
+  channelRevenue: SalesChannelTotals;
+  /** Revenue-generating order count per sales channel. Sums to `totalOrders`. */
+  channelOrders: SalesChannelTotals;
 }
+
+export interface SalesChannelTotals {
+  online: number;
+  popup: number;
+  walkin: number;
+}
+
+/** Display order and labels for the sales channels, shared by every channel UI. */
+export const SALES_CHANNELS: { key: keyof SalesChannelTotals; label: string }[] = [
+  { key: "online", label: "Online store" },
+  { key: "popup", label: "Pop-up" },
+  { key: "walkin", label: "Walk-in" },
+];
 
 export interface CustomerStats {
   totalCustomers: number;

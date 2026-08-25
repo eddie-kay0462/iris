@@ -17,9 +17,13 @@ import { toE164 } from '../common/utils/phone';
 import { QueryOrdersDto } from './dto/query-orders.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import {
+  dayOf,
   ONLINE_REVENUE_STATUSES,
   POPUP_REVENUE_STATUSES,
+  round2,
+  WALKIN_REVENUE_STATUSES,
 } from '../analytics/analytics.constants';
+import { fetchAll } from '../analytics/reports/report-context';
 
 // Payment processing fee charged on top of the order amount. Kept in sync with the
 // frontend checkout display (apps/frontend/app/(shop)/checkout/CheckoutClient.tsx) so
@@ -958,17 +962,23 @@ export class OrdersService {
   async getAdminStats() {
     const db = this.supabase.getAdminClient();
 
+    // Every aggregate here pages via `fetchAll` or uses an exact head count —
+    // bare selects stop at PostgREST's 1000-row ceiling, which silently froze
+    // total revenue, the customer count and the status breakdown.
+    //
     // Total revenue — revenue-status orders only (paid/processing/shipped/
     // delivered). Never-paid pending attempts carry a `total` but aren't money in.
-    const { data: revenueData } = await db
-      .from('orders')
-      .select('total')
-      .is('deleted_at', null)
-      .in('status', ONLINE_REVENUE_STATUSES);
+    const revenueData = await fetchAll<any>((a, b) =>
+      db
+        .from('orders')
+        .select('total')
+        .is('deleted_at', null)
+        .in('status', ONLINE_REVENUE_STATUSES)
+        .range(a, b),
+    );
 
-    const totalRevenue = (revenueData || []).reduce(
-      (sum, o) => sum + Number(o.total),
-      0,
+    const totalRevenue = round2(
+      revenueData.reduce((sum, o) => sum + Number(o.total ?? 0), 0),
     );
 
     // Order count — excludes never-paid pending attempts, matching findAdmin().
@@ -979,32 +989,30 @@ export class OrdersService {
       .or('status.neq.pending,payment_status.neq.pending');
 
     // Customer count (distinct user_ids who have orders)
-    const { data: customerData } = await db
-      .from('orders')
-      .select('user_id')
-      .is('deleted_at', null);
+    const customerData = await fetchAll<any>((a, b) =>
+      db.from('orders').select('user_id').is('deleted_at', null).range(a, b),
+    );
 
     const uniqueCustomers = new Set(
-      (customerData || []).map((o) => o.user_id),
+      customerData.map((o) => o.user_id).filter(Boolean),
     ).size;
 
-    // Low stock items
-    const { data: lowStockData } = await db
+    // Low stock items — counted in the DB rather than by row length.
+    const { count: lowStockCountRaw } = await db
       .from('product_variants')
-      .select('id')
+      .select('id', { count: 'exact', head: true })
       .gt('inventory_quantity', 0)
       .lt('inventory_quantity', 10);
 
-    const lowStockCount = lowStockData?.length || 0;
+    const lowStockCount = lowStockCountRaw ?? 0;
 
     // Orders by status
-    const { data: statusData } = await db
-      .from('orders')
-      .select('status')
-      .is('deleted_at', null);
+    const statusData = await fetchAll<any>((a, b) =>
+      db.from('orders').select('status').is('deleted_at', null).range(a, b),
+    );
 
     const ordersByStatus: Record<string, number> = {};
-    (statusData || []).forEach((o) => {
+    statusData.forEach((o) => {
       ordersByStatus[o.status] = (ordersByStatus[o.status] || 0) + 1;
     });
 
@@ -1012,16 +1020,18 @@ export class OrdersService {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const { data: recentData } = await db
-      .from('orders')
-      .select('total, created_at')
-      .is('deleted_at', null)
-      .in('status', ONLINE_REVENUE_STATUSES)
-      .gte('created_at', thirtyDaysAgo.toISOString());
+    const recentData = await fetchAll<any>((a, b) =>
+      db
+        .from('orders')
+        .select('total, created_at')
+        .is('deleted_at', null)
+        .in('status', ONLINE_REVENUE_STATUSES)
+        .gte('created_at', thirtyDaysAgo.toISOString())
+        .range(a, b),
+    );
 
-    const recentRevenue = (recentData || []).reduce(
-      (sum, o) => sum + Number(o.total),
-      0,
+    const recentRevenue = round2(
+      recentData.reduce((sum, o) => sum + Number(o.total ?? 0), 0),
     );
 
     return {
@@ -1104,43 +1114,79 @@ export class OrdersService {
       .map((p) => toE164(p.phone_number))
       .filter((p): p is string => p !== null);
 
-    const [{ data: allOnlineOrders }, { data: popupByEmailData }, { data: popupByPhoneData }] =
-      await Promise.all([
-        userIds.length > 0
-          ? db
-              .from('orders')
-              .select('user_id, total, created_at')
-              .in('user_id', userIds)
-              .is('deleted_at', null)
-              .not('status', 'in', '("cancelled","refunded")')
-          : Promise.resolve({ data: [] }),
+    // Lifetime spend uses the SAME revenue whitelists as every analytics metric.
+    // This previously excluded only cancelled/refunded, which meant never-paid
+    // `pending` checkout attempts (Iris creates the order before payment) and
+    // open/held pop-up tickets were counted as money the customer had spent.
+    type InPersonOrder = {
+      id: string;
+      customer_email: string | null;
+      customer_phone: string | null;
+      total: string;
+      created_at: string;
+    };
+    const inPersonSelect =
+      'id, customer_email, customer_phone, total, created_at';
+
+    const byEmailAndPhone = (table: 'popup_orders' | 'walkin_orders', statuses: string[]) =>
+      Promise.all([
         emails.length > 0
-          ? db
-              .from('popup_orders')
-              .select('id, customer_email, customer_phone, total, created_at')
-              .in('customer_email', emails)
-              .neq('status', 'cancelled')
-          : Promise.resolve({ data: [] }),
+          ? fetchAll<InPersonOrder>((a, b) =>
+              db
+                .from(table)
+                .select(inPersonSelect)
+                .in('customer_email', emails)
+                .in('status', statuses)
+                .range(a, b),
+            )
+          : Promise.resolve([] as InPersonOrder[]),
         phones.length > 0
-          ? db
-              .from('popup_orders')
-              .select('id, customer_email, customer_phone, total, created_at')
-              .in('customer_phone', phones)
-              .neq('status', 'cancelled')
-          : Promise.resolve({ data: [] }),
+          ? fetchAll<InPersonOrder>((a, b) =>
+              db
+                .from(table)
+                .select(inPersonSelect)
+                .in('customer_phone', phones)
+                .in('status', statuses)
+                .range(a, b),
+            )
+          : Promise.resolve([] as InPersonOrder[]),
       ]);
 
-    // Deduplicate popup orders (email + phone queries may return the same row)
-    const popupById = new Map<string, { customer_email: string | null; customer_phone: string | null; total: string; created_at: string }>();
-    for (const po of [...(popupByEmailData || []), ...(popupByPhoneData || [])]) {
-      if (!popupById.has(po.id)) popupById.set(po.id, po);
+    const [allOnlineOrders, [popupByEmailData, popupByPhoneData], [walkinByEmailData, walkinByPhoneData]] =
+      await Promise.all([
+        userIds.length > 0
+          ? fetchAll<any>((a, b) =>
+              db
+                .from('orders')
+                .select('user_id, total, created_at')
+                .in('user_id', userIds)
+                .is('deleted_at', null)
+                .in('status', ONLINE_REVENUE_STATUSES)
+                .range(a, b),
+            )
+          : Promise.resolve([] as any[]),
+        byEmailAndPhone('popup_orders', POPUP_REVENUE_STATUSES),
+        byEmailAndPhone('walkin_orders', WALKIN_REVENUE_STATUSES),
+      ]);
+
+    // Deduplicate in-person orders (email + phone queries may return the same
+    // row). Pop-up and walk-in share a customer key space, so they aggregate
+    // together — one person buying at a pop-up and at HQ is one customer.
+    const inPersonById = new Map<string, InPersonOrder>();
+    for (const po of [
+      ...popupByEmailData,
+      ...popupByPhoneData,
+      ...walkinByEmailData,
+      ...walkinByPhoneData,
+    ]) {
+      if (!inPersonById.has(po.id)) inPersonById.set(po.id, po);
     }
-    const allPopupOrders = Array.from(popupById.values());
+    const allPopupOrders = Array.from(inPersonById.values());
 
     // ── 3. Build per-profile aggregation maps ────────────────────────────────
 
     const onlineByUser = new Map<string, { total: number; count: number; lastDate: string }>();
-    for (const o of allOnlineOrders || []) {
+    for (const o of allOnlineOrders) {
       const entry = onlineByUser.get(o.user_id) ?? { total: 0, count: 0, lastDate: '' };
       entry.total += Number(o.total);
       entry.count += 1;
@@ -1242,35 +1288,70 @@ export class OrdersService {
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
-    const irisOnlineSpent = (orders || [])
-      .filter((o) => !['cancelled', 'refunded'].includes(o.status))
-      .reduce((sum, o) => sum + Number(o.total), 0);
+    // Spend counts revenue-status orders only, matching the customer list and
+    // every analytics metric. The old blacklist (everything but cancelled and
+    // refunded) counted never-paid `pending` checkout attempts as spend.
+    const revenueOrders = (orders || []).filter((o) =>
+      ONLINE_REVENUE_STATUSES.includes(o.status),
+    );
+    const irisOnlineSpent = revenueOrders.reduce(
+      (sum, o) => sum + Number(o.total ?? 0),
+      0,
+    );
 
-    // Popup orders matched by email or phone
-    const popupConditions: string[] = [];
-    if (profile.email) popupConditions.push(`customer_email.eq.${profile.email}`);
-    if (normalizedPhone) popupConditions.push(`customer_phone.eq.${normalizedPhone}`);
+    // Pop-up and walk-in orders matched by email or phone. PostgREST treats
+    // `,` `(` `)` as `or()` syntax, so the values are escaped before use.
+    const orValue = (v: string) => `"${v.replace(/["\\]/g, '\\$&')}"`;
+    const inPersonConditions: string[] = [];
+    if (profile.email) inPersonConditions.push(`customer_email.eq.${orValue(profile.email)}`);
+    if (normalizedPhone) inPersonConditions.push(`customer_phone.eq.${orValue(normalizedPhone)}`);
 
-    let popupOrders: any[] = [];
-    if (popupConditions.length > 0) {
-      const { data } = await db
-        .from('popup_orders')
-        .select('id, order_number, total, status, payment_method, created_at, popup_events(name)')
-        .or(popupConditions.join(','))
-        .neq('status', 'cancelled')
-        .order('created_at', { ascending: false });
-      popupOrders = data || [];
-    }
+    const matchInPerson = async (
+      table: 'popup_orders' | 'walkin_orders',
+      select: string,
+      statuses: string[],
+    ) => {
+      if (inPersonConditions.length === 0) return [] as any[];
+      return fetchAll<any>((a, b) =>
+        db
+          .from(table)
+          .select(select)
+          .or(inPersonConditions.join(','))
+          .in('status', statuses)
+          .order('created_at', { ascending: false })
+          .range(a, b),
+      );
+    };
 
-    // Deduplicate popup orders by ID (email+phone match could return same order twice)
-    const seen = new Set<string>();
-    const uniquePopupOrders = popupOrders.filter((po) => {
-      if (seen.has(po.id)) return false;
-      seen.add(po.id);
-      return true;
-    });
+    const [popupOrders, walkinOrders] = await Promise.all([
+      matchInPerson(
+        'popup_orders',
+        'id, order_number, total, status, payment_method, created_at, popup_events(name)',
+        POPUP_REVENUE_STATUSES,
+      ),
+      matchInPerson(
+        'walkin_orders',
+        'id, order_number, total, status, payment_method, created_at, walkin_order_items(product_name, variant_title, quantity, unit_price, total_price)',
+        WALKIN_REVENUE_STATUSES,
+      ),
+    ]);
 
-    const popupSpent = uniquePopupOrders.reduce((sum, o) => sum + Number(o.total), 0);
+    // Deduplicate by ID (an email+phone match can return the same order twice)
+    const dedupe = (rows: any[]) => {
+      const seen = new Set<string>();
+      return rows.filter((r) => {
+        if (seen.has(r.id)) return false;
+        seen.add(r.id);
+        return true;
+      });
+    };
+    const uniquePopupOrders = dedupe(popupOrders);
+    const uniqueWalkinOrders = dedupe(walkinOrders);
+
+    const sumTotal = (rows: any[]) =>
+      rows.reduce((sum, o) => sum + Number(o.total ?? 0), 0);
+    const popupSpent = sumTotal(uniquePopupOrders);
+    const walkinSpent = sumTotal(uniqueWalkinOrders);
 
     // Historical Shopify data
     const shopifyOrders = profile.shopify_total_orders ?? 0;
@@ -1289,16 +1370,24 @@ export class OrdersService {
     return {
       ...profile,
       phone_number: normalizedPhone,
-      // Iris orders (full objects for timeline)
+      // Iris orders (full objects for timeline). `orders` keeps every status so
+      // the timeline still shows abandoned/cancelled attempts; only the spend
+      // and count figures are restricted to revenue statuses.
       orders: orders || [],
       popup_orders: uniquePopupOrders,
+      walkin_orders: uniqueWalkinOrders,
       // Aggregated spend including Shopify history
-      iris_order_count: (orders?.length || 0) + uniquePopupOrders.length,
+      iris_order_count:
+        revenueOrders.length + uniquePopupOrders.length + uniqueWalkinOrders.length,
       shopify_order_count: shopifyOrders,
-      order_count: (orders?.length || 0) + uniquePopupOrders.length + shopifyOrders,
-      iris_total_spent: irisOnlineSpent + popupSpent,
+      order_count:
+        revenueOrders.length +
+        uniquePopupOrders.length +
+        uniqueWalkinOrders.length +
+        shopifyOrders,
+      iris_total_spent: round2(irisOnlineSpent + popupSpent + walkinSpent),
       shopify_total_spent_amt: shopifySpent,
-      total_spent: irisOnlineSpent + popupSpent + shopifySpent,
+      total_spent: round2(irisOnlineSpent + popupSpent + walkinSpent + shopifySpent),
       // Metadata
       billing_address: billingAddress,
       default_address: profile.default_address,
@@ -1328,51 +1417,67 @@ export class OrdersService {
       .or('role.eq.public,role.is.null')
       .gte('created_at', startOfMonth.toISOString());
 
-    // Avg order value
-    const { data: orderTotals } = await db
-      .from('orders')
-      .select('total')
-      .is('deleted_at', null)
-      .not('status', 'in', '("cancelled","refunded")');
+    // Revenue-status orders only, paged — matching the customer list, the
+    // detail view and analytics. The old blacklist counted never-paid `pending`
+    // checkout attempts toward AOV and top spender.
+    const allOrders = await fetchAll<any>((a, b) =>
+      db
+        .from('orders')
+        .select('user_id, total, email')
+        .is('deleted_at', null)
+        .in('status', ONLINE_REVENUE_STATUSES)
+        .range(a, b),
+    );
 
-    const totals = orderTotals || [];
+    // Avg order value
     const avgOrderValue =
-      totals.length > 0
-        ? totals.reduce((sum, o) => sum + Number(o.total), 0) / totals.length
+      allOrders.length > 0
+        ? round2(
+            allOrders.reduce((sum, o) => sum + Number(o.total ?? 0), 0) /
+              allOrders.length,
+          )
         : 0;
 
     // Top spender
-    const { data: allOrders } = await db
-      .from('orders')
-      .select('user_id, total, email')
-      .is('deleted_at', null)
-      .not('status', 'in', '("cancelled","refunded")');
-
     const spendByUser: Record<string, { email: string; amount: number }> = {};
-    (allOrders || []).forEach((o) => {
+    allOrders.forEach((o) => {
+      if (!o.user_id) return;
       if (!spendByUser[o.user_id]) {
         spendByUser[o.user_id] = { email: o.email, amount: 0 };
       }
-      spendByUser[o.user_id].amount += Number(o.total);
+      spendByUser[o.user_id].amount += Number(o.total ?? 0);
     });
 
-    // Also add popup order spend, matched back to profiles by email
-    const { data: allPopupOrders } = await db
-      .from('popup_orders')
-      .select('customer_email, total')
-      .neq('status', 'cancelled')
-      .not('customer_email', 'is', null);
+    // Also add pop-up and walk-in spend, matched back to profiles by email
+    const [allPopupOrders, allWalkinOrders] = await Promise.all([
+      fetchAll<any>((a, b) =>
+        db
+          .from('popup_orders')
+          .select('customer_email, total')
+          .in('status', POPUP_REVENUE_STATUSES)
+          .not('customer_email', 'is', null)
+          .range(a, b),
+      ),
+      fetchAll<any>((a, b) =>
+        db
+          .from('walkin_orders')
+          .select('customer_email, total')
+          .in('status', WALKIN_REVENUE_STATUSES)
+          .not('customer_email', 'is', null)
+          .range(a, b),
+      ),
+    ]);
 
-    const popupSpendByEmail: Record<string, number> = {};
-    (allPopupOrders || []).forEach((po) => {
-      if (po.customer_email) {
-        popupSpendByEmail[po.customer_email] =
-          (popupSpendByEmail[po.customer_email] || 0) + Number(po.total);
-      }
+    const inPersonSpendByEmail: Record<string, number> = {};
+    [...allPopupOrders, ...allWalkinOrders].forEach((po) => {
+      const email = po.customer_email?.toLowerCase();
+      if (!email) return;
+      inPersonSpendByEmail[email] =
+        (inPersonSpendByEmail[email] || 0) + Number(po.total ?? 0);
     });
 
     for (const data of Object.values(spendByUser)) {
-      const extra = popupSpendByEmail[data.email] || 0;
+      const extra = inPersonSpendByEmail[data.email?.toLowerCase() ?? ''] || 0;
       if (extra > 0) data.amount += extra;
     }
 
@@ -1395,7 +1500,7 @@ export class OrdersService {
           best.email
         : best.email;
 
-      topSpender = { name, amount: best.amount };
+      topSpender = { name, amount: round2(best.amount) };
     }
 
     return {
@@ -1414,42 +1519,75 @@ export class OrdersService {
       new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const toDate = query.to_date || new Date().toISOString();
 
-    // Revenue by day
-    const { data: orders } = await db
-      .from('orders')
-      .select('total, status, created_at')
-      .is('deleted_at', null)
-      .gte('created_at', fromDate)
-      .lte('created_at', toDate)
-      .order('created_at', { ascending: true });
+    // Every query here pages via `fetchAll` — the dashboard requests the whole
+    // history (from_date=2020-01-01) for the brushable all-time chart, and a
+    // bare select silently stops at PostgREST's 1000-row ceiling, truncating
+    // the chart, the brand split and the totals without any error.
+    const orders = await fetchAll<any>((a, b) =>
+      db
+        .from('orders')
+        .select('total, status, created_at')
+        .is('deleted_at', null)
+        .gte('created_at', fromDate)
+        .lte('created_at', toDate)
+        .order('created_at', { ascending: true })
+        .range(a, b),
+    );
 
     const revenueByDay: Record<string, number> = {};
     const ordersByDay: Record<string, number> = {};
 
-    (orders || []).forEach((o) => {
-      if (ONLINE_REVENUE_STATUSES.includes(o.status)) {
-        const day = o.created_at.slice(0, 10);
-        ordersByDay[day] = (ordersByDay[day] || 0) + 1;
-        revenueByDay[day] = (revenueByDay[day] || 0) + Number(o.total);
-      }
+    const addToDay = (createdAt: string, total: unknown) => {
+      const day = dayOf(createdAt);
+      ordersByDay[day] = (ordersByDay[day] || 0) + 1;
+      revenueByDay[day] = (revenueByDay[day] || 0) + Number(total ?? 0);
+    };
+
+    let onlineRevenue = 0;
+    let onlineOrderCount = 0;
+    orders.forEach((o) => {
+      if (!ONLINE_REVENUE_STATUSES.includes(o.status)) return;
+      addToDay(o.created_at, o.total);
+      onlineRevenue += Number(o.total ?? 0);
+      onlineOrderCount += 1;
     });
 
-    // ── Popup orders: add to combined revenueByDay / ordersByDay ──────────────
-    const { data: popupOrdersData } = await db
-      .from('popup_orders')
-      .select('total, status, created_at')
-      .gte('created_at', fromDate)
-      .lte('created_at', toDate)
-      .in('status', POPUP_REVENUE_STATUSES);
+    // ── Pop-up + walk-in: fold into the combined revenueByDay / ordersByDay ───
+    const [popupOrdersData, walkinOrdersData] = await Promise.all([
+      fetchAll<any>((a, b) =>
+        db
+          .from('popup_orders')
+          .select('total, status, created_at')
+          .gte('created_at', fromDate)
+          .lte('created_at', toDate)
+          .in('status', POPUP_REVENUE_STATUSES)
+          .range(a, b),
+      ),
+      fetchAll<any>((a, b) =>
+        db
+          .from('walkin_orders')
+          .select('total, status, created_at')
+          .gte('created_at', fromDate)
+          .lte('created_at', toDate)
+          .in('status', WALKIN_REVENUE_STATUSES)
+          .range(a, b),
+      ),
+    ]);
 
     let popupRevenue = 0;
     let popupOrderCount = 0;
-    (popupOrdersData || []).forEach((po) => {
-      const day = po.created_at.slice(0, 10);
-      revenueByDay[day] = (revenueByDay[day] || 0) + Number(po.total);
-      ordersByDay[day] = (ordersByDay[day] || 0) + 1;
-      popupRevenue += Number(po.total);
+    popupOrdersData.forEach((po) => {
+      addToDay(po.created_at, po.total);
+      popupRevenue += Number(po.total ?? 0);
       popupOrderCount += 1;
+    });
+
+    let walkinRevenue = 0;
+    let walkinOrderCount = 0;
+    walkinOrdersData.forEach((wo) => {
+      addToDay(wo.created_at, wo.total);
+      walkinRevenue += Number(wo.total ?? 0);
+      walkinOrderCount += 1;
     });
 
     // Previous period comparison
@@ -1457,36 +1595,51 @@ export class OrdersService {
     const toMs = new Date(toDate).getTime();
     const periodLength = toMs - fromMs;
     const prevFrom = new Date(fromMs - periodLength).toISOString();
-    const prevTo = fromDate;
+    // Ends 1ms before `fromDate` so a boundary order isn't in both windows.
+    const prevTo = new Date(fromMs - 1).toISOString();
 
-    const [{ data: prevOrders }, { data: prevPopupOrders }] = await Promise.all([
-      db
-        .from('orders')
-        .select('total, status')
-        .is('deleted_at', null)
-        .gte('created_at', prevFrom)
-        .lte('created_at', prevTo),
-      db
-        .from('popup_orders')
-        .select('total, status')
-        .gte('created_at', prevFrom)
-        .lte('created_at', prevTo)
-        .in('status', POPUP_REVENUE_STATUSES),
+    const [prevOrders, prevPopupOrders, prevWalkinOrders] = await Promise.all([
+      fetchAll<any>((a, b) =>
+        db
+          .from('orders')
+          .select('total, status')
+          .is('deleted_at', null)
+          .in('status', ONLINE_REVENUE_STATUSES)
+          .gte('created_at', prevFrom)
+          .lte('created_at', prevTo)
+          .range(a, b),
+      ),
+      fetchAll<any>((a, b) =>
+        db
+          .from('popup_orders')
+          .select('total, status')
+          .gte('created_at', prevFrom)
+          .lte('created_at', prevTo)
+          .in('status', POPUP_REVENUE_STATUSES)
+          .range(a, b),
+      ),
+      fetchAll<any>((a, b) =>
+        db
+          .from('walkin_orders')
+          .select('total, status')
+          .gte('created_at', prevFrom)
+          .lte('created_at', prevTo)
+          .in('status', WALKIN_REVENUE_STATUSES)
+          .range(a, b),
+      ),
     ]);
 
     // Previous period uses the same revenue-status whitelist as the current
-    // period so the delta badges compare like for like (incl. popup orders).
-    const validPrev = (prevOrders || []).filter((o) =>
-      ONLINE_REVENUE_STATUSES.includes(o.status),
-    );
+    // period so the delta badges compare like for like, across all channels.
+    const sumTotals = (rows: any[]) =>
+      rows.reduce((sum, o) => sum + Number(o.total ?? 0), 0);
     const previousPeriodRevenue =
-      validPrev.reduce((sum, o) => sum + Number(o.total), 0) +
-      (prevPopupOrders || []).reduce((sum, o) => sum + Number(o.total), 0);
+      sumTotals(prevOrders) + sumTotals(prevPopupOrders) + sumTotals(prevWalkinOrders);
     const previousPeriodOrders =
-      validPrev.length + (prevPopupOrders?.length || 0);
+      prevOrders.length + prevPopupOrders.length + prevWalkinOrders.length;
 
     // Funnel counts from current orders
-    const validOrders = (orders || []).filter((o) =>
+    const validOrders = orders.filter((o) =>
       ONLINE_REVENUE_STATUSES.includes(o.status),
     );
     const funnelStages = ['paid', 'processing', 'shipped', 'delivered'];
@@ -1504,19 +1657,22 @@ export class OrdersService {
     });
 
     // Top products by revenue
-    const { data: topItems } = await db
-      .from('order_items')
-      .select('order_id, product_id, product_name, quantity, total_price, order:orders!inner(status, created_at, deleted_at), product:products(vendor)')
-      .gte('orders.created_at', fromDate)
-      .lte('orders.created_at', toDate)
-      .is('orders.deleted_at', null);
+    const topItems = await fetchAll<any>((a, b) =>
+      db
+        .from('order_items')
+        .select('order_id, product_id, product_name, quantity, total_price, order:orders!inner(status, created_at, deleted_at), product:products(vendor)')
+        .gte('orders.created_at', fromDate)
+        .lte('orders.created_at', toDate)
+        .in('orders.status', ONLINE_REVENUE_STATUSES)
+        .is('orders.deleted_at', null)
+        .range(a, b),
+    );
 
     const productMap: Record<
       string,
       { name: string; revenue: number; unitsSold: number; productId: string | null; vendor: string | null }
     > = {};
-    (topItems || []).forEach((item: any) => {
-      if (!ONLINE_REVENUE_STATUSES.includes(item.order?.status)) return;
+    topItems.forEach((item: any) => {
       const name = item.product_name;
       if (!productMap[name]) {
         productMap[name] = { name, revenue: 0, unitsSold: 0, productId: item.product_id || null, vendor: item.product?.vendor || null };
@@ -1547,30 +1703,53 @@ export class OrdersService {
       brandOrders[vendor].add(orderId);
     };
 
-    (topItems || []).forEach((item: any) => {
-      if (!ONLINE_REVENUE_STATUSES.includes(item.order?.status)) return;
+    topItems.forEach((item: any) => {
       applyVendorMetrics(
         item.product?.vendor || '1NRI',
         Number(item.total_price),
-        item.order?.created_at?.slice(0, 10),
-        `online_${item.order_id}`
+        item.order?.created_at ? dayOf(item.order.created_at) : undefined,
+        `online_${item.order_id}`,
       );
     });
 
-    // Also attribute popup order items to vendors
-    const { data: popupItemsBrand } = await db
-      .from('popup_order_items')
-      .select('popup_order_id, total_price, product:products(vendor), order:popup_orders!inner(created_at, status)')
-      .gte('popup_orders.created_at', fromDate)
-      .lte('popup_orders.created_at', toDate);
+    // Also attribute pop-up and walk-in items to vendors, so the brand split
+    // covers the same channels as the revenue KPI above it.
+    const [popupItemsBrand, walkinItemsBrand] = await Promise.all([
+      fetchAll<any>((a, b) =>
+        db
+          .from('popup_order_items')
+          .select('order_id, total_price, product:products(vendor), order:popup_orders!inner(created_at, status)')
+          .gte('popup_orders.created_at', fromDate)
+          .lte('popup_orders.created_at', toDate)
+          .in('popup_orders.status', POPUP_REVENUE_STATUSES)
+          .range(a, b),
+      ),
+      fetchAll<any>((a, b) =>
+        db
+          .from('walkin_order_items')
+          .select('walkin_order_id, total_price, product:products(vendor), order:walkin_orders!inner(created_at, status)')
+          .gte('walkin_orders.created_at', fromDate)
+          .lte('walkin_orders.created_at', toDate)
+          .in('walkin_orders.status', WALKIN_REVENUE_STATUSES)
+          .range(a, b),
+      ),
+    ]);
 
-    (popupItemsBrand || []).forEach((item: any) => {
-      if (!POPUP_REVENUE_STATUSES.includes(item.order?.status)) return;
+    popupItemsBrand.forEach((item: any) => {
       applyVendorMetrics(
         item.product?.vendor || '1NRI',
         Number(item.total_price),
-        item.order?.created_at?.slice(0, 10),
-        `popup_${item.popup_order_id}`
+        item.order?.created_at ? dayOf(item.order.created_at) : undefined,
+        `popup_${item.order_id}`,
+      );
+    });
+
+    walkinItemsBrand.forEach((item: any) => {
+      applyVendorMetrics(
+        item.product?.vendor || '1NRI',
+        Number(item.total_price),
+        item.order?.created_at ? dayOf(item.order.created_at) : undefined,
+        `walkin_${item.walkin_order_id}`,
       );
     });
 
@@ -1606,7 +1785,7 @@ export class OrdersService {
 
     // Status breakdown
     const statusBreakdown: Record<string, number> = {};
-    (orders || []).forEach((o) => {
+    orders.forEach((o) => {
       statusBreakdown[o.status] = (statusBreakdown[o.status] || 0) + 1;
     });
 
@@ -1620,16 +1799,27 @@ export class OrdersService {
       ordersByDay,
       topProducts: topProductsWithImages,
       statusBreakdown,
-      totalOrders: validOrders.length + popupOrderCount,
-      totalRevenue:
-        validOrders.reduce((sum, o) => sum + Number(o.total), 0) + popupRevenue,
+      totalOrders: onlineOrderCount + popupOrderCount + walkinOrderCount,
+      totalRevenue: round2(onlineRevenue + popupRevenue + walkinRevenue),
       previousPeriodRevenue,
       previousPeriodOrders,
       funnelCounts,
       brandRevenue,
       brandRevenueByDay,
       brandOrderCount,
-      popupRevenue,
+      // Per-channel figures are returned explicitly. The dashboard used to
+      // derive "online" by subtracting popup from the total, which silently
+      // absorbed any newly added channel into the online slice.
+      channelRevenue: {
+        online: round2(onlineRevenue),
+        popup: round2(popupRevenue),
+        walkin: round2(walkinRevenue),
+      },
+      channelOrders: {
+        online: onlineOrderCount,
+        popup: popupOrderCount,
+        walkin: walkinOrderCount,
+      },
     };
   }
 

@@ -15,13 +15,17 @@ export function DonutChart({
   centerValue,
   height = 200,
   format = "currency",
+  colors,
 }: {
   data: DonutSlice[];
   centerLabel?: string;
   centerValue?: string;
   height?: number;
   format?: MetricFormat;
+  /** Overrides the default ink ramp — use when slices must be told apart. */
+  colors?: readonly string[];
 }) {
+  const palette = colors?.length ? colors : chart.donut;
   const total = data.reduce((s, d) => s + d.value, 0);
   const hasData = total > 0;
 
@@ -41,7 +45,7 @@ export function DonutChart({
               isAnimationActive={false}
             >
               {(hasData ? data : [{ name: "No data", value: 1 }]).map((_, i) => (
-                <Cell key={i} fill={hasData ? chart.donut[i % chart.donut.length] : "#f1f5f9"} />
+                <Cell key={i} fill={hasData ? palette[i % palette.length] : "#f1f5f9"} />
               ))}
             </Pie>
             {hasData && (
@@ -75,7 +79,7 @@ export function DonutChart({
             <div key={d.name} className="flex items-center gap-2 text-sm">
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                style={{ backgroundColor: chart.donut[i % chart.donut.length] }}
+                style={{ backgroundColor: palette[i % palette.length] }}
               />
               <span className="truncate text-slate-600">{d.name}</span>
               <span className="ml-auto whitespace-nowrap tabular-nums text-slate-900 font-medium">

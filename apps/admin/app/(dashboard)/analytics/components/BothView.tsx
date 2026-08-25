@@ -1,14 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useAnalytics } from "@/lib/api/orders";
+import { SALES_CHANNELS, useAnalytics } from "@/lib/api/orders";
 import { usePopupEvents, usePopupAnalytics } from "@/lib/api/popup-sales";
 import { useDateRange, useReport } from "@/lib/api/analytics";
 import { ChartCard } from "@/app/components/charts/ChartCard";
 import { DualLineChart } from "@/app/components/charts/ComparisonLineChart";
 import { DonutChart } from "@/app/components/charts/DonutChart";
 import { DeltaBadge } from "@/app/components/DeltaBadge";
-import { formatGHSShort } from "@/lib/charts/theme";
+import { chart, formatGHSShort } from "@/lib/charts/theme";
 import { ChevronDown } from "lucide-react";
 
 type CompareMode = "storefront-vs-popup" | "popup-vs-popup";
@@ -87,47 +87,63 @@ function ChannelOverview({ days }: { days: string }) {
 
   const rows = useMemo(
     () =>
-      (report?.series ?? []).map((r) => ({
-        date: String(r.date),
-        online: Number(r.online ?? 0),
-        popup: Number(r.popup ?? 0),
-      })),
+      (report?.series ?? []).map((r) => {
+        const row: Record<string, string | number> = { date: String(r.date) };
+        for (const { key } of SALES_CHANNELS) row[key] = Number(r[key] ?? 0);
+        return row;
+      }),
     [report],
   );
 
-  const onlineTotal = report?.table.totals.online ?? 0;
-  const popupTotal = report?.table.totals.popup ?? 0;
+  const totals = SALES_CHANNELS.map(({ key, label }) => ({
+    key,
+    label,
+    value: report?.table.totals[key] ?? 0,
+    previous: report?.table.previousTotals?.[key] ?? 0,
+  }));
+  const grandTotal = totals.reduce((sum, t) => sum + t.value, 0);
 
   return (
     <div className="grid gap-5 lg:grid-cols-5">
       <ChartCard title="Sales by channel" className="lg:col-span-2">
         <DonutChart
-          data={[
-            { name: "Online store", value: onlineTotal },
-            { name: "Pop-up", value: popupTotal },
-          ]}
-          centerValue={formatGHSShort(onlineTotal + popupTotal)}
+          data={totals.map((t) => ({ name: t.label, value: t.value }))}
+          colors={chart.channels}
+          centerValue={formatGHSShort(grandTotal)}
           centerLabel="Total"
           height={160}
         />
         {report?.table.previousTotals && (
-          <div className="mt-4 flex items-center gap-6 border-t border-slate-100 pt-3 text-xs text-slate-500">
-            <span className="flex items-center gap-1.5">
-              Online <DeltaBadge current={onlineTotal} previous={report.table.previousTotals.online ?? 0} />
-            </span>
-            <span className="flex items-center gap-1.5">
-              Pop-up <DeltaBadge current={popupTotal} previous={report.table.previousTotals.popup ?? 0} />
-            </span>
+          <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
+            {totals.map((t) => (
+              <span key={t.key} className="flex items-center gap-1.5">
+                {t.label} <DeltaBadge current={t.value} previous={t.previous} />
+              </span>
+            ))}
           </div>
         )}
       </ChartCard>
-      <ChartCard title="Channel sales over time" className="lg:col-span-3">
+      <ChartCard
+        title="Channel sales over time"
+        className="lg:col-span-3"
+        action={
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+            {SALES_CHANNELS.map(({ key, label }, i) => (
+              <span key={key} className="flex items-center gap-1.5">
+                <span
+                  className="h-2 w-2 rounded-sm"
+                  style={{ backgroundColor: chart.channels[i] }}
+                />
+                {label}
+              </span>
+            ))}
+          </div>
+        }
+      >
         <DualLineChart
           rows={rows}
-          keys={[
-            { key: "online", label: "Online store" },
-            { key: "popup", label: "Pop-up" },
-          ]}
+          keys={SALES_CHANNELS.map(({ key, label }) => ({ key, label }))}
+          colors={chart.channels}
           height={220}
         />
       </ChartCard>

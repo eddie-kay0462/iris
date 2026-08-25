@@ -17,6 +17,7 @@ import { ChargePopupOrderDto } from './dto/charge-popup-order.dto';
 import { CreatePopupCustomerDto } from './dto/create-popup-customer.dto';
 import { RefundPopupOrderDto } from './dto/refund-popup-order.dto';
 import { toE164, toPaystackMomoFormat } from '../common/utils/phone';
+import { POPUP_REVENUE_STATUSES } from '../analytics/analytics.constants';
 
 @Injectable()
 export class PopupSalesService {
@@ -101,7 +102,7 @@ export class PopupSalesService {
 
     // ── Revenue & conversion ─────────────────────────────────────────────────
     const revenueOrders = allOrders.filter(
-      (o) => o.status === 'completed' || o.status === 'confirmed',
+      (o) => POPUP_REVENUE_STATUSES.includes(o.status),
     );
     const totalRevenue = revenueOrders.reduce((s, o) => s + Number(o.total), 0);
     const totalTransactions = revenueOrders.length;
@@ -287,7 +288,7 @@ export class PopupSalesService {
 
     const allOrders = orders || [];
     const session_revenue = allOrders
-      .filter((o) => o.status === 'completed' || o.status === 'confirmed')
+      .filter((o) => POPUP_REVENUE_STATUSES.includes(o.status))
       .reduce((sum, o) => sum + Number(o.total), 0);
 
     return {

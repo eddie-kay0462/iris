@@ -18,15 +18,18 @@ import {
   WALKIN_REVENUE_STATUSES,
   PREORDER_COUNTED_STATUSES,
   round2,
+  bucketOf,
 } from './analytics.constants';
 import { SettingsService } from '../settings/settings.service';
 import {
   aggregateSessions,
+  fetchAll,
   num,
   onlineCustomerKey,
   popupCustomerKey,
   referrerLabel,
   ReportContext,
+  walkinCustomerKey,
 } from './reports/report-context';
 import { listReports, REPORTS } from './reports/report-registry';
 import { ReportPayload } from './reports/report-types';
@@ -207,7 +210,8 @@ export class AnalyticsService {
     // Previous period for % change
     const rangeMs = new Date(to).getTime() - new Date(from).getTime();
     const prevFrom = new Date(new Date(from).getTime() - rangeMs).toISOString();
-    const prevTo = from;
+    // Ends 1ms before `from` so a boundary order isn't counted in both windows.
+    const prevTo = new Date(new Date(from).getTime() - 1).toISOString();
 
     // ── Online orders (current + prev) ──
     const [{ data: curOrders }, { data: prevOrders }] = await Promise.all([
@@ -234,6 +238,20 @@ export class AnalyticsService {
         .lte('created_at', to),
       db
         .from('popup_orders')
+        .select('total, status, created_at')
+        .gte('created_at', prevFrom)
+        .lte('created_at', prevTo),
+    ]);
+
+    // ── Walk-in orders (current + prev) — all statuses for the full breakdown ──
+    const [{ data: curWalkin }, { data: prevWalkin }] = await Promise.all([
+      db
+        .from('walkin_orders')
+        .select('total, status, created_at')
+        .gte('created_at', from)
+        .lte('created_at', to),
+      db
+        .from('walkin_orders')
         .select('total, status, created_at')
         .gte('created_at', prevFrom)
         .lte('created_at', prevTo),
@@ -275,34 +293,39 @@ export class AnalyticsService {
       .lte('created_at', to);
 
     // ── Calculations ──
-    const onlineRevenueStatuses = ['paid', 'processing', 'shipped', 'delivered'];
-    const popupRevenueStatuses = ['confirmed', 'completed'];
-
     const sumRevenue = (orders: any[], statuses: string[]) =>
       (orders ?? [])
         .filter((o) => statuses.includes(o.status))
         .reduce((s, o) => s + parseFloat(o.total ?? 0), 0);
 
-    const curOnlineRevenue = sumRevenue(curOrders ?? [], onlineRevenueStatuses);
-    const prevOnlineRevenue = sumRevenue(prevOrders ?? [], onlineRevenueStatuses);
-    const curPopupRevenue = sumRevenue(curPopup ?? [], popupRevenueStatuses);
-    const prevPopupRevenue = sumRevenue(prevPopup ?? [], popupRevenueStatuses);
+    const curOnlineRevenue = sumRevenue(curOrders ?? [], ONLINE_REVENUE_STATUSES);
+    const prevOnlineRevenue = sumRevenue(prevOrders ?? [], ONLINE_REVENUE_STATUSES);
+    const curPopupRevenue = sumRevenue(curPopup ?? [], POPUP_REVENUE_STATUSES);
+    const prevPopupRevenue = sumRevenue(prevPopup ?? [], POPUP_REVENUE_STATUSES);
+    const curWalkinRevenue = sumRevenue(curWalkin ?? [], WALKIN_REVENUE_STATUSES);
+    const prevWalkinRevenue = sumRevenue(prevWalkin ?? [], WALKIN_REVENUE_STATUSES);
 
-    const curTotalRevenue = curOnlineRevenue + curPopupRevenue;
-    const prevTotalRevenue = prevOnlineRevenue + prevPopupRevenue;
+    const curTotalRevenue = curOnlineRevenue + curPopupRevenue + curWalkinRevenue;
+    const prevTotalRevenue = prevOnlineRevenue + prevPopupRevenue + prevWalkinRevenue;
 
     const curOrderCount = (curOrders ?? []).length;
     const prevOrderCount = (prevOrders ?? []).length;
     const curPopupCount = (curPopup ?? []).length;
     const prevPopupCount = (prevPopup ?? []).length;
+    const curWalkinCount = (curWalkin ?? []).length;
+    const prevWalkinCount = (prevWalkin ?? []).length;
 
     // AOV based on revenue-generating orders only
+    const countRevenue = (orders: any[], statuses: string[]) =>
+      (orders ?? []).filter((o) => statuses.includes(o.status)).length;
     const curRevenueOrders =
-      (curOrders ?? []).filter((o) => onlineRevenueStatuses.includes(o.status)).length +
-      (curPopup ?? []).filter((o) => popupRevenueStatuses.includes(o.status)).length;
+      countRevenue(curOrders ?? [], ONLINE_REVENUE_STATUSES) +
+      countRevenue(curPopup ?? [], POPUP_REVENUE_STATUSES) +
+      countRevenue(curWalkin ?? [], WALKIN_REVENUE_STATUSES);
     const prevRevenueOrders =
-      (prevOrders ?? []).filter((o) => onlineRevenueStatuses.includes(o.status)).length +
-      (prevPopup ?? []).filter((o) => popupRevenueStatuses.includes(o.status)).length;
+      countRevenue(prevOrders ?? [], ONLINE_REVENUE_STATUSES) +
+      countRevenue(prevPopup ?? [], POPUP_REVENUE_STATUSES) +
+      countRevenue(prevWalkin ?? [], WALKIN_REVENUE_STATUSES);
 
     const curAov = curRevenueOrders > 0 ? curTotalRevenue / curRevenueOrders : 0;
     const prevAov = prevRevenueOrders > 0 ? prevTotalRevenue / prevRevenueOrders : 0;
@@ -319,25 +342,35 @@ export class AnalyticsService {
     for (const o of curPopup ?? []) {
       popupStatusBreakdown[o.status] = (popupStatusBreakdown[o.status] ?? 0) + 1;
     }
+    const walkinStatusBreakdown: Record<string, number> = {};
+    for (const o of curWalkin ?? []) {
+      walkinStatusBreakdown[o.status] = (walkinStatusBreakdown[o.status] ?? 0) + 1;
+    }
 
     return {
       period: { from, to },
       revenue: {
-        total: Math.round(curTotalRevenue * 100) / 100,
-        online: Math.round(curOnlineRevenue * 100) / 100,
-        popup: Math.round(curPopupRevenue * 100) / 100,
+        total: round2(curTotalRevenue),
+        online: round2(curOnlineRevenue),
+        popup: round2(curPopupRevenue),
+        walkin: round2(curWalkinRevenue),
         change: pct(curTotalRevenue, prevTotalRevenue),
       },
       orders: {
-        total: curOrderCount + curPopupCount,
+        total: curOrderCount + curPopupCount + curWalkinCount,
         online: curOrderCount,
         popup: curPopupCount,
-        change: pct(curOrderCount + curPopupCount, prevOrderCount + prevPopupCount),
+        walkin: curWalkinCount,
+        change: pct(
+          curOrderCount + curPopupCount + curWalkinCount,
+          prevOrderCount + prevPopupCount + prevWalkinCount,
+        ),
         onlineStatusBreakdown,
         popupStatusBreakdown,
+        walkinStatusBreakdown,
       },
       averageOrderValue: {
-        value: Math.round(curAov * 100) / 100,
+        value: round2(curAov),
         change: pct(curAov, prevAov),
       },
       customers: {
@@ -361,58 +394,62 @@ export class AnalyticsService {
     const { from, to } = this.resolveDateRange(query.period, query.from, query.to);
     const gran = query.granularity ?? 'day';
 
-    const [{ data: onlineOrders }, { data: popupOrders }] = await Promise.all([
-      db
-        .from('orders')
-        .select('total, status, created_at')
-        .gte('created_at', from)
-        .lte('created_at', to)
-        .in('status', ['paid', 'processing', 'shipped', 'delivered'])
-        .is('deleted_at', null),
-      db
-        .from('popup_orders')
-        .select('total, created_at')
-        .gte('created_at', from)
-        .lte('created_at', to)
-        .in('status', ['confirmed', 'completed']),
+    const [onlineOrders, popupOrders, walkinOrders] = await Promise.all([
+      fetchAll<any>((a, b) =>
+        db
+          .from('orders')
+          .select('total, status, created_at')
+          .gte('created_at', from)
+          .lte('created_at', to)
+          .in('status', ONLINE_REVENUE_STATUSES)
+          .is('deleted_at', null)
+          .range(a, b),
+      ),
+      fetchAll<any>((a, b) =>
+        db
+          .from('popup_orders')
+          .select('total, created_at')
+          .gte('created_at', from)
+          .lte('created_at', to)
+          .in('status', POPUP_REVENUE_STATUSES)
+          .range(a, b),
+      ),
+      fetchAll<any>((a, b) =>
+        db
+          .from('walkin_orders')
+          .select('total, created_at')
+          .gte('created_at', from)
+          .lte('created_at', to)
+          .in('status', WALKIN_REVENUE_STATUSES)
+          .range(a, b),
+      ),
     ]);
 
-    // Build time-bucketed map
-    const bucket = (dateStr: string): string => {
-      const d = new Date(dateStr);
-      if (gran === 'month') return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (gran === 'week') {
-        // ISO week start (Monday)
-        const day = d.getDay() || 7;
-        const monday = new Date(d);
-        monday.setDate(d.getDate() - day + 1);
-        return monday.toISOString().slice(0, 10);
+    type ChartBucket = { date: string; online: number; popup: number; walkin: number; total: number };
+    const map: Record<string, ChartBucket> = {};
+
+    // `bucketOf` is UTC throughout; the local-time bucketing this replaced put
+    // orders in the wrong day whenever the server wasn't running in UTC.
+    const add = (rows: any[], key: 'online' | 'popup' | 'walkin') => {
+      for (const o of rows) {
+        const k = bucketOf(o.created_at, gran as Granularity);
+        if (!map[k]) map[k] = { date: k, online: 0, popup: 0, walkin: 0, total: 0 };
+        const amount = parseFloat(o.total ?? 0) || 0;
+        map[k][key] += amount;
+        map[k].total += amount;
       }
-      return d.toISOString().slice(0, 10);
     };
-
-    const map: Record<string, { date: string; online: number; popup: number; total: number }> = {};
-
-    for (const o of onlineOrders ?? []) {
-      const k = bucket(o.created_at);
-      if (!map[k]) map[k] = { date: k, online: 0, popup: 0, total: 0 };
-      map[k].online += parseFloat(o.total ?? 0);
-      map[k].total += parseFloat(o.total ?? 0);
-    }
-
-    for (const o of popupOrders ?? []) {
-      const k = bucket(o.created_at);
-      if (!map[k]) map[k] = { date: k, online: 0, popup: 0, total: 0 };
-      map[k].popup += parseFloat(o.total ?? 0);
-      map[k].total += parseFloat(o.total ?? 0);
-    }
+    add(onlineOrders, 'online');
+    add(popupOrders, 'popup');
+    add(walkinOrders, 'walkin');
 
     const series = Object.values(map)
       .map((v) => ({
         date: v.date,
-        online: Math.round(v.online * 100) / 100,
-        popup: Math.round(v.popup * 100) / 100,
-        total: Math.round(v.total * 100) / 100,
+        online: round2(v.online),
+        popup: round2(v.popup),
+        walkin: round2(v.walkin),
+        total: round2(v.total),
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
@@ -426,21 +463,36 @@ export class AnalyticsService {
     const { from, to } = this.resolveDateRange(query.period, query.from, query.to);
     const limit = query.limit ?? 20;
 
-    // Online order items
-    const { data: onlineItems } = await db
-      .from('order_items')
-      .select('product_id, product_name, quantity, total_price, orders!inner(status, created_at)')
-      .gte('orders.created_at', from)
-      .lte('orders.created_at', to)
-      .in('orders.status', ['paid', 'processing', 'shipped', 'delivered']);
-
-    // Popup order items
-    const { data: popupItems } = await db
-      .from('popup_order_items')
-      .select('product_id, product_name, quantity, total_price, popup_orders!inner(status, created_at)')
-      .gte('popup_orders.created_at', from)
-      .lte('popup_orders.created_at', to)
-      .in('popup_orders.status', ['confirmed', 'completed']);
+    const [onlineItems, popupItems, walkinItems] = await Promise.all([
+      fetchAll<any>((a, b) =>
+        db
+          .from('order_items')
+          .select('product_id, product_name, quantity, total_price, orders!inner(status, created_at, deleted_at)')
+          .gte('orders.created_at', from)
+          .lte('orders.created_at', to)
+          .in('orders.status', ONLINE_REVENUE_STATUSES)
+          .is('orders.deleted_at', null)
+          .range(a, b),
+      ),
+      fetchAll<any>((a, b) =>
+        db
+          .from('popup_order_items')
+          .select('product_id, product_name, quantity, total_price, popup_orders!inner(status, created_at)')
+          .gte('popup_orders.created_at', from)
+          .lte('popup_orders.created_at', to)
+          .in('popup_orders.status', POPUP_REVENUE_STATUSES)
+          .range(a, b),
+      ),
+      fetchAll<any>((a, b) =>
+        db
+          .from('walkin_order_items')
+          .select('product_id, product_name, quantity, total_price, walkin_orders!inner(status, created_at)')
+          .gte('walkin_orders.created_at', from)
+          .lte('walkin_orders.created_at', to)
+          .in('walkin_orders.status', WALKIN_REVENUE_STATUSES)
+          .range(a, b),
+      ),
+    ]);
 
     // Aggregate by product
     const productMap: Record<string, { name: string; units: number; revenue: number }> = {};
@@ -454,8 +506,9 @@ export class AnalyticsService {
       }
     };
 
-    aggregate(onlineItems ?? []);
-    aggregate(popupItems ?? []);
+    aggregate(onlineItems);
+    aggregate(popupItems);
+    aggregate(walkinItems);
 
     const sorted = Object.entries(productMap)
       .map(([id, v]) => ({ productId: id, name: v.name, unitsSold: v.units, revenue: Math.round(v.revenue * 100) / 100 }))
@@ -490,26 +543,41 @@ export class AnalyticsService {
       roleBreakdown[p.role ?? 'public'] = (roleBreakdown[p.role ?? 'public'] ?? 0) + 1;
     }
 
-    // Top customers by combined spend — online orders + popup orders
-    const [{ data: topOnlineOrders }, { data: topPopupOrders }] = await Promise.all([
-      db
-        .from('orders')
-        .select('user_id, email, total')
-        .gte('created_at', from)
-        .lte('created_at', to)
-        .in('status', ['paid', 'processing', 'shipped', 'delivered'])
-        .is('deleted_at', null),
-      db
-        .from('popup_orders')
-        .select('customer_email, customer_name, customer_phone, total')
-        .gte('created_at', from)
-        .lte('created_at', to)
-        .in('status', ['confirmed', 'completed']),
+    // Top customers by combined spend — online + pop-up + walk-in orders
+    const [topOnlineOrders, topPopupOrders, topWalkinOrders] = await Promise.all([
+      fetchAll<any>((a, b) =>
+        db
+          .from('orders')
+          .select('user_id, email, total')
+          .gte('created_at', from)
+          .lte('created_at', to)
+          .in('status', ONLINE_REVENUE_STATUSES)
+          .is('deleted_at', null)
+          .range(a, b),
+      ),
+      fetchAll<any>((a, b) =>
+        db
+          .from('popup_orders')
+          .select('customer_email, customer_name, customer_phone, total')
+          .gte('created_at', from)
+          .lte('created_at', to)
+          .in('status', POPUP_REVENUE_STATUSES)
+          .range(a, b),
+      ),
+      fetchAll<any>((a, b) =>
+        db
+          .from('walkin_orders')
+          .select('customer_email, customer_name, customer_phone, total')
+          .gte('created_at', from)
+          .lte('created_at', to)
+          .in('status', WALKIN_REVENUE_STATUSES)
+          .range(a, b),
+      ),
     ]);
 
     const customerSpend: Record<string, { label: string; total: number; orders: number; channels: Set<string> }> = {};
 
-    for (const o of topOnlineOrders ?? []) {
+    for (const o of topOnlineOrders) {
       const k = (o.email ?? '').toLowerCase();
       if (!k) continue;
       if (!customerSpend[k]) customerSpend[k] = { label: o.email, total: 0, orders: 0, channels: new Set() };
@@ -518,28 +586,35 @@ export class AnalyticsService {
       customerSpend[k].channels.add('online');
     }
 
-    for (const o of topPopupOrders ?? []) {
-      // Use email as key when available, fall back to customer_name
-      const k = o.customer_email ? o.customer_email.toLowerCase() : `popup:${o.customer_name ?? 'unknown'}`;
-      if (!customerSpend[k]) {
-        customerSpend[k] = {
-          label: o.customer_email ?? o.customer_name ?? 'Walk-in customer',
-          total: 0,
-          orders: 0,
-          channels: new Set(),
-        };
+    // Pop-up and walk-in share a key space, so a customer who bought at both
+    // shows once with two channel tags rather than as two separate people.
+    const addInPerson = (rows: any[], channel: 'popup' | 'walkin') => {
+      for (const o of rows) {
+        const email = o.customer_email?.toLowerCase();
+        const phone = o.customer_phone?.trim();
+        const k = email || (phone ? `p:${phone}` : `${channel}:${o.customer_name ?? 'unknown'}`);
+        if (!customerSpend[k]) {
+          customerSpend[k] = {
+            label: o.customer_email ?? o.customer_name ?? 'In-person customer',
+            total: 0,
+            orders: 0,
+            channels: new Set(),
+          };
+        }
+        customerSpend[k].total += parseFloat(o.total ?? 0);
+        customerSpend[k].orders += 1;
+        customerSpend[k].channels.add(channel);
       }
-      customerSpend[k].total += parseFloat(o.total ?? 0);
-      customerSpend[k].orders += 1;
-      customerSpend[k].channels.add('popup');
-    }
+    };
+    addInPerson(topPopupOrders, 'popup');
+    addInPerson(topWalkinOrders, 'walkin');
 
     const topCustomers = Object.values(customerSpend)
       .sort((a, b) => b.total - a.total)
       .slice(0, query.limit ?? 20)
       .map((c) => ({
         customer: c.label,
-        totalSpent: Math.round(c.total * 100) / 100,
+        totalSpent: round2(c.total),
         orderCount: c.orders,
         channels: Array.from(c.channels),
       }));
@@ -586,7 +661,7 @@ export class AnalyticsService {
       .select('order_id, product_name, quantity, total_price, popup_orders!inner(event_id, status, created_at)')
       .gte('popup_orders.created_at', from)
       .lte('popup_orders.created_at', to)
-      .in('popup_orders.status', ['confirmed', 'completed']);
+      .in('popup_orders.status', POPUP_REVENUE_STATUSES);
 
     // Per-event aggregation
     const eventMap: Record<string, any> = {};
@@ -598,7 +673,7 @@ export class AnalyticsService {
     for (const o of orders ?? []) {
       if (eventMap[o.event_id]) {
         eventMap[o.event_id].orderCount += 1;
-        if (['confirmed', 'completed'].includes(o.status)) {
+        if (POPUP_REVENUE_STATUSES.includes(o.status)) {
           eventMap[o.event_id].revenue += parseFloat(o.total ?? 0);
           eventMap[o.event_id].completedOrders += 1;
         }
@@ -724,10 +799,10 @@ export class AnalyticsService {
     ]);
 
     const completedOnline = (onlineOrders ?? []).filter((o) =>
-      ['paid', 'processing', 'shipped', 'delivered'].includes(o.status),
+      ONLINE_REVENUE_STATUSES.includes(o.status),
     );
     const completedPopup = (popupOrders ?? []).filter((o) =>
-      ['confirmed', 'completed'].includes(o.status),
+      POPUP_REVENUE_STATUSES.includes(o.status),
     );
 
     const onlineRevenue = completedOnline.reduce((s, o) => s + parseFloat(o.total ?? 0), 0);
@@ -764,15 +839,9 @@ export class AnalyticsService {
     const gran = query.granularity ?? 'month';
 
     const bucket = (dateStr: string): string => {
-      const d = new Date(dateStr);
-      if (gran === 'month') return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (gran === 'week') {
-        const day = d.getDay() || 7;
-        const monday = new Date(d);
-        monday.setDate(d.getDate() - day + 1);
-        return monday.toISOString().slice(0, 10);
-      }
-      return d.toISOString().slice(0, 10);
+      // Shared UTC bucketing — local-time bucketing put orders in the wrong
+      // day whenever the server wasn't running in UTC.
+      return bucketOf(dateStr, gran as Granularity);
     };
 
     const [{ data: onlineOrders }, { data: popupOrders }, { data: orderItems }] = await Promise.all([
@@ -792,7 +861,7 @@ export class AnalyticsService {
         .select('total_price, quantity, orders!inner(status, created_at)')
         .gte('orders.created_at', from)
         .lte('orders.created_at', to)
-        .in('orders.status', ['paid', 'processing', 'shipped', 'delivered']),
+        .in('orders.status', ONLINE_REVENUE_STATUSES),
     ]);
 
     const periodMap: Record<string, {
@@ -811,7 +880,7 @@ export class AnalyticsService {
       }
     };
 
-    const completedOnlineStatuses = ['paid', 'processing', 'shipped', 'delivered'];
+    const completedOnlineStatuses = ONLINE_REVENUE_STATUSES;
     for (const o of onlineOrders ?? []) {
       const k = bucket(o.created_at);
       ensurePeriod(k);
@@ -829,7 +898,7 @@ export class AnalyticsService {
       const k = bucket(o.created_at);
       ensurePeriod(k);
       periodMap[k].orders += 1;
-      if (['confirmed', 'completed'].includes(o.status)) {
+      if (POPUP_REVENUE_STATUSES.includes(o.status)) {
         periodMap[k].grossRevenue += parseFloat(o.subtotal ?? 0);
         periodMap[k].discounts += parseFloat(o.discount_amount ?? 0);
         periodMap[k].netRevenue += parseFloat(o.total ?? 0);
@@ -888,13 +957,13 @@ export class AnalyticsService {
         .select('product_id, product_name, sku, quantity, unit_price, total_price, orders!inner(status, created_at)')
         .gte('orders.created_at', from)
         .lte('orders.created_at', to)
-        .in('orders.status', ['paid', 'processing', 'shipped', 'delivered']),
+        .in('orders.status', ONLINE_REVENUE_STATUSES),
       db
         .from('popup_order_items')
         .select('product_id, product_name, sku, quantity, unit_price, total_price, popup_orders!inner(status, created_at)')
         .gte('popup_orders.created_at', from)
         .lte('popup_orders.created_at', to)
-        .in('popup_orders.status', ['confirmed', 'completed']),
+        .in('popup_orders.status', POPUP_REVENUE_STATUSES),
       db
         .from('orders')
         .select('id')
@@ -955,15 +1024,9 @@ export class AnalyticsService {
     const gran = query.granularity ?? 'day';
 
     const bucket = (dateStr: string): string => {
-      const d = new Date(dateStr);
-      if (gran === 'month') return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (gran === 'week') {
-        const day = d.getDay() || 7;
-        const monday = new Date(d);
-        monday.setDate(d.getDate() - day + 1);
-        return monday.toISOString().slice(0, 10);
-      }
-      return d.toISOString().slice(0, 10);
+      // Shared UTC bucketing — local-time bucketing put orders in the wrong
+      // day whenever the server wasn't running in UTC.
+      return bucketOf(dateStr, gran as Granularity);
     };
 
     const [{ data: profiles }, { data: subscribers }] = await Promise.all([
@@ -1039,10 +1102,10 @@ export class AnalyticsService {
     ]);
 
     const completedOnline = (onlineOrders ?? []).filter((o) =>
-      ['paid', 'processing', 'shipped', 'delivered'].includes(o.status),
+      ONLINE_REVENUE_STATUSES.includes(o.status),
     );
     const completedPopup = (popupOrders ?? []).filter((o) =>
-      ['confirmed', 'completed'].includes(o.status),
+      POPUP_REVENUE_STATUSES.includes(o.status),
     );
 
     const onlineDiscount = completedOnline.reduce((s, o) => s + parseFloat(o.discount ?? 0), 0);
@@ -1110,7 +1173,7 @@ export class AnalyticsService {
       const provider = o.payment_provider ?? 'unknown';
       if (!onlineByProvider[provider]) onlineByProvider[provider] = { count: 0, revenue: 0 };
       onlineByProvider[provider].count += 1;
-      if (['paid', 'processing', 'shipped', 'delivered'].includes(o.status)) {
+      if (ONLINE_REVENUE_STATUSES.includes(o.status)) {
         onlineByProvider[provider].revenue += parseFloat(o.total ?? 0);
       }
     }
@@ -1120,7 +1183,7 @@ export class AnalyticsService {
       const method = o.payment_method ?? 'unknown';
       if (!popupByMethod[method]) popupByMethod[method] = { count: 0, revenue: 0 };
       popupByMethod[method].count += 1;
-      if (['confirmed', 'completed'].includes(o.status)) {
+      if (POPUP_REVENUE_STATUSES.includes(o.status)) {
         popupByMethod[method].revenue += parseFloat(o.total ?? 0);
       }
     }
@@ -1291,33 +1354,43 @@ export class AnalyticsService {
     const range = this.resolveDateRange(query.period, query.from, query.to);
     const ctx = new ReportContext(db, range, 'day');
 
+    // Refunded orders sit outside the revenue whitelists, so they are loaded
+    // explicitly and added back into gross sales — a sale that was later
+    // refunded still happened. Without that, `returns` was subtracted from a
+    // gross figure that never contained it and net sales came out too low.
     const load = async (w: 'current' | 'previous') => {
-      const [online, popup, refunded, popupRefunds] = await Promise.all([
-        ctx.onlineOrders(w),
-        ctx.popupOrders(w),
-        ctx.refundedOrders(w),
-        ctx.popupRefunds(w),
-      ]);
+      const [online, popup, walkin, refunded, popupRefunded, popupRefunds, walkinRefunded] =
+        await Promise.all([
+          ctx.onlineOrders(w),
+          ctx.popupOrders(w),
+          ctx.walkinOrders(w),
+          ctx.refundedOrders(w),
+          ctx.popupRefundedOrders(w),
+          ctx.popupRefunds(w),
+          ctx.walkinRefunds(w),
+        ]);
       let grossSales = 0;
       let discounts = 0;
       let shipping = 0;
       let tax = 0;
       let returns = 0;
       let orders = 0;
-      for (const o of online) {
+      for (const o of [...online, ...refunded]) {
         grossSales += num(o.subtotal);
         discounts += num(o.discount);
         shipping += num(o.shipping_cost);
         tax += num(o.tax);
         orders += 1;
       }
-      for (const o of popup) {
+      // Pop-up and walk-in carry no shipping or tax lines.
+      for (const o of [...popup, ...popupRefunded, ...walkin, ...walkinRefunded]) {
         grossSales += num(o.subtotal);
         discounts += num(o.discount_amount);
         orders += 1;
       }
       for (const o of refunded) returns += num(o.total);
       for (const r of popupRefunds) returns += num(r.amount);
+      for (const o of walkinRefunded) returns += num(o.total);
       const netSales = grossSales - discounts - returns;
       return {
         grossSales: round2(grossSales),
@@ -1358,7 +1431,11 @@ export class AnalyticsService {
     }
 
     const compute = async (w: 'current' | 'previous') => {
-      const [online, popup] = await Promise.all([ctx.onlineOrders(w), ctx.popupOrders(w)]);
+      const [online, popup, walkin] = await Promise.all([
+        ctx.onlineOrders(w),
+        ctx.popupOrders(w),
+        ctx.walkinOrders(w),
+      ]);
       const customers = new Map<string, string>(); // key -> earliest order ts in window
       const consider = (key: string | null, ts: string) => {
         if (!key) return;
@@ -1367,6 +1444,7 @@ export class AnalyticsService {
       };
       for (const o of online) consider(onlineCustomerKey(o), o.created_at);
       for (const o of popup) consider(popupCustomerKey(o), o.created_at);
+      for (const o of walkin) consider(walkinCustomerKey(o), o.created_at);
 
       let returning = 0;
       for (const [key, ts] of customers.entries()) {
@@ -1442,13 +1520,16 @@ export class AnalyticsService {
       .not('reminder_sent_at', 'is', null)
       .not('recovered_at', 'is', null);
 
+    // Filter on when the reminder went out, not when the cart was created — the
+    // metric reports on reminders sent in the window, and a cart created just
+    // before the window can be reminded inside it (and vice versa).
     if (from) {
-      remindedQ.gte('created_at', from);
-      recoveredQ.gte('created_at', from);
+      remindedQ.gte('reminder_sent_at', from);
+      recoveredQ.gte('reminder_sent_at', from);
     }
     if (to) {
-      remindedQ.lte('created_at', to);
-      recoveredQ.lte('created_at', to);
+      remindedQ.lte('reminder_sent_at', to);
+      recoveredQ.lte('reminder_sent_at', to);
     }
 
     const [{ count: remindersSent }, { count: recoveredCount }] = await Promise.all([

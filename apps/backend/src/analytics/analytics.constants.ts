@@ -1,8 +1,12 @@
 // Single source of truth for which statuses count as revenue across all
-// analytics. Pending/unpaid online orders and open/held popup orders are
-// excluded everywhere so every metric compares the same population.
+// analytics AND customer lifetime spend. Pending/unpaid online orders and
+// open/held popup and walk-in orders are excluded everywhere so every metric
+// compares the same population. Import these — never inline the literals.
 export const ONLINE_REVENUE_STATUSES = ['paid', 'processing', 'shipped', 'delivered'];
 export const POPUP_REVENUE_STATUSES = ['confirmed', 'completed'];
+// Ally/Markets sales are counted toward the Road to HQ unit goal only — they are
+// deliberately NOT folded into company-wide revenue, so the Road to HQ counter
+// can legitimately exceed what the revenue channels add up to.
 export const ALLY_REVENUE_STATUSES = ['completed'];
 export const WALKIN_REVENUE_STATUSES = ['completed'];
 
