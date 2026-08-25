@@ -27,6 +27,7 @@ import {
   MapPin,
   Lock,
   Unlock,
+  Sparkles,
 } from "lucide-react";
 import { useCreatePopupPreorder, usePopupEventPreorders, type Preorder } from "@/lib/api/preorders";
 import {
@@ -51,6 +52,7 @@ import {
 } from "@/lib/api/popup-sales";
 import { apiClient } from "@/lib/api/client";
 import { useShippingOptions } from "@/lib/api/settings";
+import { useChannelDiscount } from "@/lib/hooks/useChannelDiscount";
 
 type DisplayOrder = PopupOrder & { _isPreorder?: boolean };
 
@@ -953,9 +955,17 @@ function EditOrderModal({
   const [customerEmail, setCustomerEmail] = useState(order.customer_email ?? "");
   const [paymentMethod, setPaymentMethod] = useState<PopupPaymentMethod | "">(order.payment_method ?? "");
   const [paymentReference, setPaymentReference] = useState(order.payment_reference ?? "");
-  const [discountType, setDiscountType] = useState<"none" | "percentage" | "fixed">(order.discount_type ?? "none");
-  const [discountAmount, setDiscountAmount] = useState(order.discount_amount ? String(order.discount_amount) : "");
-  const [discountReason, setDiscountReason] = useState(order.discount_reason ?? "");
+  // An order discounted by a code or a bundle rule has no staff-typed figure to
+  // reopen, so the manual controls start empty and the existing discount is
+  // shown as read-only until staff deliberately replace it.
+  const engineResolved =
+    order.discount_type === "code" || order.discount_type === "pairing";
+  const [discountType, setDiscountType] = useState<"none" | "percentage" | "fixed">(
+    engineResolved ? "none" : ((order.discount_type as "none" | "percentage" | "fixed") ?? "none"),
+  );
+  const [discountValue, setDiscountValue] = useState("");
+  const [discountReason, setDiscountReason] = useState(engineResolved ? "" : (order.discount_reason ?? ""));
+  const [promoInput, setPromoInput] = useState("");
   const [notes, setNotes] = useState(order.notes ?? "");
   const [holdDuration, setHoldDuration] = useState(order.hold_duration_minutes ? String(order.hold_duration_minutes) : "");
   const [holdNote, setHoldNote] = useState(order.hold_note ?? "");
@@ -970,8 +980,9 @@ function EditOrderModal({
         customer_email: customerEmail.trim() || undefined,
         payment_method: paymentMethod || undefined,
         payment_reference: paymentReference.trim() || undefined,
+        promo_code: promoInput.trim() || undefined,
         discount_type: discountType,
-        discount_amount: discountType !== "none" && discountAmount ? parseFloat(discountAmount) : 0,
+        discount_value: discountValue ? parseFloat(discountValue) : undefined,
         discount_reason: discountReason.trim() || undefined,
         hold_duration_minutes: holdDuration ? parseInt(holdDuration, 10) : undefined,
         hold_note: holdNote.trim() || undefined,
@@ -1065,8 +1076,26 @@ function EditOrderModal({
           <div>
             <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">Discount</p>
             <div className="space-y-3">
+              {engineResolved && (
+                <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  Currently <strong>{order.discount_reason || "a discount rule"}</strong> —{" "}
+                  {formatCurrency(Number(order.discount_amount))} off
+                  {order.discount_type === "pairing" ? " (automatic bundle)" : " (promo code)"}.
+                  Setting anything below replaces it.
+                </div>
+              )}
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Type</label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Promo code</label>
+                <input
+                  type="text"
+                  value={promoInput}
+                  onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                  placeholder="Leave blank to keep automatic rules"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Manual override</label>
                 <select
                   value={discountType}
                   onChange={(e) => setDiscountType(e.target.value as "none" | "percentage" | "fixed")}
@@ -1087,8 +1116,8 @@ function EditOrderModal({
                       type="number"
                       min="0"
                       step="0.01"
-                      value={discountAmount}
-                      onChange={(e) => setDiscountAmount(e.target.value)}
+                      value={discountValue}
+                      onChange={(e) => setDiscountValue(e.target.value)}
                       placeholder="0"
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
                     />
@@ -1297,9 +1326,13 @@ function NewOrderModal({
   const customerSearchTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // ── Discount state ─────────────────────────────────────────────────────────
+  // discountType/Value/Reason are now the MANUAL STAFF OVERRIDE. Promo codes and
+  // automatic bundle rules are resolved by the server alongside them.
   const [discountType, setDiscountType] = useState<DiscountType>("none");
   const [discountValue, setDiscountValue] = useState("");
   const [discountReason, setDiscountReason] = useState("");
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedCode, setAppliedCode] = useState("");
   const [showDiscountWarning, setShowDiscountWarning] = useState(false);
   const pendingAction = useRef<"submit" | "hold" | null>(null);
   const discountConfirmed = useRef(false);
@@ -1401,11 +1434,26 @@ function NewOrderModal({
 
   // ── Computed ───────────────────────────────────────────────────────────────
   const subtotal = items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
-  const discountNum = parseFloat(discountValue) || 0;
-  const discountAmount =
-    discountType === "percentage" ? (subtotal * discountNum) / 100
-      : discountType === "fixed" ? discountNum
-        : 0;
+
+  // The server resolves the discount — a typed code and any automatic bundle
+  // rules compete, and a manual staff figure overrides both. This is display
+  // only; the same engine runs again when the order is submitted.
+  const discount = useChannelDiscount({
+    channel: "popup",
+    items: items.map((i) => ({
+      productId: i.product_id ?? "",
+      variantId: i.variant_id ?? undefined,
+      unitPrice: i.unit_price,
+      quantity: i.quantity,
+    })),
+    appliedCode,
+    manualType: discountType,
+    manualValue: discountValue,
+    manualReason: discountReason,
+    disabled: isPreorderMode,
+  });
+
+  const discountAmount = discount.discountAmount;
   const deliveryFeeNum = isPreorderMode && includeDeliveryFee ? parseFloat(deliveryFeeAmount) || 0 : 0;
   const total = Math.max(0, subtotal - discountAmount) + deliveryFeeNum;
   const discountPct = subtotal > 0 ? (discountAmount / subtotal) * 100 : 0;
@@ -1516,8 +1564,9 @@ function NewOrderModal({
       customer_email: customerForm.email || undefined,
       payment_method: paymentMethod,
       payment_reference: isSplit ? undefined : (paymentMethod === "momo" ? momoReference || undefined : paymentMethod === "bank_transfer" ? bankReference || undefined : undefined),
+      promo_code: appliedCode || undefined,
       discount_type: discountType !== "none" ? discountType : undefined,
-      discount_amount: discountAmount > 0 ? discountAmount : undefined,
+      discount_value: discountValue ? parseFloat(discountValue) : undefined,
       discount_reason: discountReason || undefined,
       notes: undefined,
       split_payments: splitPayloads,
@@ -1558,8 +1607,9 @@ function NewOrderModal({
       customer_phone: customerForm.phone || momoPhone || undefined,
       customer_email: customerForm.email || undefined,
       payment_method: "momo",
+      promo_code: appliedCode || undefined,
       discount_type: discountType !== "none" ? discountType : undefined,
-      discount_amount: discountAmount > 0 ? discountAmount : undefined,
+      discount_value: discountValue ? parseFloat(discountValue) : undefined,
       discount_reason: discountReason || undefined,
       split_payments: splitPayloads,
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1591,8 +1641,9 @@ function NewOrderModal({
       customer_email: customerForm.email || undefined,
       payment_method: isSplit ? undefined : paymentMethod,
       payment_reference: isSplit ? undefined : (paymentMethod === "momo" ? momoReference || undefined : paymentMethod === "bank_transfer" ? bankReference || undefined : undefined),
+      promo_code: appliedCode || undefined,
       discount_type: discountType !== "none" ? discountType : undefined,
-      discount_amount: discountAmount > 0 ? discountAmount : undefined,
+      discount_value: discountValue ? parseFloat(discountValue) : undefined,
       discount_reason: discountReason || undefined,
       hold_duration_minutes: holdDuration,
       hold_note: holdNote || undefined,
@@ -2024,6 +2075,72 @@ function NewOrderModal({
                 {/* DISCOUNT */}
                 <section className="p-4">
                   <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">Discount</p>
+
+                  {/* Promo code — validated by the same engine as the storefront */}
+                  <div className="mb-3 flex gap-2">
+                    <input
+                      value={promoInput}
+                      onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && promoInput.trim()) setAppliedCode(promoInput.trim());
+                      }}
+                      placeholder="Promo code"
+                      disabled={!!appliedCode}
+                      className="h-9 flex-1 rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-400 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                    />
+                    {appliedCode ? (
+                      <button
+                        onClick={() => { setAppliedCode(""); setPromoInput(""); discount.clearCodeError(); }}
+                        className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                      >
+                        Clear
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => promoInput.trim() && setAppliedCode(promoInput.trim())}
+                        disabled={!promoInput.trim()}
+                        className="h-9 rounded-lg bg-slate-900 px-3 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-40"
+                      >
+                        Apply
+                      </button>
+                    )}
+                  </div>
+
+                  {discount.codeError && (
+                    <p className="mb-3 text-xs text-red-500">{discount.codeError}</p>
+                  )}
+
+                  {appliedCode && discount.resolution?.source === "code" && (
+                    <p className="mb-3 text-xs font-medium text-emerald-700">
+                      <span className="font-mono">{appliedCode}</span> applied — {formatCurrency(discount.discountAmount)} off
+                    </p>
+                  )}
+
+                  {/* Automatic bundle rules the basket qualifies for */}
+                  {discount.autoCandidates.length > 0 && (
+                    <div className="mb-3 space-y-1">
+                      {discount.autoCandidates.map((c) => (
+                        <div
+                          key={c.promoCodeId}
+                          className={cn(
+                            "flex items-start gap-1.5 rounded-lg px-3 py-2 text-xs",
+                            discount.resolution?.source === "pairing" && c.promoCodeId === discount.resolution?.promoCodeId
+                              ? "bg-indigo-50 text-indigo-700"
+                              : "bg-slate-50 text-slate-500"
+                          )}
+                        >
+                          <Sparkles className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+                          <span>
+                            <strong>{c.label}</strong> — {formatCurrency(c.amount)} off
+                            {c.pairing && ` (${c.pairing.pairedCount} paired ${c.pairing.basis === "products" ? "product" : "item"}${c.pairing.pairedCount === 1 ? "" : "s"})`}
+                            {discount.resolution?.source !== "pairing" && " · not applied"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">Manual override</p>
                   <div className="mb-3 flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
                     {(["none", "percentage", "fixed"] as DiscountType[]).map((t) => (
                       <button
@@ -2084,6 +2201,14 @@ function NewOrderModal({
                       </div>
                       {discountAmount > 0 && (
                         <p className="text-xs font-medium text-emerald-700">Saving {formatCurrency(discountAmount)}</p>
+                      )}
+                      {discount.overriddenBy && (
+                        <div className="flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                          <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-600" />
+                          <p className="text-xs font-medium text-amber-800">
+                            Overrides {discount.overriddenBy.label}, worth {formatCurrency(discount.overriddenBy.amount)} — customer gets {formatCurrency(discountAmount)} instead.
+                          </p>
+                        </div>
                       )}
                       {isHighDiscount && (
                         <div className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
@@ -3259,6 +3384,7 @@ export default function PopupSalesPage() {
         discount_type: null,
         discount_amount: 0,
         discount_reason: null,
+        applied_promo_code_id: null,
         hold_duration_minutes: null,
         hold_note: null,
         total,

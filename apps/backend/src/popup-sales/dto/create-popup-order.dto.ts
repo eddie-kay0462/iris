@@ -95,6 +95,20 @@ export class CreatePopupOrderDto {
   @IsEnum(['none', 'percentage', 'fixed'])
   discount_type?: 'none' | 'percentage' | 'fixed';
 
+  /**
+   * The percentage or cedi figure the staff member typed. The resolved amount
+   * is computed server-side — discount_amount from the client is ignored.
+   */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discount_value?: number;
+
+  /** A promo code presented by the customer at the stall. */
+  @IsOptional()
+  @IsString()
+  promo_code?: string;
+
   @IsOptional()
   @IsNumber()
   @Min(0)

@@ -23,6 +23,7 @@ import { StatsCard } from "@/app/components/StatsCard";
 import { StatusBadge } from "@/app/components/StatusBadge";
 import { SearchInput } from "@/app/components/SearchInput";
 import { Pagination } from "@/app/components/Pagination";
+import DiscountPanel, { type DiscountPanelState } from "@/app/components/DiscountPanel";
 import {
   useWalkinOrders,
   useWalkinStats,
@@ -395,10 +396,15 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
   const [savingCustomer, setSavingCustomer] = useState(false);
   const custTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Discount + payment
-  const [discountType, setDiscountType] = useState<"none" | "percentage" | "fixed">("none");
-  const [discountValue, setDiscountValue] = useState("");
-  const [discountReason, setDiscountReason] = useState("");
+  // Discount — resolved server-side by the shared engine (promo codes, automatic
+  // bundle rules, and the manual staff override all come back through this).
+  const [discountState, setDiscountState] = useState<DiscountPanelState>({
+    resolution: null,
+    promoCode: "",
+    manualType: "none",
+    manualValue: "",
+    manualReason: "",
+  });
   const [paymentMethod, setPaymentMethod] = useState<WalkinPaymentMethod>("cash");
   const [paymentReference, setPaymentReference] = useState("");
   const [notes, setNotes] = useState("");
@@ -493,13 +499,14 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
 
   // ── Computed ───────────────────────────────────────────────────────────────
   const subtotal = items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
-  const discountNum = parseFloat(discountValue) || 0;
-  const discountAmount =
-    discountType === "percentage" ? (subtotal * discountNum) / 100
-    : discountType === "fixed" ? discountNum
-    : 0;
+  // The server owns the discount figure; this is display only. Pre-orders route
+  // to a different table and carry no discount.
+  const discountAmount = isPreorderMode
+    ? 0
+    : (discountState.resolution?.discountAmount ?? 0);
   const deliveryFeeNum = isPreorderMode && includeDeliveryFee ? parseFloat(deliveryFeeAmount) || 0 : 0;
   const total = Math.max(0, subtotal - discountAmount) + deliveryFeeNum;
+  const discountLabel = discountState.resolution?.label ?? null;
 
   // ── Customer actions ─────────────────────────────────────────────────────────
   function pickCustomer(c: WalkinCustomer) {
@@ -570,9 +577,12 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
         customer_profile_id: customer?.id,
         payment_method: paymentMethod,
         payment_reference: paymentMethod !== "momo" ? paymentReference || undefined : undefined,
-        discount_type: discountType,
-        discount_amount: Math.round(discountAmount * 100) / 100,
-        discount_reason: discountReason || undefined,
+        promo_code: discountState.promoCode || undefined,
+        discount_type: discountState.manualType,
+        discount_value: discountState.manualValue
+          ? parseFloat(discountState.manualValue)
+          : undefined,
+        discount_reason: discountState.manualReason || undefined,
         notes: notes || undefined,
         items: items.map((i) => ({
           product_id: i.product_id,
@@ -754,22 +764,16 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
             </section>
 
             {!isPreorderMode && (
-              <section className="mb-4">
-                <h3 className="mb-2 text-sm font-semibold text-slate-700">Discount</h3>
-                <div className="flex gap-2">
-                  <select value={discountType} onChange={(e) => setDiscountType(e.target.value as any)} className="rounded-md border border-slate-300 px-2 py-2 text-sm outline-none focus:border-slate-900">
-                    <option value="none">None</option>
-                    <option value="percentage">%</option>
-                    <option value="fixed">GH₵</option>
-                  </select>
-                  {discountType !== "none" && (
-                    <input value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} type="number" placeholder="0" className="w-24 rounded-md border border-slate-300 px-2 py-2 text-sm outline-none focus:border-slate-900" />
-                  )}
-                  {discountType !== "none" && (
-                    <input value={discountReason} onChange={(e) => setDiscountReason(e.target.value)} placeholder="Reason" className="flex-1 rounded-md border border-slate-300 px-2 py-2 text-sm outline-none focus:border-slate-900" />
-                  )}
-                </div>
-              </section>
+              <DiscountPanel
+                channel="walkin"
+                items={items.map((i) => ({
+                  productId: i.product_id,
+                  variantId: i.variant_id,
+                  unitPrice: i.unit_price,
+                  quantity: i.quantity,
+                }))}
+                onChange={setDiscountState}
+              />
             )}
 
             {isPreorderMode && (
@@ -819,7 +823,10 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
             <div className="mt-auto border-t border-slate-200 pt-3">
               <div className="mb-1 flex justify-between text-sm text-slate-600"><span>Subtotal</span><span>{GHS(subtotal)}</span></div>
               {discountAmount > 0 && (
-                <div className="mb-1 flex justify-between text-sm text-green-600"><span>Discount</span><span>-{GHS(discountAmount)}</span></div>
+                <div className="mb-1 flex justify-between text-sm text-green-600">
+                  <span>{discountLabel || "Discount"}</span>
+                  <span>-{GHS(discountAmount)}</span>
+                </div>
               )}
               {deliveryFeeNum > 0 && (
                 <div className="mb-1 flex justify-between text-sm text-slate-600"><span>Delivery Fee</span><span>{GHS(deliveryFeeNum)}</span></div>

@@ -1,11 +1,31 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "./client";
 
-export type DiscountType = "fixed" | "percentage" | "free_shipping" | "product";
+export type DiscountType =
+  | "fixed"
+  | "percentage"
+  | "free_shipping"
+  | "product"
+  | "pairing";
+
+export type SalesChannel = "online" | "popup" | "walkin";
+export type PairingBasis = "units" | "products";
+export type PairingAppliesTo = "anchor" | "cart";
+export type ValueType = "percentage" | "fixed";
+export type DiscountSource = "code" | "pairing" | "manual";
+
+export interface PairingTier {
+  id?: string;
+  min_paired_count: number;
+  value_type: ValueType;
+  value: number;
+  max_discount_amount: number | null;
+}
 
 export interface PromoCode {
   id: string;
-  code: string;
+  /** Null for pairing rules, which auto-apply and carry no code. */
+  code: string | null;
   description: string | null;
   discount_type: DiscountType;
   discount_value: number;
@@ -17,15 +37,21 @@ export interface PromoCode {
   starts_at: string | null;
   expires_at: string | null;
   is_active: boolean;
+  channels: SalesChannel[] | null;
+  auto_apply: boolean;
+  anchor_product_id: string | null;
+  pairing_basis: PairingBasis | null;
+  applies_to: PairingAppliesTo | null;
+  promo_pairing_tiers: PairingTier[];
   created_at: string;
   updated_at: string;
 }
 
 export interface CreatePromoPayload {
-  code: string;
+  code?: string;
   description?: string;
   discount_type: DiscountType;
-  discount_value: number;
+  discount_value?: number;
   applicable_product_ids?: string[];
   min_order_amount?: number;
   max_discount_amount?: number;
@@ -33,12 +59,63 @@ export interface CreatePromoPayload {
   starts_at?: string;
   expires_at?: string;
   is_active?: boolean;
+  channels?: SalesChannel[];
+  anchor_product_id?: string;
+  pairing_basis?: PairingBasis;
+  applies_to?: PairingAppliesTo;
+  tiers?: PairingTier[];
+}
+
+export interface PromoRedemption {
+  id: string;
+  promo_code_id: string | null;
+  source: DiscountSource;
+  channel: SalesChannel;
+  order_table: string;
+  order_id: string;
+  order_number: string | null;
+  code_snapshot: string | null;
+  discount_type: string | null;
+  rule_snapshot: Record<string, unknown> | null;
+  breakdown: Record<string, unknown> | null;
+  subtotal: number;
+  discount_amount: number;
+  customer_email: string | null;
+  customer_phone: string | null;
+  applied_by: string | null;
+  applied_by_profile: {
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+  } | null;
+  status: "pending" | "confirmed" | "reverted";
+  confirmed_at: string | null;
+  reverted_at: string | null;
+  revert_reason: string | null;
+  created_at: string;
 }
 
 export function usePromoCodes() {
   return useQuery({
     queryKey: ["promo-codes"],
     queryFn: () => apiClient<PromoCode[]>("/promos"),
+  });
+}
+
+export function usePromoRedemptions(filters: {
+  channel?: string;
+  source?: string;
+  promoCodeId?: string;
+  status?: string;
+} = {}) {
+  const qs = new URLSearchParams(
+    Object.entries(filters).filter(([, v]) => !!v) as [string, string][],
+  ).toString();
+
+  return useQuery({
+    queryKey: ["promo-redemptions", filters],
+    queryFn: () =>
+      apiClient<PromoRedemption[]>(`/promos/redemptions${qs ? `?${qs}` : ""}`),
   });
 }
 
@@ -72,5 +149,65 @@ export function useDeletePromo() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["promo-codes"] });
     },
+  });
+}
+
+// ─── Cross-channel resolution (shared by both POS surfaces) ──────────────────
+
+export interface ResolveDiscountPayload {
+  channel: SalesChannel;
+  items: {
+    productId: string;
+    variantId?: string;
+    unitPrice: number;
+    quantity: number;
+  }[];
+  shippingCost?: number;
+  code?: string;
+  manualOverride?: { type: ValueType; value: number; reason?: string };
+}
+
+export interface DiscountCandidate {
+  source: DiscountSource;
+  promoCodeId: string | null;
+  code: string | null;
+  label: string;
+  amount: number;
+  pairing?: {
+    anchorProductId: string;
+    basis: PairingBasis;
+    appliesTo: PairingAppliesTo;
+    pairedCount: number;
+    tier: PairingTier;
+  };
+}
+
+export interface DiscountResolution {
+  subtotal: number;
+  discountAmount: number;
+  source: DiscountSource | null;
+  promoCodeId: string | null;
+  code: string | null;
+  label: string | null;
+  discountType: string;
+  channelDiscountType: "none" | "percentage" | "fixed" | "code" | "pairing";
+  breakdown: {
+    codeCandidate: DiscountCandidate | null;
+    pairingCandidates: DiscountCandidate[];
+    manualCandidate: DiscountCandidate | null;
+    rejected: { label: string; reason: string }[];
+    winner: DiscountSource | null;
+    overriddenBy: { label: string; amount: number } | null;
+  };
+  message: string;
+}
+
+export function useResolveDiscount() {
+  return useMutation({
+    mutationFn: (payload: ResolveDiscountPayload) =>
+      apiClient<DiscountResolution>("/promos/resolve", {
+        method: "POST",
+        body: payload,
+      }),
   });
 }

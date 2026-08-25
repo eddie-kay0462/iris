@@ -38,6 +38,20 @@ export interface PopupOrderRow {
   created_at: string;
 }
 
+export interface PromoRedemptionRow {
+  id: string;
+  promo_code_id: string | null;
+  source: 'code' | 'pairing' | 'manual';
+  channel: 'online' | 'popup' | 'walkin';
+  code_snapshot: string | null;
+  discount_type: string | null;
+  rule_snapshot: Record<string, any> | null;
+  subtotal: number | string;
+  discount_amount: number | string;
+  status: string;
+  created_at: string;
+}
+
 export interface WalkinOrderRow {
   id: string;
   customer_email: string | null;
@@ -274,6 +288,30 @@ export class ReportContext {
   }
 
   /** Whitelisted (revenue-generating) walk-in orders in the window. */
+  /**
+   * Confirmed promo redemptions in the window — the ledger behind every
+   * discount on every channel, including automatic bundle rules and manual
+   * staff discounts. Reverted rows are excluded: a refunded or cancelled
+   * order's discount is not money the business gave away.
+   */
+  promoRedemptions(w: Window): Promise<PromoRedemptionRow[]> {
+    const { from, to } = this.window(w);
+    return this.memo(`promoRedemptions:${w}`, () =>
+      fetchAll<PromoRedemptionRow>((a, b) =>
+        this.db
+          .from('promo_redemptions')
+          .select(
+            'id, promo_code_id, source, channel, code_snapshot, discount_type, rule_snapshot, subtotal, discount_amount, status, created_at',
+          )
+          .in('status', ['pending', 'confirmed'])
+          .gte('created_at', from)
+          .lte('created_at', to)
+          .order('created_at', { ascending: true })
+          .range(a, b),
+      ),
+    );
+  }
+
   walkinOrders(w: Window): Promise<WalkinOrderRow[]> {
     const { from, to } = this.window(w);
     return this.memo(`walkin:${w}`, () =>

@@ -13,7 +13,7 @@ import { useProfile, parseDefaultAddress } from "@/lib/api/profile";
 import { apiClient, hasToken, getToken } from "@/lib/api/client";
 import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
 import { useShippingOptions, DEFAULT_SHIPPING_OPTIONS, useCountryShippingRates, usePopupPickup } from "@/lib/api/settings";
-import { useValidatePromo, DiscountType } from "@/lib/api/promos";
+import { useResolveDiscount, DiscountResolution } from "@/lib/api/promos";
 import { ChevronDown } from "lucide-react";
 import { useLocale } from "@/lib/locale/locale-provider";
 import { track, snapshotCheckout } from "@/lib/analytics/tracker";
@@ -204,14 +204,10 @@ export default function CheckoutClient() {
   const [saveAsDefault, setSaveAsDefault] = useState(false);
   const [shippingOption, setShippingOption] = useState<"standard" | "express" | "popup_pickup">("standard");
   const [promoInput, setPromoInput] = useState("");
-  const [appliedPromo, setAppliedPromo] = useState<{
-    code: string;
-    promoCodeId: string;
-    discountAmount: number;
-    discountType: DiscountType;
-  } | null>(null);
+  const [appliedCode, setAppliedCode] = useState("");
+  const [discount, setDiscount] = useState<DiscountResolution | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
-  const validatePromo = useValidatePromo();
+  const resolveDiscount = useResolveDiscount();
 
   const { data: shippingOptions = DEFAULT_SHIPPING_OPTIONS } = useShippingOptions();
   const { data: countryShippingRates = [] } = useCountryShippingRates();
@@ -232,7 +228,9 @@ export default function CheckoutClient() {
     : isInternational
       ? internationalRate?.price ?? 0
       : domesticShippingCost;
-  const discountAmount = appliedPromo?.discountAmount ?? 0;
+  const discountAmount = discount?.discountAmount ?? 0;
+  // Bundle deals the cart qualifies for, whether or not one is the winner.
+  const bundleOffers = discount?.breakdown.pairingCandidates ?? [];
   const amountBeforeFees = Math.max(0, subtotal + shippingCost - discountAmount);
   const fees = Math.round(amountBeforeFees * PROCESSING_FEE_RATE * 100) / 100;
   const total = amountBeforeFees + fees;
@@ -337,29 +335,52 @@ export default function CheckoutClient() {
     }
   }, [isInternational, shippingOption]);
 
-  // Re-validate free_shipping discount when the shipping tier changes
+  // Resolve discounts on every cart and shipping change, not only when a code is
+  // typed — that is what lets an automatic bundle deal appear on its own, and it
+  // also keeps a free_shipping code correct when the shipping tier changes.
+  const cartKey = JSON.stringify(
+    items.map((i) => [i.productId, i.price, i.quantity]),
+  );
+
   useEffect(() => {
-    if (appliedPromo?.discountType === "free_shipping") {
-      validatePromo
-        .mutateAsync({
-          code: appliedPromo.code,
-          subtotal,
-          shippingCost,
-          items: items.map((i) => ({
-            productId: i.productId,
-            price: i.price,
-            quantity: i.quantity,
-          })),
-        })
-        .then((result) => {
-          setAppliedPromo((prev) =>
-            prev ? { ...prev, discountAmount: result.discountAmount } : null
-          );
-        })
-        .catch(() => null);
-    }
+    if (items.length === 0) return;
+    let cancelled = false;
+
+    resolveDiscount
+      .mutateAsync({
+        channel: "online",
+        items: items.map((i) => ({
+          productId: i.productId,
+          variantId: i.variantId,
+          unitPrice: i.price,
+          quantity: i.quantity,
+        })),
+        shippingCost,
+        code: appliedCode || undefined,
+      })
+      .then((result) => {
+        if (cancelled) return;
+        setDiscount(result);
+        setPromoError(null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        // Never leave a stale discount on screen — the server recomputes at
+        // order time and would charge the undiscounted amount.
+        setDiscount(null);
+        // A code that has stopped applying is dropped rather than blocking
+        // checkout; clearing it re-runs this effect without it.
+        if (appliedCode) {
+          setPromoError(err?.message || "That promo code no longer applies");
+          setAppliedCode("");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shippingOption]);
+  }, [cartKey, shippingCost, appliedCode]);
 
   if (items.length === 0) {
     return (
@@ -395,31 +416,10 @@ export default function CheckoutClient() {
     }
   }
 
-  async function handleApplyPromo() {
+  function handleApplyPromo() {
     if (!promoInput.trim()) return;
     setPromoError(null);
-    try {
-      const result = await validatePromo.mutateAsync({
-        code: promoInput.trim(),
-        subtotal,
-        shippingCost,
-        items: items.map((i) => ({
-          productId: i.productId,
-          price: i.price,
-          quantity: i.quantity,
-        })),
-      });
-      setAppliedPromo({
-        code: promoInput.trim().toUpperCase(),
-        promoCodeId: result.promoCodeId,
-        discountAmount: result.discountAmount,
-        discountType: result.discountType,
-      });
-      setPromoInput("");
-    } catch (err: any) {
-      setPromoError(err?.message || "Invalid promo code");
-      setAppliedPromo(null);
-    }
+    setAppliedCode(promoInput.trim().toUpperCase());
   }
 
   async function handleValidateAndPay(): Promise<boolean> {
@@ -465,7 +465,7 @@ export default function CheckoutClient() {
         paymentReference: reference,
         shippingCost: shippingCost,
         shippingMethod: shippingOption,
-        promoCode: appliedPromo?.code,
+        promoCode: appliedCode || undefined,
         guestEmail: !isSignedIn ? email.trim() : undefined,
       });
 
@@ -883,7 +883,7 @@ export default function CheckoutClient() {
                   Your whole order will be ready to collect on{" "}
                   <strong>{popupPickup.nextPickupLabel}</strong>
                   {popupPickup.location ? ` at ${popupPickup.location}` : ""}. You&apos;re charged
-                  today, there&apos;s no delivery fee, and nothing ships — bring your order number
+                  today, there&apos;s no delivery fee, and nothing ships, bring your order number
                   with you on the day.
                   {popupPickup.note ? ` ${popupPickup.note}` : ""}
                 </>
@@ -940,17 +940,43 @@ export default function CheckoutClient() {
             ))}
           </div>
 
+          {/* Bundle deals — these apply on their own, no code needed */}
+          {bundleOffers.length > 0 && (
+            <div className="mt-6 space-y-2">
+              {bundleOffers.map((offer) => (
+                <div
+                  key={offer.promoCodeId}
+                  className={`rounded-md border px-4 py-3 text-sm ${
+                    discount?.source === "pairing" && offer.promoCodeId === discount?.promoCodeId
+                      ? "border-success/40 bg-success-surface text-success"
+                      : "border-line bg-fill text-text-secondary"
+                  }`}
+                >
+                  <strong>{offer.label}</strong> - {formatPrice(offer.amount)} off
+                  {discount?.source !== "pairing" && (
+                    <span className="ml-1 text-xs">
+                      (your promo code saves you more)
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Promo Code */}
           <div className="mt-6">
-            {appliedPromo ? (
+            {appliedCode ? (
               <div className="flex items-center justify-between rounded-md bg-success-surface border border-success/40 px-4 py-3 text-sm">
                 <span className="text-success">
-                  <strong>{appliedPromo.code}</strong> applied - {formatPrice(appliedPromo.discountAmount)} off
+                  <strong>{appliedCode}</strong>
+                  {discount?.source === "code"
+                    ? ` applied - ${formatPrice(discountAmount)} off`
+                    : " applied"}
                 </span>
                 <button
                   type="button"
                   onClick={() => {
-                    setAppliedPromo(null);
+                    setAppliedCode("");
                     setPromoInput("");
                     setPromoError(null);
                   }}
@@ -976,10 +1002,10 @@ export default function CheckoutClient() {
                   <button
                     type="button"
                     onClick={handleApplyPromo}
-                    disabled={validatePromo.isPending || !promoInput.trim()}
+                    disabled={resolveDiscount.isPending || !promoInput.trim()}
                     className="shrink-0 rounded-md border border-line-strong bg-surface px-4 py-2 text-sm font-medium text-text-secondary hover:bg-fill disabled:opacity-50"
                   >
-                    {validatePromo.isPending ? "Checking…" : "Apply"}
+                    {resolveDiscount.isPending ? "Checking…" : "Apply"}
                   </button>
                 </div>
                 {promoError && (
@@ -1014,10 +1040,10 @@ export default function CheckoutClient() {
                 {shippingOption === "popup_pickup" ? "Free" : formatPrice(shippingCost)}
               </span>
             </div>
-            {appliedPromo && (
+            {discountAmount > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-success">
-                  Discount ({appliedPromo.code})
+                  Discount ({discount?.label ?? "applied"})
                 </span>
                 <span className="text-success">
                   - {formatPrice(discountAmount)}

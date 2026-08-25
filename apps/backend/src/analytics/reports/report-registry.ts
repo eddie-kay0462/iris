@@ -17,6 +17,7 @@ import {
   walkinCustomerKey,
   ReportContext,
   Window,
+  PromoRedemptionRow,
 } from './report-context';
 import { ReportColumn, ReportMeta, ReportPayload, ReportRow } from './report-types';
 
@@ -712,6 +713,175 @@ export const REPORTS: Record<string, ReportDefinition> = {
         { discounts: totals.discounts, grossSales: totals.grossSales, discountRate: rate(totals.discounts, totals.grossSales) },
         { discounts: prevTotals.discounts, grossSales: prevTotals.grossSales, discountRate: rate(prevTotals.discounts, prevTotals.grossSales) },
         [metric('discounts', 'Discounts', totals.discounts, prevTotals.discounts, 'currency')],
+      );
+    },
+  },
+
+  'discount-sources-over-time': {
+    id: 'discount-sources-over-time',
+    name: 'Discount sources over time',
+    category: 'Orders',
+    description:
+      'Discount value split by where it came from — promo codes, automatic bundle rules, or manual staff discounts.',
+    async build(ctx) {
+      const load = async (w: Window) => {
+        const rows = await ctx.promoRedemptions(w);
+        const byBucket = new Map<string, Record<string, number>>();
+        for (const r of rows) {
+          const k = bucketOf(r.created_at, ctx.granularity);
+          if (!byBucket.has(k))
+            byBucket.set(k, { code: 0, pairing: 0, manual: 0, total: 0 });
+          const b = byBucket.get(k)!;
+          b[r.source] += num(r.discount_amount);
+          b.total += num(r.discount_amount);
+        }
+        return byBucket;
+      };
+
+      const [cur, prev] = await Promise.all([load('current'), load('previous')]);
+      const sum = (m: Map<string, Record<string, number>>) => {
+        const t = { code: 0, pairing: 0, manual: 0, total: 0 };
+        for (const b of m.values()) {
+          t.code += b.code;
+          t.pairing += b.pairing;
+          t.manual += b.manual;
+          t.total += b.total;
+        }
+        return t;
+      };
+      const totals = sum(cur);
+      const prevTotals = sum(prev);
+
+      const fill =
+        (m: Map<string, Record<string, number>>) =>
+        (b: string) =>
+          m.get(b) ?? { code: 0, pairing: 0, manual: 0, total: 0 };
+
+      return overTime(
+        ctx,
+        [
+          col('code', 'Promo codes', 'currency'),
+          col('pairing', 'Bundle rules', 'currency'),
+          col('manual', 'Manual (staff)', 'currency'),
+          col('total', 'Total', 'currency'),
+        ],
+        makeSeries(ctx, 'current', fill(cur)),
+        makeSeries(ctx, 'previous', fill(prev)),
+        totals,
+        prevTotals,
+        [
+          metric('total', 'Total discounted', totals.total, prevTotals.total, 'currency'),
+          metric('pairing', 'From bundle rules', totals.pairing, prevTotals.pairing, 'currency'),
+          metric('manual', 'Manual discounts', totals.manual, prevTotals.manual, 'currency'),
+        ],
+      );
+    },
+  },
+
+  'discount-usage-by-code': {
+    id: 'discount-usage-by-code',
+    name: 'Discount usage by code',
+    category: 'Orders',
+    description:
+      'Which codes and bundle rules are actually being used, across all three sales channels.',
+    async build(ctx) {
+      const rows = await ctx.promoRedemptions('current');
+
+      const byRule = new Map<
+        string,
+        {
+          label: string;
+          source: string;
+          uses: number;
+          discounted: number;
+          grossSales: number;
+          online: number;
+          popup: number;
+          walkin: number;
+        }
+      >();
+
+      for (const r of rows as PromoRedemptionRow[]) {
+        // Manual discounts have no rule to group by, so they roll up as one line.
+        const key = r.promo_code_id ?? `manual:${r.source}`;
+        const label =
+          r.code_snapshot ??
+          (r.rule_snapshot as any)?.label ??
+          (r.source === 'manual' ? 'Manual staff discounts' : 'Unnamed rule');
+
+        if (!byRule.has(key)) {
+          byRule.set(key, {
+            label,
+            source: r.source,
+            uses: 0,
+            discounted: 0,
+            grossSales: 0,
+            online: 0,
+            popup: 0,
+            walkin: 0,
+          });
+        }
+        const b = byRule.get(key)!;
+        b.uses += 1;
+        b.discounted += num(r.discount_amount);
+        b.grossSales += num(r.subtotal);
+        b[r.channel] += num(r.discount_amount);
+      }
+
+      const SOURCE_LABELS: Record<string, string> = {
+        code: 'Promo code',
+        pairing: 'Bundle rule',
+        manual: 'Manual',
+      };
+
+      const list = [...byRule.values()]
+        .map((b) => ({
+          label: b.label,
+          source: SOURCE_LABELS[b.source] ?? b.source,
+          uses: b.uses,
+          discounted: b.discounted,
+          grossSales: b.grossSales,
+          discountRate: rate(b.discounted, b.grossSales),
+          online: b.online,
+          popup: b.popup,
+          walkin: b.walkin,
+        }))
+        .sort((a, b) => b.discounted - a.discounted);
+
+      const totals = list.reduce(
+        (t, r) => ({
+          uses: t.uses + r.uses,
+          discounted: t.discounted + r.discounted,
+          grossSales: t.grossSales + r.grossSales,
+          online: t.online + r.online,
+          popup: t.popup + r.popup,
+          walkin: t.walkin + r.walkin,
+        }),
+        { uses: 0, discounted: 0, grossSales: 0, online: 0, popup: 0, walkin: 0 },
+      );
+
+      return dimension(
+        [
+          col('label', 'Code / rule', 'text'),
+          col('source', 'Source', 'text'),
+          col('uses', 'Uses', 'number'),
+          col('discounted', 'Discounted', 'currency'),
+          col('grossSales', 'Gross sales', 'currency'),
+          col('discountRate', 'Discount rate', 'percent'),
+          col('online', 'Online', 'currency'),
+          col('popup', 'Pop-up', 'currency'),
+          col('walkin', 'Walk-in', 'currency'),
+        ],
+        list,
+        {
+          ...totals,
+          discountRate: rate(totals.discounted, totals.grossSales),
+        },
+        [
+          metric('discounted', 'Total discounted', totals.discounted, null, 'currency'),
+          metric('uses', 'Redemptions', totals.uses, null, 'number'),
+        ],
+        null,
       );
     },
   },

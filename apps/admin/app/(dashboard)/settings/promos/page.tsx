@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Trash2, Plus, RefreshCw } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, RefreshCw, Receipt, X } from "lucide-react";
 import {
   usePromoCodes,
   useCreatePromo,
@@ -11,7 +11,10 @@ import {
   DiscountType,
   PromoCode,
   CreatePromoPayload,
+  PairingTier,
+  SalesChannel,
 } from "@/lib/api/promos";
+import ProductPicker from "./ProductPicker";
 
 function generateCode() {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -23,7 +26,16 @@ const DISCOUNT_TYPE_LABELS: Record<DiscountType, string> = {
   percentage: "Percentage (%)",
   free_shipping: "Free shipping",
   product: "Product discount (GH₵)",
+  pairing: "Bundle / pairing rule (automatic)",
 };
+
+const CHANNEL_LABELS: Record<SalesChannel, string> = {
+  online: "Online store",
+  popup: "Pop-up sales",
+  walkin: "Walk-in sales",
+};
+
+const ALL_CHANNELS: SalesChannel[] = ["online", "popup", "walkin"];
 
 function statusBadge(promo: PromoCode) {
   const now = new Date();
@@ -34,12 +46,22 @@ function statusBadge(promo: PromoCode) {
   return <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">Active</span>;
 }
 
+function tierLabel(t: PairingTier) {
+  const value = t.value_type === "percentage" ? `${t.value}%` : `GH₵ ${t.value}`;
+  const cap = t.max_discount_amount ? ` (max GH₵ ${t.max_discount_amount})` : "";
+  return `${t.min_paired_count}+ → ${value}${cap}`;
+}
+
 function valueLabel(promo: PromoCode) {
   switch (promo.discount_type) {
     case "fixed": return `GH₵ ${promo.discount_value} off`;
     case "percentage": return `${promo.discount_value}% off${promo.max_discount_amount ? ` (max GH₵ ${promo.max_discount_amount})` : ""}`;
     case "free_shipping": return "Free shipping";
     case "product": return `GH₵ ${promo.discount_value} off (products)`;
+    case "pairing":
+      return (promo.promo_pairing_tiers ?? []).length
+        ? (promo.promo_pairing_tiers ?? []).map(tierLabel).join(", ")
+        : "No tiers set";
   }
 }
 
@@ -49,6 +71,14 @@ const emptyForm = (): CreatePromoPayload => ({
   discount_type: "fixed",
   discount_value: 0,
   is_active: true,
+  channels: [...ALL_CHANNELS],
+});
+
+const emptyTier = (min: number): PairingTier => ({
+  min_paired_count: min,
+  value_type: "percentage",
+  value: 10,
+  max_discount_amount: null,
 });
 
 export default function PromosSettingsPage() {
@@ -59,16 +89,32 @@ export default function PromosSettingsPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<CreatePromoPayload>(emptyForm());
+  const [tiers, setTiers] = useState<PairingTier[]>([emptyTier(1)]);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const isPairing = form.discount_type === "pairing";
 
   function setField<K extends keyof CreatePromoPayload>(key: K, value: CreatePromoPayload[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  function setTier(index: number, patch: Partial<PairingTier>) {
+    setTiers((prev) => prev.map((t, i) => (i === index ? { ...t, ...patch } : t)));
+  }
+
+  function toggleChannel(channel: SalesChannel) {
+    const current = form.channels ?? [...ALL_CHANNELS];
+    const next = current.includes(channel)
+      ? current.filter((c) => c !== channel)
+      : [...current, channel];
+    setField("channels", next);
+  }
+
   function resetForm() {
     setForm(emptyForm());
+    setTiers([emptyTier(1)]);
     setFormError(null);
     setFormSuccess(false);
     setEditingId(null);
@@ -77,7 +123,7 @@ export default function PromosSettingsPage() {
 
   function startEdit(promo: PromoCode) {
     setForm({
-      code: promo.code,
+      code: promo.code ?? "",
       description: promo.description ?? "",
       discount_type: promo.discount_type,
       discount_value: promo.discount_value,
@@ -88,24 +134,51 @@ export default function PromosSettingsPage() {
       starts_at: promo.starts_at ? promo.starts_at.slice(0, 16) : undefined,
       expires_at: promo.expires_at ? promo.expires_at.slice(0, 16) : undefined,
       is_active: promo.is_active,
+      channels: promo.channels ?? [...ALL_CHANNELS],
+      anchor_product_id: promo.anchor_product_id ?? undefined,
+      pairing_basis: promo.pairing_basis ?? "units",
+      applies_to: promo.applies_to ?? "anchor",
     });
+    setTiers(
+      (promo.promo_pairing_tiers ?? []).length
+        ? [...promo.promo_pairing_tiers].sort((a, b) => a.min_paired_count - b.min_paired_count)
+        : [emptyTier(1)],
+    );
     setEditingId(promo.id);
     setShowForm(true);
     setFormError(null);
   }
 
   async function handleSubmit() {
-    if (!form.code.trim()) { setFormError("Code is required"); return; }
-    if (form.discount_type !== "free_shipping" && !form.discount_value) { setFormError("Discount value is required"); return; }
+    if (isPairing) {
+      if (!form.anchor_product_id) { setFormError("Pick the anchor product this rule is built around"); return; }
+      if (tiers.length === 0) { setFormError("Add at least one tier"); return; }
+      const thresholds = tiers.map((t) => t.min_paired_count);
+      if (new Set(thresholds).size !== thresholds.length) {
+        setFormError("Each tier needs a distinct paired-item count"); return;
+      }
+      if (tiers.some((t) => t.value_type === "percentage" && t.value > 100)) {
+        setFormError("A percentage tier cannot exceed 100%"); return;
+      }
+    } else {
+      if (!form.code?.trim()) { setFormError("Code is required"); return; }
+      if (form.discount_type !== "free_shipping" && !form.discount_value) { setFormError("Discount value is required"); return; }
+    }
+
+    if (!form.channels?.length) { setFormError("Pick at least one sales channel"); return; }
 
     const payload: CreatePromoPayload = {
       ...form,
-      code: form.code.trim().toUpperCase(),
+      code: isPairing ? undefined : form.code?.trim().toUpperCase(),
       applicable_product_ids:
         form.discount_type === "product" && form.applicable_product_ids?.length
           ? form.applicable_product_ids
           : undefined,
       max_discount_amount: form.discount_type === "percentage" ? form.max_discount_amount : undefined,
+      anchor_product_id: isPairing ? form.anchor_product_id : undefined,
+      pairing_basis: isPairing ? (form.pairing_basis ?? "units") : undefined,
+      applies_to: isPairing ? (form.applies_to ?? "anchor") : undefined,
+      tiers: isPairing ? tiers : undefined,
     };
 
     try {
@@ -122,31 +195,40 @@ export default function PromosSettingsPage() {
   }
 
   const inputCls = "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
+  const labelCls = "mb-1 block text-xs font-medium text-slate-600";
 
   return (
     <section className="space-y-6">
       <Link href="/settings" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900 transition-colors">
         <ArrowLeft className="h-4 w-4" /> Back to Settings
       </Link>
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Promo Codes</h1>
-        <p className="text-sm text-slate-500">
-          Create and manage discount codes for customers at checkout.
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold">Discounts &amp; Promo Codes</h1>
+          <p className="text-sm text-slate-500">
+            Codes and automatic bundle rules, applied across the online store, pop-up sales and walk-in sales.
+          </p>
+        </div>
+        <Link
+          href="/settings/promos/redemptions"
+          className="flex shrink-0 items-center gap-1.5 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+        >
+          <Receipt className="h-4 w-4" /> Usage log
+        </Link>
       </header>
 
       {/* Create / Edit Form */}
       <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold">
-            {editingId ? "Edit Promo Code" : "New Promo Code"}
+            {editingId ? "Edit discount" : "New discount"}
           </h2>
           {!showForm ? (
             <button
               onClick={() => setShowForm(true)}
               className="flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
             >
-              <Plus className="h-4 w-4" /> New Promo Code
+              <Plus className="h-4 w-4" /> New discount
             </button>
           ) : (
             <button onClick={resetForm} className="text-sm text-slate-500 hover:text-slate-700">
@@ -157,112 +239,269 @@ export default function PromosSettingsPage() {
 
         {showForm && (
           <div className="mt-5 space-y-4">
-            {/* Code */}
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className="mb-1 block text-xs font-medium text-slate-600">Code *</label>
-                <input
-                  type="text"
-                  value={form.code}
-                  onChange={(e) => setField("code", e.target.value.toUpperCase())}
-                  placeholder="e.g. SAVE20"
-                  className={inputCls}
-                />
-              </div>
-              <div className="flex items-end">
-                <button
-                  type="button"
-                  onClick={() => setField("code", generateCode())}
-                  className="flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
-                  title="Generate random code"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" /> Generate
-                </button>
-              </div>
+            {/* Discount Type first — it decides what the rest of the form asks for */}
+            <div>
+              <label className={labelCls}>Discount type *</label>
+              <select
+                value={form.discount_type}
+                onChange={(e) => setField("discount_type", e.target.value as DiscountType)}
+                className={inputCls}
+              >
+                {(Object.entries(DISCOUNT_TYPE_LABELS) as [DiscountType, string][]).map(([v, l]) => (
+                  <option key={v} value={v}>{l}</option>
+                ))}
+              </select>
+              {isPairing && (
+                <p className="mt-1.5 text-xs text-slate-500">
+                  A bundle rule applies on its own — no code to type. When the anchor product is in a
+                  basket, the discount level is set by how many other items are alongside it.
+                </p>
+              )}
             </div>
+
+            {/* Code — pairing rules auto-apply, so they have none */}
+            {!isPairing && (
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className={labelCls}>Code *</label>
+                  <input
+                    type="text"
+                    value={form.code ?? ""}
+                    onChange={(e) => setField("code", e.target.value.toUpperCase())}
+                    placeholder="e.g. SAVE20"
+                    className={inputCls}
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={() => setField("code", generateCode())}
+                    className="flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                    title="Generate random code"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" /> Generate
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Description */}
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Description</label>
+              <label className={labelCls}>
+                {isPairing ? "Name *" : "Description"}
+              </label>
               <input
                 type="text"
                 value={form.description ?? ""}
                 onChange={(e) => setField("description", e.target.value)}
-                placeholder="Internal note about this code"
+                placeholder={isPairing ? "e.g. Signature Tee bundle" : "Internal note about this code"}
                 className={inputCls}
               />
             </div>
 
-            {/* Discount Type */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Discount type *</label>
-                <select
-                  value={form.discount_type}
-                  onChange={(e) => setField("discount_type", e.target.value as DiscountType)}
-                  className={inputCls}
-                >
-                  {(Object.entries(DISCOUNT_TYPE_LABELS) as [DiscountType, string][]).map(([v, l]) => (
-                    <option key={v} value={v}>{l}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Discount Value (hidden for free_shipping) */}
-              {form.discount_type !== "free_shipping" && (
+            {/* Value — hidden for free_shipping and pairing (tiers carry the value) */}
+            {!isPairing && form.discount_type !== "free_shipping" && (
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                  <label className={labelCls}>
                     {form.discount_type === "percentage" ? "Discount %" : "Amount (GH₵)"} *
                   </label>
                   <input
                     type="number"
                     min={0}
-                    value={form.discount_value}
+                    value={form.discount_value ?? 0}
                     onChange={(e) => setField("discount_value", parseFloat(e.target.value) || 0)}
                     className={inputCls}
                   />
                 </div>
-              )}
-            </div>
-
-            {/* Percentage cap */}
-            {form.discount_type === "percentage" && (
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Max discount amount (GH₵)</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={form.max_discount_amount ?? ""}
-                  onChange={(e) => setField("max_discount_amount", e.target.value ? parseFloat(e.target.value) : undefined)}
-                  placeholder="No cap"
-                  className={inputCls}
-                />
+                {form.discount_type === "percentage" && (
+                  <div>
+                    <label className={labelCls}>Max discount amount (GH₵)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={form.max_discount_amount ?? ""}
+                      onChange={(e) => setField("max_discount_amount", e.target.value ? parseFloat(e.target.value) : undefined)}
+                      placeholder="No cap"
+                      className={inputCls}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Product IDs */}
+            {/* Product-type targeting */}
             {form.discount_type === "product" && (
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Applicable product IDs (comma-separated UUIDs)</label>
-                <input
-                  type="text"
-                  value={(form.applicable_product_ids ?? []).join(", ")}
-                  onChange={(e) =>
-                    setField(
-                      "applicable_product_ids",
-                      e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
-                    )
-                  }
-                  placeholder="uuid1, uuid2, ..."
-                  className={inputCls}
+                <label className={labelCls}>Applies to these products</label>
+                <ProductPicker
+                  multiple
+                  value={form.applicable_product_ids ?? []}
+                  onChange={(ids) => setField("applicable_product_ids", ids)}
                 />
               </div>
             )}
+
+            {/* ── Pairing rule configuration ────────────────────────────────── */}
+            {isPairing && (
+              <div className="space-y-4 rounded-md border border-slate-200 bg-slate-50/60 p-4">
+                <div>
+                  <label className={labelCls}>Anchor product *</label>
+                  <ProductPicker
+                    value={form.anchor_product_id ? [form.anchor_product_id] : []}
+                    onChange={(ids) => setField("anchor_product_id", ids[0])}
+                    placeholder="Which product triggers this bundle?"
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={labelCls}>Count paired items by</label>
+                    <select
+                      value={form.pairing_basis ?? "units"}
+                      onChange={(e) => setField("pairing_basis", e.target.value as "units" | "products")}
+                      className={inputCls}
+                    >
+                      <option value="units">Total quantity of other items</option>
+                      <option value="products">Number of different other products</option>
+                    </select>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {form.pairing_basis === "products"
+                        ? "Anchor + 2× hoodie counts as 1."
+                        : "Anchor + 2× hoodie counts as 2."}
+                    </p>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Discount applies to</label>
+                    <select
+                      value={form.applies_to ?? "anchor"}
+                      onChange={(e) => setField("applies_to", e.target.value as "anchor" | "cart")}
+                      className={inputCls}
+                    >
+                      <option value="anchor">The anchor product only</option>
+                      <option value="cart">The whole basket</option>
+                    </select>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {form.applies_to === "cart"
+                        ? "Everything in the basket is discounted."
+                        : "Other items stay at full price."}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tier editor */}
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className={`${labelCls} mb-0`}>Tiers *</label>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setTiers((prev) => [
+                          ...prev,
+                          emptyTier(Math.max(0, ...prev.map((t) => t.min_paired_count)) + 1),
+                        ])
+                      }
+                      className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Add tier
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {tiers.map((tier, i) => (
+                      <div key={i} className="flex flex-wrap items-end gap-2 rounded-md border border-slate-200 bg-white p-2.5">
+                        <div className="w-28">
+                          <label className="mb-1 block text-[11px] text-slate-500">Other items</label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={1}
+                              value={tier.min_paired_count}
+                              onChange={(e) => setTier(i, { min_paired_count: parseInt(e.target.value) || 1 })}
+                              className="w-16 rounded-md border border-slate-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                            />
+                            <span className="text-xs text-slate-400">or more</span>
+                          </div>
+                        </div>
+                        <div className="w-32">
+                          <label className="mb-1 block text-[11px] text-slate-500">Discount</label>
+                          <select
+                            value={tier.value_type}
+                            onChange={(e) => setTier(i, { value_type: e.target.value as "percentage" | "fixed" })}
+                            className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                          >
+                            <option value="percentage">Percentage</option>
+                            <option value="fixed">Fixed GH₵</option>
+                          </select>
+                        </div>
+                        <div className="w-24">
+                          <label className="mb-1 block text-[11px] text-slate-500">
+                            {tier.value_type === "percentage" ? "%" : "GH₵"}
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={tier.value}
+                            onChange={(e) => setTier(i, { value: parseFloat(e.target.value) || 0 })}
+                            className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                          />
+                        </div>
+                        <div className="w-28">
+                          <label className="mb-1 block text-[11px] text-slate-500">Cap (GH₵)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={tier.max_discount_amount ?? ""}
+                            onChange={(e) =>
+                              setTier(i, {
+                                max_discount_amount: e.target.value ? parseFloat(e.target.value) : null,
+                              })
+                            }
+                            placeholder="None"
+                            className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setTiers((prev) => prev.filter((_, idx) => idx !== i))}
+                          disabled={tiers.length === 1}
+                          className="ml-auto rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400"
+                          title="Remove tier"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    The highest tier the basket qualifies for is the one that applies.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Channels */}
+            <div>
+              <label className={labelCls}>Available on *</label>
+              <div className="flex flex-wrap gap-4">
+                {ALL_CHANNELS.map((c) => (
+                  <label key={c} className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={(form.channels ?? []).includes(c)}
+                      onChange={() => toggleChannel(c)}
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    <span className="text-sm text-slate-700">{CHANNEL_LABELS[c]}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
 
             {/* Min order / Max uses */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Minimum order amount (GH₵)</label>
+                <label className={labelCls}>Minimum order amount (GH₵)</label>
                 <input
                   type="number"
                   min={0}
@@ -273,7 +512,7 @@ export default function PromosSettingsPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Max total uses</label>
+                <label className={labelCls}>Max total uses</label>
                 <input
                   type="number"
                   min={1}
@@ -288,7 +527,7 @@ export default function PromosSettingsPage() {
             {/* Date range */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Starts at</label>
+                <label className={labelCls}>Starts at</label>
                 <input
                   type="datetime-local"
                   value={form.starts_at ?? ""}
@@ -297,7 +536,7 @@ export default function PromosSettingsPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Expires at</label>
+                <label className={labelCls}>Expires at</label>
                 <input
                   type="datetime-local"
                   value={form.expires_at ?? ""}
@@ -307,7 +546,6 @@ export default function PromosSettingsPage() {
               </div>
             </div>
 
-            {/* Active toggle */}
             <label className="flex cursor-pointer items-center gap-3">
               <input
                 type="checkbox"
@@ -326,30 +564,35 @@ export default function PromosSettingsPage() {
               disabled={createPromo.isPending || updatePromo.isPending}
               className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
             >
-              {createPromo.isPending || updatePromo.isPending ? "Saving…" : editingId ? "Update Code" : "Create Code"}
+              {createPromo.isPending || updatePromo.isPending
+                ? "Saving…"
+                : editingId
+                  ? "Update"
+                  : "Create"}
             </button>
           </div>
         )}
       </div>
 
-      {/* Promo Codes Table */}
+      {/* Table */}
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-5 py-4">
-          <h2 className="text-base font-semibold">All Promo Codes</h2>
+          <h2 className="text-base font-semibold">All discounts</h2>
         </div>
 
         {isLoading ? (
           <div className="p-6 text-sm text-slate-500">Loading…</div>
         ) : promos.length === 0 ? (
-          <div className="p-6 text-sm text-slate-500">No promo codes yet.</div>
+          <div className="p-6 text-sm text-slate-500">No discounts yet.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
-                  <th className="px-5 py-3 text-left">Code</th>
+                  <th className="px-5 py-3 text-left">Code / name</th>
                   <th className="px-5 py-3 text-left">Type</th>
                   <th className="px-5 py-3 text-left">Value</th>
+                  <th className="px-5 py-3 text-left">Channels</th>
                   <th className="px-5 py-3 text-left">Status</th>
                   <th className="px-5 py-3 text-left">Uses</th>
                   <th className="px-5 py-3 text-left">Expires</th>
@@ -359,9 +602,25 @@ export default function PromosSettingsPage() {
               <tbody className="divide-y divide-slate-100">
                 {promos.map((promo) => (
                   <tr key={promo.id} className="hover:bg-slate-50">
-                    <td className="px-5 py-3 font-mono font-semibold tracking-wide">{promo.code}</td>
+                    <td className="px-5 py-3">
+                      {promo.code ? (
+                        <span className="font-mono font-semibold tracking-wide">{promo.code}</span>
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          <span className="font-medium">{promo.description || "Untitled rule"}</span>
+                          <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-indigo-600">
+                            Auto
+                          </span>
+                        </span>
+                      )}
+                    </td>
                     <td className="px-5 py-3 text-slate-600">{DISCOUNT_TYPE_LABELS[promo.discount_type]}</td>
-                    <td className="px-5 py-3">{valueLabel(promo)}</td>
+                    <td className="px-5 py-3 text-slate-600">{valueLabel(promo)}</td>
+                    <td className="px-5 py-3 text-xs text-slate-500">
+                      {(promo.channels ?? ALL_CHANNELS).length === 3
+                        ? "All"
+                        : (promo.channels ?? []).map((c) => CHANNEL_LABELS[c].split(" ")[0]).join(", ")}
+                    </td>
                     <td className="px-5 py-3">{statusBadge(promo)}</td>
                     <td className="px-5 py-3 text-slate-600">
                       {promo.used_count}{promo.max_uses !== null ? ` / ${promo.max_uses}` : ""}
@@ -385,7 +644,7 @@ export default function PromosSettingsPage() {
                         </button>
                         <button
                           onClick={() => {
-                            if (confirm(`Delete promo code "${promo.code}"?`)) {
+                            if (confirm(`Delete "${promo.code || promo.description || "this rule"}"?`)) {
                               deletePromo.mutate(promo.id);
                             }
                           }}

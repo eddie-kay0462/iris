@@ -55,9 +55,11 @@ export interface PopupOrder {
   payment_method: PopupPaymentMethod | null;
   payment_reference: string | null;
   subtotal: number;
-  discount_type: 'none' | 'percentage' | 'fixed' | null;
+  /** code / pairing = engine-resolved; percentage / fixed = manual staff override. */
+  discount_type: 'none' | 'percentage' | 'fixed' | 'code' | 'pairing' | null;
   discount_amount: number;
   discount_reason: string | null;
+  applied_promo_code_id: string | null;
   hold_duration_minutes: number | null;
   hold_note: string | null;
   total: number;
@@ -109,8 +111,11 @@ export interface CreateOrderInput {
   customer_email?: string;
   payment_method?: PopupPaymentMethod;
   payment_reference?: string;
+  /** A promo code presented at the stall. Resolved server-side. */
+  promo_code?: string;
+  /** Free-form staff override. The server resolves the amount from this. */
   discount_type?: 'none' | 'percentage' | 'fixed';
-  discount_amount?: number;
+  discount_value?: number;
   discount_reason?: string;
   hold_duration_minutes?: number;
   hold_note?: string;
@@ -126,8 +131,11 @@ export interface UpdateOrderInput {
   customer_name?: string;
   customer_phone?: string;
   customer_email?: string;
+  /** A promo code presented at the stall. Resolved server-side. */
+  promo_code?: string;
+  /** Free-form staff override. The server resolves the amount from this. */
   discount_type?: 'none' | 'percentage' | 'fixed';
-  discount_amount?: number;
+  discount_value?: number;
   discount_reason?: string;
   hold_duration_minutes?: number;
   hold_note?: string;
