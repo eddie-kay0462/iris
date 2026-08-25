@@ -20,6 +20,14 @@ export const chart = {
   areaTop: "rgba(15, 23, 42, 0.08)",
   areaBottom: "rgba(15, 23, 42, 0)",
   donut: ["#0f172a", "#475569", "#64748b", "#94a3b8", "#cbd5e1", "#e2e8f0"],
+  /**
+   * Sales channels are the one split that has to be readable at a glance, and
+   * adjacent steps of the ink ramp are too close to tell apart in a donut. These
+   * stay dark and desaturated so they still read as premium rather than as a
+   * default category palette, but they separate by hue as well as by value.
+   * Order matches SALES_CHANNELS: online, pop-up, walk-in.
+   */
+  channels: ["#0f172a", "#0e7490", "#b45309"],
 } as const;
 
 export type MetricFormat = "currency" | "number" | "percent" | "text";

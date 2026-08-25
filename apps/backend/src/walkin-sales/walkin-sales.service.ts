@@ -17,6 +17,12 @@ import { CreateWalkinPreorderDto } from './dto/create-walkin-preorder.dto';
 import { RefundWalkinOrderDto } from './dto/refund-walkin-order.dto';
 import { ChargeWalkinOrderDto } from './dto/charge-walkin-order.dto';
 import { toE164, toPaystackMomoFormat } from '../common/utils/phone';
+import {
+  dayOf,
+  round2,
+  WALKIN_REVENUE_STATUSES,
+} from '../analytics/analytics.constants';
+import { fetchAll } from '../analytics/reports/report-context';
 
 const ORDER_SELECT =
   '*, profiles!served_by(id, first_name, last_name), walkin_order_items(*)';
@@ -93,27 +99,33 @@ export class WalkinSalesService {
 
   async getStats() {
     const db = this.supabase.getAdminClient();
-    const { data, error } = await db
-      .from('walkin_orders')
-      .select('status, total, created_at');
-    if (error) throw error;
+    // Paged — a bare select silently stops at PostgREST's 1000-row ceiling,
+    // which would quietly freeze these totals once walk-ins pass that mark.
+    const rows = await fetchAll<{ status: string; total: string | number; created_at: string }>(
+      (a, b) =>
+        db
+          .from('walkin_orders')
+          .select('status, total, created_at')
+          .range(a, b),
+    );
 
-    const rows = data || [];
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    // UTC day, matching `dayOf` used across analytics (Ghana is UTC+0), rather
+    // than the server's local midnight.
+    const today = dayOf(new Date().toISOString());
+    const isToday = (o: { created_at: string }) => dayOf(o.created_at) === today;
 
-    const completed = rows.filter((o) => o.status === 'completed');
+    const completed = rows.filter((o) =>
+      WALKIN_REVENUE_STATUSES.includes(o.status),
+    );
     const total_revenue = completed.reduce((sum, o) => sum + Number(o.total), 0);
-    const today_revenue = completed
-      .filter((o) => new Date(o.created_at) >= startOfDay)
-      .reduce((sum, o) => sum + Number(o.total), 0);
+    const todays = completed.filter(isToday);
+    const today_revenue = todays.reduce((sum, o) => sum + Number(o.total), 0);
 
     return {
-      total_revenue: Math.round(total_revenue * 100) / 100,
-      today_revenue: Math.round(today_revenue * 100) / 100,
+      total_revenue: round2(total_revenue),
+      today_revenue: round2(today_revenue),
       orders_completed: completed.length,
-      orders_today: completed.filter((o) => new Date(o.created_at) >= startOfDay)
-        .length,
+      orders_today: todays.length,
     };
   }
 

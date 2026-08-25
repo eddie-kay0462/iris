@@ -1,4 +1,12 @@
-import { bucketOf, bucketRange, Granularity, round2 } from '../analytics.constants';
+import {
+  bucketOf,
+  bucketRange,
+  Granularity,
+  ONLINE_REVENUE_STATUSES,
+  POPUP_REVENUE_STATUSES,
+  round2,
+  WALKIN_REVENUE_STATUSES,
+} from '../analytics.constants';
 import {
   aggregateSessions,
   ItemRow,
@@ -6,6 +14,7 @@ import {
   onlineCustomerKey,
   popupCustomerKey,
   referrerLabel,
+  walkinCustomerKey,
   ReportContext,
   Window,
 } from './report-context';
@@ -42,20 +51,37 @@ const emptyFin = (): FinancialBucket => ({
   orders: 0,
 });
 
+/**
+ * Shopify-style P&L buckets across all three revenue channels.
+ *
+ * Refunds are handled the way Shopify does: a refunded order still counts in
+ * gross sales (the sale happened) and the refunded amount is subtracted once as
+ * a return. Refunded orders fall outside the revenue whitelists, so they are
+ * re-loaded explicitly — without that, `netSales` subtracted the refund from a
+ * gross figure that never contained it, understating net sales twice over.
+ *
+ * Returns are bucketed against the *order's* date, not the refund's, so a
+ * bucket's gross and returns always describe the same set of orders.
+ */
 async function financials(ctx: ReportContext, w: Window) {
-  const [online, popup, refunded, popupRefunds] = await Promise.all([
-    ctx.onlineOrders(w),
-    ctx.popupOrders(w),
-    ctx.refundedOrders(w),
-    ctx.popupRefunds(w),
-  ]);
+  const [online, popup, walkin, refunded, popupRefunded, popupRefunds, walkinRefunded] =
+    await Promise.all([
+      ctx.onlineOrders(w),
+      ctx.popupOrders(w),
+      ctx.walkinOrders(w),
+      ctx.refundedOrders(w),
+      ctx.popupRefundedOrders(w),
+      ctx.popupRefunds(w),
+      ctx.walkinRefunds(w),
+    ]);
   const byBucket = new Map<string, FinancialBucket>();
   const at = (ts: string): FinancialBucket => {
     const k = bucketOf(ts, ctx.granularity);
     if (!byBucket.has(k)) byBucket.set(k, emptyFin());
     return byBucket.get(k)!;
   };
-  for (const o of online) {
+  // Online: refunded orders join the whitelisted ones in gross/shipping/tax.
+  for (const o of [...online, ...refunded]) {
     const b = at(o.created_at);
     b.grossSales += num(o.subtotal);
     b.discounts += num(o.discount);
@@ -63,14 +89,18 @@ async function financials(ctx: ReportContext, w: Window) {
     b.tax += num(o.tax);
     b.orders += 1;
   }
-  for (const o of popup) {
+  // Pop-up and walk-in carry no shipping or tax lines.
+  for (const o of [...popup, ...popupRefunded, ...walkin, ...walkinRefunded]) {
     const b = at(o.created_at);
     b.grossSales += num(o.subtotal);
     b.discounts += num(o.discount_amount);
     b.orders += 1;
   }
   for (const o of refunded) at(o.created_at).returns += num(o.total);
-  for (const r of popupRefunds) at(r.created_at).returns += num(r.amount);
+  // popup_refunds rows carry the real (possibly partial) refunded amount.
+  for (const r of popupRefunds) at(r.orderCreatedAt).returns += num(r.amount);
+  // Walk-in has no refunds table — the flipped order total is the refund.
+  for (const o of walkinRefunded) at(o.created_at).returns += num(o.total);
   for (const b of byBucket.values()) {
     b.netSales = b.grossSales - b.discounts - b.returns;
     b.totalSales = b.netSales + b.shipping + b.tax;
@@ -325,44 +355,55 @@ export const REPORTS: Record<string, ReportDefinition> = {
     id: 'sales-by-channel',
     name: 'Sales by channel',
     category: 'Sales',
-    description: 'Storefront vs pop-up sales per period.',
+    description: 'Storefront, pop-up and walk-in sales per period.',
     async build(ctx) {
+      const zero = () => ({ online: 0, popup: 0, walkin: 0, total: 0 });
       const load = async (w: Window) => {
-        const [online, popup] = await Promise.all([ctx.onlineOrders(w), ctx.popupOrders(w)]);
-        const map = new Map<string, { online: number; popup: number; total: number }>();
+        const [online, popup, walkin] = await Promise.all([
+          ctx.onlineOrders(w),
+          ctx.popupOrders(w),
+          ctx.walkinOrders(w),
+        ]);
+        const map = new Map<string, ReturnType<typeof zero>>();
         const at = (ts: string) => {
           const k = bucketOf(ts, ctx.granularity);
-          if (!map.has(k)) map.set(k, { online: 0, popup: 0, total: 0 });
+          if (!map.has(k)) map.set(k, zero());
           return map.get(k)!;
         };
-        for (const o of online) {
-          const b = at(o.created_at);
-          b.online += num(o.total);
-          b.total += num(o.total);
-        }
-        for (const o of popup) {
-          const b = at(o.created_at);
-          b.popup += num(o.total);
-          b.total += num(o.total);
-        }
+        const add = (rows: { created_at: string; total: string | number | null }[], key: 'online' | 'popup' | 'walkin') => {
+          for (const o of rows) {
+            const b = at(o.created_at);
+            b[key] += num(o.total);
+            b.total += num(o.total);
+          }
+        };
+        add(online, 'online');
+        add(popup, 'popup');
+        add(walkin, 'walkin');
         return map;
       };
       const [cur, prev] = await Promise.all([load('current'), load('previous')]);
-      const totalOf = (m: Map<string, { online: number; popup: number; total: number }>) => {
-        const t = { online: 0, popup: 0, total: 0 };
+      const totalOf = (m: Map<string, ReturnType<typeof zero>>) => {
+        const t = zero();
         for (const b of m.values()) {
           t.online += b.online;
           t.popup += b.popup;
+          t.walkin += b.walkin;
           t.total += b.total;
         }
         return t;
       };
       const totals = totalOf(cur);
       const prevTotals = totalOf(prev);
-      const fill = (m: typeof cur) => (b: string) => m.get(b) ?? { online: 0, popup: 0, total: 0 };
+      const fill = (m: typeof cur) => (b: string) => m.get(b) ?? zero();
       return overTime(
         ctx,
-        [col('online', 'Online store', 'currency'), col('popup', 'Pop-up', 'currency'), col('total', 'Total', 'currency')],
+        [
+          col('online', 'Online store', 'currency'),
+          col('popup', 'Pop-up', 'currency'),
+          col('walkin', 'Walk-in', 'currency'),
+          col('total', 'Total', 'currency'),
+        ],
         makeSeries(ctx, 'current', fill(cur)),
         makeSeries(ctx, 'previous', fill(prev)),
         totals,
@@ -370,6 +411,7 @@ export const REPORTS: Record<string, ReportDefinition> = {
         [
           metric('online', 'Online store', totals.online, prevTotals.online, 'currency'),
           metric('popup', 'Pop-up', totals.popup, prevTotals.popup, 'currency'),
+          metric('walkin', 'Walk-in', totals.walkin, prevTotals.walkin, 'currency'),
         ],
       );
     },
@@ -382,14 +424,18 @@ export const REPORTS: Record<string, ReportDefinition> = {
     description: 'Average value of revenue-generating orders per period.',
     async build(ctx) {
       const load = async (w: Window) => {
-        const [online, popup] = await Promise.all([ctx.onlineOrders(w), ctx.popupOrders(w)]);
+        const [online, popup, walkin] = await Promise.all([
+          ctx.onlineOrders(w),
+          ctx.popupOrders(w),
+          ctx.walkinOrders(w),
+        ]);
         const map = new Map<string, { revenue: number; orders: number }>();
         const at = (ts: string) => {
           const k = bucketOf(ts, ctx.granularity);
           if (!map.has(k)) map.set(k, { revenue: 0, orders: 0 });
           return map.get(k)!;
         };
-        for (const o of [...online, ...popup]) {
+        for (const o of [...online, ...popup, ...walkin]) {
           const b = at(o.created_at);
           b.revenue += num(o.total);
           b.orders += 1;
@@ -521,42 +567,53 @@ export const REPORTS: Record<string, ReportDefinition> = {
     category: 'Orders',
     description: 'Revenue-generating orders per period, split by channel.',
     async build(ctx) {
+      const zero = () => ({ online: 0, popup: 0, walkin: 0, total: 0 });
       const load = async (w: Window) => {
-        const [online, popup] = await Promise.all([ctx.onlineOrders(w), ctx.popupOrders(w)]);
-        const map = new Map<string, { online: number; popup: number; total: number }>();
+        const [online, popup, walkin] = await Promise.all([
+          ctx.onlineOrders(w),
+          ctx.popupOrders(w),
+          ctx.walkinOrders(w),
+        ]);
+        const map = new Map<string, ReturnType<typeof zero>>();
         const at = (ts: string) => {
           const k = bucketOf(ts, ctx.granularity);
-          if (!map.has(k)) map.set(k, { online: 0, popup: 0, total: 0 });
+          if (!map.has(k)) map.set(k, zero());
           return map.get(k)!;
         };
-        for (const o of online) {
-          const b = at(o.created_at);
-          b.online += 1;
-          b.total += 1;
-        }
-        for (const o of popup) {
-          const b = at(o.created_at);
-          b.popup += 1;
-          b.total += 1;
-        }
+        const add = (rows: { created_at: string }[], key: 'online' | 'popup' | 'walkin') => {
+          for (const o of rows) {
+            const b = at(o.created_at);
+            b[key] += 1;
+            b.total += 1;
+          }
+        };
+        add(online, 'online');
+        add(popup, 'popup');
+        add(walkin, 'walkin');
         return map;
       };
       const [cur, prev] = await Promise.all([load('current'), load('previous')]);
-      const totalOf = (m: Map<string, { online: number; popup: number; total: number }>) => {
-        const t = { online: 0, popup: 0, total: 0 };
+      const totalOf = (m: Map<string, ReturnType<typeof zero>>) => {
+        const t = zero();
         for (const b of m.values()) {
           t.online += b.online;
           t.popup += b.popup;
+          t.walkin += b.walkin;
           t.total += b.total;
         }
         return t;
       };
       const totals = totalOf(cur);
       const prevTotals = totalOf(prev);
-      const fill = (m: typeof cur) => (b: string) => m.get(b) ?? { online: 0, popup: 0, total: 0 };
+      const fill = (m: typeof cur) => (b: string) => m.get(b) ?? zero();
       return overTime(
         ctx,
-        [col('total', 'Orders', 'number'), col('online', 'Online store', 'number'), col('popup', 'Pop-up', 'number')],
+        [
+          col('total', 'Orders', 'number'),
+          col('online', 'Online store', 'number'),
+          col('popup', 'Pop-up', 'number'),
+          col('walkin', 'Walk-in', 'number'),
+        ],
         makeSeries(ctx, 'current', fill(cur)),
         makeSeries(ctx, 'previous', fill(prev)),
         totals,
@@ -570,7 +627,8 @@ export const REPORTS: Record<string, ReportDefinition> = {
     id: 'fulfillment-over-time',
     name: 'Orders fulfilled over time',
     category: 'Orders',
-    description: 'Orders shipped and delivered per period, by fulfillment date.',
+    description:
+      'Orders shipped and delivered per period, by fulfillment date. Online store only — pop-up and walk-in orders are handed over at the point of sale.',
     async build(ctx) {
       const loadStamps = async (column: 'shipped_at' | 'delivered_at', from: string, to: string) => {
         const { data } = await ctx.db
@@ -667,7 +725,11 @@ export const REPORTS: Record<string, ReportDefinition> = {
     async build(ctx) {
       const firstOrders = await ctx.customerFirstOrder();
       const load = async (w: Window) => {
-        const [online, popup] = await Promise.all([ctx.onlineOrders(w), ctx.popupOrders(w)]);
+        const [online, popup, walkin] = await Promise.all([
+          ctx.onlineOrders(w),
+          ctx.popupOrders(w),
+          ctx.walkinOrders(w),
+        ]);
         const map = new Map<string, { newCustomers: Set<string>; returningCustomers: Set<string> }>();
         const at = (ts: string) => {
           const k = bucketOf(ts, ctx.granularity);
@@ -683,6 +745,7 @@ export const REPORTS: Record<string, ReportDefinition> = {
         };
         for (const o of online) classify(onlineCustomerKey(o), o.created_at);
         for (const o of popup) classify(popupCustomerKey(o), o.created_at);
+        for (const o of walkin) classify(walkinCustomerKey(o), o.created_at);
         return map;
       };
       const [cur, prev] = await Promise.all([load('current'), load('previous')]);
@@ -775,9 +838,10 @@ export const REPORTS: Record<string, ReportDefinition> = {
       // Re-load all order activity (cheap at current scale, cached by context for the window loads).
       const activity = new Map<string, Set<string>>(); // customer key -> set of YYYY-MM with orders
       const months = 12;
-      const [online, popup] = await Promise.all([
+      const [online, popup, walkin] = await Promise.all([
         fetchAllOrders(ctx, 'orders', 'user_id, email, created_at'),
         fetchAllOrders(ctx, 'popup_orders', 'customer_email, customer_phone, created_at'),
+        fetchAllOrders(ctx, 'walkin_orders', 'customer_email, customer_phone, created_at'),
       ]);
       const monthOf = (ts: string) => ts.slice(0, 7);
       const note = 'Cohorts cover Iris-era orders only — migrated Shopify history has no per-order dates.';
@@ -788,6 +852,7 @@ export const REPORTS: Record<string, ReportDefinition> = {
       };
       for (const o of online) record(onlineCustomerKey(o), o.created_at);
       for (const o of popup) record(popupCustomerKey(o), o.created_at);
+      for (const o of walkin) record(walkinCustomerKey(o), o.created_at);
 
       const cohorts = new Map<string, { customers: number; retention: number[] }>();
       const monthDiff = (a: string, b: string) => {
@@ -1078,9 +1143,13 @@ export const REPORTS: Record<string, ReportDefinition> = {
     id: 'payment-methods',
     name: 'Sales by payment method',
     category: 'Finances',
-    description: 'Orders and revenue by payment provider (online) and method (pop-up).',
+    description: 'Orders and revenue by payment provider (online) and method (pop-up and walk-in).',
     async build(ctx) {
-      const [online, popup] = await Promise.all([ctx.onlineOrders('current'), ctx.popupOrders('current')]);
+      const [online, popup, walkin] = await Promise.all([
+        ctx.onlineOrders('current'),
+        ctx.popupOrders('current'),
+        ctx.walkinOrders('current'),
+      ]);
       const map = new Map<string, { orders: number; revenue: number }>();
       const add = (method: string, total: number) => {
         if (!map.has(method)) map.set(method, { orders: 0, revenue: 0 });
@@ -1089,7 +1158,7 @@ export const REPORTS: Record<string, ReportDefinition> = {
         m.revenue += total;
       };
       for (const o of online) add(o.payment_provider ?? 'online', num(o.total));
-      for (const o of popup) add(o.payment_method ?? 'unknown', num(o.total));
+      for (const o of [...popup, ...walkin]) add(o.payment_method ?? 'unknown', num(o.total));
       const rows = Array.from(map.entries())
         .map(([method, v]) => ({ method, orders: v.orders, revenue: v.revenue }))
         .sort((a, b) => b.revenue - a.revenue);
@@ -1108,8 +1177,17 @@ export const REPORTS: Record<string, ReportDefinition> = {
 };
 
 // Cohort builder needs full history beyond the report window.
-async function fetchAllOrders(ctx: ReportContext, table: 'orders' | 'popup_orders', select: string) {
-  const statuses = table === 'orders' ? ['paid', 'processing', 'shipped', 'delivered'] : ['confirmed', 'completed'];
+async function fetchAllOrders(
+  ctx: ReportContext,
+  table: 'orders' | 'popup_orders' | 'walkin_orders',
+  select: string,
+) {
+  const statuses =
+    table === 'orders'
+      ? ONLINE_REVENUE_STATUSES
+      : table === 'popup_orders'
+        ? POPUP_REVENUE_STATUSES
+        : WALKIN_REVENUE_STATUSES;
   const all: any[] = [];
   const PAGE = 1000;
   for (let page = 0; page < 100; page++) {

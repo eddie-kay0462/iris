@@ -3,6 +3,7 @@ import {
   Granularity,
   ONLINE_REVENUE_STATUSES,
   POPUP_REVENUE_STATUSES,
+  WALKIN_REVENUE_STATUSES,
 } from '../analytics.constants';
 
 export type Window = 'current' | 'previous';
@@ -34,6 +35,21 @@ export interface PopupOrderRow {
   discount_amount: string | number | null;
   discount_type: string | null;
   payment_method: string | null;
+  created_at: string;
+}
+
+export interface WalkinOrderRow {
+  id: string;
+  customer_email: string | null;
+  customer_phone: string | null;
+  customer_name: string | null;
+  status: string;
+  subtotal: string | number | null;
+  total: string | number | null;
+  discount_amount: string | number | null;
+  discount_type: string | null;
+  payment_method: string | null;
+  brand: string | null;
   created_at: string;
 }
 
@@ -83,14 +99,23 @@ export interface SessionAgg {
 export const num = (v: string | number | null | undefined): number =>
   v == null ? 0 : typeof v === 'number' ? v : parseFloat(v) || 0;
 
-/** Supabase caps responses at 1000 rows; page through to get everything. */
+/**
+ * Supabase caps responses at 1000 rows; page through to get everything.
+ *
+ * Errors are thrown rather than swallowed. A silently-ignored PostgREST error
+ * is indistinguishable from "no rows", which is how a brand-revenue query with
+ * a wrong column name went unnoticed while quietly dropping a whole channel.
+ */
 export async function fetchAll<T>(
   build: (fromRow: number, toRow: number) => PromiseLike<{ data: T[] | null; error: any }>,
 ): Promise<T[]> {
   const PAGE = 1000;
   const all: T[] = [];
   for (let page = 0; page < 100; page++) {
-    const { data } = await build(page * PAGE, page * PAGE + PAGE - 1);
+    const { data, error } = await build(page * PAGE, page * PAGE + PAGE - 1);
+    if (error) {
+      throw new Error(`analytics query failed: ${error.message ?? String(error)}`);
+    }
     if (!data || data.length === 0) break;
     all.push(...data);
     if (data.length < PAGE) break;
@@ -119,8 +144,10 @@ export class ReportContext {
     this.from = range.from;
     this.to = range.to;
     const span = new Date(range.to).getTime() - new Date(range.from).getTime();
+    // The previous window ends 1ms before `from` so an order sitting exactly on
+    // the boundary is counted once, not in both windows.
     this.prevFrom = new Date(new Date(range.from).getTime() - span).toISOString();
-    this.prevTo = range.from;
+    this.prevTo = new Date(new Date(range.from).getTime() - 1).toISOString();
     this.granularity = granularity;
   }
 
@@ -192,14 +219,22 @@ export class ReportContext {
     );
   }
 
-  popupRefunds(w: Window): Promise<{ amount: string | number | null; created_at: string }[]> {
+  /**
+   * Popup orders that were refunded. `refundOrder()` both writes a popup_refunds
+   * row and flips the order status, so these rows fall out of the revenue
+   * whitelist — they have to be added back into gross sales or the refund is
+   * subtracted twice.
+   */
+  popupRefundedOrders(w: Window): Promise<PopupOrderRow[]> {
     const { from, to } = this.window(w);
-    return this.memo(`popupRefunds:${w}`, () =>
-      fetchAll((a, b) =>
+    return this.memo(`popupRefunded:${w}`, () =>
+      fetchAll<PopupOrderRow>((a, b) =>
         this.db
-          .from('popup_refunds')
-          .select('amount, created_at')
-          .neq('status', 'failed')
+          .from('popup_orders')
+          .select(
+            'id, customer_email, customer_phone, customer_name, status, subtotal, total, discount_amount, discount_type, payment_method, created_at',
+          )
+          .eq('status', 'refunded')
           .gte('created_at', from)
           .lte('created_at', to)
           .range(a, b),
@@ -207,11 +242,83 @@ export class ReportContext {
     );
   }
 
-  /** Order items (online + popup combined) for whitelisted orders. */
+  /**
+   * Refund rows for popup orders placed in the window. `orderCreatedAt` is the
+   * parent order's date so a bucket's returns line up with the gross sales they
+   * reverse, rather than landing wherever the refund happened to be issued.
+   */
+  popupRefunds(
+    w: Window,
+  ): Promise<{ amount: string | number | null; created_at: string; orderCreatedAt: string }[]> {
+    const { from, to } = this.window(w);
+    return this.memo(`popupRefunds:${w}`, async () => {
+      const rows = await fetchAll<any>((a, b) =>
+        this.db
+          .from('popup_refunds')
+          .select('amount, created_at, order:popup_orders!inner(created_at)')
+          .neq('status', 'failed')
+          .gte('popup_orders.created_at', from)
+          .lte('popup_orders.created_at', to)
+          .range(a, b),
+      );
+      return rows.map((r) => {
+        // PostgREST types a to-one embed as an array; it arrives as an object.
+        const order = Array.isArray(r.order) ? r.order[0] : r.order;
+        return {
+          amount: r.amount,
+          created_at: r.created_at,
+          orderCreatedAt: order?.created_at ?? r.created_at,
+        };
+      });
+    });
+  }
+
+  /** Whitelisted (revenue-generating) walk-in orders in the window. */
+  walkinOrders(w: Window): Promise<WalkinOrderRow[]> {
+    const { from, to } = this.window(w);
+    return this.memo(`walkin:${w}`, () =>
+      fetchAll<WalkinOrderRow>((a, b) =>
+        this.db
+          .from('walkin_orders')
+          .select(
+            'id, customer_email, customer_phone, customer_name, status, subtotal, total, discount_amount, discount_type, payment_method, brand, created_at',
+          )
+          .in('status', WALKIN_REVENUE_STATUSES)
+          .gte('created_at', from)
+          .lte('created_at', to)
+          .order('created_at', { ascending: true })
+          .range(a, b),
+      ),
+    );
+  }
+
+  /**
+   * Refunded walk-in orders in the window. There is no `walkin_refunds` table —
+   * a refund flips `walkin_orders.status` to 'refunded' (walkin-sales.service),
+   * so the refunded order total is the returned amount.
+   */
+  walkinRefunds(w: Window): Promise<WalkinOrderRow[]> {
+    const { from, to } = this.window(w);
+    return this.memo(`walkinRefunds:${w}`, () =>
+      fetchAll<WalkinOrderRow>((a, b) =>
+        this.db
+          .from('walkin_orders')
+          .select(
+            'id, customer_email, customer_phone, customer_name, status, subtotal, total, discount_amount, discount_type, payment_method, brand, created_at',
+          )
+          .eq('status', 'refunded')
+          .gte('created_at', from)
+          .lte('created_at', to)
+          .range(a, b),
+      ),
+    );
+  }
+
+  /** Order items (online + popup + walk-in combined) for whitelisted orders. */
   orderItems(w: Window): Promise<ItemRow[]> {
     const { from, to } = this.window(w);
     return this.memo(`items:${w}`, async () => {
-      const [online, popup] = await Promise.all([
+      const [online, popup, walkin] = await Promise.all([
         fetchAll<any>((a, b) =>
           this.db
             .from('order_items')
@@ -235,6 +342,17 @@ export class ReportContext {
             .in('popup_orders.status', POPUP_REVENUE_STATUSES)
             .range(a, b),
         ),
+        fetchAll<any>((a, b) =>
+          this.db
+            .from('walkin_order_items')
+            .select(
+              'walkin_order_id, product_id, product_name, sku, quantity, unit_price, total_price, product:products(vendor), order:walkin_orders!inner(status, created_at)',
+            )
+            .gte('walkin_orders.created_at', from)
+            .lte('walkin_orders.created_at', to)
+            .in('walkin_orders.status', WALKIN_REVENUE_STATUSES)
+            .range(a, b),
+        ),
       ]);
       const mapRow = (item: any, channel: string): ItemRow => ({
         product_id: item.product_id ?? null,
@@ -244,12 +362,13 @@ export class ReportContext {
         unit_price: item.unit_price,
         total_price: item.total_price,
         vendor: item.product?.vendor ?? null,
-        order_id: `${channel}_${item.order_id}`,
+        order_id: `${channel}_${item.order_id ?? item.walkin_order_id}`,
         created_at: item.order?.created_at ?? '',
       });
       return [
         ...online.map((i) => mapRow(i, 'online')),
         ...popup.map((i) => mapRow(i, 'popup')),
+        ...walkin.map((i) => mapRow(i, 'walkin')),
       ];
     });
   }
@@ -285,11 +404,11 @@ export class ReportContext {
 
   /**
    * Full-history first-order date per customer key (online user_id/email,
-   * popup email/phone). Powers new-vs-returning and cohort reports.
+   * popup/walk-in email/phone). Powers new-vs-returning and cohort reports.
    */
   customerFirstOrder(): Promise<Map<string, string>> {
     return this.memo('firstOrders', async () => {
-      const [online, popup] = await Promise.all([
+      const [online, popup, walkin] = await Promise.all([
         fetchAll<any>((a, b) =>
           this.db
             .from('orders')
@@ -307,6 +426,14 @@ export class ReportContext {
             .order('created_at', { ascending: true })
             .range(a, b),
         ),
+        fetchAll<any>((a, b) =>
+          this.db
+            .from('walkin_orders')
+            .select('customer_email, customer_phone, created_at')
+            .in('status', WALKIN_REVENUE_STATUSES)
+            .order('created_at', { ascending: true })
+            .range(a, b),
+        ),
       ]);
       const first = new Map<string, string>();
       const consider = (key: string | null, ts: string) => {
@@ -316,6 +443,7 @@ export class ReportContext {
       };
       for (const o of online) consider(onlineCustomerKey(o), o.created_at);
       for (const o of popup) consider(popupCustomerKey(o), o.created_at);
+      for (const o of walkin) consider(walkinCustomerKey(o), o.created_at);
       return first;
     });
   }
@@ -333,6 +461,12 @@ export function popupCustomerKey(o: { customer_email?: string | null; customer_p
   const phone = (o.customer_phone ?? '').trim();
   return phone ? `p:${phone}` : null;
 }
+
+/**
+ * Walk-in orders carry the same customer columns as popup orders, so they share
+ * the key space — one person buying at a pop-up and at HQ is one customer.
+ */
+export const walkinCustomerKey = popupCustomerKey;
 
 /** Collapse raw events into one aggregate per session. */
 export function aggregateSessions(events: EventRow[]): Map<string, SessionAgg> {
