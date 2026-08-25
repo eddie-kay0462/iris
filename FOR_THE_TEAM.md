@@ -5468,3 +5468,55 @@ Two things deliberately left alone:
 6. Refund that same walk-in order, then check the dashboard again — it should come back out of Total Sales, and appear once (not twice) on the Returns line of the Total sales breakdown card.
 7. Open a **customer who has bought in person at HQ** (Customers → pick one) — you should see a "Walk-in" row in their Iris Breakdown and a Walk-in Orders section further down.
 8. If you know a customer who started a checkout and never paid, check their total spent — it should no longer include that abandoned order.
+
+---
+
+## Bulk SMS Can Now Skip International Numbers (August 2026)
+
+LetsFish charges us more to text a foreign number than a Ghanaian one, and the last bulk send quietly ate into the wallet because there was no way to leave the foreign ones out. There is now a **"Ghana numbers only"** tickbox on the Bulk SMS composer in **Admin → Settings → Communications**, and it is **on by default** — you have to deliberately turn it off to send abroad.
+
+It sits alongside the existing two options rather than replacing them, so you can still combine it: "SMS opted-in only" *and* "Ghana numbers only" together, for example.
+
+Here is what is actually in the customer list right now, which is the whole reason this was worth doing:
+
+- **723** customers have a phone number saved
+- **663** of them are Ghanaian
+- **51** are foreign — 26 American, 11 British, 5 Canadian, 3 Kenyan, 2 Nigerian, and one each from Benin, Rwanda, Australia and Zimbabwe
+- **9** are unreadable — the number saved against them isn't a working phone number at all
+
+So a "send to everyone" blast was paying the premium rate 51 times, and throwing 9 messages at numbers that could never receive them.
+
+**A bigger problem turned up while building this.** Phone numbers are saved in the database in a real mess — some as `+233241234567`, some as `0241234567`, some with spaces in them, and a batch of them with a stray apostrophe on the front (`'0241234567`) from being imported out of a spreadsheet. The transactional texts — order confirmations and so on — have always tidied these up before sending. **Bulk SMS never did.** It was handing whatever string happened to be sitting in the database straight to LetsFish. So the messiest numbers were being attempted in a form the provider couldn't dial, which is a plausible chunk of the failures we've been seeing on big sends. Every bulk message now gets cleaned up into a proper international format first, whether or not you tick the Ghana box.
+
+On how it tells Ghanaian from foreign: it uses a proper phone-number library rather than a hand-written list of prefixes like 024 and 054. That matters more than it sounds — Telecel's newer 057 numbers are already in our customer list and a hand-written list would have wrongly binned them, and a British London number starting 020 would have been wrongly counted as Ghanaian, since Ghana has an 020 too.
+
+Two smaller things fixed along the way: the recipient counts shown on the page are now the real number of people who will get the text (they used to count numbers that were going to fail), and the message preview no longer has the sender name "1NRI" typed into it by hand — it reads the real one from the settings, so it can't go stale if we ever change it.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/backend/src/common/utils/phone.ts` | The shared phone-number tidier. Gained the ability to say which country a number belongs to, and a straight yes/no "is this Ghanaian?" — both built on the same library the rest of the site already uses. |
+| `apps/backend/src/communications/communications.service.ts` | The engine behind the Communications page. The three things that needed a recipient list (the counts, the preview table, the actual send) now all work off one shared list instead of three slightly different ones, every number gets cleaned up before sending, and unreadable ones are dropped. Also fixed a limit where only the first 1,000 customers would ever have been loaded — we're at 723, so this would have started biting soon. |
+| `apps/backend/src/communications/dto/bulk-sms.dto.ts`, `dto/recipient-preview.dto.ts` | Let the page tell the server whether the Ghana box is ticked. |
+| `apps/backend/src/letsfish/letsfish.service.ts` | Reports the sender name back to the page so it doesn't have to be hard-coded. |
+| `apps/admin/app/(dashboard)/settings/communications/page.tsx` | The Communications page itself — the new tickbox, honest recipient counts, a warning before sending abroad, and the review screen now shows you when a number had to be cleaned up. |
+
+> **Heads-up**
+>
+> No migration and no new settings — nothing to run. But **the recipient count will look smaller than before**, and that's the point: it dropped from 723 to 714 with the box off (the 9 unreadable ones are gone), and to 663 with it on. Nobody who could actually receive a text has been dropped.
+
+### Still to do
+
+- **A real bulk send hasn't been tested yet**, deliberately — testing it costs actual wallet balance. Worth doing one small send first (pick "SMS opted-in only", which is just 5 people) and checking the log afterwards before trusting it with a big blast.
+- **Only 5 customers have "SMS opted-in" ticked**, so that option is effectively dead and "All customers" is the one everyone actually uses. Might be worth a look separately.
+- **The 9 unreadable numbers haven't been cleaned up.** They all came in on the same 21 March import and are missing their country code. Seven of them can be worked out from the area code (they're American, Canadian and British numbers) and the fix is written and ready, but hasn't been applied. Two can't be fixed automatically: one customer's saved number isn't a valid number in any country, and another is a duplicate account for someone who's already in the system under a second profile. Note that fixing these **saves no money** — they're all foreign, so the Ghana filter already skips them either way. It's tidying up, not a cost saving.
+
+### How to test
+
+1. Go to **Admin → Settings → Communications** and scroll to **Bulk SMS**. There should be a **"Ghana numbers only"** tickbox under the two existing options, already ticked, with a line underneath telling you how many international and unreadable numbers are being left out.
+2. Type any message. The button at the bottom should read **"Review & Send to 663 recipients"**.
+3. Untick the box — it should jump to **714**. Tick it again, back to 663.
+4. Click **Review & Send**. The table that opens should be nothing but `+233…` numbers with the box ticked. Page through to the end to check it doesn't run out early.
+5. Go to the last step of the review (**"Looks good"**) with the box **unticked** — there should be a red warning telling you it includes 51 international numbers and what that costs. **Then click Cancel — don't send.**
+6. Somewhere in the review table you should see a number with smaller grey text under it reading "stored as …" — that's one that had to be cleaned up before it could be sent.
