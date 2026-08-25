@@ -12,6 +12,14 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
+import { DiscountEngineService } from '../promos/discount-engine.service';
+import { splitPageWindow } from './product-ordering';
+
+/**
+ * The anchor block is fetched in full on every catalog request, so it has to
+ * stay small. Well beyond any realistic number of concurrent bundle deals.
+ */
+const MAX_HOISTED_ANCHORS = 24;
 
 @Injectable()
 export class ProductsService {
@@ -20,6 +28,7 @@ export class ProductsService {
   constructor(
     private supabase: SupabaseService,
     private configService: ConfigService,
+    private discountEngine: DiscountEngineService,
   ) {
     this.supabaseUrl = this.configService.getOrThrow<string>('SUPABASE_URL');
   }
@@ -71,33 +80,109 @@ export class ProductsService {
     }
   }
 
+  /** The catalog's default order — the only one bundle anchors are hoisted in. */
+  private isDefaultSort(query: QueryProductsDto): boolean {
+    const sortBy = query.sort_by || 'created_at';
+    const ascending = query.sort_order === 'asc';
+    return sortBy === 'created_at' && !ascending;
+  }
+
   async findPublic(query: QueryProductsDto) {
-    const db = this.supabase.getAdminClient();
     const page = parseInt(query.page || '1', 10);
     const limit = parseInt(query.limit || '20', 10);
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
+    // Bundle anchors lead the default view so a deal isn't buried on page four.
+    // A customer who picks an explicit sort gets exactly that sort — hoisting a
+    // GH₵400 anchor to the top of "price: low to high" would read as a bug.
+    const anchorIds = this.isDefaultSort(query)
+      ? await this.bundleAnchorIds()
+      : [];
+
+    if (anchorIds.length === 0) {
+      const { data, count } = await this.queryPublicPage(query, from, to);
+      return this.paginate(data, count, page, limit);
+    }
+
+    // The list is conceptually [anchors..., everything else...], both in the
+    // requested order. Slice the page window across that seam so pagination and
+    // the total stay honest — an anchor must never appear on two pages.
+    const { data: anchors, count: anchorCount } = await this.queryPublicPage(
+      query,
+      0,
+      Math.max(anchorIds.length - 1, 0),
+      { onlyIds: anchorIds },
+    );
+
+    const anchorTotal = anchorCount ?? anchors.length;
+    const window = splitPageWindow(from, to, anchorTotal);
+    const anchorSlice = anchors.slice(window.anchors[0], window.anchors[1]);
+
+    let rest: any[] = [];
+    let restTotal = 0;
+
+    if (window.rest) {
+      const { data, count } = await this.queryPublicPage(
+        query,
+        window.rest.from,
+        window.rest.to,
+        { excludeIds: anchorIds },
+      );
+      rest = data;
+      restTotal = count ?? 0;
+    } else {
+      // Window ends inside the anchor block, but the total still has to count
+      // the tail or the grid would stop fetching after the anchors.
+      const { count } = await this.queryPublicPage(query, 0, 0, {
+        excludeIds: anchorIds,
+      });
+      restTotal = count ?? 0;
+    }
+
+    return this.paginate(
+      [...anchorSlice, ...rest],
+      anchorTotal + restTotal,
+      page,
+      limit,
+    );
+  }
+
+  /** Product ids that anchor an active, advertisable bundle rule. */
+  private async bundleAnchorIds(): Promise<string[]> {
+    try {
+      const offers = await this.discountEngine.listActiveBundles('online');
+      return [...new Set(offers.map((o) => o.anchorProductId))].slice(0, MAX_HOISTED_ANCHORS);
+    } catch {
+      // Merchandising is a nice-to-have; the catalog must still render.
+      return [];
+    }
+  }
+
+  private async queryPublicPage(
+    query: QueryProductsDto,
+    from: number,
+    to: number,
+    opts: { onlyIds?: string[]; excludeIds?: string[] } = {},
+  ) {
+    const db = this.supabase.getAdminClient();
+
     let q = db
       .from('products')
-      .select(
-        '*, product_variants(*), product_images(*)',
-        { count: 'exact' },
-      )
+      .select('*, product_variants(*), product_images(*)', { count: 'exact' })
       .eq('status', 'active')
       .is('deleted_at', null);
 
-    if (query.search) {
-      q = q.ilike('title', `%${query.search}%`);
-    }
-    if (query.gender) {
-      q = q.eq('gender', query.gender);
-    }
-    if (query.category) {
-      q = q.eq('category', query.category);
-    }
-    if (query.product_type) {
-      q = q.eq('product_type', query.product_type);
+    if (query.search) q = q.ilike('title', `%${query.search}%`);
+    if (query.gender) q = q.eq('gender', query.gender);
+    if (query.category) q = q.eq('category', query.category);
+    if (query.product_type) q = q.eq('product_type', query.product_type);
+
+    // Anchors are filtered like everything else, so one outside the current
+    // category or search simply doesn't appear.
+    if (opts.onlyIds) q = q.in('id', opts.onlyIds);
+    if (opts.excludeIds?.length) {
+      q = q.not('id', 'in', `(${opts.excludeIds.map((id) => `"${id}"`).join(',')})`);
     }
 
     const sortBy = query.sort_by || 'created_at';
@@ -106,9 +191,12 @@ export class ProductsService {
 
     const { data, count, error } = await q;
     if (error) throw error;
+    return { data: data || [], count };
+  }
 
+  private paginate(data: any[], count: number | null, page: number, limit: number) {
     return {
-      data: (data || []).map((p) => this.resolveProductImages(p)),
+      data: data.map((p) => this.resolveProductImages(p)),
       total: count || 0,
       page,
       limit,

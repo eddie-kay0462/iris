@@ -8,6 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import type { Product } from "@/lib/api/products";
 import { useCart } from "@/lib/cart";
+import { useBundleOfferFor } from "@/lib/api/promos";
 import { useLocale } from "@/lib/locale/locale-provider";
 import { prefetchImage } from "@/hooks/useImagePrefetch";
 import { isVariantInStock } from "@/lib/products/variants";
@@ -51,6 +52,8 @@ export function ProductCard({
   const images = product.product_images || [];
   const image = images[0];
   const { addItem } = useCart();
+  // Automatic bundle deal on this product, if it's the anchor of one.
+  const bundleOffer = useBundleOfferFor(product.id);
   const { formatPrice } = useLocale();
   const queryClient = useQueryClient();
 
@@ -288,6 +291,22 @@ export function ProductCard({
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-text-placeholder">
               No image
+            </div>
+          )}
+
+          {/* ── Bundle deal badge ──────────────────────
+              Only on the anchor product of an active pairing rule. Sits above
+              the stock badge so a sold-out pre-order can carry both. */}
+          {bundleOffer && (
+            <div
+              className={`absolute left-2.5 z-10 ${allOutOfStock || hasPreorder ? "bottom-9" : "bottom-2.5"}`}
+            >
+              <span
+                className="bg-white px-2 py-[3px] text-[9px] font-bold uppercase tracking-[0.16em] text-neutral-900 ring-1 ring-inset ring-neutral-900"
+                title={bundleOffer.label}
+              >
+                {bundleOffer.headline}
+              </span>
             </div>
           )}
 

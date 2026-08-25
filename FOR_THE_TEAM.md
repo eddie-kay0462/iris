@@ -5680,3 +5680,59 @@ So it matches two ways: orders placed once an event exists are tied straight to 
 11. Check the customer side: open that order on the **storefront tracking page** — it should now show as complete, not still waiting.
 12. Tap **Undo** on the collected order and confirm it goes back to awaiting.
 13. **The day-of reminder is the awkward one to test** — it only fires when the collection date is today and only after 7am. Easiest check is to set an order's collection date to today in the database and wait for the top of the hour.
+
+---
+
+## Bundle Deals Are Now Visible on the Shop (August 2026)
+
+The bundle deals built a few days ago worked, but they were invisible. A customer browsing the shop had no way of knowing that adding a second item to their basket would knock 20% off — they'd only find out at checkout, by which point they'd already decided what to buy. A discount nobody knows about doesn't sell anything.
+
+Two changes, both on the customer-facing shop.
+
+**A badge on the product.** Any product that anchors a live bundle deal now carries a small badge reading something like **"Up to 30% off"** — on its card in the shop grid, and again on the product page itself. On the product page it's more than a badge: underneath it, the deal is spelled out level by level ("Add 2 or more other items → 20% off this item"), with a line making clear it applies automatically and there's no code to type.
+
+The badge only quotes a number when it can do so honestly. If a deal mixes percentages and cedi amounts across its levels, those can't be ranked against each other without knowing what's in the basket, so it falls back to a plain **"Bundle deal"** rather than guessing and overstating the offer. Expired, switched-off, and used-up deals never show a badge at all.
+
+**Anchor products move to the front of the shop.** A bundle deal buried on page four of the catalogue may as well not exist, so products with a live deal now lead the grid.
+
+There's a deliberate limit on that: **it only applies to the default "Newest" ordering** — which is what everyone sees unless they change it. If a customer actively picks "Price: low to high", they get exactly that, anchors and all. Shoving a GH₵400 anchor to the top of a list someone explicitly asked to be sorted cheapest-first reads as a bug, not a promotion.
+
+Two smaller notes on how it behaves: an anchor product that doesn't match what you're currently browsing (wrong category, doesn't match your search) simply doesn't appear — it isn't forced into a list where it doesn't belong. And if the deal lookup ever fails, the shop just renders in its normal order with no badges. Merchandising shouldn't be able to take the shop down.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/backend/src/promos/discount-engine.rules.ts` | Two new pieces of logic: which deals are live enough to advertise, and what the badge should say. |
+| `apps/backend/src/promos/discount-engine.service.ts`, `promos.controller.ts` | A new lookup the shop can call to ask "which products have a deal on them right now". Read-only — it can't affect what anyone is charged. |
+| `apps/backend/src/products/products.service.ts`, `products.module.ts` | The shop grid now serves deal products first on the default ordering, and leaves every other ordering alone. |
+| `apps/backend/src/products/product-ordering.ts` | The page-splitting sums behind that, pulled out on their own so they can be tested properly. |
+| `apps/backend/src/products/product-ordering.spec.ts` | 7 tests walking five pages of the shop and checking every slot is filled exactly once — no product skipped, none shown twice. |
+| `apps/backend/src/promos/discount-engine.rules.spec.ts` | 11 more tests covering which deals earn a badge and what it reads. |
+| `apps/frontend/app/(shop)/components/ProductCard.tsx` | The badge on the shop grid. Sits above the Sold Out / Pre-order badge rather than replacing it, so a product can carry both. |
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | The product page version — badge plus the deal levels written out. |
+| `apps/frontend/lib/api/promos.ts` | Fetches the deals once and shares them across every product on the page. |
+
+> **Heads-up**
+>
+> **No migration, nothing to run, no new settings.** This reads the bundle deals already set up under Settings → Discounts.
+>
+> Worth knowing: **a deal needs a name to look right.** The name typed into the "Name" box when creating a bundle rule is what appears next to the badge on the product page. A rule left unnamed falls back to "Bundle deal", which works but reads as filler.
+
+### Still to do
+
+- **Not yet tested against the real database** — the discount migrations still haven't been run, so no badge has actually been seen on a real product page. This goes together with testing the bundle deals themselves.
+- **Still no cart nudge.** Flagged last time and still open: telling someone "add one more item to save 20%" while they're in their basket is the moment that actually converts. The badge gets them interested; the nudge would close it.
+- **Nothing is tracked yet.** There's no way to tell whether the badge is doing anything — whether products carrying one sell better. Worth a thought if bundle deals become a regular thing.
+
+### How to test
+
+1. Run the discount migrations first if you haven't (see the earlier discounts entry) — none of this shows without them.
+2. Go to **Settings → Discounts** and create a **bundle deal** on a product that's live in the shop. Give it a **name** — it shows to customers. Add a couple of levels, e.g. 1 or more → 10%, 3 or more → 30%.
+3. Open the **shop** on the storefront. That product should now be **in the first row**, with a badge reading **"Up to 30% off"**.
+4. Click into the product. The badge should be there again, with the levels written out underneath and a line saying it applies automatically.
+5. Change the shop's sort to **"Price: low to high"**. The product should drop back to its correct spot in the price order — but keep its badge.
+6. Filter the shop to a **category the product isn't in**. It shouldn't appear.
+7. Go back to Settings and **deactivate** the deal. Refresh the shop — badge gone, and the product back in its normal position.
+8. Try a deal that **mixes a percentage level with a cedi level**. The badge should read plain **"Bundle deal"** rather than quoting a number.
+9. Set a deal's **Max total uses to 1** and use it once. The badge should stop showing.

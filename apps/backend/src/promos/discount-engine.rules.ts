@@ -250,6 +250,51 @@ export function checkEligibility(
   return null;
 }
 
+/**
+ * Whether a rule can be *advertised* on a product page, as opposed to applied
+ * to a specific basket.
+ *
+ * Deliberately skips the cart-dependent gates that `checkEligibility` also
+ * covers — min_order_amount can't be judged before there's a cart, and a badge
+ * that vanished once the basket dipped below a threshold would be worse than
+ * no badge at all. Everything absolute (active, dates, usage cap, channel) is
+ * still checked, so an exhausted or expired rule is never advertised.
+ */
+export function isAdvertisable(
+  rule: PromoRule,
+  channel: SalesChannel,
+  now: Date = new Date(),
+): boolean {
+  if (!rule.is_active) return false;
+  if (!rule.anchor_product_id) return false;
+  if (!rule.tiers?.length) return false;
+  if (rule.starts_at && new Date(rule.starts_at) > now) return false;
+  if (rule.expires_at && new Date(rule.expires_at) < now) return false;
+  if (rule.max_uses !== null && rule.used_count >= rule.max_uses) return false;
+  if (rule.channels?.length && !rule.channels.includes(channel)) return false;
+  return true;
+}
+
+/**
+ * The badge headline for a rule — the best a customer could do.
+ *
+ * Percentage and fixed tiers can't be ranked against each other without a
+ * basket, so a rule mixing both falls back to the neutral "Bundle deal".
+ */
+export function bundleHeadline(tiers: PairingTier[]): string {
+  if (!tiers.length) return 'Bundle deal';
+
+  const types = new Set(tiers.map((t) => t.value_type));
+  if (types.size > 1) return 'Bundle deal';
+
+  const best = Math.max(...tiers.map((t) => t.value));
+  if (best <= 0) return 'Bundle deal';
+
+  return tiers[0].value_type === 'percentage'
+    ? `Up to ${Number(best.toFixed(2))}% off`
+    : `Up to GH₵${Number(best.toFixed(2))} off`;
+}
+
 export const ruleLabel = (rule: PromoRule): string =>
   rule.code || rule.description || `Pairing rule ${rule.id.slice(0, 8)}`;
 

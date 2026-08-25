@@ -2,6 +2,7 @@
 
 import { use, useState, useMemo, useCallback, useEffect, useRef, Suspense } from "react";
 import { useProduct, useProducts, type ProductVariant } from "@/lib/api/products";
+import { useBundleOfferFor } from "@/lib/api/promos";
 import { useCart } from "@/lib/cart";
 import { motion } from "framer-motion";
 import { prefetchImage } from "@/hooks/useImagePrefetch";
@@ -543,6 +544,8 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
   const priceVariant = active ?? activeVariant ?? variants[0] ?? null;
   const displayPrice = priceVariant?.price ?? product.base_price;
   const comparePrice = priceVariant?.compare_at_price ?? null;
+  // Automatic bundle deal on this product, if it's the anchor of one.
+  const bundleOffer = useBundleOfferFor(product?.id);
   const inStock = active ? isVariantInStock(active) : false;
   const lowStock = active && inStock && active.inventory_quantity <= 3;
   const canPreorder = active ? (!inStock && (active.preorder_enabled ?? false)) : false;
@@ -617,6 +620,45 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
               </>
             )}
           </div>
+
+          {/* Bundle deal */}
+          {bundleOffer && (
+            <div className="mt-3.5 border border-line-strong px-3.5 py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="bg-invert-bg px-2 py-[3px] text-[10px] font-bold uppercase tracking-[0.18em] text-invert-fg">
+                  {bundleOffer.headline}
+                </span>
+                <span className="text-[12px] tracking-[0.04em] text-text-secondary">
+                  {bundleOffer.label}
+                </span>
+              </div>
+              <ul className="mt-2.5 space-y-1">
+                {bundleOffer.tiers.map((tier) => (
+                  <li
+                    key={tier.minPairedCount}
+                    className="text-[12px] leading-relaxed text-text-secondary"
+                  >
+                    Add{" "}
+                    <strong className="font-medium text-text">
+                      {tier.minPairedCount} or more{" "}
+                      {bundleOffer.basis === "products" ? "other product" : "other item"}
+                      {tier.minPairedCount === 1 ? "" : "s"}
+                    </strong>{" "}
+                    &rarr;{" "}
+                    <strong className="font-medium text-text">
+                      {tier.valueType === "percentage"
+                        ? `${tier.value}% off`
+                        : `${formatPrice(tier.value)} off`}
+                    </strong>{" "}
+                    {bundleOffer.appliesTo === "cart" ? "your basket" : "this item"}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2.5 text-[11px] leading-relaxed text-text-placeholder">
+                Applied automatically at checkout - no code needed.
+              </p>
+            </div>
+          )}
 
           {/* Stock status */}
           <div className="flex items-center gap-2.5 py-3.5 border-t border-b border-line">
