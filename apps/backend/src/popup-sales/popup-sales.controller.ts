@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { PopupSalesService } from './popup-sales.service';
+import { PopupCollectionsService } from './popup-collections.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { CreatePopupOrderDto } from './dto/create-popup-order.dto';
@@ -24,7 +25,10 @@ import { PermissionsGuard } from '../common/guards/permissions.guard';
 @Controller('popup-sales')
 @UseGuards(PermissionsGuard)
 export class PopupSalesController {
-  constructor(private popupSalesService: PopupSalesService) {}
+  constructor(
+    private popupSalesService: PopupSalesService,
+    private collectionsService: PopupCollectionsService,
+  ) {}
 
   // ─── Events ────────────────────────────────────────────────────────────────
 
@@ -59,6 +63,29 @@ export class PopupSalesController {
   getEventAnalytics(@Param('id') id: string) {
     return this.popupSalesService.getEventAnalytics(id);
   }
+  // ─── Online pre-orders collected at this pop-up ─────────────────────────────
+  //
+  // These are `orders` rows, not `popup_orders` — paid for on the storefront
+  // days earlier and only handed over at the stand.
+
+  @Get('events/:id/collections')
+  @RequirePermission('popup:read')
+  listCollections(@Param('id') id: string) {
+    return this.collectionsService.listForEvent(id);
+  }
+
+  @Post('collections/:orderId/collect')
+  @RequirePermission('popup:update')
+  markCollected(@Param('orderId') orderId: string, @CurrentUser() user: any) {
+    return this.collectionsService.markCollected(orderId, user.sub);
+  }
+
+  @Post('collections/:orderId/undo')
+  @RequirePermission('popup:update')
+  undoCollected(@Param('orderId') orderId: string, @CurrentUser() user: any) {
+    return this.collectionsService.undoCollected(orderId, user.sub);
+  }
+
   // ─── Orders ─────────────────────────────────────────────────────────────────
 
   @Get('events/:id/orders')

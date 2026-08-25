@@ -399,3 +399,84 @@ export function usePopupAnalytics(eventId: string | null) {
   });
 }
 
+
+// ─── Pop-up collections ──────────────────────────────────────────────────────
+//
+// Storefront pre-orders whose customer chose "collect at the pop-up". These are
+// `orders` rows, not `popup_orders` — already paid for online, and only handed
+// over at the stand.
+
+export interface PickupCollectionItem {
+  product_name: string;
+  variant_title: string | null;
+  quantity: number;
+  is_preorder: boolean;
+}
+
+export interface PickupCollection {
+  id: string;
+  order_number: string;
+  status: string;
+  email: string;
+  customer_name: string | null;
+  customer_phone: string | null;
+  pickup_date: string | null;
+  pickup_date_label: string;
+  total: number;
+  collected_at: string | null;
+  collected_by: string | null;
+  collected_by_name: string | null;
+  pickup_reminder_sent_at: string | null;
+  created_at: string;
+  items: PickupCollectionItem[];
+}
+
+export interface PickupCollectionsResult {
+  event: {
+    id: string;
+    name: string;
+    event_date: string | null;
+    end_date: string | null;
+    location: string | null;
+  };
+  awaiting: PickupCollection[];
+  collected: PickupCollection[];
+}
+
+export function usePopupCollections(eventId: string | null) {
+  return useQuery({
+    queryKey: ["popup-collections", eventId],
+    queryFn: () =>
+      apiClient<PickupCollectionsResult>(
+        `/popup-sales/events/${eventId}/collections`,
+      ),
+    enabled: !!eventId,
+  });
+}
+
+export function useMarkCollected(eventId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orderId: string) =>
+      apiClient<PickupCollection>(
+        `/popup-sales/collections/${orderId}/collect`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["popup-collections", eventId] });
+    },
+  });
+}
+
+export function useUndoCollected(eventId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orderId: string) =>
+      apiClient<PickupCollection>(`/popup-sales/collections/${orderId}/undo`, {
+        method: "POST",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["popup-collections", eventId] });
+    },
+  });
+}

@@ -28,7 +28,9 @@ import {
   Lock,
   Unlock,
   Sparkles,
+  Package,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useCreatePopupPreorder, usePopupEventPreorders, type Preorder } from "@/lib/api/preorders";
 import {
   usePopupEvents,
@@ -49,6 +51,10 @@ import {
   type PopupOrderStatus,
   type PopupPaymentMethod,
   type CreateOrderItemInput,
+  usePopupCollections,
+  useMarkCollected,
+  useUndoCollected,
+  type PickupCollection,
 } from "@/lib/api/popup-sales";
 import { apiClient } from "@/lib/api/client";
 import { useShippingOptions } from "@/lib/api/settings";
@@ -121,14 +127,23 @@ const PAYMENT_LABELS: Record<PopupPaymentMethod, string> = {
   bank_transfer: "Bank Transfer",
 };
 
-type Tab = "active" | "on_hold" | "completed" | "awaiting_payment" | "refunded";
+type Tab =
+  | "active"
+  | "on_hold"
+  | "completed"
+  | "awaiting_payment"
+  | "refunded"
+  | "collections";
 
-const TABS: { id: Tab; label: string; status: PopupOrderStatus }[] = [
+const TABS: { id: Tab; label: string; status?: PopupOrderStatus }[] = [
   { id: "active", label: "Active", status: "active" },
   { id: "on_hold", label: "On Hold", status: "on_hold" },
   { id: "completed", label: "Completed", status: "completed" },
   { id: "awaiting_payment", label: "Confirmation Queue", status: "awaiting_payment" },
   { id: "refunded", label: "Refunded", status: "refunded" },
+  // Online pre-orders being handed over at this pop-up. Different table
+  // entirely (`orders`, not `popup_orders`), hence no status here.
+  { id: "collections", label: "Collections" },
 ];
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -3302,6 +3317,251 @@ function OrderTable({
   );
 }
 
+// ─── Collections ─────────────────────────────────────────────────────────────
+
+/**
+ * Storefront pre-orders being handed over at this pop-up.
+ *
+ * These were paid for online days ago — nothing is being sold here, only
+ * collected. Built for someone standing at a stand with a queue: the order
+ * number is the biggest thing on each row because that is what the customer
+ * reads off their phone, and search matches it as you type.
+ */
+function CollectionsPanel({ eventId }: { eventId: string }) {
+  const { data, isLoading } = usePopupCollections(eventId);
+  const markCollected = useMarkCollected(eventId);
+  const undoCollected = useUndoCollected(eventId);
+
+  const [search, setSearch] = useState("");
+  const [showCollected, setShowCollected] = useState(false);
+  const [confirming, setConfirming] = useState<PickupCollection | null>(null);
+
+  const awaiting = data?.awaiting ?? [];
+  const collected = data?.collected ?? [];
+
+  const matches = (c: PickupCollection) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      c.order_number.toLowerCase().includes(q) ||
+      (c.customer_name ?? "").toLowerCase().includes(q) ||
+      (c.customer_phone ?? "").toLowerCase().includes(q) ||
+      (c.email ?? "").toLowerCase().includes(q)
+    );
+  };
+
+  const visibleAwaiting = awaiting.filter(matches);
+  const visibleCollected = collected.filter(matches);
+
+  async function handleCollect(c: PickupCollection) {
+    try {
+      await markCollected.mutateAsync(c.id);
+      toast.success(`${c.order_number} collected — receipt sent.`);
+    } catch (e: any) {
+      toast.error(e.message || "Couldn't mark that as collected.");
+    } finally {
+      setConfirming(null);
+    }
+  }
+
+  async function handleUndo(c: PickupCollection) {
+    try {
+      await undoCollected.mutateAsync(c.id);
+      toast.success(`${c.order_number} moved back to awaiting collection.`);
+    } catch (e: any) {
+      toast.error(e.message || "Couldn't undo that.");
+    }
+  }
+
+  if (isLoading) {
+    return <div className="p-8 text-center text-sm text-slate-500">Loading collections…</div>;
+  }
+
+  if (awaiting.length === 0 && collected.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <Package className="mb-3 h-10 w-10 text-slate-300" />
+        <p className="text-sm text-slate-500">No online pre-orders due for collection at this pop-up.</p>
+        <p className="mt-1 max-w-md text-xs text-slate-400">
+          Customers who pick &ldquo;collect at the pop-up&rdquo; at checkout appear here automatically,
+          matched to this event by their collection date.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-5 py-3">
+        <div className="relative min-w-56 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Order number, name or phone…"
+            className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-sm focus:border-slate-400 focus:outline-none"
+          />
+        </div>
+        <span className="text-sm font-medium text-slate-600">
+          {visibleAwaiting.length} awaiting
+        </span>
+        {collected.length > 0 && (
+          <button
+            onClick={() => setShowCollected((v) => !v)}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+          >
+            {showCollected ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            {showCollected ? "Hide" : "Show"} collected ({collected.length})
+          </button>
+        )}
+      </div>
+
+      {visibleAwaiting.length === 0 && !showCollected ? (
+        <div className="py-12 text-center">
+          <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-green-400" />
+          <p className="text-sm text-slate-500">
+            {search ? "No awaiting collections match that search." : "Everything has been collected."}
+          </p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-slate-100">
+          {visibleAwaiting.map((c) => (
+            <CollectionRow
+              key={c.id}
+              collection={c}
+              onCollect={() => setConfirming(c)}
+              busy={markCollected.isPending}
+            />
+          ))}
+        </ul>
+      )}
+
+      {showCollected && visibleCollected.length > 0 && (
+        <>
+          <div className="border-y border-slate-100 bg-slate-50 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Collected
+          </div>
+          <ul className="divide-y divide-slate-100">
+            {visibleCollected.map((c) => (
+              <CollectionRow
+                key={c.id}
+                collection={c}
+                onUndo={() => handleUndo(c)}
+                busy={undoCollected.isPending}
+              />
+            ))}
+          </ul>
+        </>
+      )}
+
+      {confirming && (
+        <ConfirmDialog
+          title={`Hand over ${confirming.order_number}?`}
+          message={`This marks the order collected and sends ${confirming.customer_name || "the customer"} a confirmation email${confirming.customer_phone ? " and SMS" : ""}. Check the order number on their phone matches before confirming.`}
+          confirmLabel="Mark collected"
+          onConfirm={() => handleCollect(confirming)}
+          onCancel={() => setConfirming(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function CollectionRow({
+  collection: c,
+  onCollect,
+  onUndo,
+  busy,
+}: {
+  collection: PickupCollection;
+  onCollect?: () => void;
+  onUndo?: () => void;
+  busy?: boolean;
+}) {
+  const isCollected = !!c.collected_at;
+
+  return (
+    <li className={cn("flex flex-wrap items-start gap-4 px-5 py-4", isCollected && "bg-slate-50/60")}>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={cn(
+            "font-mono text-base font-semibold tracking-wide",
+            isCollected ? "text-slate-400" : "text-slate-900",
+          )}>
+            {c.order_number}
+          </span>
+          {isCollected ? (
+            <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+              Collected
+            </span>
+          ) : (
+            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+              Awaiting collection
+            </span>
+          )}
+          {!isCollected && c.pickup_reminder_sent_at && (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+              Reminded
+            </span>
+          )}
+        </div>
+
+        <p className="mt-1 text-sm font-medium text-slate-700">
+          {c.customer_name || "Name not given"}
+        </p>
+        <p className="text-xs text-slate-500">
+          {[c.customer_phone, c.email].filter(Boolean).join(" · ") || "No contact details"}
+        </p>
+
+        <ul className="mt-2 space-y-0.5">
+          {c.items.map((item, i) => (
+            <li key={i} className="text-xs text-slate-600">
+              {item.product_name}
+              {item.variant_title ? ` — ${item.variant_title}` : ""}
+              <span className="text-slate-400"> × {item.quantity}</span>
+              {item.is_preorder && (
+                <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                  pre-order
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+
+        <p className="mt-2 text-xs text-slate-400">
+          Booked for {c.pickup_date_label} · paid {formatCurrency(c.total)}
+          {isCollected && c.collected_at && (
+            <> · handed over {new Date(c.collected_at).toLocaleString()}
+              {c.collected_by_name ? ` by ${c.collected_by_name}` : ""}</>
+          )}
+        </p>
+      </div>
+
+      <div className="shrink-0">
+        {isCollected ? (
+          <button
+            onClick={onUndo}
+            disabled={busy}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-white disabled:opacity-50"
+          >
+            Undo
+          </button>
+        ) : (
+          <button
+            onClick={onCollect}
+            disabled={busy}
+            className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+          >
+            <CheckCircle className="h-4 w-4" />
+            Collected
+          </button>
+        )}
+      </div>
+    </li>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PopupSalesPage() {
@@ -3336,6 +3596,10 @@ export default function PopupSalesPage() {
   const updateEvent = useUpdatePopupEvent();
 
   const { data: stats } = usePopupStats(selectedEventId);
+  // Loaded for every tab, not just the Collections one, so the badge tells staff
+  // there are people waiting without them having to go looking.
+  const { data: collectionsData } = usePopupCollections(selectedEventId);
+  const collectionsAwaiting = collectionsData?.awaiting.length ?? 0;
   const { data: ordersData, isLoading: ordersLoading } = usePopupOrders(
     selectedEventId,
     { status: TABS.find((t) => t.id === activeTab)?.status }
@@ -3573,6 +3837,11 @@ export default function PopupSalesPage() {
                   }`}
               >
                 {tab.label}
+                {tab.id === "collections" && collectionsAwaiting > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 px-1 text-xs font-semibold text-white">
+                    {collectionsAwaiting}
+                  </span>
+                )}
                 {tab.id === "awaiting_payment" && awaitingCount > 0 && (
                   <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1 text-xs font-semibold text-white">
                     {awaitingCount}
@@ -3590,15 +3859,19 @@ export default function PopupSalesPage() {
             </div>
           )}
 
-          <OrderTable
-            orders={mergedOrders}
-            isLoading={ordersLoading}
-            onUpdate={handleUpdateOrder}
-            onChargeMomo={setMomoChargeOrder}
-            onViewDetails={setDetailOrder}
-            onEditOrder={setEditOrder}
-            onRefundOrder={setRefundOrder}
-          />
+          {activeTab === "collections" ? (
+            <CollectionsPanel eventId={selectedEventId!} />
+          ) : (
+            <OrderTable
+              orders={mergedOrders}
+              isLoading={ordersLoading}
+              onUpdate={handleUpdateOrder}
+              onChargeMomo={setMomoChargeOrder}
+              onViewDetails={setDetailOrder}
+              onEditOrder={setEditOrder}
+              onRefundOrder={setRefundOrder}
+            />
+          )}
         </div>
       </section>
 

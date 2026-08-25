@@ -330,6 +330,7 @@ export class OrdersService {
     // contain pre-order lines, only within Ghana, and only while staff have it on.
     // Re-checked here because the checkout page may have been open for a while.
     let pickupDate: string | null = null;
+    let pickupEventId: string | null = null;
     if (dto.shippingMethod === 'popup_pickup') {
       if (preorderItems.length === 0) {
         throw new BadRequestException(
@@ -355,6 +356,7 @@ export class OrdersService {
       )
         .toISOString()
         .slice(0, 10);
+      pickupEventId = await this.resolvePickupEventId(pickupDate);
     }
 
     // 1b. Validate pre-order eligibility BEFORE inserting anything, so an
@@ -431,6 +433,7 @@ export class OrdersService {
         shipping_address: dto.shippingAddress,
         shipping_method: dto.shippingMethod || 'standard',
         pickup_date: pickupDate,
+        popup_event_id: pickupEventId,
         payment_provider: 'paystack',
         payment_reference: dto.paymentReference,
         payment_status: 'pending',
@@ -853,6 +856,35 @@ export class OrdersService {
    * roll the order back rather than leaving an orphaned pending row behind —
    * the customer gets a clean "usage limit" error and can retry without it.
    */
+  /**
+   * The pop-up event a collection date falls inside, or null if none is
+   * scheduled yet.
+   *
+   * The pickup date comes from a weekday + lead-time setting rather than from
+   * the events table, so a customer can book a collection for a week whose
+   * event row has not been created. That is fine — the admin collections view
+   * falls back to matching on date, and the backfill in
+   * 20260827000000_popup_pickup_collections picks up the stragglers.
+   */
+  private async resolvePickupEventId(
+    pickupDate: string | null,
+  ): Promise<string | null> {
+    if (!pickupDate) return null;
+    const db = this.supabase.getAdminClient();
+    const { data } = await db
+      .from('popup_events')
+      .select('id, event_date, end_date')
+      .lte('event_date', pickupDate)
+      .neq('status', 'closed')
+      .order('event_date', { ascending: false })
+      .limit(5);
+
+    const match = (data ?? []).find(
+      (e: any) => (e.end_date ?? e.event_date) >= pickupDate,
+    );
+    return match?.id ?? null;
+  }
+
   private async reserveDiscount(
     resolution: DiscountResolution,
     order: { id: string; order_number: string },
