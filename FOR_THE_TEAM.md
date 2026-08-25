@@ -5408,3 +5408,63 @@ Also cleaned up along the way: there was a half-finished "pickup" option sitting
 6. Empty the bag and add a **normal in-stock item** instead — the option shouldn't appear at all.
 7. Place a test order with pickup selected, then check: the confirmation email names the date and place, the order in your account and on `/track` shows collection details rather than an address, and in Admin → Orders the order carries a "Collect at pop-up" badge.
 8. To sanity-check the cut-off, temporarily set prep days to something large like 7 and reload checkout — the offered date should jump a week forward rather than the option disappearing.
+
+---
+
+## Walk-in Sales Now Count Everywhere (August 2026)
+
+The dashboard has been quietly under-reporting how much we sell. Walk-in sales — the ones rung up in person at HQ — had their own page, but they never made it into any of the numbers on the main dashboard. Not the Total Sales figure, not the revenue chart, not Sales by Channel, not the reports, and not a customer's spending history.
+
+To put a number on it: **GH₵7,300 across 15 orders, about 23% of everything we've ever sold, was invisible.** The Road to HQ counter had been counting those items all along, which is why that number never seemed to line up with the revenue figures. It does now.
+
+Walk-in is now a proper sales channel alongside the online store and pop-ups. It appears in every KPI, every chart, all 22 reports, and on customer profiles. **Sales by Channel is now three slices instead of two**, both on the dashboard and on the Analytics → Compare tab, and the three colours are properly distinct from each other rather than three near-identical shades of grey.
+
+A few other things turned up while going through the numbers, and they're worth knowing about because they'd been wrong for a while:
+
+**Pop-up sales were missing from Sales by Brand.** One line of the code was looking for a column by the wrong name. The database was rejecting the request, the code wasn't checking for a rejection, and an empty answer looks exactly like "no pop-up sales." So the brand split had only ever shown online sales. The upshot: **Unlikely Alliances had been showing zero revenue on the dashboard**, because everything it has ever sold was sold at a pop-up. It now shows GH₵470. Brand revenue overall went from GH₵9,760 to GH₵32,634 — the missing GH₵22,874 was pop-up sales all along.
+
+**Customers looked like they'd spent more than they had.** Because we create an order the moment someone reaches checkout — before they've paid — a customer's "total spent" was including orders they abandoned without ever paying. Spending figures now only count orders that were actually paid for, matching how every other number on the site works. Some customers' totals will drop as a result; those totals were wrong before, not now.
+
+**Refunds were being subtracted twice.** A refunded order was dropped out of sales *and* then had the refund taken off again, so net sales came out lower than reality.
+
+**Anything over 1,000 rows was being silently cut off.** The database returns at most 1,000 rows per request unless you ask for more, and several places weren't asking. The all-time revenue chart on the dashboard was the worst case — it asks for every order ever placed, so it was guaranteed to start dropping data as we grow. All fixed. The customer count and the low-stock count were capped the same way.
+
+Also tidied: the "sales by day" grouping in a few older reports used the server's local clock instead of a fixed one, which could have put an order on the wrong day; and about 20 places had their own hand-typed copy of the list of "which order statuses count as a sale," which is how these things drift apart in the first place. They all read from one list now.
+
+Two things deliberately left alone:
+
+- **Ally/Markets sales are still not in company-wide revenue.** That was a judgement call, not an oversight — those sales carry commission and may want accounting for separately. The Road to HQ counter does still count them, so that number can legitimately be higher than the revenue channels add up to. There's a note in the code explaining why, so nobody "fixes" it by accident.
+- **Total Sales (the big KPI) and Total Sales (in the breakdown card below it) can still differ slightly when there are refunds.** They're measuring two genuinely different things — money charged vs. a Shopify-style profit-and-loss build-up. Both cards now explain which is which instead of leaving two unexplained numbers sitting next to each other.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/backend/src/analytics/reports/report-context.ts` | The shared place every report gets its data from. Now loads walk-in orders, walk-in items and walk-in refunds, so all 22 reports pick them up at once. Also now reports database errors instead of quietly treating them as "no results" — that silence is what hid the brand bug. |
+| `apps/backend/src/analytics/reports/report-registry.ts` | The 22 report definitions. Sales by Channel and Orders Over Time gained a walk-in column; the profit-and-loss maths behind several reports now covers all three channels and stops double-counting refunds. |
+| `apps/backend/src/analytics/analytics.service.ts` | The main analytics engine — walk-in added to the overview, revenue chart, top products, top customers and returning-customer rate. Date grouping switched to a fixed clock. |
+| `apps/backend/src/orders/orders.service.ts` | Powers the dashboard's top row of numbers and the Customers pages. Walk-in folded in, per-channel figures now sent explicitly rather than worked out by subtraction, the 1,000-row cut-off fixed, the brand-split column-name bug fixed, and customer spending switched to paid orders only. |
+| `apps/backend/src/analytics/analytics.constants.ts` | The single list of "what counts as a sale," with a note explaining why ally sales are counted for Road to HQ but not for revenue. |
+| `apps/backend/src/walkin-sales/walkin-sales.service.ts` | The four stat cards on the Walk-in Sales page — no longer capped at 1,000 orders, and "today" now uses the same clock as everything else. |
+| `apps/backend/src/popup-sales/popup-sales.service.ts` | Reads from the shared status list instead of its own copy. |
+| `apps/admin/app/(dashboard)/page.tsx` | The dashboard itself: three-slice Sales by Channel, walk-in in the headline numbers, and clearer wording on the cards that were quietly measuring different things. |
+| `apps/admin/app/(dashboard)/analytics/components/BothView.tsx` | The Analytics → Compare tab — three channels in both the donut and the line chart, plus a colour key on the chart, which it didn't have before. |
+| `apps/admin/app/(dashboard)/customers/[id]/page.tsx` | A customer's profile now lists their walk-in orders and counts walk-in spend, with a note that unpaid attempts aren't included. |
+| `apps/admin/lib/charts/theme.ts` | A dedicated three-colour set for sales channels — dark ink, deep teal, deep ochre — so the slices can actually be told apart. |
+| `apps/admin/app/components/charts/DonutChart.tsx`, `ComparisonLineChart.tsx` | Both charts can now be given a specific set of colours instead of always using the grey ramp. |
+| `apps/admin/lib/api/orders.ts` | The shared list of sales channels, used by every channel chart so they can't drift out of sync. |
+
+> **Heads-up**
+>
+> No migration and no new settings — this is all reading data we already had. But **the numbers on the dashboard will jump the first time you look**, and that's expected: Total Sales goes up (walk-in is now included), brand revenue goes up a lot (pop-ups are now included), and some customers' "total spent" goes down (unpaid attempts no longer counted). None of these are new sales or lost sales — they're the same history, counted correctly.
+
+### How to test
+
+1. Open the **dashboard** and look at **Sales by Channel** — three slices now: Online store, Pop-up, Walk-in, in three clearly different colours. The three should add up to the Total Sales figure at the top.
+2. Check **Sales by Brand** on the same page — Unlikely Alliances should show a real number now instead of zero.
+3. Go to **Analytics → Compare** — same three channels in the donut, and the line chart underneath should have a small colour key in its top-right corner.
+4. Go to **Analytics → Reports → Sales by channel** — there should be a Walk-in column in the table.
+5. Ring up a **new walk-in sale** on the Walk-in Sales page, then go back to the dashboard. Total Sales should go up by that amount and the Walk-in slice should grow.
+6. Refund that same walk-in order, then check the dashboard again — it should come back out of Total Sales, and appear once (not twice) on the Returns line of the Total sales breakdown card.
+7. Open a **customer who has bought in person at HQ** (Customers → pick one) — you should see a "Walk-in" row in their Iris Breakdown and a Walk-in Orders section further down.
+8. If you know a customer who started a checkout and never paid, check their total spent — it should no longer include that abandoned order.
