@@ -5854,6 +5854,10 @@ That's a dangerous lie to tell someone standing at a counter. The obvious next m
 | `apps/backend/src/walkin-sales/dto/create-walkin-order.dto.ts` | Lets the till send the ticket number. |
 | `apps/backend/src/payments/payments.service.ts` | Paystack confirmations now check walk-in sales too, and one channel failing no longer blocks the others. |
 | `apps/backend/src/payments/payments.module.ts` | Wiring for the above. |
+| `apps/backend/src/walkin-sales/walkin-reconciliation.cron.ts` | The every-5-minutes safety sweep described below. New file. |
+| `apps/backend/src/walkin-sales/walkin-sales.module.ts` | Switches the sweep on. |
+| `apps/backend/test/reconcile-walkin-payments.test.js` | 9 tests for the sweep, including the one that matters: never cancel a sale we couldn't get an answer about. New file. |
+| `apps/backend/test/reconcile-pending-orders.test.js` | Unrelated pre-existing breakage, fixed while we were here — see below. |
 | `apps/admin/lib/api/client.ts` | Tells the difference between "the server said no" and "we never heard back", gives up after 30 seconds instead of hanging forever, and stops the login bounce from interrupting a sale. |
 | `apps/admin/app/(dashboard)/walkin-sales/page.tsx` | Creates the ticket number, re-asks once automatically, and shows the honest message. |
 | `apps/admin/lib/api/walkin-sales.ts` | Carries the ticket number through. |
@@ -5870,6 +5874,19 @@ That's a dangerous lie to tell someone standing at a counter. The obvious next m
 4. Ring up a basket with the same product added on two separate lines, then check that product's stock — it should have gone down by the full amount, not half.
 5. Leave the admin dashboard open overnight so your login pass expires, then try a sale in the morning. You should get bounced to the login screen *without* a mystery error first.
 
-### Still open
+### The safety net behind all that
 
-If Paystack's confirmation message never reaches us at all — their end fails, or our server is down at that moment — a MoMo walk-in can still get stranded. Online orders have an automatic sweep that catches this every few minutes; walk-ins don't have one yet. Worth adding, not done.
+Adding walk-ins to Paystack's confirmation message closes the common case, but not every case: if that message never reaches us at all — Paystack's end hiccups, or our server happens to be restarting — the sale would still strand. Online orders already had an automatic sweep for exactly this. Walk-ins now have one too.
+
+Every five minutes it looks for MoMo walk-ins still sitting unpaid and asks Paystack directly what happened to each one:
+
+- **Paid** → the sale is completed properly: stock comes down, the customer gets their receipt.
+- **Not paid, and over 24 hours old** → the sale is cancelled so it stops cluttering the list, and any promo code used on it is handed back so it doesn't burn a use on a sale that never happened.
+- **Not paid, but recent** → left alone; the customer may still be typing their PIN. It'll ask again next time.
+- **Couldn't get an answer** → left alone. "We don't know" is never treated as "not paid" — that's the mistake that would cancel a sale someone had genuinely paid for.
+
+There are tests covering each of those, including a deliberate one for the last case.
+
+### One unrelated thing fixed on the way past
+
+The existing tests for the **online order** sweep had been silently failing since the bundle-discounts work went in — that change added an ingredient to how orders are put together, and the test setup was never updated to match, so all eight cases were erroring out rather than actually checking anything. Nothing was wrong with the orders code itself; the tests just weren't testing it any more. Fixed, and all eight pass again.

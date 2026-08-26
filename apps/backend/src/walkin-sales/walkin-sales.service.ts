@@ -28,6 +28,17 @@ import { fetchAll } from '../analytics/reports/report-context';
 /** Postgres unique_violation. */
 const UNIQUE_VIOLATION = '23505';
 
+// Reconciliation windows for MoMo walk-ins stuck in 'awaiting_payment'
+// (see reconcileAwaitingPayments).
+// GRACE: leave the order alone while the admin tab's own poll is still the
+// natural way it gets confirmed — only chase genuinely stuck ones.
+const WALKIN_RECONCILE_GRACE_MS = 5 * 60_000; // 5 minutes
+// After this, an order Paystack still reports as unpaid is treated as a charge
+// the customer never completed, and cancelled so it stops sitting on the list.
+const WALKIN_RECONCILE_CANCEL_AFTER_MS = 24 * 60 * 60_000; // 24 hours
+// Cap per tick so a backlog can't blow up a single run.
+const WALKIN_RECONCILE_BATCH_SIZE = 50;
+
 const ORDER_SELECT =
   '*, profiles!served_by(id, first_name, last_name), walkin_order_items(*)';
 
@@ -718,12 +729,8 @@ export class WalkinSalesService {
       return { status: 'completed', confirmed: true };
     }
 
-    const response = await fetch(
-      `https://api.paystack.co/charge/${order.payment_reference}`,
-      { headers: { Authorization: `Bearer ${this.paystackSecretKey}` } },
-    );
-    const result = (await response.json()) as any;
-    const paystackStatus: string = result.data?.status ?? 'unknown';
+    const paystackStatus =
+      (await this.fetchChargeStatus(order.payment_reference)) ?? 'unknown';
 
     if (paystackStatus === 'success') {
       await this.completeByReference(order.payment_reference);
@@ -731,6 +738,116 @@ export class WalkinSalesService {
     }
 
     return { status: paystackStatus, confirmed: false };
+  }
+
+  /**
+   * Paystack's view of a MoMo charge, or null if we couldn't get an answer.
+   * Null means "don't know", never "not paid" — callers must retry rather than
+   * act on it.
+   */
+  private async fetchChargeStatus(reference: string): Promise<string | null> {
+    try {
+      const response = await fetch(
+        `https://api.paystack.co/charge/${reference}`,
+        { headers: { Authorization: `Bearer ${this.paystackSecretKey}` } },
+      );
+      const result = (await response.json()) as any;
+      return result?.data?.status ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Safety net for a MoMo walk-in whose confirmation never arrived by either
+   * route: the admin tab was closed mid-payment (killing its poll) AND the
+   * Paystack webhook was never delivered. Without this the sale sits in
+   * 'awaiting_payment' forever — cash taken, stock never deducted, customer
+   * never sent their receipt. Runs on a schedule (see WalkinReconciliationCron).
+   *
+   * For each awaiting order past the grace window we ask Paystack for the truth:
+   *   - success                          → completeByReference() recovers the sale
+   *   - unpaid AND older than CANCEL age → cancel it, and free the promo seat
+   *   - unpaid but still young           → leave it, retry next tick
+   * Every order is handled independently so one failure can't stall the batch.
+   */
+  async reconcileAwaitingPayments(): Promise<{
+    recovered: number;
+    cancelled: number;
+  }> {
+    if (!this.paystackSecretKey) return { recovered: 0, cancelled: 0 };
+
+    const db = this.supabase.getAdminClient();
+    const now = Date.now();
+    const graceCutoff = new Date(
+      now - WALKIN_RECONCILE_GRACE_MS,
+    ).toISOString();
+
+    const { data: rows, error } = await db
+      .from('walkin_orders')
+      .select('id, order_number, payment_reference, created_at')
+      .eq('status', 'awaiting_payment')
+      .not('payment_reference', 'is', null)
+      .lt('created_at', graceCutoff)
+      .order('created_at', { ascending: true })
+      .limit(WALKIN_RECONCILE_BATCH_SIZE);
+
+    if (error) throw error;
+    if (!rows?.length) return { recovered: 0, cancelled: 0 };
+
+    let recovered = 0;
+    let cancelled = 0;
+
+    for (const order of rows) {
+      try {
+        const status = await this.fetchChargeStatus(order.payment_reference);
+        if (status === null) continue; // lookup failed — retry next tick
+
+        if (status === 'success') {
+          // Idempotent: gated on status still being 'awaiting_payment'.
+          if (await this.completeByReference(order.payment_reference)) {
+            recovered += 1;
+          }
+          continue;
+        }
+
+        const age = now - new Date(order.created_at).getTime();
+        if (age <= WALKIN_RECONCILE_CANCEL_AFTER_MS) continue;
+
+        const { data: updated } = await db
+          .from('walkin_orders')
+          .update({ status: 'cancelled' })
+          .eq('id', order.id)
+          .eq('status', 'awaiting_payment') // guard: never cancel a paid order
+          .select('id')
+          .maybeSingle();
+        if (!updated) continue;
+
+        // No inventory to restore — stock is only deducted on completion. The
+        // promo seat, though, was reserved when the order was created and has
+        // to go back.
+        await this.discountEngine
+          .revertForOrder(
+            'walkin_orders',
+            order.id,
+            `Order ${order.order_number} never paid`,
+          )
+          .catch((err) =>
+            console.error(
+              `Failed to revert promo redemption for walk-in ${order.order_number}:`,
+              err,
+            ),
+          );
+        cancelled += 1;
+      } catch (err: any) {
+        console.error(
+          `reconcileAwaitingPayments failed for ${order.order_number}:`,
+          err?.message ?? err,
+        );
+      }
+    }
+
+    return { recovered, cancelled };
   }
 
   // Flip an awaiting MoMo order to completed exactly once, then run completion
