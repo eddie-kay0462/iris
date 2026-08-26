@@ -73,8 +73,9 @@ function makeService(tableResults, capturedCalls) {
   const supabase = { getAdminClient: () => client };
   const config = { get: (k, d) => (k === 'PAYSTACK_SECRET_KEY' ? 'sk_test_x' : d) };
   const noop = {};
-  // Constructor arg order: supabase, email, sms, promos, settings, preorders, config
-  return new OrdersService(supabase, noop, noop, noop, noop, noop, config);
+  // Constructor arg order: supabase, email, sms, promos, discountEngine,
+  // settings, preorders, config
+  return new OrdersService(supabase, noop, noop, noop, noop, noop, noop, config);
 }
 
 function mockFetch(statusByRef) {

@@ -16,7 +16,7 @@ import {
   AlertCircle,
   Package,
 } from "lucide-react";
-import { apiClient } from "@/lib/api/client";
+import { apiClient, isNetworkError } from "@/lib/api/client";
 import PhoneInput from "@/app/components/PhoneInput";
 import { DataTable, type Column } from "@/app/components/DataTable";
 import { StatsCard } from "@/app/components/StatsCard";
@@ -423,6 +423,14 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
   // MoMo charge target (opens the Paystack charge modal once the order exists)
   const [chargeOrder, setChargeOrder] = useState<WalkinOrder | null>(null);
 
+  // Idempotency key for this cart. Set on the first submit and reused by every
+  // retry of the same cart, so a lost response can't turn into a second sale.
+  // Any edit to the cart clears it — an edited cart is a different sale.
+  const cartKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    cartKeyRef.current = null;
+  }, [items, customer, discountState, paymentMethod, paymentReference, notes]);
+
   // ── Product search ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!productSearch.trim()) { setResults([]); return; }
@@ -564,13 +572,21 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
         toast.success("Pre-order recorded. Customer notified.");
         onClose();
       } catch (e: any) {
+        if (isNetworkError(e)) {
+          toast.error(
+            "Couldn't confirm the pre-order — check the Pre-orders list before re-entering it.",
+            { duration: 10000 },
+          );
+          return;
+        }
         toast.error(e.message || "Failed to record pre-order.");
       }
       return;
     }
 
-    try {
-      const order = await createOrder.mutateAsync({
+    cartKeyRef.current ??= crypto.randomUUID();
+    const payload = {
+        idempotency_key: cartKeyRef.current,
         customer_name: customer ? [customer.first_name, customer.last_name].filter(Boolean).join(" ") || undefined : undefined,
         customer_phone: customer?.phone_number || undefined,
         customer_email: customer?.email || undefined,
@@ -593,7 +609,19 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
           quantity: i.quantity,
           unit_price: i.unit_price,
         })),
-      });
+    };
+
+    try {
+      let order: WalkinOrder;
+      try {
+        order = await createOrder.mutateAsync(payload);
+      } catch (e: unknown) {
+        // No response came back, so we can't tell a rejected sale from a
+        // recorded one. The idempotency key makes asking again safe: if the
+        // order was already written, this returns that same order.
+        if (!isNetworkError(e)) throw e;
+        order = await createOrder.mutateAsync(payload);
+      }
 
       // MoMo: the order is created unpaid — open the Paystack charge modal to
       // send the USSD prompt and confirm before it completes.
@@ -605,6 +633,15 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
       toast.success("Walk-in sale recorded.");
       onClose();
     } catch (e: any) {
+      if (isNetworkError(e)) {
+        // Never tell staff a sale failed when it may well have gone through —
+        // re-entering it would double the revenue and the stock deduction.
+        toast.error(
+          "Couldn't confirm the sale — check the Walk-ins list before re-entering it.",
+          { duration: 10000 },
+        );
+        return;
+      }
       toast.error(e.message || "Failed to record sale.");
     }
   }

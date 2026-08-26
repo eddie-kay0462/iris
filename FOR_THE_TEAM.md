@@ -5812,3 +5812,81 @@ The original image in `homepage_img/` is untouched — the tab icon is a separat
 2. Do the same on the **admin dashboard**.
 3. If you still see a blank icon, hard refresh (Cmd+Shift+R) or close and reopen the tab — see the heads-up above.
 4. Bookmark either page and check the icon shows in the bookmarks bar too.
+
+---
+
+## Walk-in Sales: The "Failed" Sale That Actually Went Through (August 2026)
+
+Staff reported that logging a walk-in sale would sometimes pop up an error, but if they refreshed the page the sale was sitting there, recorded perfectly. Nothing showed up in the server's error log either, which made it look like a ghost.
+
+It turned out the sale was **never actually failing**. We checked every walk-in order ever created in the live database — all 15 of them, numbered `WLK-2026-0001` straight through to `0015` with no gaps and no duplicates. Every one has its products attached, and every one has its stock deduction recorded about a second and a half after the sale. The server was doing the whole job correctly, every single time.
+
+What was breaking was the **reply coming back to the browser**. The till would finish the sale, send back a "done!", and that message would get lost on the way. The screen, having heard nothing, assumed the worst and said "Failed to record sale."
+
+That's a dangerous lie to tell someone standing at a counter. The obvious next move is to ring the sale up a second time — which would have double-counted the money and taken the stock down twice. Nobody has done that yet, but it was only a matter of time.
+
+### What's been done about it
+
+**The message no longer lies.** If the reply genuinely goes missing, the screen now says *"Couldn't confirm the sale — check the Walk-ins list before re-entering it."* The basket stays on screen so nothing typed in is lost.
+
+**Ringing up the same sale twice is now impossible.** Each basket gets its own hidden ticket number. If the till has to ask again, it hands over the same ticket, and the server recognises it and hands back the sale it already recorded rather than creating a second one. The till now quietly re-asks once on its own, so in most cases staff won't even see an error any more.
+
+**We found the most likely culprit.** Everyone's login pass expires after 24 hours. When it lapsed, the admin page would immediately bounce you to the login screen — even if it did so *in the middle of* a sale being sent, which killed the reply. It now waits for anything in progress to finish before bouncing you out.
+
+**The server keeps a proper diary now.** This is the reason the logs looked empty: the system was only writing down a specific *kind* of failure and quietly ignoring the rest. It now records every request that comes in and every problem that occurs, so the next time something odd happens we can just go and look instead of guessing.
+
+### Things we found while we were in there
+
+- **Two sales rung up at the same moment would have collided.** Order numbers were worked out by looking up the last one and adding one — with two tills going at once, both get the same number and one sale fails. It now retries instead of giving up. Related: the numbering also would have broken at sale number 10,000, which is a nice problem to have but is now fixed anyway.
+- **A half-saved sale could have been left behind.** If the products failed to save after the order itself had been created, we'd have been left with a sale on the books, counted as revenue, with nothing in it. It now cleans up after itself.
+- **The same product on two separate lines** of one basket would only have had its stock taken down once. Now the quantities are added together first.
+- **Mobile Money sales could get stranded.** When a customer pays by MoMo, the sale sits as "awaiting payment" until Paystack confirms. The *only* thing listening for that confirmation was the admin tab itself — so if staff closed the tab or hit "confirm later" while the customer was still typing their PIN, the sale would sit unpaid forever: money taken, stock never deducted, customer never emailed. Paystack's confirmation message was arriving at our server and being ignored, because walk-ins had never been added to the list of things it checks. They have been now. No sale has actually been lost to this — nobody has used MoMo at the counter yet — but it would have bitten the first time someone did.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `supabase/migrations/20260828000000_walkin_idempotency_key.sql` | Adds the hidden per-basket ticket number to the database. **New file — needs running, see below.** |
+| `apps/backend/src/common/filters/all-exceptions.filter.ts` | Writes down every problem that happens, with enough detail to act on. New file. |
+| `apps/backend/src/common/interceptors/logging.interceptor.ts` | Writes one line for every request: what was asked for, how it went, how long it took. New file. |
+| `apps/backend/src/app.module.ts` | Switches the two above on. |
+| `apps/backend/src/walkin-sales/walkin-sales.service.ts` | The ticket-number check, the order-number retry, the clean-up on half-saved sales, the stock fix, and clearer error messages. |
+| `apps/backend/src/walkin-sales/dto/create-walkin-order.dto.ts` | Lets the till send the ticket number. |
+| `apps/backend/src/payments/payments.service.ts` | Paystack confirmations now check walk-in sales too, and one channel failing no longer blocks the others. |
+| `apps/backend/src/payments/payments.module.ts` | Wiring for the above. |
+| `apps/backend/src/walkin-sales/walkin-reconciliation.cron.ts` | The every-5-minutes safety sweep described below. New file. |
+| `apps/backend/src/walkin-sales/walkin-sales.module.ts` | Switches the sweep on. |
+| `apps/backend/test/reconcile-walkin-payments.test.js` | 9 tests for the sweep, including the one that matters: never cancel a sale we couldn't get an answer about. New file. |
+| `apps/backend/test/reconcile-pending-orders.test.js` | Unrelated pre-existing breakage, fixed while we were here — see below. |
+| `apps/admin/lib/api/client.ts` | Tells the difference between "the server said no" and "we never heard back", gives up after 30 seconds instead of hanging forever, and stops the login bounce from interrupting a sale. |
+| `apps/admin/app/(dashboard)/walkin-sales/page.tsx` | Creates the ticket number, re-asks once automatically, and shows the honest message. |
+| `apps/admin/lib/api/walkin-sales.ts` | Carries the ticket number through. |
+
+> **Heads-up — action required**
+>
+> The database migration **must be run before this goes live**. The till now sends that hidden ticket number with every sale, and a database that doesn't have a place to put it will reject every walk-in outright. This is the one step that can't be skipped.
+
+### How to test
+
+1. Ring up a normal cash walk-in. It should record exactly as before — nothing about the everyday flow has changed.
+2. **The main one:** start a sale, and just as you hit *Record*, switch your browser to offline (in Chrome: right-click → Inspect → Network tab → change "No throttling" to "Offline"). Go back online. Instead of a failure, the sale should complete normally — the till asks again and gets back the sale it already made.
+3. Check the Walk-ins list afterwards: there should be **one** sale, not two.
+4. Ring up a basket with the same product added on two separate lines, then check that product's stock — it should have gone down by the full amount, not half.
+5. Leave the admin dashboard open overnight so your login pass expires, then try a sale in the morning. You should get bounced to the login screen *without* a mystery error first.
+
+### The safety net behind all that
+
+Adding walk-ins to Paystack's confirmation message closes the common case, but not every case: if that message never reaches us at all — Paystack's end hiccups, or our server happens to be restarting — the sale would still strand. Online orders already had an automatic sweep for exactly this. Walk-ins now have one too.
+
+Every five minutes it looks for MoMo walk-ins still sitting unpaid and asks Paystack directly what happened to each one:
+
+- **Paid** → the sale is completed properly: stock comes down, the customer gets their receipt.
+- **Not paid, and over 24 hours old** → the sale is cancelled so it stops cluttering the list, and any promo code used on it is handed back so it doesn't burn a use on a sale that never happened.
+- **Not paid, but recent** → left alone; the customer may still be typing their PIN. It'll ask again next time.
+- **Couldn't get an answer** → left alone. "We don't know" is never treated as "not paid" — that's the mistake that would cancel a sale someone had genuinely paid for.
+
+There are tests covering each of those, including a deliberate one for the last case.
+
+### One unrelated thing fixed on the way past
+
+The existing tests for the **online order** sweep had been silently failing since the bundle-discounts work went in — that change added an ingredient to how orders are put together, and the test setup was never updated to match, so all eight cases were erroring out rather than actually checking anything. Nothing was wrong with the orders code itself; the tests just weren't testing it any more. Fixed, and all eight pass again.

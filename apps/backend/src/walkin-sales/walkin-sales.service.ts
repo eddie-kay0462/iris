@@ -25,6 +25,20 @@ import {
 } from '../analytics/analytics.constants';
 import { fetchAll } from '../analytics/reports/report-context';
 
+/** Postgres unique_violation. */
+const UNIQUE_VIOLATION = '23505';
+
+// Reconciliation windows for MoMo walk-ins stuck in 'awaiting_payment'
+// (see reconcileAwaitingPayments).
+// GRACE: leave the order alone while the admin tab's own poll is still the
+// natural way it gets confirmed — only chase genuinely stuck ones.
+const WALKIN_RECONCILE_GRACE_MS = 5 * 60_000; // 5 minutes
+// After this, an order Paystack still reports as unpaid is treated as a charge
+// the customer never completed, and cancelled so it stops sitting on the list.
+const WALKIN_RECONCILE_CANCEL_AFTER_MS = 24 * 60 * 60_000; // 24 hours
+// Cap per tick so a backlog can't blow up a single run.
+const WALKIN_RECONCILE_BATCH_SIZE = 50;
+
 const ORDER_SELECT =
   '*, profiles!served_by(id, first_name, last_name), walkin_order_items(*)';
 
@@ -140,21 +154,12 @@ export class WalkinSalesService {
       throw new BadRequestException('A walk-in order needs at least one item');
     }
 
-    // Generate order number: WLK-YYYY-XXXX
-    const year = new Date().getFullYear();
-    const { data: lastOrder } = await db
-      .from('walkin_orders')
-      .select('order_number')
-      .like('order_number', `WLK-${year}-%`)
-      .order('order_number', { ascending: false })
-      .limit(1);
-
-    let sequence = 1;
-    if (lastOrder && lastOrder.length > 0) {
-      const lastSeq = parseInt(lastOrder[0].order_number.split('-')[2], 10);
-      sequence = lastSeq + 1;
+    // A lost response must never cost the shop a duplicate sale. If this cart
+    // was already rung up, hand back the order that exists.
+    if (dto.idempotency_key) {
+      const existing = await this.findByIdempotencyKey(dto.idempotency_key);
+      if (existing) return this.findOrder(existing);
     }
-    const order_number = `WLK-${year}-${String(sequence).padStart(4, '0')}`;
 
     // Totals — resolved server-side by the shared discount engine, the same one
     // the storefront uses. A typed promo code and any automatic bundle rules
@@ -198,31 +203,62 @@ export class WalkinSalesService {
     // Cash and bank transfer are collected on the spot → complete immediately.
     const isMomo = dto.payment_method === 'momo';
 
-    const { data: order, error: orderError } = await db
-      .from('walkin_orders')
-      .insert({
-        order_number,
-        customer_name: dto.customer_name || null,
-        customer_phone: customerPhone,
-        customer_email: dto.customer_email || null,
-        customer_profile_id: dto.customer_profile_id || null,
-        served_by: userId,
-        status: isMomo ? 'awaiting_payment' : 'completed',
-        payment_method: dto.payment_method || null,
-        payment_reference: dto.payment_reference || null,
-        subtotal: round2(subtotal),
-        discount_type: discount.channelDiscountType,
-        discount_amount: discountAmount,
-        discount_reason: discount.label,
-        applied_promo_code_id: discount.promoCodeId,
-        total,
-        notes: dto.notes || null,
-        brand,
-      })
-      .select()
-      .single();
+    const insertOrder = (order_number: string) =>
+      db
+        .from('walkin_orders')
+        .insert({
+          order_number,
+          idempotency_key: dto.idempotency_key || null,
+          customer_name: dto.customer_name || null,
+          customer_phone: customerPhone,
+          customer_email: dto.customer_email || null,
+          customer_profile_id: dto.customer_profile_id || null,
+          served_by: userId,
+          status: isMomo ? 'awaiting_payment' : 'completed',
+          payment_method: dto.payment_method || null,
+          payment_reference: dto.payment_reference || null,
+          subtotal: round2(subtotal),
+          discount_type: discount.channelDiscountType,
+          discount_amount: discountAmount,
+          discount_reason: discount.label,
+          applied_promo_code_id: discount.promoCodeId,
+          total,
+          notes: dto.notes || null,
+          brand,
+        })
+        .select()
+        .single();
 
-    if (orderError || !order) throw orderError;
+    // The order number is a read-then-increment against a UNIQUE column, so two
+    // sales rung up at the same moment collide. Re-read and retry rather than
+    // failing a sale the customer is standing there paying for.
+    let order: any = null;
+    let orderError: any = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const result = await insertOrder(await this.nextOrderNumber());
+      order = result.data;
+      orderError = result.error;
+      if (!orderError && order) break;
+
+      // Someone else's request won the race on this cart's key — their order is
+      // this order.
+      if (
+        orderError?.code === UNIQUE_VIOLATION &&
+        orderError?.message?.includes('idempotency_key') &&
+        dto.idempotency_key
+      ) {
+        const existing = await this.findByIdempotencyKey(dto.idempotency_key);
+        if (existing) return this.findOrder(existing);
+      }
+
+      if (orderError?.code !== UNIQUE_VIOLATION) break;
+    }
+
+    if (orderError || !order) {
+      throw new InternalServerErrorException(
+        `Could not create the walk-in order: ${orderError?.message ?? 'no row returned'}`,
+      );
+    }
 
     // Reserve the promo usage seat. Cash and bank transfer are collected on the
     // spot, so they confirm immediately; MoMo waits for the Paystack charge.
@@ -261,7 +297,18 @@ export class WalkinSalesService {
     const { error: itemsError } = await db
       .from('walkin_order_items')
       .insert(items);
-    if (itemsError) throw itemsError;
+    if (itemsError) {
+      // Without this the order row survives as 'completed' and revenue-counted
+      // with zero items, exactly as the promo-reserve path already guards
+      // against.
+      await db.from('walkin_orders').delete().eq('id', order.id);
+      await this.discountEngine
+        .revertForOrder('walkin_orders', order.id, 'Order items insert failed')
+        .catch(() => {});
+      throw new InternalServerErrorException(
+        `Could not save the walk-in order's items: ${itemsError.message}`,
+      );
+    }
 
     // Cash/bank complete now: deduct stock + send confirmations. MoMo waits for
     // the Paystack charge to confirm (see chargeOrder → verifyPayment).
@@ -270,6 +317,40 @@ export class WalkinSalesService {
     }
 
     return this.findOrder(order.id);
+  }
+
+  /** The id of the order already recorded for this cart key, if there is one. */
+  private async findByIdempotencyKey(key: string): Promise<string | null> {
+    const { data } = await this.supabase
+      .getAdminClient()
+      .from('walkin_orders')
+      .select('id')
+      .eq('idempotency_key', key)
+      .maybeSingle();
+    return data?.id ?? null;
+  }
+
+  /**
+   * Next number in the WLK-YYYY-XXXX series. Ordered by the numeric tail rather
+   * than the whole string, which would put WLK-2026-9999 above WLK-2026-10000.
+   * Callers must handle a unique collision — this is a read, not a reservation.
+   */
+  private async nextOrderNumber(): Promise<string> {
+    const year = new Date().getFullYear();
+    const { data: lastOrder } = await this.supabase
+      .getAdminClient()
+      .from('walkin_orders')
+      .select('order_number')
+      .like('order_number', `WLK-${year}-%`)
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    let sequence = 1;
+    for (const row of lastOrder ?? []) {
+      const seq = parseInt(row.order_number.split('-')[2], 10);
+      if (Number.isFinite(seq) && seq >= sequence) sequence = seq + 1;
+    }
+    return `WLK-${year}-${String(sequence).padStart(4, '0')}`;
   }
 
   /**
@@ -299,33 +380,46 @@ export class WalkinSalesService {
         ),
       );
 
-    // Deduct inventory + log movements.
+    // Deduct inventory + log movements. Quantities are summed per variant
+    // first: two lines for the same variant would otherwise read the same
+    // `before` and the second write would clobber the first. Distinct variants
+    // touch distinct rows, so they run together — this is on the response path.
+    const byVariant = new Map<string, number>();
     for (const item of items) {
       if (!item.variant_id) continue;
-      const { data: variant } = await db
-        .from('product_variants')
-        .select('inventory_quantity')
-        .eq('id', item.variant_id)
-        .single();
-      if (!variant) continue;
-
-      const before = variant.inventory_quantity ?? 0;
-      const after = Math.max(0, before - item.quantity);
-
-      await db
-        .from('product_variants')
-        .update({ inventory_quantity: after })
-        .eq('id', item.variant_id);
-
-      await db.from('inventory_movements').insert({
-        variant_id: item.variant_id,
-        quantity_change: -item.quantity,
-        quantity_before: before,
-        quantity_after: after,
-        movement_type: 'sale',
-        notes: `Walk-in order ${order.order_number}`,
-      });
+      byVariant.set(
+        item.variant_id,
+        (byVariant.get(item.variant_id) ?? 0) + item.quantity,
+      );
     }
+
+    await Promise.all(
+      [...byVariant].map(async ([variantId, quantity]) => {
+        const { data: variant } = await db
+          .from('product_variants')
+          .select('inventory_quantity')
+          .eq('id', variantId)
+          .single();
+        if (!variant) return;
+
+        const before = variant.inventory_quantity ?? 0;
+        const after = Math.max(0, before - quantity);
+
+        await db
+          .from('product_variants')
+          .update({ inventory_quantity: after })
+          .eq('id', variantId);
+
+        await db.from('inventory_movements').insert({
+          variant_id: variantId,
+          quantity_change: -quantity,
+          quantity_before: before,
+          quantity_after: after,
+          movement_type: 'sale',
+          notes: `Walk-in order ${order.order_number}`,
+        });
+      }),
+    );
 
     // Confirmations (fire-and-forget). Walk-ins get a dedicated in-store
     // summary email (no shipping/tracking), styled like the pop-up email.
@@ -635,12 +729,8 @@ export class WalkinSalesService {
       return { status: 'completed', confirmed: true };
     }
 
-    const response = await fetch(
-      `https://api.paystack.co/charge/${order.payment_reference}`,
-      { headers: { Authorization: `Bearer ${this.paystackSecretKey}` } },
-    );
-    const result = (await response.json()) as any;
-    const paystackStatus: string = result.data?.status ?? 'unknown';
+    const paystackStatus =
+      (await this.fetchChargeStatus(order.payment_reference)) ?? 'unknown';
 
     if (paystackStatus === 'success') {
       await this.completeByReference(order.payment_reference);
@@ -648,6 +738,116 @@ export class WalkinSalesService {
     }
 
     return { status: paystackStatus, confirmed: false };
+  }
+
+  /**
+   * Paystack's view of a MoMo charge, or null if we couldn't get an answer.
+   * Null means "don't know", never "not paid" — callers must retry rather than
+   * act on it.
+   */
+  private async fetchChargeStatus(reference: string): Promise<string | null> {
+    try {
+      const response = await fetch(
+        `https://api.paystack.co/charge/${reference}`,
+        { headers: { Authorization: `Bearer ${this.paystackSecretKey}` } },
+      );
+      const result = (await response.json()) as any;
+      return result?.data?.status ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Safety net for a MoMo walk-in whose confirmation never arrived by either
+   * route: the admin tab was closed mid-payment (killing its poll) AND the
+   * Paystack webhook was never delivered. Without this the sale sits in
+   * 'awaiting_payment' forever — cash taken, stock never deducted, customer
+   * never sent their receipt. Runs on a schedule (see WalkinReconciliationCron).
+   *
+   * For each awaiting order past the grace window we ask Paystack for the truth:
+   *   - success                          → completeByReference() recovers the sale
+   *   - unpaid AND older than CANCEL age → cancel it, and free the promo seat
+   *   - unpaid but still young           → leave it, retry next tick
+   * Every order is handled independently so one failure can't stall the batch.
+   */
+  async reconcileAwaitingPayments(): Promise<{
+    recovered: number;
+    cancelled: number;
+  }> {
+    if (!this.paystackSecretKey) return { recovered: 0, cancelled: 0 };
+
+    const db = this.supabase.getAdminClient();
+    const now = Date.now();
+    const graceCutoff = new Date(
+      now - WALKIN_RECONCILE_GRACE_MS,
+    ).toISOString();
+
+    const { data: rows, error } = await db
+      .from('walkin_orders')
+      .select('id, order_number, payment_reference, created_at')
+      .eq('status', 'awaiting_payment')
+      .not('payment_reference', 'is', null)
+      .lt('created_at', graceCutoff)
+      .order('created_at', { ascending: true })
+      .limit(WALKIN_RECONCILE_BATCH_SIZE);
+
+    if (error) throw error;
+    if (!rows?.length) return { recovered: 0, cancelled: 0 };
+
+    let recovered = 0;
+    let cancelled = 0;
+
+    for (const order of rows) {
+      try {
+        const status = await this.fetchChargeStatus(order.payment_reference);
+        if (status === null) continue; // lookup failed — retry next tick
+
+        if (status === 'success') {
+          // Idempotent: gated on status still being 'awaiting_payment'.
+          if (await this.completeByReference(order.payment_reference)) {
+            recovered += 1;
+          }
+          continue;
+        }
+
+        const age = now - new Date(order.created_at).getTime();
+        if (age <= WALKIN_RECONCILE_CANCEL_AFTER_MS) continue;
+
+        const { data: updated } = await db
+          .from('walkin_orders')
+          .update({ status: 'cancelled' })
+          .eq('id', order.id)
+          .eq('status', 'awaiting_payment') // guard: never cancel a paid order
+          .select('id')
+          .maybeSingle();
+        if (!updated) continue;
+
+        // No inventory to restore — stock is only deducted on completion. The
+        // promo seat, though, was reserved when the order was created and has
+        // to go back.
+        await this.discountEngine
+          .revertForOrder(
+            'walkin_orders',
+            order.id,
+            `Order ${order.order_number} never paid`,
+          )
+          .catch((err) =>
+            console.error(
+              `Failed to revert promo redemption for walk-in ${order.order_number}:`,
+              err,
+            ),
+          );
+        cancelled += 1;
+      } catch (err: any) {
+        console.error(
+          `reconcileAwaitingPayments failed for ${order.order_number}:`,
+          err?.message ?? err,
+        );
+      }
+    }
+
+    return { recovered, cancelled };
   }
 
   // Flip an awaiting MoMo order to completed exactly once, then run completion
