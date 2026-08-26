@@ -368,9 +368,18 @@ export class PreordersService {
         phone = profile?.phone_number ?? null;
       }
       if (phone) {
+        // A pop-up collection customer is not waiting on a call in N days —
+        // they have a date, a place, and an order number to present. Telling
+        // them the ETA text instead would be actively wrong.
         await this.letsfish.sendSms(
           phone,
-          SMS_TEMPLATES.preorderConfirmation(preorder.order_number, etaText),
+          pickup
+            ? SMS_TEMPLATES.pickupPreorderConfirmation(
+                preorder.order_number,
+                pickup.dateLabel,
+                pickup.location,
+              )
+            : SMS_TEMPLATES.preorderConfirmation(preorder.order_number, etaText),
         );
       }
     }

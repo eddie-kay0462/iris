@@ -235,6 +235,41 @@ export class EmailService {
     await this.send(order.email, subject, html, order.order_number);
   }
 
+  /**
+   * Sent on the morning of the pop-up to everyone still due to collect.
+   * The order number is the headline because it is what staff ask for.
+   */
+  async sendPickupReminder(order: {
+    email: string;
+    customer_name?: string | null;
+    order_number: string;
+    dateLabel: string;
+    location?: string | null;
+    note?: string | null;
+    items: { product_name: string; variant_title?: string | null; quantity: number }[];
+    brand?: string;
+  }): Promise<void> {
+    const subject = `Collect today - ${order.order_number}`;
+    const html = this.buildPickupReminderHtml(order);
+    await this.send(order.email, subject, html, order.order_number);
+  }
+
+  /** The receipt handed over at the stand, once the item is in their hands. */
+  async sendPickupCollectedConfirmation(order: {
+    email: string;
+    customer_name?: string | null;
+    order_number: string;
+    collectedAtLabel: string;
+    location?: string | null;
+    items: { product_name: string; variant_title?: string | null; quantity: number }[];
+    total?: number | null;
+    brand?: string;
+  }): Promise<void> {
+    const subject = `Collected - ${order.order_number}`;
+    const html = this.buildPickupCollectedHtml(order);
+    await this.send(order.email, subject, html, order.order_number);
+  }
+
   async sendAbandonedCheckoutReminder(checkout: {
     email: string;
     customer_name?: string | null;
@@ -422,7 +457,7 @@ export class EmailService {
           <div style="margin:28px 0 0;text-align:center;">
             <a href="${this.frontendUrl}/track?order=${order.order_number}" style="display:inline-block;background:#111;color:#fff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:6px;text-decoration:none;letter-spacing:0.01em;">Track your order</a>
           </div>
-          <p style="margin:16px 0 0;font-size:13px;color:#999;text-align:center;">${order.pickup ? 'Bring your order number with you on the day.' : "We'll send you another update when your order ships."}</p>
+          <p style="margin:16px 0 0;font-size:13px;color:#999;text-align:center;">${order.pickup ? `Present your order number ${order.order_number} at the pop-up stand to collect. We'll remind you on the day.` : "We'll send you another update when your order ships."}</p>
         </td></tr>
       </table>
     </td></tr>
@@ -1164,7 +1199,7 @@ export class EmailService {
               <td style="background:#f9fafb;border-radius:8px;padding:16px;">
                 <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#111;">What happens next?</p>
                 <p style="margin:0;font-size:13px;color:#666;line-height:1.6;">${order.pickup
-                  ? `Collect your order at our pop-up on <strong style="color:#111;">${order.pickup.dateLabel}</strong>${order.pickup.location ? ` — ${order.pickup.location}` : ''}. Bring your order number with you.${order.pickup.note ? ` ${order.pickup.note}` : ''}`
+                  ? `Collect your order at our pop-up on <strong style="color:#111;">${order.pickup.dateLabel}</strong>${order.pickup.location ? ` — ${order.pickup.location}` : ''}. <strong style="color:#111;">Present your order number ${order.order_number} at the stand to collect your item.</strong>${order.pickup.note ? ` ${order.pickup.note}` : ''} We'll send you a reminder on the day.`
                   : `We expect to reach out within ${order.etaText} once your item is ready for collection or dispatch. Keep an eye on your phone - we'll send you a message when your order is confirmed.`}</p>
               </td>
             </tr>
@@ -1282,4 +1317,133 @@ export class EmailService {
 </body>
 </html>`;
   }
+
+  /** Shared chrome for the two collection emails. */
+  private pickupShell(opts: {
+    brandName: string;
+    title: string;
+    intro: string;
+    orderNumber: string;
+    calloutLabel: string;
+    calloutBody: string;
+    itemsHtml: string;
+    footer: string;
+  }): string {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${opts.title} - ${opts.orderNumber}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f4f4f5;padding:32px 0;">
+    <tr><td align="center" style="padding:0 16px;">
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:560px;background:#fff;border-radius:10px;overflow:hidden;border:1px solid #e4e4e7;">
+
+        <tr><td style="background:${this.brandBgColor(opts.brandName)};padding:24px 32px;">
+          ${this.brandHeader(opts.brandName)}
+        </td></tr>
+
+        <tr><td style="padding:32px 32px 0;">
+          <h1 style="margin:0 0 6px;font-size:22px;font-weight:700;color:#111;">${opts.title}</h1>
+          <p style="margin:0 0 24px;font-size:14px;color:#666;line-height:1.6;">${opts.intro}</p>
+
+          <!-- Order number, set large: this is what staff ask for at the stand -->
+          <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:0 0 24px;">
+            <tr>
+              <td align="center" style="background:#111;border-radius:8px;padding:20px 16px;">
+                <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#a1a1aa;">${opts.calloutLabel}</p>
+                <p style="margin:8px 0 0;font-size:26px;font-weight:700;letter-spacing:0.04em;color:#fff;font-family:'SF Mono',Menlo,Consolas,monospace;">${opts.orderNumber}</p>
+                <p style="margin:10px 0 0;font-size:13px;line-height:1.5;color:#d4d4d8;">${opts.calloutBody}</p>
+              </td>
+            </tr>
+          </table>
+
+          <p style="margin:0 0 8px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#999;">Your Items</p>
+          <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+            ${opts.itemsHtml}
+          </table>
+        </td></tr>
+
+        <tr><td style="padding:24px 32px 32px;">
+          <p style="margin:0;font-size:13px;color:#999;line-height:1.6;">${opts.footer}</p>
+        </td></tr>
+
+      </table>
+      <p style="margin:16px 0 0;font-size:11px;color:#a1a1aa;text-align:center;">&copy; ${new Date().getFullYear()} ${opts.brandName}. All rights reserved.</p>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+  }
+
+  private pickupItemRows(
+    items: { product_name: string; variant_title?: string | null; quantity: number }[],
+  ): string {
+    return items
+      .map(
+        (item) => `
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;">
+          ${item.product_name}${item.variant_title ? ` - ${item.variant_title}` : ''}
+          <span style="color:#999;"> × ${item.quantity}</span>
+        </td>
+      </tr>`,
+      )
+      .join('');
+  }
+
+  private buildPickupReminderHtml(order: {
+    customer_name?: string | null;
+    order_number: string;
+    dateLabel: string;
+    location?: string | null;
+    note?: string | null;
+    items: { product_name: string; variant_title?: string | null; quantity: number }[];
+    brand?: string;
+  }): string {
+    const brandName = order.brand || '1NRI';
+    const greeting = order.customer_name
+      ? `Hi ${order.customer_name.split(' ')[0]},`
+      : 'Hi there,';
+
+    return this.pickupShell({
+      brandName,
+      title: 'Your collection is today',
+      orderNumber: order.order_number,
+      intro: `${greeting} your pre-order is packed and waiting for you at our pop-up today, <strong style="color:#111;">${order.dateLabel}</strong>${order.location ? ` — ${order.location}` : ''}.${order.note ? ` ${order.note}` : ''}`,
+      calloutLabel: 'Present this at the stand',
+      calloutBody: 'Show this order number to collect your item.',
+      itemsHtml: this.pickupItemRows(order.items),
+      footer: `See you today. If you can't make it, reply to this email and we'll hold your order for the next pop-up.`,
+    });
+  }
+
+  private buildPickupCollectedHtml(order: {
+    customer_name?: string | null;
+    order_number: string;
+    collectedAtLabel: string;
+    location?: string | null;
+    items: { product_name: string; variant_title?: string | null; quantity: number }[];
+    total?: number | null;
+    brand?: string;
+  }): string {
+    const brandName = order.brand || '1NRI';
+    const greeting = order.customer_name
+      ? `Hi ${order.customer_name.split(' ')[0]},`
+      : 'Hi there,';
+
+    return this.pickupShell({
+      brandName,
+      title: 'Collected — thank you!',
+      orderNumber: order.order_number,
+      intro: `${greeting} your order was collected at our pop-up on <strong style="color:#111;">${order.collectedAtLabel}</strong>${order.location ? ` — ${order.location}` : ''}. That's everything on this order — nothing further to wait for.`,
+      calloutLabel: 'Order collected',
+      calloutBody: 'Keep this for your records.',
+      itemsHtml: this.pickupItemRows(order.items),
+      footer: `Thank you for shopping with ${brandName}. If anything isn't right, reply to this email and we'll sort it out.`,
+    });
+  }
+
 }

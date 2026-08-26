@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiClient } from "./client";
 
 export type DiscountType =
@@ -95,4 +95,47 @@ export function useValidatePromo() {
         body: payload,
       }),
   });
+}
+
+// ─── Bundle offers (storefront badges) ───────────────────────────────────────
+
+export interface BundleTier {
+  minPairedCount: number;
+  valueType: "percentage" | "fixed";
+  value: number;
+}
+
+export interface BundleOffer {
+  promoCodeId: string;
+  anchorProductId: string;
+  label: string;
+  /** Ready-made badge text, e.g. "Up to 30% off". */
+  headline: string;
+  basis: "units" | "products";
+  appliesTo: "anchor" | "cart";
+  tiers: BundleTier[];
+}
+
+/**
+ * Which products currently carry an automatic bundle deal.
+ *
+ * Cart-independent, so it's fetched once and shared across every product card
+ * on the page. What a bundle is actually *worth* is still decided server-side
+ * at checkout — this only drives the badge.
+ */
+export function useBundleOffers() {
+  return useQuery({
+    queryKey: ["bundle-offers"],
+    queryFn: () => apiClient<BundleOffer[]>("/promos/bundles"),
+    staleTime: 5 * 60 * 1000,
+    // A badge is decoration: never let its absence surface as an error.
+    retry: false,
+  });
+}
+
+/** The offer attached to a product, if it has one. */
+export function useBundleOfferFor(productId: string | undefined) {
+  const { data } = useBundleOffers();
+  if (!productId) return null;
+  return data?.find((o) => o.anchorProductId === productId) ?? null;
 }

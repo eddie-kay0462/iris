@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  bundleHeadline,
+  isAdvertisable,
   EngineItem,
   EvalContext,
   PairingTier,
@@ -286,5 +288,66 @@ describe('computeManualDiscount', () => {
 
   it('rounds to the pesewa', () => {
     expect(computeManualDiscount({ type: 'percentage', value: 33.333 }, 99.99)).toBe(33.33);
+  });
+});
+
+describe('isAdvertisable — what earns a storefront badge', () => {
+  it('advertises a live rule with an anchor and tiers', () => {
+    expect(isAdvertisable(rule(), 'online')).toBe(true);
+  });
+
+  it('will not advertise an inactive, expired, or exhausted rule', () => {
+    expect(isAdvertisable(rule({ is_active: false }), 'online')).toBe(false);
+    expect(isAdvertisable(rule({ expires_at: '2020-01-01T00:00:00Z' }), 'online')).toBe(false);
+    expect(isAdvertisable(rule({ max_uses: 3, used_count: 3 }), 'online')).toBe(false);
+  });
+
+  it('will not advertise a rule that has not started yet', () => {
+    expect(isAdvertisable(rule({ starts_at: '2099-01-01T00:00:00Z' }), 'online')).toBe(false);
+  });
+
+  it('respects the channel whitelist', () => {
+    const popupOnly = rule({ channels: ['popup'] });
+    expect(isAdvertisable(popupOnly, 'online')).toBe(false);
+    expect(isAdvertisable(popupOnly, 'popup')).toBe(true);
+  });
+
+  it('will not advertise a rule with no anchor or no tiers', () => {
+    expect(isAdvertisable(rule({ anchor_product_id: null }), 'online')).toBe(false);
+    expect(isAdvertisable(rule({ tiers: [] }), 'online')).toBe(false);
+  });
+
+  it('ignores min_order_amount — a badge cannot know the basket yet', () => {
+    // checkEligibility would reject this against an empty cart; a product badge
+    // must not blink out just because nothing has been added.
+    expect(isAdvertisable(rule({ min_order_amount: 5000 }), 'online')).toBe(true);
+  });
+});
+
+describe('bundleHeadline', () => {
+  it('quotes the best percentage tier', () => {
+    expect(bundleHeadline(tiers([1, 'percentage', 10], [3, 'percentage', 30])))
+      .toBe('Up to 30% off');
+  });
+
+  it('quotes the best fixed tier in cedis', () => {
+    expect(bundleHeadline(tiers([1, 'fixed', 20], [2, 'fixed', 55])))
+      .toBe('Up to GH₵55 off');
+  });
+
+  it('falls back to a neutral label when tiers mix types', () => {
+    // Percentages and cedi amounts cannot be ranked without a basket, so
+    // claiming a "best" would risk overstating the offer.
+    expect(bundleHeadline(tiers([1, 'percentage', 10], [2, 'fixed', 50])))
+      .toBe('Bundle deal');
+  });
+
+  it('falls back when there are no tiers or every tier is zero', () => {
+    expect(bundleHeadline([])).toBe('Bundle deal');
+    expect(bundleHeadline(tiers([1, 'percentage', 0]))).toBe('Bundle deal');
+  });
+
+  it('trims trailing zeros off decimal values', () => {
+    expect(bundleHeadline(tiers([1, 'percentage', 12.5]))).toBe('Up to 12.5% off');
   });
 });

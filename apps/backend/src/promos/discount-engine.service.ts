@@ -13,10 +13,14 @@ import {
   RejectedRule,
   SalesChannel,
   bestAlternative,
+  bundleHeadline,
   checkEligibility,
+  isAdvertisable,
   computeCodeDiscount,
   computeManualDiscount,
   evaluatePairingRule,
+  PairingBasis,
+  PairingAppliesTo,
   pickWinner,
   ruleLabel,
   subtotalOf,
@@ -69,6 +73,17 @@ export interface ReserveInput {
   appliedBy?: string | null;
   /** Cash sales are money-in-hand — reserve straight to confirmed. */
   confirmImmediately?: boolean;
+}
+
+
+export interface BundleOffer {
+  promoCodeId: string;
+  anchorProductId: string;
+  label: string;
+  headline: string;
+  basis: PairingBasis;
+  appliesTo: PairingAppliesTo;
+  tiers: { minPairedCount: number; valueType: string; value: number }[];
 }
 
 const PROMO_SELECT = `
@@ -317,6 +332,69 @@ export class DiscountEngineService {
       amount,
       manual: override,
     };
+  }
+
+  /**
+   * Active bundle rules, for advertising on the storefront.
+   *
+   * Public and cart-independent: it answers "does this product have a bundle
+   * deal on it", which is what a product badge needs. Applying a rule still
+   * goes through resolve(), so nothing here can affect what is charged.
+   */
+  async listActiveBundles(
+    channel: SalesChannel = 'online',
+  ): Promise<BundleOffer[]> {
+    const db = this.supabase.getAdminClient();
+    const { data, error } = await db
+      .from('promo_codes')
+      .select(`${PROMO_SELECT}, promo_pairing_tiers (*)`)
+      .eq('discount_type', 'pairing')
+      .eq('auto_apply', true)
+      .eq('is_active', true)
+      .not('anchor_product_id', 'is', null);
+
+    if (error) {
+      // A failed badge lookup must never take a product page down with it.
+      this.logger.error(`Failed to load bundle offers: ${error.message}`);
+      return [];
+    }
+
+    const now = new Date();
+    const offers: BundleOffer[] = [];
+
+    for (const row of data ?? []) {
+      const tiers: PairingTier[] = ((row as any).promo_pairing_tiers ?? []).map(
+        (t: any) => ({
+          id: t.id,
+          min_paired_count: Number(t.min_paired_count),
+          value_type: t.value_type,
+          value: Number(t.value),
+          max_discount_amount:
+            t.max_discount_amount === null ? null : Number(t.max_discount_amount),
+        }),
+      );
+
+      const rule: PromoRule = { ...(row as unknown as PromoRule), tiers };
+      if (!isAdvertisable(rule, channel, now)) continue;
+
+      offers.push({
+        promoCodeId: rule.id,
+        anchorProductId: rule.anchor_product_id!,
+        label: rule.description?.trim() || 'Bundle deal',
+        headline: bundleHeadline(tiers),
+        basis: rule.pairing_basis ?? 'units',
+        appliesTo: rule.applies_to ?? 'anchor',
+        tiers: [...tiers]
+          .sort((a, b) => a.min_paired_count - b.min_paired_count)
+          .map((t) => ({
+            minPairedCount: t.min_paired_count,
+            valueType: t.value_type,
+            value: t.value,
+          })),
+      });
+    }
+
+    return offers;
   }
 
   // ─── Ledger ────────────────────────────────────────────────────────────────

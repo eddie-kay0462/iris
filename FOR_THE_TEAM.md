@@ -5608,3 +5608,170 @@ Promo changes are also now recorded in the **Activity** feed, which they weren't
 13. Make a code with **Max total uses set to 1**, then try to use it on two orders. The second should be turned away cleanly.
 14. Check **Analytics → Reports** for the two new entries: *Discount sources over time* and *Discount usage by code*.
 15. Finally, check the **Activity** page — creating and editing a discount should now show up there.
+
+---
+
+## Pop-up Collections — Online Pre-orders Handed Over at the Stand (August 2026)
+
+At checkout, a customer pre-ordering something can choose **"collect at the pop-up"** instead of paying for delivery. That option has existed for a while and customers have been using it. What didn't exist was any way for whoever is working the pop-up to *see* those orders. They were paid for online days earlier and sat in the main Orders list looking like every other order — so on the day, there was no list of who was coming, what they'd bought, or any way to record that you'd handed it over.
+
+**There's now a "Collections" tab inside each pop-up event**, sitting alongside Active, On Hold and the rest. It lists everyone due to collect at that pop-up, with a blue count badge on the tab so you can see at a glance how many people are still waiting — you don't have to open the tab to find out.
+
+Each entry is laid out for someone standing at a stand with a queue: **the order number is the biggest thing on the row**, because that's what the customer will read off their phone. Underneath it is their name, phone and email, what they actually bought (pre-ordered lines are badged so you know what came from where), the date they booked for, and what they paid. There's a search box that matches on order number, name, phone or email as you type.
+
+When you hand the order over, you tap **Collected**. It asks you to confirm first — the prompt reminds you to check the order number on their phone matches the one on screen — and then it marks the order collected, closes it out properly (so the customer's own order history and tracking page update too), and sends them a confirmation. If you tap it on the wrong person, there's an **Undo**.
+
+Collected orders drop off the working list but aren't gone — a **"Show collected"** toggle brings them back, with who handed each one over and when, so you can double-check a hand-over without leaving the page.
+
+### The messages customers get
+
+Three points of contact, and all of them now say the same thing: **bring your order number**.
+
+1. **When they order** — the confirmation email and SMS name the pop-up date and location and tell them to present their order number at the stand. *The SMS was actively wrong before this*: it told pop-up collection customers "we'll reach out within a few days once your item is ready", which is what a delivery pre-order gets. These customers aren't waiting on a call — they have a date and a place to turn up.
+2. **On the morning of the pop-up** — an automatic reminder email and SMS: your collection is today, here's where, present your order number. It sends once per order and won't fire before 7am, so nobody gets a text at midnight.
+3. **When they collect** — a short "collected, thank you" email and SMS as a receipt.
+
+### How orders find their pop-up
+
+The collection date on an order is worked out from a weekday-and-lead-time setting (Settings → the pop-up pickup options), *not* from the pop-up events list. That means a customer can quite legitimately book a collection for a week whose event hasn't been created yet.
+
+So it matches two ways: orders placed once an event exists are tied straight to it, and anything else is matched by its collection date falling inside the event's dates. That second route is also why **every pop-up pickup order placed before this went live still shows up** — nothing is stranded.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `supabase/migrations/20260827000000_popup_pickup_collections.sql` | New database columns: which pop-up an order collects at, when it was collected and by whom, and whether the day-of reminder has gone out. Also backfills existing pickup orders onto the right event. |
+| `apps/backend/src/popup-sales/popup-collections.service.ts` | The engine behind the tab: finding an event's collections both ways, recording a hand-over (including fulfilling the pre-order lines), undoing one, and the day-of reminder sweep. |
+| `apps/backend/src/popup-sales/popup-pickup-reminder.cron.ts` | The timer that sends the morning-of reminders. Runs hourly so a restart can't skip a day, but holds off until 7am. |
+| `apps/backend/src/popup-sales/popup-sales.controller.ts`, `popup-sales.module.ts` | The three new endpoints — list collections, mark collected, undo. |
+| `apps/backend/src/orders/orders.service.ts` | Checkout now files a pop-up collection order against the actual pop-up event when one already exists. |
+| `apps/backend/src/email/email.service.ts` | Two new emails — the day-of reminder and the collection receipt — plus the order number made prominent, and "present your order number at the stand" spelled out in the confirmation emails. |
+| `apps/backend/src/sms/sms.service.ts` | Three new text messages: pop-up confirmation, day-of reminder, and collected receipt. |
+| `apps/backend/src/preorders/preorders.service.ts` | Fixes the pre-order SMS that was telling collection customers to wait for a call. |
+| `apps/admin/app/(dashboard)/popup-sales/page.tsx` | The Collections tab itself — the list, the search, the confirm-before-handover prompt, the collected toggle, and the count badge. |
+| `apps/admin/lib/api/popup-sales.ts` | Plumbing between the page and the server. |
+
+> **Heads-up — database migration required**
+>
+> One new file: `supabase/migrations/20260827000000_popup_pickup_collections.sql`. Run `npx supabase db push`, or paste it into the Supabase SQL editor. It also backfills existing pickup orders onto matching pop-up events, so they'll appear in the tab straight away.
+>
+> **No new settings to configure** — it reads the pop-up pickup location and note you've already set under Settings. But do check those are filled in, because they go out in the reminder texts and emails.
+
+### Still to do
+
+- **This hasn't been tested against the real database yet.** It all builds, but the migration hasn't been run and no real collection has been put through. The list below is the order to test it in.
+- **The reminder texts cost money.** One SMS per uncollected order on the morning of each pop-up. Worth watching on the first pop-up after this goes live so there are no surprises on the LetsFish wallet.
+- **The reminder goes out the morning of, not the day before.** If turnout is the goal, a day-before nudge might work better — easy to change, just a question of what you want.
+- **There's a second, unused checkout path** (`createPending`) that doesn't handle pop-up collection at all. Nothing calls it today, so it doesn't matter yet, but it would need the same treatment if it's ever switched on.
+
+### How to test
+
+1. Run the migration first.
+2. Make sure **Settings** has a pop-up pickup location and note saved — they appear in the customer messages.
+3. Create a **pop-up event** with dates covering the next pickup day, if there isn't one.
+4. On the **storefront**, put a pre-orderable item in your basket and check out choosing **"collect at the pop-up"**. Pay with a test card.
+5. Check the **confirmation email and SMS**. Both should name the pop-up date and location and tell you to present your order number. The SMS should *not* say anything about reaching out in a few days.
+6. Go to **Pop-up Sales → your event → Collections**. Your order should be there, with the order number large, your name and contact, and the item badged as a pre-order. The tab should have a blue count badge.
+7. Try the **search box** — type part of the order number, then part of the name.
+8. Tap **Collected**. Read the confirmation prompt, then confirm.
+9. The order should disappear from the awaiting list. Tap **Show collected** — it should be there with your name as the person who handed it over and a timestamp.
+10. Check your **email and phone** for the "collected, thank you" receipt.
+11. Check the customer side: open that order on the **storefront tracking page** — it should now show as complete, not still waiting.
+12. Tap **Undo** on the collected order and confirm it goes back to awaiting.
+13. **The day-of reminder is the awkward one to test** — it only fires when the collection date is today and only after 7am. Easiest check is to set an order's collection date to today in the database and wait for the top of the hour.
+
+---
+
+## Bundle Deals Are Now Visible on the Shop (August 2026)
+
+The bundle deals built a few days ago worked, but they were invisible. A customer browsing the shop had no way of knowing that adding a second item to their basket would knock 20% off — they'd only find out at checkout, by which point they'd already decided what to buy. A discount nobody knows about doesn't sell anything.
+
+Two changes, both on the customer-facing shop.
+
+**A badge on the product.** Any product that anchors a live bundle deal now carries a small badge reading something like **"Up to 30% off"** — on its card in the shop grid, and again on the product page itself. On the product page it's more than a badge: underneath it, the deal is spelled out level by level ("Add 2 or more other items → 20% off this item"), with a line making clear it applies automatically and there's no code to type.
+
+The badge only quotes a number when it can do so honestly. If a deal mixes percentages and cedi amounts across its levels, those can't be ranked against each other without knowing what's in the basket, so it falls back to a plain **"Bundle deal"** rather than guessing and overstating the offer. Expired, switched-off, and used-up deals never show a badge at all.
+
+**Anchor products move to the front of the shop.** A bundle deal buried on page four of the catalogue may as well not exist, so products with a live deal now lead the grid.
+
+There's a deliberate limit on that: **it only applies to the default "Newest" ordering** — which is what everyone sees unless they change it. If a customer actively picks "Price: low to high", they get exactly that, anchors and all. Shoving a GH₵400 anchor to the top of a list someone explicitly asked to be sorted cheapest-first reads as a bug, not a promotion.
+
+Two smaller notes on how it behaves: an anchor product that doesn't match what you're currently browsing (wrong category, doesn't match your search) simply doesn't appear — it isn't forced into a list where it doesn't belong. And if the deal lookup ever fails, the shop just renders in its normal order with no badges. Merchandising shouldn't be able to take the shop down.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/backend/src/promos/discount-engine.rules.ts` | Two new pieces of logic: which deals are live enough to advertise, and what the badge should say. |
+| `apps/backend/src/promos/discount-engine.service.ts`, `promos.controller.ts` | A new lookup the shop can call to ask "which products have a deal on them right now". Read-only — it can't affect what anyone is charged. |
+| `apps/backend/src/products/products.service.ts`, `products.module.ts` | The shop grid now serves deal products first on the default ordering, and leaves every other ordering alone. |
+| `apps/backend/src/products/product-ordering.ts` | The page-splitting sums behind that, pulled out on their own so they can be tested properly. |
+| `apps/backend/src/products/product-ordering.spec.ts` | 7 tests walking five pages of the shop and checking every slot is filled exactly once — no product skipped, none shown twice. |
+| `apps/backend/src/promos/discount-engine.rules.spec.ts` | 11 more tests covering which deals earn a badge and what it reads. |
+| `apps/frontend/app/(shop)/components/ProductCard.tsx` | The badge on the shop grid. Sits above the Sold Out / Pre-order badge rather than replacing it, so a product can carry both. |
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | The product page version — badge plus the deal levels written out. |
+| `apps/frontend/lib/api/promos.ts` | Fetches the deals once and shares them across every product on the page. |
+
+> **Heads-up**
+>
+> **No migration, nothing to run, no new settings.** This reads the bundle deals already set up under Settings → Discounts.
+>
+> Worth knowing: **a deal needs a name to look right.** The name typed into the "Name" box when creating a bundle rule is what appears next to the badge on the product page. A rule left unnamed falls back to "Bundle deal", which works but reads as filler.
+
+### Still to do
+
+- **Not yet tested against the real database** — the discount migrations still haven't been run, so no badge has actually been seen on a real product page. This goes together with testing the bundle deals themselves.
+- **Still no cart nudge.** Flagged last time and still open: telling someone "add one more item to save 20%" while they're in their basket is the moment that actually converts. The badge gets them interested; the nudge would close it.
+- **Nothing is tracked yet.** There's no way to tell whether the badge is doing anything — whether products carrying one sell better. Worth a thought if bundle deals become a regular thing.
+
+### How to test
+
+1. Run the discount migrations first if you haven't (see the earlier discounts entry) — none of this shows without them.
+2. Go to **Settings → Discounts** and create a **bundle deal** on a product that's live in the shop. Give it a **name** — it shows to customers. Add a couple of levels, e.g. 1 or more → 10%, 3 or more → 30%.
+3. Open the **shop** on the storefront. That product should now be **in the first row**, with a badge reading **"Up to 30% off"**.
+4. Click into the product. The badge should be there again, with the levels written out underneath and a line saying it applies automatically.
+5. Change the shop's sort to **"Price: low to high"**. The product should drop back to its correct spot in the price order — but keep its badge.
+6. Filter the shop to a **category the product isn't in**. It shouldn't appear.
+7. Go back to Settings and **deactivate** the deal. Refresh the shop — badge gone, and the product back in its normal position.
+8. Try a deal that **mixes a percentage level with a cedi level**. The badge should read plain **"Bundle deal"** rather than quoting a number.
+9. Set a deal's **Max total uses to 1** and use it once. The badge should stop showing.
+
+---
+
+## Bundle Deal Levels Now Read Correctly (August 2026)
+
+Small but worth writing down, because the old wording promised customers the wrong thing.
+
+The product page lists a bundle deal's levels. It was writing every one of them as **"or more"** — so a deal set up as 1 item → 10%, 2 items → 20%, 3 items → 30% read as:
+
+> Add **1 or more** other items → 10% off
+> Add **2 or more** other items → 20% off
+> Add **3 or more** other items → 30% off
+
+Which is wrong on the first two lines. Add two items and you get 20%, not 10% — the level above takes over. Only the top level is genuinely open-ended. A customer reading that carefully could reasonably feel they'd been told one thing and charged another.
+
+It now reads:
+
+> Add **1 other item** → 10% off
+> Add **2 other items** → 20% off
+> Add **3 or more other items** → 30% off
+
+If the levels skip numbers — say 1, 3 and 6 — it writes the span properly: "1-2 other items", "3-5 other items", "6 or more other items". A deal with only one level still says "or more", which is correct there.
+
+Nothing about what customers are actually **charged** has changed — the discount itself was always calculated correctly. This was only the description on the page.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/frontend/lib/bundles/tier-label.ts` | Works out the range each level actually covers, and the phrase for it. New file. |
+| `apps/frontend/lib/bundles/tier-label.test.ts` | 11 tests — consecutive levels, levels that skip numbers, single-level deals, and both ways of counting. |
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | Uses the above instead of writing "or more" on every line. |
+
+### How to test
+
+1. Create a bundle deal with three levels: **1 → 10%**, **2 → 20%**, **3 → 30%**.
+2. Open that product on the storefront. The first two lines should read "1 other item" and "2 other items", with only the last saying "3 or more other items".
+3. Edit the deal so the levels are **1**, **3** and **6**. The lines should become "1-2 other items", "3-5 other items", "6 or more other items".
+4. Delete all but one level. That single line should go back to saying "or more".

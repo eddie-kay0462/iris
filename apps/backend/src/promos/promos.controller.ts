@@ -34,6 +34,18 @@ export class PromosController {
     return this.promosService.findAll();
   }
 
+  /**
+   * Active bundle rules, for the storefront badge. Public and cart-independent
+   * — it only says which products carry a deal, never what anything costs.
+   */
+  @Get('bundles')
+  @Public()
+  listBundles(@Query('channel') channel?: string) {
+    return this.engine.listActiveBundles(
+      channel === 'popup' || channel === 'walkin' ? channel : 'online',
+    );
+  }
+
   // Declared before ':id' so the literal segment is not swallowed by the param.
   @Get('redemptions')
   @RequirePermission('settings:read')
