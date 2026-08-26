@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { SupabaseModule } from './common/supabase/supabase.module';
 import { ActivityLogModule } from './common/activity/activity-log.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { AuthModule } from './auth/auth.module';
 import { ProfileModule } from './profile/profile.module';
 import { SmsModule } from './sms/sms.module';
@@ -71,6 +73,16 @@ import { AlliesModule } from './allies/allies.module';
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    // Log every request and every exception, including HttpExceptions, which
+    // Nest's default filter drops silently.
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: LoggingInterceptor,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: AllExceptionsFilter,
     },
   ],
 })

@@ -43,14 +43,55 @@ export function hasToken(): boolean {
 
 type ApiOptions = Omit<RequestInit, 'body'> & {
   body?: unknown;
+  /** Milliseconds before the request is aborted. Defaults to 30s. */
+  timeoutMs?: number;
 };
+
+/** Thrown when no HTTP response reached us — the request may still have run. */
+export class NetworkError extends Error {
+  readonly networkFailure = true;
+  constructor(message: string) {
+    super(message);
+    this.name = 'NetworkError';
+  }
+}
+
+export function isNetworkError(err: unknown): err is NetworkError {
+  return !!err && (err as any).networkFailure === true;
+}
+
+/**
+ * A 401 on a background poll used to fire `window.location.href = '/login'`
+ * straight away, which tore the page down on top of any request still in
+ * flight. A walk-in sale POST would be committed server-side and its response
+ * thrown away, so staff saw a failure for a sale that had actually gone
+ * through. Hold the redirect until nothing is mid-write.
+ */
+let inFlightWrites = 0;
+let logoutPending = false;
+
+function logoutNow() {
+  clearToken();
+  if (typeof window !== 'undefined') window.location.href = '/login';
+}
+
+function requestLogout() {
+  logoutPending = true;
+  if (inFlightWrites === 0) logoutNow();
+}
+
+function endWrite() {
+  inFlightWrites = Math.max(0, inFlightWrites - 1);
+  if (inFlightWrites === 0 && logoutPending) logoutNow();
+}
 
 /** Make an authenticated request to the backend API */
 export async function apiClient<T = any>(
   path: string,
   options: ApiOptions = {},
 ): Promise<T> {
-  const { body, headers: customHeaders, ...rest } = options;
+  const { body, headers: customHeaders, timeoutMs = 30_000, ...rest } = options;
+  const isWrite = !!rest.method && rest.method.toUpperCase() !== 'GET';
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -62,37 +103,56 @@ export async function apiClient<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...rest,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  // Handle 401 — redirect to login (but not for auth endpoints like login/signup)
-  const isAuthEndpoint = path.startsWith('/auth/');
-  if (res.status === 401 && !isAuthEndpoint && typeof window !== 'undefined') {
-    clearToken();
-    window.location.href = '/login';
-    throw new Error('Unauthorized');
-  }
-
-  let data: any;
+  // Held until the body has been read, so a 401 elsewhere can't navigate the
+  // page away while this response is still being consumed.
+  if (isWrite) inFlightWrites++;
   try {
-    data = await res.json();
-  } catch {
-    data = { message: 'Request failed' };
-  }
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE_URL}${path}`, {
+        ...rest,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: rest.signal ?? AbortSignal.timeout(timeoutMs),
+      });
+    } catch (err: any) {
+      // fetch only rejects when no response arrived: a dropped connection, a
+      // timeout, the tab navigating away. The server may well have done the
+      // work regardless.
+      throw new NetworkError(
+        err?.name === 'TimeoutError' || err?.name === 'AbortError'
+          ? 'The server did not respond in time.'
+          : 'Could not reach the server.',
+      );
+    }
 
-  if (!res.ok) {
-    // NestJS message can be a string or array of strings
-    const msg = Array.isArray(data.message)
-      ? data.message[0]
-      : data.message || data.error || 'Request failed';
-    const error = new Error(msg);
-    (error as any).status = res.status;
-    (error as any).data = data;
-    throw error;
-  }
+    // Handle 401 — redirect to login (but not for auth endpoints like login/signup)
+    const isAuthEndpoint = path.startsWith('/auth/');
+    if (res.status === 401 && !isAuthEndpoint && typeof window !== 'undefined') {
+      requestLogout();
+      throw new Error('Unauthorized');
+    }
 
-  return data as T;
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      data = { message: 'Request failed' };
+    }
+
+    if (!res.ok) {
+      // NestJS message can be a string or array of strings
+      const msg = Array.isArray(data.message)
+        ? data.message[0]
+        : data.message || data.error || 'Request failed';
+      const error = new Error(msg);
+      (error as any).status = res.status;
+      (error as any).data = data;
+      throw error;
+    }
+
+    return data as T;
+  } finally {
+    if (isWrite) endWrite();
+  }
 }

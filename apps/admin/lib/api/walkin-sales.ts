@@ -77,6 +77,8 @@ export interface WalkinOrderItemInput {
 }
 
 export interface CreateWalkinOrderInput {
+  /** One per counter cart. Makes a retried submit return the same order. */
+  idempotency_key?: string;
   customer_name?: string;
   customer_phone?: string;
   customer_email?: string;
