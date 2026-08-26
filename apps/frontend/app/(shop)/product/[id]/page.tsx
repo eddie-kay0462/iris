@@ -3,6 +3,7 @@
 import { use, useState, useMemo, useCallback, useEffect, useRef, Suspense } from "react";
 import { useProduct, useProducts, type ProductVariant } from "@/lib/api/products";
 import { useBundleOfferFor } from "@/lib/api/promos";
+import { describeTiers } from "@/lib/bundles/tier-label";
 import { useCart } from "@/lib/cart";
 import { motion } from "framer-motion";
 import { prefetchImage } from "@/hooks/useImagePrefetch";
@@ -633,17 +634,13 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
                 </span>
               </div>
               <ul className="mt-2.5 space-y-1">
-                {bundleOffer.tiers.map((tier) => (
+                {describeTiers(bundleOffer.tiers, bundleOffer.basis).map(({ tier, rangeLabel }) => (
                   <li
                     key={tier.minPairedCount}
                     className="text-[12px] leading-relaxed text-text-secondary"
                   >
                     Add{" "}
-                    <strong className="font-medium text-text">
-                      {tier.minPairedCount} or more{" "}
-                      {bundleOffer.basis === "products" ? "other product" : "other item"}
-                      {tier.minPairedCount === 1 ? "" : "s"}
-                    </strong>{" "}
+                    <strong className="font-medium text-text">{rangeLabel}</strong>{" "}
                     &rarr;{" "}
                     <strong className="font-medium text-text">
                       {tier.valueType === "percentage"

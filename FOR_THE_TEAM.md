@@ -5736,3 +5736,42 @@ Two smaller notes on how it behaves: an anchor product that doesn't match what y
 7. Go back to Settings and **deactivate** the deal. Refresh the shop — badge gone, and the product back in its normal position.
 8. Try a deal that **mixes a percentage level with a cedi level**. The badge should read plain **"Bundle deal"** rather than quoting a number.
 9. Set a deal's **Max total uses to 1** and use it once. The badge should stop showing.
+
+---
+
+## Bundle Deal Levels Now Read Correctly (August 2026)
+
+Small but worth writing down, because the old wording promised customers the wrong thing.
+
+The product page lists a bundle deal's levels. It was writing every one of them as **"or more"** — so a deal set up as 1 item → 10%, 2 items → 20%, 3 items → 30% read as:
+
+> Add **1 or more** other items → 10% off
+> Add **2 or more** other items → 20% off
+> Add **3 or more** other items → 30% off
+
+Which is wrong on the first two lines. Add two items and you get 20%, not 10% — the level above takes over. Only the top level is genuinely open-ended. A customer reading that carefully could reasonably feel they'd been told one thing and charged another.
+
+It now reads:
+
+> Add **1 other item** → 10% off
+> Add **2 other items** → 20% off
+> Add **3 or more other items** → 30% off
+
+If the levels skip numbers — say 1, 3 and 6 — it writes the span properly: "1-2 other items", "3-5 other items", "6 or more other items". A deal with only one level still says "or more", which is correct there.
+
+Nothing about what customers are actually **charged** has changed — the discount itself was always calculated correctly. This was only the description on the page.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/frontend/lib/bundles/tier-label.ts` | Works out the range each level actually covers, and the phrase for it. New file. |
+| `apps/frontend/lib/bundles/tier-label.test.ts` | 11 tests — consecutive levels, levels that skip numbers, single-level deals, and both ways of counting. |
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | Uses the above instead of writing "or more" on every line. |
+
+### How to test
+
+1. Create a bundle deal with three levels: **1 → 10%**, **2 → 20%**, **3 → 30%**.
+2. Open that product on the storefront. The first two lines should read "1 other item" and "2 other items", with only the last saying "3 or more other items".
+3. Edit the deal so the levels are **1**, **3** and **6**. The lines should become "1-2 other items", "3-5 other items", "6 or more other items".
+4. Delete all but one level. That single line should go back to saying "or more".
