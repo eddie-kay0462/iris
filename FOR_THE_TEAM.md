@@ -5775,3 +5775,40 @@ Nothing about what customers are actually **charged** has changed — the discou
 2. Open that product on the storefront. The first two lines should read "1 other item" and "2 other items", with only the last saying "3 or more other items".
 3. Edit the deal so the levels are **1**, **3** and **6**. The lines should become "1-2 other items", "3-5 other items", "6 or more other items".
 4. Delete all but one level. That single line should go back to saying "or more".
+
+---
+
+## The 1NRI Logo Is Now the Browser Tab Icon (August 2026)
+
+Cosmetic, but it's the sort of thing people notice.
+
+Both the **storefront** and the **admin dashboard** now show the 1NRI wordmark as their browser tab icon (the little picture next to the page title in a tab, on a bookmark, and in your history). The storefront never had one at all — it was showing the browser's blank default page icon. Admin was the same.
+
+The logo as supplied is a square with a lot of empty white space around it: the mark filled only about **43% of the height**, so shrunk down to tab size it came out as a small, thin thing floating in a mostly-empty white square. So it's been **trimmed down to the logo and re-centred** on a tighter square, with a bit of breathing room left around the edges so it isn't jammed against the sides. It now fills about **52% of the height and 84% of the width** — visibly chunkier and easier to pick out in a row of tabs.
+
+The original image in `homepage_img/` is untouched — the tab icon is a separate copy.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/frontend/app/icon.png` | The storefront's tab icon. New file. |
+| `apps/admin/app/icon.png` | The admin dashboard's tab icon. Same image. New file. |
+| `homepage_img/bg-1NRI.png` | The source logo this was made from, now saved into the project. |
+
+> **Heads-up**
+>
+> Nothing to run. But **browsers cache tab icons hard** — if you don't see the change straight away, that's expected rather than broken. A hard refresh (Cmd+Shift+R) usually does it; sometimes it takes closing and reopening the tab.
+
+### Worth knowing
+
+- **At the very smallest size it's a squeeze.** Browsers use a 16-pixel version in a crowded tab strip and in the bookmarks bar. Four letters across 16 pixels is not much room, and the letterforms blur together a bit at that size. It's better than it was, but it's still tight. The usual fix, if it ever bothers us, is a simplified mark for that size — just the "1", say — rather than the full wordmark. That's a design decision, so nothing has been done about it.
+- **It's the white-background version**, so it always shows as a white tile. There's also a transparent version of the logo in `homepage_img/` which would take on the browser's own tab colour instead — that often sits better in dark-themed browsers. Easy to swap if we'd prefer it.
+- There's an old stray `ico.png` file sitting in the storefront that was never actually being used as an icon. Left alone for now; it can be deleted whenever.
+
+### How to test
+
+1. Open the **storefront** and look at the browser tab — the 1NRI logo should be next to the page title.
+2. Do the same on the **admin dashboard**.
+3. If you still see a blank icon, hard refresh (Cmd+Shift+R) or close and reopen the tab — see the heads-up above.
+4. Bookmark either page and check the icon shows in the bookmarks bar too.
