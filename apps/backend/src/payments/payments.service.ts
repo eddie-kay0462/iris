@@ -4,6 +4,7 @@ import { createHmac } from 'crypto';
 import { OrdersService } from '../orders/orders.service';
 import { SupabaseService } from '../common/supabase/supabase.service';
 import { PopupSalesService } from '../popup-sales/popup-sales.service';
+import { WalkinSalesService } from '../walkin-sales/walkin-sales.service';
 import { EmailService } from '../email/email.service';
 
 @Injectable()
@@ -15,6 +16,7 @@ export class PaymentsService {
     private ordersService: OrdersService,
     private supabase: SupabaseService,
     private popupSalesService: PopupSalesService,
+    private walkinSalesService: WalkinSalesService,
     private emailService: EmailService,
   ) {
     this.secretKey = this.configService.get<string>(
@@ -40,26 +42,53 @@ export class PaymentsService {
     if (eventType === 'charge.success') {
       const reference = event?.data?.reference;
       if (reference) {
-        // Try popup order first
-        const confirmedPopup = await this.popupSalesService.confirmByReference(reference);
-        if (!confirmedPopup) {
-          // Try ally sale by payment_reference (MoMo) or customer_code (virtual account)
-          const confirmedAlly = await this.confirmAllySaleByReference(
-            reference,
-            event?.data?.customer?.customer_code,
-          );
-          if (!confirmedAlly) {
-            const confirmedOrder =
-              await this.ordersService.confirmPayment(reference);
-            if (!confirmedOrder) {
-              // Charge succeeded but no order/popup/ally row matched this
-              // reference. Log loudly so it's visible — the pending-order
-              // reconciliation cron will also catch it if an order later appears.
-              console.warn(
-                `[Paystack Webhook] charge.success for reference ${reference} matched no order — possible missed payment`,
-              );
+        // A reference belongs to exactly one of these, so the first channel to
+        // claim it wins. Walk-ins are in this list because their only other
+        // route to 'completed' is the admin tab's client-side poll — close that
+        // tab mid-payment and the sale would strand in 'awaiting_payment' with
+        // the cash collected, stock never deducted and no confirmation sent.
+        const channels: [string, () => Promise<boolean>][] = [
+          ['popup', () => this.popupSalesService.confirmByReference(reference)],
+          [
+            'ally',
+            () =>
+              this.confirmAllySaleByReference(
+                reference,
+                event?.data?.customer?.customer_code,
+              ),
+          ],
+          ['walk-in', () => this.walkinSalesService.completeByReference(reference)],
+          ['online order', () => this.ordersService.confirmPayment(reference)],
+        ];
+
+        let claimedBy: string | null = null;
+        for (const [name, confirm] of channels) {
+          // One channel throwing must not strand a payment that another one
+          // owns — try them all before declaring the reference unmatched.
+          try {
+            if (await confirm()) {
+              claimedBy = name;
+              break;
             }
+          } catch (err) {
+            console.error(
+              `[Paystack Webhook] ${name} confirmation failed for reference ${reference}:`,
+              err,
+            );
           }
+        }
+
+        if (claimedBy) {
+          console.log(
+            `[Paystack Webhook] reference ${reference} confirmed as ${claimedBy}`,
+          );
+        } else {
+          // Charge succeeded but no row matched this reference. Log loudly so
+          // it's visible — the pending-order reconciliation cron will also
+          // catch it if an order later appears.
+          console.warn(
+            `[Paystack Webhook] charge.success for reference ${reference} matched no order — possible missed payment`,
+          );
         }
       }
     }
