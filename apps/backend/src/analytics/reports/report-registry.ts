@@ -15,6 +15,7 @@ import {
   popupCustomerKey,
   referrerLabel,
   walkinCustomerKey,
+  WalkinOrderRow,
   ReportContext,
   Window,
   PromoRedemptionRow,
@@ -122,6 +123,68 @@ function sumBuckets(byBucket: Map<string, FinancialBucket>): FinancialBucket {
   t.netSales = t.grossSales - t.discounts - t.returns;
   t.totalSales = t.netSales + t.shipping + t.tax;
   return t;
+}
+
+// ─── Walk-in helpers ──────────────────────────────────────────────────────────
+
+interface WalkinBucket {
+  [key: string]: number;
+  grossSales: number;
+  discounts: number;
+  returns: number;
+  netSales: number;
+  orders: number;
+  aov: number;
+}
+
+const emptyWalkin = (): WalkinBucket => ({
+  grossSales: 0,
+  discounts: 0,
+  returns: 0,
+  netSales: 0,
+  orders: 0,
+  aov: 0,
+});
+
+function deriveWalkin(b: WalkinBucket): WalkinBucket {
+  b.netSales = b.grossSales - b.discounts - b.returns;
+  b.aov = b.orders > 0 ? b.netSales / b.orders : 0;
+  return b;
+}
+
+function sumWalkin(byBucket: Map<string, WalkinBucket>): WalkinBucket {
+  const t = emptyWalkin();
+  for (const b of byBucket.values()) {
+    t.grossSales += b.grossSales;
+    t.discounts += b.discounts;
+    t.returns += b.returns;
+    t.orders += b.orders;
+  }
+  return deriveWalkin(t);
+}
+
+const UNATTRIBUTED = 'unattributed';
+
+const WALKIN_PAYMENT_LABELS: Record<string, string> = {
+  cash: 'Cash',
+  momo: 'Mobile money',
+  bank_transfer: 'Bank transfer',
+  unknown: 'Not recorded',
+};
+
+/**
+ * Name of the staff member who rang an order up. PostgREST hands a to-one
+ * embed back as either an object or a one-element array depending on how it
+ * infers the relationship, so both shapes are unwrapped here.
+ */
+function staffName(o: WalkinOrderRow): string {
+  const rel = o.staff as unknown;
+  const s = (Array.isArray(rel) ? rel[0] : rel) as
+    | { first_name: string | null; last_name: string | null }
+    | null
+    | undefined;
+  const name = [s?.first_name, s?.last_name].filter(Boolean).join(' ').trim();
+  return name || 'Unattributed';
 }
 
 function buckets(ctx: ReportContext, w: Window): string[] {
@@ -1341,6 +1404,255 @@ export const REPORTS: Record<string, ReportDefinition> = {
         rows,
         totals,
         [metric('revenue', 'Revenue', totals.revenue, null, 'currency')],
+      );
+    },
+  },
+
+  // ── Walk-ins ───────────────────────────────────────────────────────────────
+  'walkin-sales-over-time': {
+    id: 'walkin-sales-over-time',
+    name: 'Walk-in sales over time',
+    category: 'Sales',
+    description: 'Counter sales, orders and average order value per period.',
+    async build(ctx) {
+      const load = async (w: Window) => {
+        const [orders, refunded] = await Promise.all([ctx.walkinOrders(w), ctx.walkinRefunds(w)]);
+        const map = new Map<string, WalkinBucket>();
+        const at = (ts: string) => {
+          const k = bucketOf(ts, ctx.granularity);
+          if (!map.has(k)) map.set(k, emptyWalkin());
+          return map.get(k)!;
+        };
+        // Same convention as `financials`: a refunded walk-in still counts as a
+        // sale that happened, and the refund is subtracted once as a return,
+        // bucketed against the order's own date.
+        for (const o of [...orders, ...refunded]) {
+          const b = at(o.created_at);
+          b.grossSales += num(o.subtotal);
+          b.discounts += num(o.discount_amount);
+          b.orders += 1;
+        }
+        // No `walkin_refunds` table — the flipped order total is the refund.
+        for (const o of refunded) at(o.created_at).returns += num(o.total);
+        for (const b of map.values()) deriveWalkin(b);
+        return map;
+      };
+      const [cur, prev] = await Promise.all([load('current'), load('previous')]);
+      const totals = sumWalkin(cur);
+      const prevTotals = sumWalkin(prev);
+      const fill = (m: Map<string, WalkinBucket>) => (b: string) => ({ ...(m.get(b) ?? emptyWalkin()) });
+      return overTime(
+        ctx,
+        [
+          col('grossSales', 'Gross sales', 'currency'),
+          col('discounts', 'Discounts', 'currency'),
+          col('returns', 'Returns', 'currency'),
+          col('netSales', 'Net sales', 'currency'),
+          col('orders', 'Orders', 'number'),
+          col('aov', 'Avg. order value', 'currency'),
+        ],
+        makeSeries(ctx, 'current', fill(cur)),
+        makeSeries(ctx, 'previous', fill(prev)),
+        totals,
+        prevTotals,
+        [
+          metric('netSales', 'Net sales', totals.netSales, prevTotals.netSales, 'currency'),
+          metric('orders', 'Orders', totals.orders, prevTotals.orders, 'number'),
+          metric('aov', 'Avg. order value', totals.aov, prevTotals.aov, 'currency'),
+        ],
+      );
+    },
+  },
+
+  'walkin-sales-by-hour': {
+    id: 'walkin-sales-by-hour',
+    name: 'Walk-in sales by hour',
+    category: 'Sales',
+    description: 'Which hours of the day the counter actually sells in.',
+    async build(ctx) {
+      // Ghana is UTC+0, so the stored UTC hour is the local trading hour —
+      // the same assumption `dayOf()` makes in walkin-sales.service.ts.
+      const load = async (w: Window) => {
+        const orders = await ctx.walkinOrders(w);
+        const hours = Array.from({ length: 24 }, () => ({ orders: 0, revenue: 0 }));
+        for (const o of orders) {
+          const h = new Date(o.created_at).getUTCHours();
+          hours[h].orders += 1;
+          hours[h].revenue += num(o.total);
+        }
+        return hours;
+      };
+      const [cur, prev] = await Promise.all([load('current'), load('previous')]);
+      const sum = (hs: { orders: number; revenue: number }[]) => ({
+        orders: hs.reduce((s, h) => s + h.orders, 0),
+        revenue: hs.reduce((s, h) => s + h.revenue, 0),
+      });
+      const totals = sum(cur);
+      const prevTotals = sum(prev);
+      // Every hour is emitted, empty ones included, so the chart keeps its shape.
+      const rows = cur.map((h, i) => ({
+        hour: `${String(i).padStart(2, '0')}:00`,
+        orders: h.orders,
+        revenue: h.revenue,
+        share: rate(h.revenue, totals.revenue),
+      }));
+      const busiest = rows.reduce((a, b) => (b.revenue > a.revenue ? b : a), rows[0]);
+      return dimension(
+        [
+          col('hour', 'Hour', 'text'),
+          col('orders', 'Orders', 'number'),
+          col('revenue', 'Revenue', 'currency'),
+          col('share', 'Share', 'percent'),
+        ],
+        rows,
+        { ...totals, share: 100 },
+        [
+          metric('revenue', 'Revenue', totals.revenue, prevTotals.revenue, 'currency'),
+          metric('orders', 'Orders', totals.orders, prevTotals.orders, 'number'),
+        ],
+        { ...prevTotals, share: 100 },
+      );
+    },
+  },
+
+  'walkin-basket': {
+    id: 'walkin-basket',
+    name: 'Walk-in basket',
+    category: 'Sales',
+    description: 'Units sold and revenue per product at the counter, plus basket size.',
+    async build(ctx) {
+      const load = async (w: Window) => {
+        const items = (await ctx.orderItems(w)).filter((i) => i.order_id.startsWith('walkin_'));
+        const map = new Map<string, { product: string; units: number; revenue: number }>();
+        const orders = new Set<string>();
+        let units = 0;
+        for (const i of items) {
+          orders.add(i.order_id);
+          units += i.quantity;
+          const key = i.product_id ?? i.product_name;
+          if (!map.has(key)) map.set(key, { product: i.product_name, units: 0, revenue: 0 });
+          const p = map.get(key)!;
+          p.units += i.quantity;
+          p.revenue += num(i.total_price);
+        }
+        return { map, orders: orders.size, units };
+      };
+      const [cur, prev] = await Promise.all([load('current'), load('previous')]);
+      const rows = Array.from(cur.map.values()).sort((a, b) => b.revenue - a.revenue);
+      const totals = {
+        units: cur.units,
+        revenue: rows.reduce((s, r) => s + r.revenue, 0),
+        unitsPerOrder: cur.orders > 0 ? cur.units / cur.orders : 0,
+      };
+      const prevUnitsPerOrder = prev.orders > 0 ? prev.units / prev.orders : 0;
+      return dimension(
+        [col('product', 'Product', 'text'), col('units', 'Units', 'number'), col('revenue', 'Revenue', 'currency')],
+        rows,
+        totals,
+        [
+          metric('unitsPerOrder', 'Units per order', totals.unitsPerOrder, prevUnitsPerOrder, 'number'),
+          metric('units', 'Units sold', cur.units, prev.units, 'number'),
+        ],
+      );
+    },
+  },
+
+  'walkin-staff-performance': {
+    id: 'walkin-staff-performance',
+    name: 'Walk-in sales by staff',
+    category: 'Orders',
+    description: 'Counter orders and revenue per staff member who rang them up.',
+    async build(ctx) {
+      const load = async (w: Window) => {
+        const orders = await ctx.walkinOrders(w);
+        const map = new Map<string, { staff: string; orders: number; revenue: number; aov: number }>();
+        for (const o of orders) {
+          const key = o.served_by ?? UNATTRIBUTED;
+          if (!map.has(key)) map.set(key, { staff: staffName(o), orders: 0, revenue: 0, aov: 0 });
+          const s = map.get(key)!;
+          s.orders += 1;
+          s.revenue += num(o.total);
+        }
+        for (const s of map.values()) s.aov = s.orders > 0 ? s.revenue / s.orders : 0;
+        return map;
+      };
+      const [cur, prev] = await Promise.all([load('current'), load('previous')]);
+      const rows = Array.from(cur.values()).sort((a, b) => b.revenue - a.revenue);
+      const sum = (m: Map<string, { orders: number; revenue: number }>) => {
+        const t = { orders: 0, revenue: 0, aov: 0 };
+        for (const s of m.values()) {
+          t.orders += s.orders;
+          t.revenue += s.revenue;
+        }
+        t.aov = t.orders > 0 ? t.revenue / t.orders : 0;
+        return t;
+      };
+      const totals = sum(cur);
+      const prevTotals = sum(prev);
+      return dimension(
+        [
+          col('staff', 'Staff', 'text'),
+          col('orders', 'Orders', 'number'),
+          col('revenue', 'Revenue', 'currency'),
+          col('aov', 'Avg. order value', 'currency'),
+        ],
+        rows,
+        totals,
+        [
+          metric('revenue', 'Revenue', totals.revenue, prevTotals.revenue, 'currency'),
+          metric('orders', 'Orders', totals.orders, prevTotals.orders, 'number'),
+        ],
+        prevTotals,
+      );
+    },
+  },
+
+  'walkin-payment-methods': {
+    id: 'walkin-payment-methods',
+    name: 'Walk-in payment methods',
+    category: 'Finances',
+    description: 'Cash, mobile money and bank transfer split for counter sales.',
+    async build(ctx) {
+      const load = async (w: Window) => {
+        const orders = await ctx.walkinOrders(w);
+        const map = new Map<string, { method: string; orders: number; revenue: number }>();
+        for (const o of orders) {
+          const key = o.payment_method ?? 'unknown';
+          if (!map.has(key)) map.set(key, { method: WALKIN_PAYMENT_LABELS[key] ?? key, orders: 0, revenue: 0 });
+          const m = map.get(key)!;
+          m.orders += 1;
+          m.revenue += num(o.total);
+        }
+        return map;
+      };
+      const [cur, prev] = await Promise.all([load('current'), load('previous')]);
+      const sum = (m: Map<string, { orders: number; revenue: number }>) => {
+        const t = { orders: 0, revenue: 0 };
+        for (const v of m.values()) {
+          t.orders += v.orders;
+          t.revenue += v.revenue;
+        }
+        return t;
+      };
+      const totals = sum(cur);
+      const prevTotals = sum(prev);
+      const rows = Array.from(cur.values())
+        .map((v) => ({ ...v, share: rate(v.revenue, totals.revenue) }))
+        .sort((a, b) => b.revenue - a.revenue);
+      return dimension(
+        [
+          col('method', 'Payment method', 'text'),
+          col('orders', 'Orders', 'number'),
+          col('revenue', 'Revenue', 'currency'),
+          col('share', 'Share', 'percent'),
+        ],
+        rows,
+        { ...totals, share: 100 },
+        [
+          metric('revenue', 'Revenue', totals.revenue, prevTotals.revenue, 'currency'),
+          metric('orders', 'Orders', totals.orders, prevTotals.orders, 'number'),
+        ],
+        { ...prevTotals, share: 100 },
       );
     },
   },

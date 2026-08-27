@@ -5,13 +5,15 @@ import Link from "next/link";
 import { FileBarChart } from "lucide-react";
 import { StorefrontView } from "./components/StorefrontView";
 import { PopupsView } from "./components/PopupsView";
+import { WalkinsView } from "./components/WalkinsView";
 import { BothView } from "./components/BothView";
 
-type SourceTab = "storefront" | "popups" | "both";
+type SourceTab = "storefront" | "popups" | "walkins" | "both";
 
 const TABS: { id: SourceTab; label: string }[] = [
   { id: "storefront", label: "Storefront" },
   { id: "popups", label: "Pop-ups" },
+  { id: "walkins", label: "Walk-ins" },
   { id: "both", label: "Compare" },
 ];
 
@@ -53,6 +55,7 @@ export default function AdminAnalyticsPage() {
 
       {sourceTab === "storefront" && <StorefrontView />}
       {sourceTab === "popups" && <PopupsView />}
+      {sourceTab === "walkins" && <WalkinsView />}
       {sourceTab === "both" && <BothView />}
     </section>
   );

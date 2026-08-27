@@ -11,7 +11,25 @@ import { DeltaBadge } from "@/app/components/DeltaBadge";
 import { chart, formatGHSShort } from "@/lib/charts/theme";
 import { ChevronDown } from "lucide-react";
 
-type CompareMode = "storefront-vs-popup" | "popup-vs-popup";
+type CompareMode =
+  | "storefront-vs-popup"
+  | "storefront-vs-walkin"
+  | "popup-vs-walkin"
+  | "popup-vs-popup";
+
+const COMPARE_MODES: { id: CompareMode; label: string }[] = [
+  { id: "storefront-vs-popup", label: "Storefront vs Pop-up" },
+  { id: "storefront-vs-walkin", label: "Storefront vs Walk-in" },
+  { id: "popup-vs-walkin", label: "Pop-up vs Walk-in" },
+  { id: "popup-vs-popup", label: "Pop-up vs Pop-up" },
+];
+
+/**
+ * Pop-up figures come from `/popup-sales/events/:id/analytics`, which covers the
+ * whole event — not the period selector — so the two sides of a comparison
+ * involving a pop-up cover different windows. Say so rather than imply parity.
+ */
+const EVENT_WINDOW_NOTE = "Covers the whole event, not the selected period.";
 
 function fmt(n: number) {
   return `GH₵ ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -58,6 +76,24 @@ function EventSelector({
         </select>
         <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
       </div>
+    </div>
+  );
+}
+
+function PeriodSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-slate-500">Time period</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+      >
+        <option value="7">Last 7 days</option>
+        <option value="30">Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="365">Last year</option>
+      </select>
     </div>
   );
 }
@@ -199,9 +235,11 @@ function StorefrontColumn({ days }: { days: string }) {
 function PopupColumn({
   eventId,
   label,
+  note,
 }: {
   eventId: string | null;
   label: string;
+  note?: string;
 }) {
   const { data, isLoading, error } = usePopupAnalytics(eventId);
 
@@ -244,6 +282,42 @@ function PopupColumn({
           )}
         </>
       ) : null}
+      {note && eventId && <p className="mt-3 text-[11px] text-slate-400">{note}</p>}
+    </div>
+  );
+}
+
+/** Period-scoped walk-in totals — same three metrics as StorefrontColumn. */
+function WalkinColumn({ days, note }: { days: string; note?: string }) {
+  const range = useDateRange(parseInt(days));
+  const { data, isLoading, error } = useReport("walkin-sales-over-time", range);
+  const totals = data?.table.totals;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-6">
+      <div className="mb-4 flex items-center gap-2">
+        <span
+          className="h-2 w-2 rounded-full"
+          style={{ backgroundColor: chart.channels[2] }}
+        />
+        <h3 className="text-sm font-semibold text-slate-700">Walk-in</h3>
+      </div>
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-14 animate-pulse rounded bg-slate-100" />
+          ))}
+        </div>
+      ) : error ? (
+        <p className="text-sm text-rose-700">Failed to load data.</p>
+      ) : (
+        <>
+          <MetricRow label="Revenue" value={fmt(totals?.netSales ?? 0)} />
+          <MetricRow label="Orders" value={String(totals?.orders ?? 0)} />
+          <MetricRow label="Avg. Order Value" value={fmt(totals?.aov ?? 0)} />
+        </>
+      )}
+      {note && <p className="mt-3 text-[11px] text-slate-400">{note}</p>}
     </div>
   );
 }
@@ -260,39 +334,26 @@ export function BothView() {
   return (
     <div className="space-y-6">
       {/* Compare mode toggle */}
-      <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 w-fit">
-        {(["storefront-vs-popup", "popup-vs-popup"] as CompareMode[]).map((mode) => (
+      <div className="flex flex-wrap items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 w-fit">
+        {COMPARE_MODES.map((mode) => (
           <button
-            key={mode}
-            onClick={() => setCompareMode(mode)}
+            key={mode.id}
+            onClick={() => setCompareMode(mode.id)}
             className={`rounded-md px-4 py-2 text-sm font-medium transition-all ${
-              compareMode === mode
+              compareMode === mode.id
                 ? "bg-white text-slate-900 shadow-sm"
                 : "text-slate-500 hover:text-slate-700"
             }`}
           >
-            {mode === "storefront-vs-popup" ? "Storefront vs Pop-up" : "Pop-up vs Pop-up"}
+            {mode.label}
           </button>
         ))}
       </div>
 
-      {compareMode === "storefront-vs-popup" ? (
+      {compareMode === "storefront-vs-popup" && (
         <>
-          {/* Controls */}
           <div className="flex flex-wrap items-end gap-4">
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-slate-500">Time period</span>
-              <select
-                value={days}
-                onChange={(e) => setDays(e.target.value)}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-              >
-                <option value="7">Last 7 days</option>
-                <option value="30">Last 30 days</option>
-                <option value="90">Last 90 days</option>
-                <option value="365">Last year</option>
-              </select>
-            </div>
+            <PeriodSelector value={days} onChange={setDays} />
             <EventSelector
               value={popupEventId}
               onChange={setPopupEventId}
@@ -313,12 +374,57 @@ export function BothView() {
                   ? `Pop-up: ${events.find((e) => e.id === popupEventId)?.name ?? ""}`
                   : "Pop-up"
               }
+              note={EVENT_WINDOW_NOTE}
             />
           </div>
         </>
-      ) : (
+      )}
+
+      {compareMode === "storefront-vs-walkin" && (
         <>
-          {/* Controls */}
+          <div className="flex flex-wrap items-end gap-4">
+            <PeriodSelector value={days} onChange={setDays} />
+          </div>
+
+          <ChannelOverview days={days} />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <StorefrontColumn days={days} />
+            <WalkinColumn days={days} />
+          </div>
+        </>
+      )}
+
+      {compareMode === "popup-vs-walkin" && (
+        <>
+          <div className="flex flex-wrap items-end gap-4">
+            <PeriodSelector value={days} onChange={setDays} />
+            <EventSelector
+              value={popupEventId}
+              onChange={setPopupEventId}
+              label="Pop-up event"
+              events={events}
+              loading={eventsLoading}
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <PopupColumn
+              eventId={popupEventId}
+              label={
+                popupEventId && events
+                  ? `Pop-up: ${events.find((e) => e.id === popupEventId)?.name ?? ""}`
+                  : "Pop-up"
+              }
+              note={EVENT_WINDOW_NOTE}
+            />
+            <WalkinColumn days={days} note="Covers the selected time period." />
+          </div>
+        </>
+      )}
+
+      {compareMode === "popup-vs-popup" && (
+        <>
           <div className="flex flex-wrap items-end gap-4">
             <EventSelector
               value={eventAId}

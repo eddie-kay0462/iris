@@ -64,6 +64,8 @@ export interface WalkinOrderRow {
   discount_type: string | null;
   payment_method: string | null;
   brand: string | null;
+  served_by: string | null;
+  staff: { first_name: string | null; last_name: string | null }[] | null;
   created_at: string;
 }
 
@@ -319,7 +321,7 @@ export class ReportContext {
         this.db
           .from('walkin_orders')
           .select(
-            'id, customer_email, customer_phone, customer_name, status, subtotal, total, discount_amount, discount_type, payment_method, brand, created_at',
+            'id, customer_email, customer_phone, customer_name, status, subtotal, total, discount_amount, discount_type, payment_method, brand, served_by, created_at, staff:profiles!served_by(first_name, last_name)',
           )
           .in('status', WALKIN_REVENUE_STATUSES)
           .gte('created_at', from)
@@ -342,7 +344,7 @@ export class ReportContext {
         this.db
           .from('walkin_orders')
           .select(
-            'id, customer_email, customer_phone, customer_name, status, subtotal, total, discount_amount, discount_type, payment_method, brand, created_at',
+            'id, customer_email, customer_phone, customer_name, status, subtotal, total, discount_amount, discount_type, payment_method, brand, served_by, created_at, staff:profiles!served_by(first_name, last_name)',
           )
           .eq('status', 'refunded')
           .gte('created_at', from)
