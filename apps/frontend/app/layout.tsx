@@ -36,6 +36,13 @@ export const metadata: Metadata = {
   authors: [{ name: "1NRI Worldwide LTD" }],
   creator: "1NRI Worldwide LTD",
   publisher: "1NRI Worldwide LTD",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/icon.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: "/icon.png",
+  },
   alternates: {
     canonical: "/",
   },

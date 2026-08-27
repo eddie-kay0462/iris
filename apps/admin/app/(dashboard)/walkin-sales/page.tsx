@@ -42,13 +42,11 @@ import {
 } from "@/lib/api/walkin-sales";
 import { usePreorders, type Preorder, type PreorderStatus } from "@/lib/api/preorders";
 import { useShippingOptions } from "@/lib/api/settings";
+import { PreorderStatusBadge } from "@/app/components/preorders/PreorderControls";
 import {
-  PreorderStatusBadge,
-  PreorderActionsMenu,
-  RestockModal,
-  RefundModal,
-  ResendConfirmationModal,
-} from "@/app/components/preorders/PreorderControls";
+  WalkinStatusSelect,
+  PreorderGroupStatusSelect,
+} from "@/app/components/StatusSelects";
 
 const GHS = (n: number) =>
   `GH₵${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -141,9 +139,6 @@ export default function WalkinSalesPage() {
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [detailOrder, setDetailOrder] = useState<WalkinOrder | null>(null);
-  const [restockTarget, setRestockTarget] = useState<Preorder | null>(null);
-  const [refundTarget, setRefundTarget] = useState<Preorder | null>(null);
-  const [resendTarget, setResendTarget] = useState<Preorder | null>(null);
 
   const { data: stats } = useWalkinStats();
   const { data, isLoading } = useWalkinOrders({
@@ -224,18 +219,9 @@ export default function WalkinSalesPage() {
       render: (o) =>
         o._kind === "preorder" ? (
           <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-1.5">
-              <PreorderStatusBadge status={o.status} />
-              {o.items.length === 1 && (
-                <PreorderActionsMenu
-                  preorder={o.items[0]}
-                  onRestock={() => setRestockTarget(o.items[0])}
-                  onRefund={() => setRefundTarget(o.items[0])}
-                  onResendConfirmation={() => setResendTarget(o.items[0])}
-                  align="left"
-                />
-              )}
-            </div>
+            <PreorderGroupStatusSelect orderNumber={o.order_number} currentStatus={o.status} />
+            {/* Per-item states can differ within a group; the dropdown above sets
+                them in bulk, so the breakdown is read-only. */}
             {o.items.length > 1 &&
               o.items.map((pre) => (
                 <div key={pre.id} className="flex items-center gap-1.5">
@@ -243,18 +229,13 @@ export default function WalkinSalesPage() {
                     {pre.variant_title ?? pre.product_name}
                   </span>
                   <PreorderStatusBadge status={pre.status} />
-                  <PreorderActionsMenu
-                    preorder={pre}
-                    onRestock={() => setRestockTarget(pre)}
-                    onRefund={() => setRefundTarget(pre)}
-                    onResendConfirmation={() => setResendTarget(pre)}
-                    align="left"
-                  />
                 </div>
               ))}
           </div>
         ) : (
-          <StatusBadge status={o.status} />
+          <div onClick={(e) => e.stopPropagation()}>
+            <WalkinStatusSelect order={o} />
+          </div>
         ),
     },
     { key: "total", header: "Total", render: (o) => GHS(o.total) },
@@ -321,15 +302,6 @@ export default function WalkinSalesPage() {
 
       {showModal && <NewWalkinModal onClose={() => setShowModal(false)} />}
       {detailOrder && <OrderDetailModal order={detailOrder} onClose={() => setDetailOrder(null)} />}
-      {restockTarget && (
-        <RestockModal preorder={restockTarget} onClose={() => setRestockTarget(null)} />
-      )}
-      {refundTarget && (
-        <RefundModal preorder={refundTarget} onClose={() => setRefundTarget(null)} />
-      )}
-      {resendTarget && (
-        <ResendConfirmationModal preorder={resendTarget} onClose={() => setResendTarget(null)} />
-      )}
     </div>
   );
 }
