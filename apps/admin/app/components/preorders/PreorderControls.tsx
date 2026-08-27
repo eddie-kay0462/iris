@@ -13,6 +13,7 @@ import {
   usePreorderGroupHistory,
   type Preorder,
   type PreorderStatus,
+  type UpdateGroupStatusResult,
 } from "@/lib/api/preorders";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -20,6 +21,14 @@ import {
 export function formatCurrency(n: number) {
   return `GH₵ ${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
+export const PREORDER_STATUS_LABELS: Record<PreorderStatus, string> = {
+  pending: "Pending",
+  stock_held: "Stock Held",
+  fulfilled: "Fulfilled",
+  cancelled: "Cancelled",
+  refunded: "Refunded",
+};
 
 export function PreorderStatusBadge({ status }: { status: PreorderStatus }) {
   const map: Record<PreorderStatus, string> = {
@@ -29,16 +38,9 @@ export function PreorderStatusBadge({ status }: { status: PreorderStatus }) {
     cancelled: "bg-slate-100 text-slate-600",
     refunded: "bg-red-100 text-red-800",
   };
-  const label: Record<PreorderStatus, string> = {
-    pending: "Pending",
-    stock_held: "Stock Held",
-    fulfilled: "Fulfilled",
-    cancelled: "Cancelled",
-    refunded: "Refunded",
-  };
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${map[status] ?? "bg-slate-100 text-slate-600"}`}>
-      {label[status] ?? status}
+      {PREORDER_STATUS_LABELS[status] ?? status}
     </span>
   );
 }
@@ -417,11 +419,31 @@ export function PreorderActionsMenu({
 
 // ─── Group Status Panel & History (popup/walkin "orders" — no real orders row) ─
 
-const GROUP_STATUS_OPTIONS: { value: "fulfilled" | "cancelled" | "refunded"; label: string }[] = [
+export type GroupStatusTarget = "fulfilled" | "cancelled" | "refunded";
+
+export const GROUP_STATUS_OPTIONS: { value: GroupStatusTarget; label: string }[] = [
   { value: "fulfilled", label: "Fulfilled" },
   { value: "cancelled", label: "Cancelled" },
   { value: "refunded", label: "Refunded" },
 ];
+
+/**
+ * Group status changes skip items that aren't eligible for the target status, so
+ * the toast has to report what actually happened. Shared by the detail-page panel
+ * and the inline dropdown in the order lists so the wording can't drift apart.
+ */
+export function toastGroupStatusResult(
+  result: UpdateGroupStatusResult,
+  status: GroupStatusTarget,
+) {
+  if (result.updated === 0) {
+    toast.error("No items were eligible for that status change.", { duration: 6000 });
+  } else if (result.skipped > 0) {
+    toast.success(`Updated ${result.updated} item(s) — ${result.skipped} weren't eligible.`);
+  } else {
+    toast.success(`Updated ${result.updated} item(s) to ${status}.`);
+  }
+}
 
 export function PreorderGroupStatusPanel({
   orderNumber,
@@ -440,13 +462,7 @@ export function PreorderGroupStatusPanel({
     if (!newStatus) return;
     try {
       const result = await updateGroupStatus.mutateAsync({ orderNumber, status: newStatus, notes: notes || undefined });
-      if (result.updated === 0) {
-        toast.error("No items were eligible for that status change.", { duration: 6000 });
-      } else if (result.skipped > 0) {
-        toast.success(`Updated ${result.updated} item(s) — ${result.skipped} weren't eligible.`);
-      } else {
-        toast.success(`Updated ${result.updated} item(s) to ${newStatus}.`);
-      }
+      toastGroupStatusResult(result, newStatus);
       setNewStatus("");
       setNotes("");
     } catch {

@@ -1,5 +1,17 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { apiClient } from "./client";
+
+/**
+ * Walk-in orders are also mirrored into the unified Orders page and the payment
+ * stat cards, so any status change has to refresh those views too.
+ */
+function invalidateWalkinViews(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ["walkin-orders"] });
+  qc.invalidateQueries({ queryKey: ["walkin-stats"] });
+  qc.invalidateQueries({ queryKey: ["admin-orders"] });
+  qc.invalidateQueries({ queryKey: ["admin-order"] });
+  qc.invalidateQueries({ queryKey: ["payment-stats"] });
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -199,10 +211,7 @@ export function useUpdateWalkinOrder() {
   return useMutation({
     mutationFn: ({ id, dto }: { id: string; dto: UpdateWalkinOrderInput }) =>
       apiClient<WalkinOrder>(`/walkin-sales/orders/${id}`, { method: "PATCH", body: dto }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["walkin-orders"] });
-      qc.invalidateQueries({ queryKey: ["walkin-stats"] });
-    },
+    onSuccess: () => invalidateWalkinViews(qc),
   });
 }
 
@@ -211,10 +220,7 @@ export function useRefundWalkinOrder() {
   return useMutation({
     mutationFn: ({ id, dto }: { id: string; dto: RefundWalkinOrderInput }) =>
       apiClient<WalkinOrder>(`/walkin-sales/orders/${id}/refund`, { method: "POST", body: dto }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["walkin-orders"] });
-      qc.invalidateQueries({ queryKey: ["walkin-stats"] });
-    },
+    onSuccess: () => invalidateWalkinViews(qc),
   });
 }
 

@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { useAdminOrders, useUpdateOrderStatus, type Order } from "@/lib/api/orders";
+import { useAdminOrders, type Order } from "@/lib/api/orders";
 import { usePaymentStats } from "@/lib/api/payments";
 import { DataTable, type Column } from "../../components/DataTable";
-import { StatusBadge } from "../../components/StatusBadge";
 import { SearchInput } from "../../components/SearchInput";
 import { Pagination } from "../../components/Pagination";
 import { StatsCard } from "../../components/StatsCard";
@@ -15,66 +13,18 @@ import { getToken } from "@/lib/api/client";
 import {
   PreorderStatusBadge,
   PreorderSourceBadge,
-  PreorderActionsMenu,
-  RestockModal,
-  RefundModal,
-  ResendConfirmationModal,
 } from "../../components/preorders/PreorderControls";
-import type { Preorder, PreorderStatus } from "@/lib/api/preorders";
+import {
+  ORDER_STATUSES,
+  OrderStatusSelect,
+  WalkinStatusSelect,
+  PreorderGroupStatusSelect,
+} from "../../components/StatusSelects";
+import type { PreorderStatus } from "@/lib/api/preorders";
+import type { WalkinOrderStatus } from "@/lib/api/walkin-sales";
 
 function fmt(n: number) {
   return `GH₵${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-const ORDER_STATUSES = [
-  "pending",
-  "paid",
-  "processing",
-  "shipped",
-  "delivered",
-  "cancelled",
-  "refunded",
-];
-
-function StatusDropdown({
-  order,
-  onUpdate,
-}: {
-  order: Order;
-  onUpdate: (orderId: string, status: string) => void;
-}) {
-  const [pending, setPending] = useState(false);
-
-  async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    e.stopPropagation();
-    const newStatus = e.target.value;
-    if (newStatus === order.status) return;
-    setPending(true);
-    try {
-      await onUpdate(order.id, newStatus);
-      toast.success(`Order status updated to ${newStatus}.`);
-    } catch {
-      toast.error("Failed to update order status.", { duration: 6000 });
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <select
-      value={order.status}
-      onChange={handleChange}
-      onClick={(e) => e.stopPropagation()}
-      disabled={pending}
-      className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 outline-none focus:border-slate-400 disabled:opacity-50"
-    >
-      {ORDER_STATUSES.map((s) => (
-        <option key={s} value={s}>
-          {s.charAt(0).toUpperCase() + s.slice(1)}
-        </option>
-      ))}
-    </select>
-  );
 }
 
 export default function AdminOrdersPage() {
@@ -83,9 +33,6 @@ export default function AdminOrdersPage() {
   const [status, setStatus] = useState("");
   const [preordersOnly, setPreordersOnly] = useState(false);
   const [page, setPage] = useState(1);
-  const [restockTarget, setRestockTarget] = useState<Preorder | null>(null);
-  const [refundTarget, setRefundTarget] = useState<Preorder | null>(null);
-  const [resendTarget, setResendTarget] = useState<Preorder | null>(null);
 
   const { data, isLoading } = useAdminOrders({
     search,
@@ -93,12 +40,7 @@ export default function AdminOrdersPage() {
     has_preorders: preordersOnly ? "true" : undefined,
     page,
   });
-  const updateStatus = useUpdateOrderStatus();
   const { data: payStats } = usePaymentStats();
-
-  function handleStatusUpdate(orderId: string, newStatus: string) {
-    return updateStatus.mutateAsync({ orderId, status: newStatus });
-  }
 
   const columns: Column<Order>[] = [
     {
@@ -138,21 +80,21 @@ export default function AdminOrdersPage() {
       header: "Status",
       render: (row) =>
         row.is_walkin ? (
-          <StatusBadge status={row.status} />
+          <WalkinStatusSelect
+            order={{
+              id: row.id,
+              order_number: row.order_number,
+              status: row.status as WalkinOrderStatus,
+            }}
+          />
         ) : row.is_popup_preorder ? (
           <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-1.5">
-              <PreorderStatusBadge status={row.status as PreorderStatus} />
-              {row.preorders?.length === 1 && (
-                <PreorderActionsMenu
-                  preorder={row.preorders[0]}
-                  onRestock={() => setRestockTarget(row.preorders![0])}
-                  onRefund={() => setRefundTarget(row.preorders![0])}
-                  onResendConfirmation={() => setResendTarget(row.preorders![0])}
-                  align="left"
-                />
-              )}
-            </div>
+            <PreorderGroupStatusSelect
+              orderNumber={row.order_number}
+              currentStatus={row.status as PreorderStatus}
+            />
+            {/* Per-item states can differ within a group; the dropdown above sets
+                them in bulk, so the breakdown is read-only. */}
             {(row.preorders?.length ?? 0) > 1 &&
               row.preorders!.map((pre) => (
                 <div key={pre.id} className="flex items-center gap-1.5">
@@ -160,18 +102,11 @@ export default function AdminOrdersPage() {
                     {pre.variant_title ?? pre.product_name}
                   </span>
                   <PreorderStatusBadge status={pre.status} />
-                  <PreorderActionsMenu
-                    preorder={pre}
-                    onRestock={() => setRestockTarget(pre)}
-                    onRefund={() => setRefundTarget(pre)}
-                    onResendConfirmation={() => setResendTarget(pre)}
-                    align="left"
-                  />
                 </div>
               ))}
           </div>
         ) : (
-          <StatusDropdown order={row} onUpdate={handleStatusUpdate} />
+          <OrderStatusSelect order={row} />
         ),
     },
     {
@@ -310,16 +245,6 @@ export default function AdminOrdersPage() {
           totalPages={data.totalPages}
           onPageChange={setPage}
         />
-      )}
-
-      {restockTarget && (
-        <RestockModal preorder={restockTarget} onClose={() => setRestockTarget(null)} />
-      )}
-      {refundTarget && (
-        <RefundModal preorder={refundTarget} onClose={() => setRefundTarget(null)} />
-      )}
-      {resendTarget && (
-        <ResendConfirmationModal preorder={resendTarget} onClose={() => setResendTarget(null)} />
       )}
     </section>
   );
