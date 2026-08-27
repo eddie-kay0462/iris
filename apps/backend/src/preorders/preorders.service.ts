@@ -45,23 +45,30 @@ export class PreordersService {
     });
   }
 
+  /**
+   * Allocates the next pre-order number from a Postgres sequence.
+   *
+   * This used to read the newest row and add one, which raced: two pre-orders
+   * started at the same moment both read the same latest number and both
+   * returned its successor. The UNIQUE constraint on order_number used to turn
+   * that into a failed request; now that a pre-order is legitimately several
+   * rows sharing one number, that constraint is gone and the collision would
+   * instead merge two unrelated carts into one apparent order.
+   *
+   * `next_preorder_number` (20260829000001) does the allocation atomically and
+   * still applies the configured start number as a floor.
+   */
   private async generateOrderNumber(): Promise<string> {
-    const db = this.supabase.getAdminClient();
-    const { data } = await db
-      .from('preorders')
-      .select('order_number')
-      .order('created_at', { ascending: false })
-      .limit(1);
-    let next = 1;
-    if (data && data.length > 0) {
-      const match = data[0].order_number.match(/PRE-(\d+)/);
-      if (match) next = parseInt(match[1], 10) + 1;
-    }
-    // Floor at the configured start so preorder numbers match the clean
-    // high-number scheme used for online orders.
     const start = await this.settingsService.getPreorderNumberStart();
-    next = Math.max(next, start);
-    return `PRE-${String(next).padStart(6, '0')}`;
+    const { data, error } = await this.supabase
+      .getAdminClient()
+      .rpc('next_preorder_number', { min_sequence: start });
+    if (error || !data) {
+      throw new InternalServerErrorException(
+        `Could not allocate a pre-order number: ${error?.message ?? 'no value returned'}`,
+      );
+    }
+    return data as string;
   }
 
   private async checkEligibility(
@@ -403,8 +410,22 @@ export class PreordersService {
     }
 
     const orderNumber = await this.generateOrderNumber();
-    const results = [];
+    const results: any[] = [];
     const preorderVendors: string[] = [];
+
+    /**
+     * Line items are inserted one at a time, so a failure partway through
+     * would leave an orphaned half-order behind under this order_number.
+     * Clean those up before rethrowing, the way walkin-sales.service does
+     * when its item insert fails.
+     */
+    const rollback = async () => {
+      if (results.length === 0) return;
+      await db
+        .from('preorders')
+        .delete()
+        .in('id', results.map((r) => r.id));
+    };
 
     for (const item of dto.items) {
       const { data: variant, error: varErr } = await db
@@ -413,9 +434,13 @@ export class PreordersService {
         .eq('id', item.variantId)
         .single();
 
-      if (varErr || !variant) throw new BadRequestException(`Variant ${item.variantId} not found`);
+      if (varErr || !variant) {
+        await rollback();
+        throw new BadRequestException(`Variant ${item.variantId} not found`);
+      }
       if (!variant.preorder_enabled) {
         const title = (variant.products as any)?.title ?? item.variantId;
+        await rollback();
         throw new BadRequestException(`Pre-orders are not enabled for ${title}`);
       }
 
@@ -426,6 +451,7 @@ export class PreordersService {
           .eq('variant_id', item.variantId)
           .in('status', ['pending', 'stock_held']);
         if ((count ?? 0) + item.quantity > variant.preorder_limit) {
+          await rollback();
           throw new BadRequestException(
             `Pre-orders for this item are full (limit: ${variant.preorder_limit}, current: ${count})`,
           );
@@ -457,7 +483,14 @@ export class PreordersService {
         .select()
         .single();
 
-      if (error || !preorder) throw new InternalServerErrorException(`Failed to create preorder for variant ${item.variantId}`);
+      if (error || !preorder) {
+        await rollback();
+        // Carry the Postgres detail through — without it the production log
+        // says only "failed" and gives nothing to diagnose from.
+        throw new InternalServerErrorException(
+          `Failed to create preorder for variant ${item.variantId}: ${error?.message ?? 'no row returned'}`,
+        );
+      }
       results.push(preorder);
     }
 

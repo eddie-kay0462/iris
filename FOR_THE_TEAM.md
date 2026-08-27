@@ -5890,3 +5890,105 @@ There are tests covering each of those, including a deliberate one for the last 
 ### One unrelated thing fixed on the way past
 
 The existing tests for the **online order** sweep had been silently failing since the bundle-discounts work went in — that change added an ingredient to how orders are put together, and the test setup was never updated to match, so all eight cases were erroring out rather than actually checking anything. Nothing was wrong with the orders code itself; the tests just weren't testing it any more. Fixed, and all eight pass again.
+
+---
+
+## One Status Dropdown for Every Kind of Order (August 2026)
+
+The Orders list and the Walk-in Sales list were showing three different controls in the same Status column, depending on what kind of order the row was. A normal online order had a dropdown you could just click and change. A walk-in sale had a coloured label and nothing else — you literally could not change its status from the list. A pre-order had a label plus an "Actions" button that opened a menu, so changing its state took three clicks through a menu that also had unrelated things in it.
+
+Now every row — online order, walk-in sale, pop-up pre-order, walk-in pre-order — has the same dropdown. Click it, pick the new state, done. All the dropdowns are also the same width, so the column lines up instead of each box shrinking to fit its own wording.
+
+Two things worth knowing about how it behaves:
+
+- **Refunding a walk-in still does the full job.** Picking "Refunded" on a walk-in sale doesn't just change the word — it puts the stock back, records the refund against the payment, and texts the customer, same as the refund button always did. It asks you to confirm first, and it's only offered on sales that were actually completed. Same for cancelling a completed sale, since that returns stock too.
+- **Pre-orders change as a group.** A pre-order can have several items in it, and not every item is always eligible for the state you picked. The dropdown sets them all at once and then tells you honestly what happened — e.g. "Updated 2 item(s) — 1 wasn't eligible." Where a pre-order has more than one item, the individual items are still listed underneath so you can see where each one stands.
+
+**Restock & Allocate and Resend Confirmation have moved.** Those two were living in the old "Actions" menu on the list. They're now only on the individual order's page — click into the order to get them. Nothing was removed, it's just one click further away, which keeps the list itself clean.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/admin/app/components/StatusSelects.tsx` | The new shared dropdown, in three flavours — online orders, walk-in sales, pre-order groups. This is what makes them all look and behave the same. New file. |
+| `apps/admin/app/(dashboard)/orders/page.tsx` | The Orders list now uses the shared dropdown for all three row types. The old one-off dropdown and the "Actions" menus are gone. |
+| `apps/admin/app/(dashboard)/walkin-sales/page.tsx` | Same swap on the Walk-in Sales list. Walk-in sales are changeable from the list for the first time. |
+| `apps/admin/app/components/preorders/PreorderControls.tsx` | Shares its status wording and its "here's what actually got updated" message with the new dropdown, so the two can't drift apart and start saying different things. |
+| `apps/admin/lib/api/walkin-sales.ts` | Changing a walk-in's status now refreshes the Orders page and the money tiles too, not just the Walk-in Sales page — the same sale shows up in all three places. |
+
+> **Heads-up — no action required**
+>
+> No database migration, no new settings. This is a front-of-house change only; nothing about how orders are stored or processed changed.
+
+### How to test
+
+1. Go to **Orders**. Every row's Status column should now be a dropdown, all the same width, and there should be no "Actions" button left anywhere on the page.
+2. On a normal online order, change the status and check it sticks.
+3. On a teal **Walk-in** row, change it to "On Hold" and back to "Completed". Clicking the dropdown should *not* navigate you away from the page.
+4. On a completed walk-in, pick "Refunded". You should get a confirmation prompt first — say yes, then check that product's stock has gone back up.
+5. On a purple **Pre-order** row, pick "Cancelled" and read the message that comes back — it should tell you how many items it actually changed.
+6. Click into any pre-order's own page and confirm **Restock & Allocate** and **Resend Confirmation** are still there.
+
+### Still on the list
+
+The Walk-in Sales page has filter buttons across the top — All, Completed, Refunded, Cancelled. Two of the states you can now pick from the dropdown, **On Hold** and **Awaiting Payment**, don't have a button up there. So if you're filtered to something and you move a sale into one of those two states, the row will disappear from view. It hasn't gone anywhere — click "All" and it's back. Adding the two missing buttons is a small follow-up, not done yet.
+
+---
+
+## Walk-in Sales Get Their Own Analytics Tab (August 2026)
+
+Walk-in sales have counted towards the numbers for a while now, but there was nowhere to actually *look* at them. Analytics had a tab for the online store and a tab for pop-ups, and walk-ins showed up as one slice of a pie chart and four basic tiles on the Walk-in Sales page — total revenue, orders today, that sort of thing. Nothing about how the counter is actually trading.
+
+There's now a **Walk-ins** tab in Analytics, sitting between Pop-ups and Compare. It answers the questions you'd actually ask about a shop counter:
+
+- **The basics** — net sales, order count, average order value, and average items per sale, each with an arrow showing whether it's up or down against the period before, and a little trend line.
+- **Sales over time**, with the previous period drawn behind it as a dashed line so you can see whether things are picking up.
+- **How people are paying** — the cash / mobile money / bank transfer split. Handy for knowing how much float to keep on hand.
+- **Busiest hours** — which hours of the day actually bring in money. Sorted busiest-first, so the top of the list is when you want your best person on the floor.
+- **Sales by staff** — who rang up what, with their order count and average sale.
+- **Top products at the counter** — which specifically may differ from what sells online.
+
+Everything respects the period picker at the top (last 7 / 30 / 90 days, or last year).
+
+### Walk-ins in the Compare tab
+
+The Compare tab could only do "Storefront vs Pop-up" or "Pop-up vs Pop-up". It now has four options, with **Storefront vs Walk-in** and **Pop-up vs Walk-in** added.
+
+One honest caveat we've now written on the cards themselves rather than leaving you to guess: **pop-up figures always cover the whole event, not the period you picked at the top.** That was already true of the old Storefront-vs-Pop-up comparison, it just wasn't said anywhere. So when a pop-up is on one side of a comparison, the two sides are measuring different stretches of time. Storefront-vs-Walk-in has no such problem — both sides use the period picker.
+
+Storefront and Walk-in also now show the *same three* numbers side by side (Revenue, Orders, Average Order Value). The older Storefront-vs-Pop-up pairing is a bit lopsided — one side says "Orders" and the other says "Transactions" — which we've left alone for now.
+
+### The five new reports
+
+Each of the new charts is also a proper report in its own right, so they show up in the **Reports** list and can be opened on their own page with a table and a CSV download: *Walk-in sales over time*, *Walk-in sales by hour*, *Walk-in basket*, *Walk-in sales by staff*, and *Walk-in payment methods*.
+
+A note on refunds, so the numbers aren't surprising: a refunded walk-in still counts as a sale that happened, with the refunded amount subtracted separately as a return — and the return is counted against the day of the *original sale*, not the day of the refund. That's the same convention the storefront sales figures already use, so the two channels can be compared fairly.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/backend/src/analytics/reports/report-registry.ts` | The five new walk-in reports, plus the shared maths they use. Built on the same machinery as the existing reports, so they get period-vs-period comparison, the standalone report page and CSV export without any extra work. |
+| `apps/backend/src/analytics/reports/report-context.ts` | Walk-in sales now also load who rang them up, so the "Sales by staff" report has names to show. Everything else that reads walk-in data is unaffected. |
+| `apps/admin/app/(dashboard)/analytics/components/WalkinsView.tsx` | The new Walk-ins tab itself. New file. |
+| `apps/admin/app/(dashboard)/analytics/page.tsx` | Adds the Walk-ins tab to the row of tabs. |
+| `apps/admin/app/(dashboard)/analytics/components/BothView.tsx` | The two new Compare options, a walk-in column that matches the storefront one number-for-number, and the note about pop-up figures covering the whole event. Also tidied up a period picker that had been copy-pasted twice. |
+
+> **Heads-up — no action required**
+>
+> No database migration and no new settings. The staff name on each walk-in sale was already being recorded when the sale was rung up; we just weren't reading it back out until now.
+
+### How to test
+
+1. Go to **Analytics**. There should be a new **Walk-ins** tab between Pop-ups and Compare.
+2. Cycle the period picker through all four options. Every card should keep rendering — on a range with no walk-in sales, the hours chart should still show all 24 hours rather than collapsing to nothing.
+3. Check the Net Sales figure against Total Revenue on the **Walk-in Sales** page for a comparable stretch, and against the Walk-in slice of the pie on the Compare tab. All three should agree.
+4. Ring up a test walk-in sale (pay cash so it completes straight away), come back, and confirm it lands in today's bucket, in the Cash slice, in the right hour, and under your own name in Sales by staff.
+5. Open **Compare** and click through all four options. The two that existed before should look exactly as they did.
+6. Go to **Reports** and open any of the walk-in reports on its own page, then try the CSV download.
+
+### Worth knowing
+
+- **Hours are read as Ghana time.** Because Ghana doesn't shift from UTC, the timestamp we store *is* the local trading hour. If we ever sell from a shop in another timezone, the Busiest Hours chart is the thing that would need revisiting.
+- **Sales with no one attached** show as "Unattributed" in Sales by staff. Shouldn't happen for anything rung up in the admin app, but old or imported records might land there.
+- **Not yet checked in a browser.** The numbers have been verified directly against the live database — 15 completed walk-ins, GH₵7,300, matching the Walk-in Sales page exactly — and everything compiles and builds. But nobody has actually looked at the new tab on screen yet, so treat step 1 above as a genuine test rather than a formality.
