@@ -6,9 +6,10 @@ export type DiscountType =
   | "percentage"
   | "free_shipping"
   | "product"
-  | "pairing";
+  | "pairing"
+  | "volume";
 
-export type DiscountSource = "code" | "pairing" | "manual";
+export type DiscountSource = "code" | "pairing" | "volume" | "manual";
 
 export interface ResolveDiscountPayload {
   channel: "online";
@@ -35,6 +36,11 @@ export interface DiscountCandidate {
     pairedCount: number;
     tier: { min_paired_count: number; value_type: string; value: number };
   };
+  volume?: {
+    countedProductIds: string[] | null;
+    count: number;
+    tier: { min_paired_count: number; value_type: string; value: number };
+  };
 }
 
 export interface DiscountResolution {
@@ -48,6 +54,7 @@ export interface DiscountResolution {
   breakdown: {
     codeCandidate: DiscountCandidate | null;
     pairingCandidates: DiscountCandidate[];
+    volumeCandidates: DiscountCandidate[];
     rejected: { label: string; reason: string }[];
     winner: DiscountSource | null;
   };
@@ -86,7 +93,7 @@ export interface ValidatePromoResult {
   message: string;
 }
 
-/** @deprecated Use useResolveDiscount — it also surfaces automatic bundle rules. */
+/** @deprecated Use useResolveDiscount — it also surfaces automatic rules. */
 export function useValidatePromo() {
   return useMutation({
     mutationFn: (payload: ValidatePromoPayload) =>
@@ -138,4 +145,37 @@ export function useBundleOfferFor(productId: string | undefined) {
   const { data } = useBundleOffers();
   if (!productId) return null;
   return data?.find((o) => o.anchorProductId === productId) ?? null;
+}
+
+// ─── Volume offers (cart nudge) ──────────────────────────────────────────────
+
+export interface VolumeTier {
+  minCount: number;
+  valueType: "percentage" | "fixed";
+  value: number;
+}
+
+export interface VolumeOffer {
+  promoCodeId: string;
+  label: string;
+  /** Null when every line in the cart counts toward the threshold. */
+  productIds: string[] | null;
+  tiers: VolumeTier[];
+}
+
+/**
+ * Which item-count thresholds are currently on offer.
+ *
+ * Cart-independent, so it's fetched once and shared between the cart drawer and
+ * the cart page. What a cart is actually *worth* is still decided server-side
+ * at checkout — this only drives the "add one more" nudge.
+ */
+export function useVolumeOffers() {
+  return useQuery({
+    queryKey: ["volume-offers"],
+    queryFn: () => apiClient<VolumeOffer[]>("/promos/volume-offers"),
+    staleTime: 5 * 60 * 1000,
+    // A nudge is decoration: never let its absence surface as an error.
+    retry: false,
+  });
 }

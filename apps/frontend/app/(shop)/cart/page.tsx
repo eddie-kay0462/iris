@@ -6,6 +6,7 @@ import { useCart } from "@/lib/cart";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocale } from "@/lib/locale/locale-provider";
+import VolumeNudge from "@/app/(shop)/components/VolumeNudge";
 
 export default function CartPage() {
   const { items, subtotal, removeItem, updateQuantity } = useCart();
@@ -125,6 +126,7 @@ export default function CartPage() {
 
       {/* Summary */}
       <div className="mt-8 border-t border-line pt-6">
+        <VolumeNudge className="mb-4 text-sm text-text-secondary" />
         <div className="flex items-center justify-between text-lg font-semibold text-text">
           <span>Subtotal</span>
           <span>{formatPrice(subtotal)}</span>

@@ -22,12 +22,14 @@ const CHANNEL_LABELS: Record<SalesChannel, string> = {
 const SOURCE_LABELS: Record<DiscountSource, string> = {
   code: "Promo code",
   pairing: "Bundle rule",
+  volume: "Volume rule",
   manual: "Manual (staff)",
 };
 
 const SOURCE_STYLES: Record<DiscountSource, string> = {
   code: "bg-blue-50 text-blue-700",
   pairing: "bg-indigo-50 text-indigo-700",
+  volume: "bg-teal-50 text-teal-700",
   manual: "bg-amber-50 text-amber-700",
 };
 

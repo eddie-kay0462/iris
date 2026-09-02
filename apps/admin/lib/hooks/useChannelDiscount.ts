@@ -32,6 +32,7 @@ export interface ChannelDiscountResult {
   discountAmount: number;
   label: string | null;
   /** Bundle rules the basket qualifies for, whether or not they won. */
+  /** Every rule that fired on its own — pairing and volume alike. */
   autoCandidates: DiscountResolution["breakdown"]["pairingCandidates"];
   /** Set when a manual override is worth less than a rule the basket qualifies for. */
   overriddenBy: { label: string; amount: number } | null;
@@ -125,7 +126,10 @@ export function useChannelDiscount(
     resolution,
     discountAmount: resolution?.discountAmount ?? 0,
     label: resolution?.label ?? null,
-    autoCandidates: resolution?.breakdown.pairingCandidates ?? [],
+    autoCandidates: [
+      ...(resolution?.breakdown.pairingCandidates ?? []),
+      ...(resolution?.breakdown.volumeCandidates ?? []),
+    ],
     overriddenBy: resolution?.breakdown.overriddenBy ?? null,
     codeError,
     clearCodeError: () => setCodeError(null),

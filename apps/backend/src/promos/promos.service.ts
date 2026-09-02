@@ -20,6 +20,14 @@ export interface ValidatePromoResult {
 
 const DEFAULT_CHANNELS = ['online', 'popup', 'walkin'];
 
+/** Types whose value lives in promo_pairing_tiers rather than discount_value. */
+const isTiered = (type: DiscountType) => type === 'pairing' || type === 'volume';
+
+/** A rule that fires on its own carries no code — see promo_codes_shape_check. */
+const isCodeless = (dto: { discount_type: DiscountType; auto_apply?: boolean }) =>
+  dto.discount_type === 'pairing' ||
+  (dto.discount_type === 'volume' && dto.auto_apply !== false);
+
 @Injectable()
 export class PromosService {
   constructor(
@@ -63,11 +71,13 @@ export class PromosService {
 
     const db = this.supabase.getAdminClient();
     const isPairing = dto.discount_type === 'pairing';
+    const tiered = isTiered(dto.discount_type);
+    const codeless = isCodeless(dto);
 
     const { data, error } = await db
       .from('promo_codes')
       .insert({
-        code: isPairing ? null : dto.code!.toUpperCase().trim(),
+        code: codeless ? null : dto.code!.toUpperCase().trim(),
         description: dto.description || null,
         discount_type: dto.discount_type,
         discount_value: dto.discount_value ?? 0,
@@ -79,7 +89,7 @@ export class PromosService {
         expires_at: dto.expires_at ?? null,
         is_active: dto.is_active ?? true,
         channels: dto.channels?.length ? dto.channels : DEFAULT_CHANNELS,
-        auto_apply: isPairing ? true : (dto.auto_apply ?? false),
+        auto_apply: codeless,
         anchor_product_id: isPairing ? dto.anchor_product_id! : null,
         pairing_basis: isPairing ? (dto.pairing_basis ?? 'units') : null,
         applies_to: isPairing ? (dto.applies_to ?? 'anchor') : null,
@@ -95,7 +105,7 @@ export class PromosService {
       throw error;
     }
 
-    if (isPairing) await this.replaceTiers(data.id, dto.tiers ?? []);
+    if (tiered) await this.replaceTiers(data.id, dto.tiers ?? []);
 
     await this.activityLog.log({
       action: 'create',
@@ -106,7 +116,7 @@ export class PromosService {
         code: data.code,
         discount_type: data.discount_type,
         channels: data.channels,
-        tiers: isPairing ? (dto.tiers ?? []) : undefined,
+        tiers: tiered ? (dto.tiers ?? []) : undefined,
       },
     });
 
@@ -147,8 +157,8 @@ export class PromosService {
     if (dto.pairing_basis !== undefined) updates.pairing_basis = dto.pairing_basis;
     if (dto.applies_to !== undefined) updates.applies_to = dto.applies_to;
 
-    // A promo switched into or out of 'pairing' has to have its shape columns
-    // moved with it, or the promo_codes_shape_check constraint will reject it.
+    // A promo switched between types has to have its shape columns moved with
+    // it, or the promo_codes_shape_check constraint will reject it.
     if (dto.discount_type !== undefined) {
       if (dto.discount_type === 'pairing') {
         updates.auto_apply = true;
@@ -156,13 +166,20 @@ export class PromosService {
         updates.pairing_basis = dto.pairing_basis ?? existing.pairing_basis ?? 'units';
         updates.applies_to = dto.applies_to ?? existing.applies_to ?? 'anchor';
       } else {
-        updates.auto_apply = dto.auto_apply ?? false;
+        // Volume rules choose their own trigger; every other type needs a code.
+        const autoApply =
+          dto.discount_type === 'volume'
+            ? (dto.auto_apply ?? existing.auto_apply ?? true)
+            : false;
+        updates.auto_apply = autoApply;
+        if (autoApply) updates.code = null;
         updates.anchor_product_id = null;
         updates.pairing_basis = null;
         updates.applies_to = null;
       }
     } else if (dto.auto_apply !== undefined) {
       updates.auto_apply = dto.auto_apply;
+      if (dto.auto_apply) updates.code = null;
     }
 
     const { data, error } = await db
@@ -180,7 +197,7 @@ export class PromosService {
     }
 
     if (dto.tiers !== undefined) await this.replaceTiers(id, dto.tiers);
-    if (discountType !== 'pairing') await this.replaceTiers(id, []);
+    if (!isTiered(discountType)) await this.replaceTiers(id, []);
 
     await this.activityLog.log({
       action: 'update',
@@ -246,23 +263,38 @@ export class PromosService {
     if (error) throw error;
   }
 
+  private assertTiers(dto: CreatePromoDto, noun: string) {
+    const tiers = dto.tiers ?? [];
+    if (!tiers.length) {
+      throw new BadRequestException(`A ${noun} rule needs at least one tier`);
+    }
+    const thresholds = tiers.map((t) => t.min_paired_count);
+    if (new Set(thresholds).size !== thresholds.length) {
+      throw new BadRequestException('Each tier needs a distinct item count');
+    }
+    for (const t of tiers) {
+      if (t.value_type === 'percentage' && t.value > 100) {
+        throw new BadRequestException('A percentage tier cannot exceed 100%');
+      }
+    }
+  }
+
   private assertShape(dto: CreatePromoDto) {
     if (dto.discount_type === 'pairing') {
       if (!dto.anchor_product_id) {
         throw new BadRequestException('A pairing rule needs an anchor product');
       }
-      const tiers = dto.tiers ?? [];
-      if (!tiers.length) {
-        throw new BadRequestException('A pairing rule needs at least one tier');
-      }
-      const thresholds = tiers.map((t) => t.min_paired_count);
-      if (new Set(thresholds).size !== thresholds.length) {
-        throw new BadRequestException('Each tier needs a distinct paired-item count');
-      }
-      for (const t of tiers) {
-        if (t.value_type === 'percentage' && t.value > 100) {
-          throw new BadRequestException('A percentage tier cannot exceed 100%');
-        }
+      this.assertTiers(dto, 'pairing');
+      return;
+    }
+
+    if (dto.discount_type === 'volume') {
+      this.assertTiers(dto, 'volume');
+      // A code-gated volume rule is the only shape that still needs a code.
+      if (dto.auto_apply === false && !dto.code?.trim()) {
+        throw new BadRequestException(
+          'A volume rule that does not auto-apply needs a promo code',
+        );
       }
       return;
     }
@@ -281,7 +313,7 @@ export class PromosService {
   /**
    * @deprecated Kept so the original POST /promos/validate contract survives.
    * New callers should use DiscountEngineService.resolve via POST /promos/resolve,
-   * which also surfaces auto-applied pairing rules.
+   * which also surfaces auto-applied pairing and volume rules.
    */
   async validate(dto: ValidatePromoDto): Promise<ValidatePromoResult> {
     const resolution = await this.engine.resolve({

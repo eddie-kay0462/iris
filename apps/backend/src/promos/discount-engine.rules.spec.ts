@@ -8,9 +8,13 @@ import {
   PromoRule,
   bestAlternative,
   computeManualDiscount,
+  computeCodeDiscount,
   computePairingDiscount,
+  computeVolumeDiscount,
   countPaired,
+  countUnits,
   evaluatePairingRule,
+  evaluateVolumeRule,
   pickWinner,
   selectTier,
   subtotalOf,
@@ -349,5 +353,177 @@ describe('bundleHeadline', () => {
 
   it('trims trailing zeros off decimal values', () => {
     expect(bundleHeadline(tiers([1, 'percentage', 12.5]))).toBe('Up to 12.5% off');
+  });
+});
+
+// ─── Volume rules ────────────────────────────────────────────────────────────
+
+const volumeRule = (over: Partial<PromoRule> = {}): PromoRule =>
+  rule({
+    discount_type: 'volume',
+    description: 'Buy more, save more',
+    anchor_product_id: null,
+    pairing_basis: null,
+    applies_to: null,
+    tiers: tiers([3, 'percentage', 10], [5, 'percentage', 15]),
+    ...over,
+  });
+
+describe('countUnits', () => {
+  it('counts repeats of the same product', () => {
+    expect(countUnits([item(HOODIE, 300, 3)], null)).toBe(3);
+  });
+
+  it('sums every line when there is no restriction', () => {
+    const cart = [item(ANCHOR, 200, 1), item(HOODIE, 300, 2)];
+    expect(countUnits(cart, null)).toBe(3);
+    expect(countUnits(cart, [])).toBe(3);
+  });
+
+  it('counts only the listed products when restricted', () => {
+    const cart = [item(ANCHOR, 200, 4), item(HOODIE, 300, 2)];
+    expect(countUnits(cart, [HOODIE])).toBe(2);
+    expect(countUnits(cart, [CAP])).toBe(0);
+  });
+
+  it('ignores zero-quantity lines', () => {
+    expect(countUnits([item(HOODIE, 300, 0), item(CAP, 100, 2)], null)).toBe(2);
+  });
+});
+
+describe('computeVolumeDiscount', () => {
+  it('takes a percentage off the whole subtotal', () => {
+    expect(computeVolumeDiscount(tiers([3, 'percentage', 10])[0], 900)).toBe(90);
+  });
+
+  it('takes a fixed amount off', () => {
+    expect(computeVolumeDiscount(tiers([3, 'fixed', 50])[0], 900)).toBe(50);
+  });
+
+  it('honours the tier cap', () => {
+    const tier = { ...tiers([3, 'percentage', 50])[0], max_discount_amount: 100 };
+    expect(computeVolumeDiscount(tier, 900)).toBe(100);
+  });
+
+  it('never exceeds the subtotal', () => {
+    expect(computeVolumeDiscount(tiers([3, 'fixed', 500])[0], 120)).toBe(120);
+  });
+
+  it('never goes negative', () => {
+    expect(computeVolumeDiscount(tiers([3, 'fixed', 0])[0], 120)).toBe(0);
+  });
+});
+
+describe('evaluateVolumeRule', () => {
+  it('fires on three of the same product', () => {
+    const cart = [item(HOODIE, 300, 3)];
+    const { candidate } = evaluateVolumeRule(volumeRule(), ctxOf(cart));
+    expect(candidate?.source).toBe('volume');
+    expect(candidate?.volume?.count).toBe(3);
+    expect(candidate?.amount).toBe(90); // 10% of 900
+  });
+
+  it('rejects a cart short of the lowest threshold', () => {
+    const { candidate, rejected } = evaluateVolumeRule(
+      volumeRule(),
+      ctxOf([item(HOODIE, 300, 2)]),
+    );
+    expect(candidate).toBeUndefined();
+    expect(rejected?.reason).toBe('Needs 3 item(s), cart has 2');
+  });
+
+  it('takes the highest satisfied tier on overshoot', () => {
+    const cart = [item(HOODIE, 100, 9)];
+    const { candidate } = evaluateVolumeRule(volumeRule(), ctxOf(cart));
+    expect(candidate?.volume?.tier.min_paired_count).toBe(5);
+    expect(candidate?.amount).toBe(135); // 15% of 900
+  });
+
+  it('counts only the restricted products', () => {
+    const cart = [item(ANCHOR, 100, 4), item(HOODIE, 100, 2)];
+    const restricted = volumeRule({ applicable_product_ids: [HOODIE] });
+    const { candidate, rejected } = evaluateVolumeRule(restricted, ctxOf(cart));
+    expect(candidate).toBeUndefined();
+    expect(rejected?.reason).toBe('Needs 3 item(s), cart has 2');
+  });
+
+  it('still discounts the whole basket when restricted', () => {
+    const cart = [item(ANCHOR, 100, 2), item(HOODIE, 100, 3)];
+    const restricted = volumeRule({ applicable_product_ids: [HOODIE] });
+    const { candidate } = evaluateVolumeRule(restricted, ctxOf(cart));
+    expect(candidate?.volume?.countedProductIds).toEqual([HOODIE]);
+    expect(candidate?.amount).toBe(50); // 10% of the full 500 subtotal
+  });
+
+  it('passes eligibility rejections straight through', () => {
+    const cart = [item(HOODIE, 300, 3)];
+    expect(
+      evaluateVolumeRule(volumeRule({ is_active: false }), ctxOf(cart)).rejected?.reason,
+    ).toBe('This promo code is no longer active');
+    expect(
+      evaluateVolumeRule(volumeRule(), ctxOf(cart, { channel: 'walkin' })).rejected,
+    ).toBeUndefined();
+    expect(
+      evaluateVolumeRule(volumeRule({ channels: ['online'] }), ctxOf(cart, { channel: 'walkin' }))
+        .rejected?.reason,
+    ).toBe('This promo code is not valid for walkin sales');
+    expect(
+      evaluateVolumeRule(volumeRule({ min_order_amount: 1000 }), ctxOf(cart)).rejected?.reason,
+    ).toContain('Minimum order amount');
+  });
+
+  it('rejects a rule with no tiers', () => {
+    const { rejected } = evaluateVolumeRule(
+      volumeRule({ tiers: [] }),
+      ctxOf([item(HOODIE, 300, 3)]),
+    );
+    expect(rejected?.reason).toBe('Rule has no tiers configured');
+  });
+});
+
+describe('computeCodeDiscount — volume', () => {
+  it('values a code-gated volume rule off its tier', () => {
+    const cart = [item(HOODIE, 300, 3)];
+    const typed = volumeRule({ auto_apply: false, code: 'BULK' });
+    expect(computeCodeDiscount(typed, ctxOf(cart))).toBe(90);
+  });
+
+  it('is worth nothing when no tier clears', () => {
+    const cart = [item(HOODIE, 300, 2)];
+    const typed = volumeRule({ auto_apply: false, code: 'BULK' });
+    expect(computeCodeDiscount(typed, ctxOf(cart))).toBe(0);
+  });
+});
+
+describe('pickWinner — volume against the rest', () => {
+  const volumeCandidate = (amount: number) => ({
+    source: 'volume' as const,
+    promoCodeId: 'volume-1',
+    code: null,
+    label: 'Buy more, save more',
+    discountType: 'volume' as const,
+    amount,
+  });
+
+  const codeCandidate = (amount: number) => ({
+    source: 'code' as const,
+    promoCodeId: 'code-1',
+    code: 'SAVE20',
+    label: 'SAVE20',
+    discountType: 'percentage' as const,
+    amount,
+  });
+
+  it('out-bids a smaller pairing candidate', () => {
+    const pairing = { ...volumeCandidate(40), source: 'pairing' as const };
+    expect(pickWinner([pairing, volumeCandidate(60)])?.source).toBe('volume');
+  });
+
+  it('loses a tie to the typed code', () => {
+    expect(pickWinner([volumeCandidate(50), codeCandidate(50)])?.source).toBe('code');
+  });
+
+  it('still wins outright on amount', () => {
+    expect(pickWinner([volumeCandidate(80), codeCandidate(50)])?.source).toBe('volume');
   });
 });

@@ -230,7 +230,12 @@ export default function CheckoutClient() {
       : domesticShippingCost;
   const discountAmount = discount?.discountAmount ?? 0;
   // Bundle deals the cart qualifies for, whether or not one is the winner.
-  const bundleOffers = discount?.breakdown.pairingCandidates ?? [];
+  // Every rule that fired on its own — bundles and volume thresholds alike.
+  const bundleOffers = [
+    ...(discount?.breakdown.pairingCandidates ?? []),
+    ...(discount?.breakdown.volumeCandidates ?? []),
+  ];
+  const autoRuleWon = discount?.source === "pairing" || discount?.source === "volume";
   const amountBeforeFees = Math.max(0, subtotal + shippingCost - discountAmount);
   const fees = Math.round(amountBeforeFees * PROCESSING_FEE_RATE * 100) / 100;
   const total = amountBeforeFees + fees;
@@ -947,13 +952,13 @@ export default function CheckoutClient() {
                 <div
                   key={offer.promoCodeId}
                   className={`rounded-md border px-4 py-3 text-sm ${
-                    discount?.source === "pairing" && offer.promoCodeId === discount?.promoCodeId
+                    autoRuleWon && offer.promoCodeId === discount?.promoCodeId
                       ? "border-success/40 bg-success-surface text-success"
                       : "border-line bg-fill text-text-secondary"
                   }`}
                 >
                   <strong>{offer.label}</strong> - {formatPrice(offer.amount)} off
-                  {discount?.source !== "pairing" && (
+                  {!autoRuleWon && (
                     <span className="ml-1 text-xs">
                       (your promo code saves you more)
                     </span>

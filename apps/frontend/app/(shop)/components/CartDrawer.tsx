@@ -15,6 +15,7 @@ import {
   findImageIndexByTag,
 } from "@/lib/products/colors";
 import { prefetchRawImage } from "@/hooks/useImagePrefetch";
+import VolumeNudge from "./VolumeNudge";
 import type { Product, ProductVariant, PaginatedResponse } from "@/lib/api/products";
 
 /**
@@ -221,6 +222,7 @@ export default function CartDrawer() {
         {/* Footer — sticky checkout */}
         {items.length > 0 && (
           <div className="shrink-0 border-t border-line px-5 pb-5 pt-4">
+            <VolumeNudge className="mb-3 text-[11px] uppercase tracking-[0.14em] text-text-secondary" />
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
                 Subtotal

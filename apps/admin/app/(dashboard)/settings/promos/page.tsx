@@ -27,6 +27,7 @@ const DISCOUNT_TYPE_LABELS: Record<DiscountType, string> = {
   free_shipping: "Free shipping",
   product: "Product discount (GH₵)",
   pairing: "Bundle / pairing rule (automatic)",
+  volume: "Volume discount (item count)",
 };
 
 const CHANNEL_LABELS: Record<SalesChannel, string> = {
@@ -59,6 +60,7 @@ function valueLabel(promo: PromoCode) {
     case "free_shipping": return "Free shipping";
     case "product": return `GH₵ ${promo.discount_value} off (products)`;
     case "pairing":
+    case "volume":
       return (promo.promo_pairing_tiers ?? []).length
         ? (promo.promo_pairing_tiers ?? []).map(tierLabel).join(", ")
         : "No tiers set";
@@ -95,6 +97,11 @@ export default function PromosSettingsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const isPairing = form.discount_type === "pairing";
+  const isVolume = form.discount_type === "volume";
+  // Both types carry their value in promo_pairing_tiers rather than discount_value.
+  const isTiered = isPairing || isVolume;
+  // A volume rule chooses its own trigger; a pairing rule always auto-applies.
+  const autoApply = isVolume ? form.auto_apply !== false : isPairing;
 
   function setField<K extends keyof CreatePromoPayload>(key: K, value: CreatePromoPayload[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -135,6 +142,7 @@ export default function PromosSettingsPage() {
       expires_at: promo.expires_at ? promo.expires_at.slice(0, 16) : undefined,
       is_active: promo.is_active,
       channels: promo.channels ?? [...ALL_CHANNELS],
+      auto_apply: promo.auto_apply,
       anchor_product_id: promo.anchor_product_id ?? undefined,
       pairing_basis: promo.pairing_basis ?? "units",
       applies_to: promo.applies_to ?? "anchor",
@@ -150,15 +158,19 @@ export default function PromosSettingsPage() {
   }
 
   async function handleSubmit() {
-    if (isPairing) {
-      if (!form.anchor_product_id) { setFormError("Pick the anchor product this rule is built around"); return; }
+    if (isTiered) {
+      if (isPairing && !form.anchor_product_id) { setFormError("Pick the anchor product this rule is built around"); return; }
       if (tiers.length === 0) { setFormError("Add at least one tier"); return; }
       const thresholds = tiers.map((t) => t.min_paired_count);
       if (new Set(thresholds).size !== thresholds.length) {
-        setFormError("Each tier needs a distinct paired-item count"); return;
+        setFormError("Each tier needs a distinct item count"); return;
       }
       if (tiers.some((t) => t.value_type === "percentage" && t.value > 100)) {
         setFormError("A percentage tier cannot exceed 100%"); return;
+      }
+      // A volume rule that waits for a code still needs one.
+      if (isVolume && !autoApply && !form.code?.trim()) {
+        setFormError("A rule that does not apply automatically needs a code"); return;
       }
     } else {
       if (!form.code?.trim()) { setFormError("Code is required"); return; }
@@ -169,16 +181,17 @@ export default function PromosSettingsPage() {
 
     const payload: CreatePromoPayload = {
       ...form,
-      code: isPairing ? undefined : form.code?.trim().toUpperCase(),
+      code: autoApply ? undefined : form.code?.trim().toUpperCase(),
       applicable_product_ids:
-        form.discount_type === "product" && form.applicable_product_ids?.length
+        (form.discount_type === "product" || isVolume) && form.applicable_product_ids?.length
           ? form.applicable_product_ids
           : undefined,
       max_discount_amount: form.discount_type === "percentage" ? form.max_discount_amount : undefined,
+      auto_apply: isVolume ? autoApply : undefined,
       anchor_product_id: isPairing ? form.anchor_product_id : undefined,
       pairing_basis: isPairing ? (form.pairing_basis ?? "units") : undefined,
       applies_to: isPairing ? (form.applies_to ?? "anchor") : undefined,
-      tiers: isPairing ? tiers : undefined,
+      tiers: isTiered ? tiers : undefined,
     };
 
     try {
@@ -257,10 +270,34 @@ export default function PromosSettingsPage() {
                   basket, the discount level is set by how many other items are alongside it.
                 </p>
               )}
+              {isVolume && (
+                <p className="mt-1.5 text-xs text-slate-500">
+                  The discount level is set by how many individual items are in the basket — three of
+                  the same product counts as three. No anchor product needed.
+                </p>
+              )}
             </div>
 
-            {/* Code — pairing rules auto-apply, so they have none */}
-            {!isPairing && (
+            {/* Trigger — a volume rule can fire on its own or wait for a code */}
+            {isVolume && (
+              <label className="flex cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={autoApply}
+                  onChange={(e) => setField("auto_apply", e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300"
+                />
+                <span className="text-sm text-slate-700">
+                  Apply automatically
+                  <span className="ml-1 text-xs text-slate-500">
+                    (no code needed — uncheck to require one)
+                  </span>
+                </span>
+              </label>
+            )}
+
+            {/* Code — rules that auto-apply have none */}
+            {!autoApply && (
               <div className="flex gap-3">
                 <div className="flex-1">
                   <label className={labelCls}>Code *</label>
@@ -288,19 +325,19 @@ export default function PromosSettingsPage() {
             {/* Description */}
             <div>
               <label className={labelCls}>
-                {isPairing ? "Name *" : "Description"}
+                {isTiered ? "Name *" : "Description"}
               </label>
               <input
                 type="text"
                 value={form.description ?? ""}
                 onChange={(e) => setField("description", e.target.value)}
-                placeholder={isPairing ? "e.g. Signature Tee bundle" : "Internal note about this code"}
+                placeholder={isPairing ? "e.g. Signature Tee bundle" : isVolume ? "e.g. Buy more, save more" : "Internal note about this code"}
                 className={inputCls}
               />
             </div>
 
-            {/* Value — hidden for free_shipping and pairing (tiers carry the value) */}
-            {!isPairing && form.discount_type !== "free_shipping" && (
+            {/* Value — hidden for free_shipping and tiered rules (tiers carry the value) */}
+            {!isTiered && form.discount_type !== "free_shipping" && (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className={labelCls}>
@@ -342,9 +379,26 @@ export default function PromosSettingsPage() {
               </div>
             )}
 
-            {/* ── Pairing rule configuration ────────────────────────────────── */}
-            {isPairing && (
+            {/* ── Tiered rule configuration (pairing, volume) ───────────────── */}
+            {isTiered && (
               <div className="space-y-4 rounded-md border border-slate-200 bg-slate-50/60 p-4">
+                {isVolume && (
+                  <div>
+                    <label className={labelCls}>Count only these products</label>
+                    <ProductPicker
+                      multiple
+                      value={form.applicable_product_ids ?? []}
+                      onChange={(ids) => setField("applicable_product_ids", ids)}
+                      placeholder="Leave empty to count everything in the basket"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                      Narrows what <em>counts</em> toward the threshold. The discount always comes off
+                      the whole basket.
+                    </p>
+                  </div>
+                )}
+
+                {isPairing && (
                 <div>
                   <label className={labelCls}>Anchor product *</label>
                   <ProductPicker
@@ -353,7 +407,9 @@ export default function PromosSettingsPage() {
                     placeholder="Which product triggers this bundle?"
                   />
                 </div>
+                )}
 
+                {isPairing && (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className={labelCls}>Count paired items by</label>
@@ -388,8 +444,9 @@ export default function PromosSettingsPage() {
                     </p>
                   </div>
                 </div>
+                )}
 
-                {/* Tier editor */}
+                {/* Tier editor — thresholds are paired items, or cart units */}
                 <div>
                   <div className="mb-2 flex items-center justify-between">
                     <label className={`${labelCls} mb-0`}>Tiers *</label>
@@ -411,7 +468,9 @@ export default function PromosSettingsPage() {
                     {tiers.map((tier, i) => (
                       <div key={i} className="flex flex-wrap items-end gap-2 rounded-md border border-slate-200 bg-white p-2.5">
                         <div className="w-28">
-                          <label className="mb-1 block text-[11px] text-slate-500">Other items</label>
+                          <label className="mb-1 block text-[11px] text-slate-500">
+                            {isVolume ? "Items" : "Other items"}
+                          </label>
                           <div className="flex items-center gap-1">
                             <input
                               type="number"
