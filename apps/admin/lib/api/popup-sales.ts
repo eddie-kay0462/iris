@@ -43,6 +43,20 @@ export interface PopupOrderItem {
   created_at: string;
 }
 
+/** One leg of a split payment — how part of an order was actually settled. */
+export interface PopupSplitPayment {
+  id: string;
+  order_id: string;
+  method: PopupPaymentMethod;
+  amount: number;
+  network: string | null;
+  phone: string | null;
+  reference: string | null;
+  bank_name: string | null;
+  sent_to_paystack: boolean;
+  created_at: string;
+}
+
 export interface PopupOrder {
   id: string;
   event_id: string;
@@ -68,6 +82,7 @@ export interface PopupOrder {
   updated_at: string;
   profiles?: { id: string; first_name: string | null; last_name: string | null } | null;
   popup_order_items?: PopupOrderItem[];
+  popup_split_payments?: PopupSplitPayment[];
 }
 
 export interface PopupOrdersResult {
@@ -106,6 +121,8 @@ export interface SplitPaymentInput {
 }
 
 export interface CreateOrderInput {
+  /** One id per cart. Makes a retried create return the same order, not a second one. */
+  idempotency_key?: string;
   customer_name?: string;
   customer_phone?: string;
   customer_email?: string;
