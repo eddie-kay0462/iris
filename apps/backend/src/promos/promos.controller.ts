@@ -46,6 +46,18 @@ export class PromosController {
     );
   }
 
+  /**
+   * Live volume rules, for the cart's "add one more item" nudge. Public and
+   * cart-independent — it only says which thresholds are on offer.
+   */
+  @Get('volume-offers')
+  @Public()
+  listVolumeOffers(@Query('channel') channel?: string) {
+    return this.engine.listActiveVolumeOffers(
+      channel === 'popup' || channel === 'walkin' ? channel : 'online',
+    );
+  }
+
   // Declared before ':id' so the literal segment is not swallowed by the param.
   @Get('redemptions')
   @RequirePermission('settings:read')

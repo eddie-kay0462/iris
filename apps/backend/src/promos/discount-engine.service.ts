@@ -16,9 +16,11 @@ import {
   bundleHeadline,
   checkEligibility,
   isAdvertisable,
+  isLive,
   computeCodeDiscount,
   computeManualDiscount,
   evaluatePairingRule,
+  evaluateVolumeRule,
   PairingBasis,
   PairingAppliesTo,
   pickWinner,
@@ -39,6 +41,7 @@ export interface ResolveInput {
 export interface DiscountBreakdown {
   codeCandidate: DiscountCandidate | null;
   pairingCandidates: DiscountCandidate[];
+  volumeCandidates: DiscountCandidate[];
   manualCandidate: DiscountCandidate | null;
   rejected: RejectedRule[];
   winner: DiscountSource | null;
@@ -55,7 +58,13 @@ export interface DiscountResolution {
   label: string | null;
   discountType: PromoDiscountType | 'percentage' | 'fixed' | 'none';
   /** Persisted verbatim into promo_redemptions.discount_type. */
-  channelDiscountType: 'none' | 'percentage' | 'fixed' | 'code' | 'pairing';
+  channelDiscountType:
+    | 'none'
+    | 'percentage'
+    | 'fixed'
+    | 'code'
+    | 'pairing'
+    | 'volume';
   breakdown: DiscountBreakdown;
   message: string;
 }
@@ -84,6 +93,15 @@ export interface BundleOffer {
   basis: PairingBasis;
   appliesTo: PairingAppliesTo;
   tiers: { minPairedCount: number; valueType: string; value: number }[];
+}
+
+/** A live volume rule, for the cart's "add one more" nudge. */
+export interface VolumeOffer {
+  promoCodeId: string;
+  label: string;
+  /** Null when every line in the cart counts. */
+  productIds: string[] | null;
+  tiers: { minCount: number; valueType: string; value: number }[];
 }
 
 const PROMO_SELECT = `
@@ -131,6 +149,10 @@ export class DiscountEngineService {
       await this.buildPairingCandidates(ctx);
     rejected.push(...pairingRejects);
 
+    const { candidates: volumeCandidates, rejected: volumeRejects } =
+      await this.buildVolumeCandidates(ctx);
+    rejected.push(...volumeRejects);
+
     const manualCandidate = this.buildManualCandidate(
       input.manualOverride,
       subtotal,
@@ -142,7 +164,12 @@ export class DiscountEngineService {
       ? pairingCandidates.reduce((b, c) => (c.amount > b.amount ? c : b))
       : null;
 
-    const contenders = [codeCandidate, bestPairing].filter(
+    // Same one-rule-per-cart ceiling for volume rules.
+    const bestVolume = volumeCandidates.length
+      ? volumeCandidates.reduce((b, c) => (c.amount > b.amount ? c : b))
+      : null;
+
+    const contenders = [codeCandidate, bestPairing, bestVolume].filter(
       (c): c is DiscountCandidate => c !== null,
     );
 
@@ -156,6 +183,7 @@ export class DiscountEngineService {
     const breakdown: DiscountBreakdown = {
       codeCandidate,
       pairingCandidates,
+      volumeCandidates,
       manualCandidate,
       rejected,
       winner: winner?.source ?? null,
@@ -196,9 +224,10 @@ export class DiscountEngineService {
 
   private channelDiscountType(
     winner: DiscountCandidate,
-  ): 'none' | 'percentage' | 'fixed' | 'code' | 'pairing' {
+  ): 'none' | 'percentage' | 'fixed' | 'code' | 'pairing' | 'volume' {
     if (winner.source === 'code') return 'code';
     if (winner.source === 'pairing') return 'pairing';
+    if (winner.source === 'volume') return 'volume';
     return winner.manual?.type === 'percentage' ? 'percentage' : 'fixed';
   }
 
@@ -210,6 +239,10 @@ export class DiscountEngineService {
         const n = winner.pairing?.pairedCount ?? 0;
         return `Bundle deal applied — ${n} paired item${n === 1 ? '' : 's'}`;
       }
+      case 'volume': {
+        const n = winner.volume?.count ?? 0;
+        return `Volume discount applied — ${n} item${n === 1 ? '' : 's'}`;
+      }
       default:
         return 'Manual discount applied';
     }
@@ -219,6 +252,20 @@ export class DiscountEngineService {
    * A typed code that fails throws — the person who typed it needs to know why.
    * (Auto rules that fail stay quiet; see buildPairingCandidates.)
    */
+  /** Rows come back with numerics as strings; the maths needs numbers. */
+  private mapTiers(row: any): PairingTier[] {
+    return (row?.promo_pairing_tiers ?? []).map(
+      (t: any): PairingTier => ({
+        id: t.id,
+        min_paired_count: Number(t.min_paired_count),
+        value_type: t.value_type,
+        value: Number(t.value),
+        max_discount_amount:
+          t.max_discount_amount === null ? null : Number(t.max_discount_amount),
+      }),
+    );
+  }
+
   private async buildCodeCandidate(
     code: string | null | undefined,
     ctx: EvalContext,
@@ -229,13 +276,16 @@ export class DiscountEngineService {
     const db = this.supabase.getAdminClient();
     const { data, error } = await db
       .from('promo_codes')
-      .select(PROMO_SELECT)
+      .select(`${PROMO_SELECT}, promo_pairing_tiers (*)`)
       .ilike('code', trimmed)
       .maybeSingle();
 
     if (error || !data) throw new BadRequestException('Invalid promo code');
 
-    const rule = data as unknown as PromoRule;
+    const rule: PromoRule = {
+      ...(data as unknown as PromoRule),
+      tiers: this.mapTiers(data),
+    };
 
     // Pairing rules are not codes — they fire on their own or not at all.
     if (rule.discount_type === 'pairing' || rule.auto_apply) {
@@ -292,21 +342,55 @@ export class DiscountEngineService {
     for (const row of data ?? []) {
       const rule: PromoRule = {
         ...(row as unknown as PromoRule),
-        tiers: ((row as any).promo_pairing_tiers ?? []).map(
-          (t: any): PairingTier => ({
-            id: t.id,
-            min_paired_count: Number(t.min_paired_count),
-            value_type: t.value_type,
-            value: Number(t.value),
-            max_discount_amount:
-              t.max_discount_amount === null
-                ? null
-                : Number(t.max_discount_amount),
-          }),
-        ),
+        tiers: this.mapTiers(row),
       };
 
       const result = evaluatePairingRule(rule, ctx);
+      if (result.candidate) candidates.push(result.candidate);
+      if (result.rejected) rejected.push(result.rejected);
+    }
+
+    return { candidates, rejected };
+  }
+
+  /**
+   * Auto-applied volume rules.
+   *
+   * Unlike pairing there is nothing to prefilter on — an unrestricted rule
+   * matches any cart — so every live volume rule is loaded and evaluated. The
+   * partial index on (discount_type) WHERE volume AND auto_apply AND is_active
+   * keeps that cheap.
+   */
+  private async buildVolumeCandidates(ctx: EvalContext): Promise<{
+    candidates: DiscountCandidate[];
+    rejected: RejectedRule[];
+  }> {
+    if (ctx.items.length === 0) return { candidates: [], rejected: [] };
+
+    const db = this.supabase.getAdminClient();
+    const { data, error } = await db
+      .from('promo_codes')
+      .select(`${PROMO_SELECT}, promo_pairing_tiers (*)`)
+      .eq('discount_type', 'volume')
+      .eq('auto_apply', true)
+      .eq('is_active', true);
+
+    if (error) {
+      // A discount engine that throws here would take checkout down with it.
+      this.logger.error(`Failed to load volume rules: ${error.message}`);
+      return { candidates: [], rejected: [] };
+    }
+
+    const candidates: DiscountCandidate[] = [];
+    const rejected: RejectedRule[] = [];
+
+    for (const row of data ?? []) {
+      const rule: PromoRule = {
+        ...(row as unknown as PromoRule),
+        tiers: this.mapTiers(row),
+      };
+
+      const result = evaluateVolumeRule(rule, ctx);
       if (result.candidate) candidates.push(result.candidate);
       if (result.rejected) rejected.push(result.rejected);
     }
@@ -363,17 +447,7 @@ export class DiscountEngineService {
     const offers: BundleOffer[] = [];
 
     for (const row of data ?? []) {
-      const tiers: PairingTier[] = ((row as any).promo_pairing_tiers ?? []).map(
-        (t: any) => ({
-          id: t.id,
-          min_paired_count: Number(t.min_paired_count),
-          value_type: t.value_type,
-          value: Number(t.value),
-          max_discount_amount:
-            t.max_discount_amount === null ? null : Number(t.max_discount_amount),
-        }),
-      );
-
+      const tiers = this.mapTiers(row);
       const rule: PromoRule = { ...(row as unknown as PromoRule), tiers };
       if (!isAdvertisable(rule, channel, now)) continue;
 
@@ -388,6 +462,58 @@ export class DiscountEngineService {
           .sort((a, b) => a.min_paired_count - b.min_paired_count)
           .map((t) => ({
             minPairedCount: t.min_paired_count,
+            valueType: t.value_type,
+            value: t.value,
+          })),
+      });
+    }
+
+    return offers;
+  }
+
+  /**
+   * Live volume rules, for the cart's "add one more item" nudge.
+   *
+   * Cart-independent and public, like listActiveBundles: it answers "what
+   * thresholds are on offer", not "what is this basket worth". Applying a rule
+   * still goes through resolve(), so nothing here can affect what is charged.
+   */
+  async listActiveVolumeOffers(
+    channel: SalesChannel = 'online',
+  ): Promise<VolumeOffer[]> {
+    const db = this.supabase.getAdminClient();
+    const { data, error } = await db
+      .from('promo_codes')
+      .select(`${PROMO_SELECT}, promo_pairing_tiers (*)`)
+      .eq('discount_type', 'volume')
+      .eq('auto_apply', true)
+      .eq('is_active', true);
+
+    if (error) {
+      // A failed nudge lookup must never take the cart down with it.
+      this.logger.error(`Failed to load volume offers: ${error.message}`);
+      return [];
+    }
+
+    const now = new Date();
+    const offers: VolumeOffer[] = [];
+
+    for (const row of data ?? []) {
+      const tiers = this.mapTiers(row);
+      const rule: PromoRule = { ...(row as unknown as PromoRule), tiers };
+      if (!tiers.length) continue;
+      if (!isLive(rule, channel, now)) continue;
+
+      offers.push({
+        promoCodeId: rule.id,
+        label: rule.description?.trim() || 'Volume discount',
+        productIds: rule.applicable_product_ids?.length
+          ? rule.applicable_product_ids
+          : null,
+        tiers: [...tiers]
+          .sort((a, b) => a.min_paired_count - b.min_paired_count)
+          .map((t) => ({
+            minCount: t.min_paired_count,
             valueType: t.value_type,
             value: t.value,
           })),
@@ -417,7 +543,11 @@ export class DiscountEngineService {
           ? resolution.breakdown.pairingCandidates.find(
               (c) => c.promoCodeId === resolution.promoCodeId,
             )
-          : resolution.breakdown.manualCandidate;
+          : resolution.source === 'volume'
+            ? resolution.breakdown.volumeCandidates.find(
+                (c) => c.promoCodeId === resolution.promoCodeId,
+              )
+            : resolution.breakdown.manualCandidate;
 
     const db = this.supabase.getAdminClient();
     const { data, error } = await db.rpc('promo_reserve_redemption', {

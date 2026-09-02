@@ -6,16 +6,19 @@ export type DiscountType =
   | "percentage"
   | "free_shipping"
   | "product"
-  | "pairing";
+  | "pairing"
+  | "volume";
 
 export type SalesChannel = "online" | "popup" | "walkin";
 export type PairingBasis = "units" | "products";
 export type PairingAppliesTo = "anchor" | "cart";
 export type ValueType = "percentage" | "fixed";
-export type DiscountSource = "code" | "pairing" | "manual";
+export type DiscountSource = "code" | "pairing" | "volume" | "manual";
 
+/** Shared by pairing and volume rules — see promo_pairing_tiers. */
 export interface PairingTier {
   id?: string;
+  /** Paired items for a pairing rule; cart units for a volume rule. */
   min_paired_count: number;
   value_type: ValueType;
   value: number;
@@ -24,7 +27,7 @@ export interface PairingTier {
 
 export interface PromoCode {
   id: string;
-  /** Null for pairing rules, which auto-apply and carry no code. */
+  /** Null for rules that auto-apply and so carry no code. */
   code: string | null;
   description: string | null;
   discount_type: DiscountType;
@@ -60,6 +63,7 @@ export interface CreatePromoPayload {
   expires_at?: string;
   is_active?: boolean;
   channels?: SalesChannel[];
+  auto_apply?: boolean;
   anchor_product_id?: string;
   pairing_basis?: PairingBasis;
   applies_to?: PairingAppliesTo;
@@ -180,6 +184,11 @@ export interface DiscountCandidate {
     pairedCount: number;
     tier: PairingTier;
   };
+  volume?: {
+    countedProductIds: string[] | null;
+    count: number;
+    tier: PairingTier;
+  };
 }
 
 export interface DiscountResolution {
@@ -190,10 +199,17 @@ export interface DiscountResolution {
   code: string | null;
   label: string | null;
   discountType: string;
-  channelDiscountType: "none" | "percentage" | "fixed" | "code" | "pairing";
+  channelDiscountType:
+    | "none"
+    | "percentage"
+    | "fixed"
+    | "code"
+    | "pairing"
+    | "volume";
   breakdown: {
     codeCandidate: DiscountCandidate | null;
     pairingCandidates: DiscountCandidate[];
+    volumeCandidates: DiscountCandidate[];
     manualCandidate: DiscountCandidate | null;
     rejected: { label: string; reason: string }[];
     winner: DiscountSource | null;

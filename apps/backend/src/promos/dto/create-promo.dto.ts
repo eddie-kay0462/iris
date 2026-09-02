@@ -20,10 +20,11 @@ export type DiscountType =
   | 'percentage'
   | 'free_shipping'
   | 'product'
-  | 'pairing';
+  | 'pairing'
+  | 'volume';
 
 export class CreatePromoDto {
-  /** Optional for pairing rules, which auto-apply and carry no code. */
+  /** Optional for rules that auto-apply and so carry no code. */
   @IsOptional()
   @IsString()
   @MinLength(3)
@@ -33,7 +34,7 @@ export class CreatePromoDto {
   @IsString()
   description?: string;
 
-  @IsEnum(['fixed', 'percentage', 'free_shipping', 'product', 'pairing'])
+  @IsEnum(['fixed', 'percentage', 'free_shipping', 'product', 'pairing', 'volume'])
   discount_type: DiscountType;
 
   @IsOptional()
@@ -45,6 +46,8 @@ export class CreatePromoDto {
   @IsArray()
   @IsUUID(undefined, { each: true })
   applicable_product_ids?: string[];
+  // product discounts: what the discount applies to.
+  // volume rules: whose units are counted — omit to count the whole cart.
 
   @IsOptional()
   @IsNumber()
@@ -79,8 +82,9 @@ export class CreatePromoDto {
   @IsIn(['online', 'popup', 'walkin'], { each: true })
   channels?: ('online' | 'popup' | 'walkin')[];
 
-  // ─── Pairing rules ─────────────────────────────────────────────────────────
+  // ─── Tiered rules (pairing, volume) ────────────────────────────────────────
 
+  /** Always true for pairing. Admin-chosen per volume rule. */
   @IsOptional()
   @IsBoolean()
   auto_apply?: boolean;
@@ -100,6 +104,7 @@ export class CreatePromoDto {
   @IsIn(['anchor', 'cart'])
   applies_to?: 'anchor' | 'cart';
 
+  /** Pairing: paired-item thresholds. Volume: cart-unit thresholds. */
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

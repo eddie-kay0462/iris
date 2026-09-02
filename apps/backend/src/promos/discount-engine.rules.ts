@@ -8,7 +8,7 @@
 import { round2 } from '../analytics/analytics.constants';
 
 export type SalesChannel = 'online' | 'popup' | 'walkin';
-export type DiscountSource = 'code' | 'pairing' | 'manual';
+export type DiscountSource = 'code' | 'pairing' | 'volume' | 'manual';
 export type PairingBasis = 'units' | 'products';
 export type PairingAppliesTo = 'anchor' | 'cart';
 export type ValueType = 'percentage' | 'fixed';
@@ -17,7 +17,8 @@ export type PromoDiscountType =
   | 'percentage'
   | 'free_shipping'
   | 'product'
-  | 'pairing';
+  | 'pairing'
+  | 'volume';
 
 export interface EngineItem {
   productId: string;
@@ -85,6 +86,12 @@ export interface DiscountCandidate {
     pairedCount: number;
     tier: PairingTier;
   };
+  /** Volume only — how the tier was reached, for the ledger. */
+  volume?: {
+    countedProductIds: string[] | null;
+    count: number;
+    tier: PairingTier;
+  };
   /** Manual only. */
   manual?: ManualOverride;
 }
@@ -137,6 +144,24 @@ export function countPaired(
   return others.reduce((sum, i) => sum + i.quantity, 0);
 }
 
+/**
+ * How many individual units the cart holds.
+ *
+ * Unlike `countPaired` there is no anchor to exclude, so quantity is all that
+ * matters — three of the same product counts as three. A non-empty
+ * `productIds` narrows the count to those products; null or empty counts the
+ * whole cart.
+ */
+export function countUnits(
+  items: EngineItem[],
+  productIds: string[] | null,
+): number {
+  const scoped = productIds?.length
+    ? items.filter((i) => productIds.includes(i.productId))
+    : items;
+  return scoped.reduce((sum, i) => sum + Math.max(0, i.quantity), 0);
+}
+
 /** The highest tier the paired count satisfies, or null if it clears none. */
 export function selectTier(
   tiers: PairingTier[],
@@ -173,6 +198,27 @@ export function computePairingDiscount(
 }
 
 /**
+ * Apply a volume tier to the cart subtotal.
+ *
+ * A product restriction narrows what *counts*, never what is *discounted* — the
+ * base is always the whole subtotal.
+ */
+export function computeVolumeDiscount(
+  tier: PairingTier,
+  subtotal: number,
+): number {
+  const raw =
+    tier.value_type === 'percentage' ? (subtotal * tier.value) / 100 : tier.value;
+
+  const capped =
+    tier.max_discount_amount !== null && tier.max_discount_amount !== undefined
+      ? Math.min(raw, tier.max_discount_amount)
+      : raw;
+
+  return round2(Math.max(0, Math.min(capped, subtotal)));
+}
+
+/**
  * Code-based discounts. Behaviour is carried over unchanged from the original
  * PromosService.computeDiscount so existing codes keep valuing identically.
  */
@@ -202,6 +248,15 @@ export function computeCodeDiscount(
         .filter((i) => rule.applicable_product_ids!.includes(i.productId))
         .reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
       return round2(Math.min(rule.discount_value, eligibleSubtotal));
+    }
+
+    case 'volume': {
+      const tier = selectTier(rule.tiers ?? [], countUnits(
+        ctx.items,
+        rule.applicable_product_ids,
+      ));
+      // No tier cleared: the caller turns a zero into "does not apply to your cart".
+      return tier ? computeVolumeDiscount(tier, ctx.subtotal) : 0;
     }
 
     default:
@@ -251,8 +306,7 @@ export function checkEligibility(
 }
 
 /**
- * Whether a rule can be *advertised* on a product page, as opposed to applied
- * to a specific basket.
+ * Whether a rule is live at all, as opposed to applicable to a specific basket.
  *
  * Deliberately skips the cart-dependent gates that `checkEligibility` also
  * covers — min_order_amount can't be judged before there's a cart, and a badge
@@ -260,19 +314,28 @@ export function checkEligibility(
  * no badge at all. Everything absolute (active, dates, usage cap, channel) is
  * still checked, so an exhausted or expired rule is never advertised.
  */
-export function isAdvertisable(
+export function isLive(
   rule: PromoRule,
   channel: SalesChannel,
   now: Date = new Date(),
 ): boolean {
   if (!rule.is_active) return false;
-  if (!rule.anchor_product_id) return false;
-  if (!rule.tiers?.length) return false;
   if (rule.starts_at && new Date(rule.starts_at) > now) return false;
   if (rule.expires_at && new Date(rule.expires_at) < now) return false;
   if (rule.max_uses !== null && rule.used_count >= rule.max_uses) return false;
   if (rule.channels?.length && !rule.channels.includes(channel)) return false;
   return true;
+}
+
+/** A pairing rule fit to wear a badge on its anchor product's card. */
+export function isAdvertisable(
+  rule: PromoRule,
+  channel: SalesChannel,
+  now: Date = new Date(),
+): boolean {
+  if (!rule.anchor_product_id) return false;
+  if (!rule.tiers?.length) return false;
+  return isLive(rule, channel, now);
 }
 
 /**
@@ -296,7 +359,9 @@ export function bundleHeadline(tiers: PairingTier[]): string {
 }
 
 export const ruleLabel = (rule: PromoRule): string =>
-  rule.code || rule.description || `Pairing rule ${rule.id.slice(0, 8)}`;
+  rule.code ||
+  rule.description ||
+  `${rule.discount_type === 'volume' ? 'Volume' : 'Pairing'} rule ${rule.id.slice(0, 8)}`;
 
 // ─── Candidate building ──────────────────────────────────────────────────────
 
@@ -356,6 +421,59 @@ export function evaluatePairingRule(
         pairedCount,
         tier,
       },
+    },
+  };
+}
+
+/**
+ * Evaluate one volume rule against the cart.
+ *
+ * No anchor to look for — the rule applies to any cart that holds enough
+ * qualifying units. Rejections read the same way pairing's do so the ledger's
+ * `rejected[]` stays one vocabulary.
+ */
+export function evaluateVolumeRule(
+  rule: PromoRule,
+  ctx: EvalContext,
+): { candidate?: DiscountCandidate; rejected?: RejectedRule } {
+  const reject = (reason: string) => ({
+    rejected: {
+      promoCodeId: rule.id,
+      code: rule.code,
+      label: ruleLabel(rule),
+      reason,
+    },
+  });
+
+  const eligibility = checkEligibility(rule, ctx);
+  if (eligibility) return reject(eligibility);
+
+  const tiers = rule.tiers ?? [];
+  if (tiers.length === 0) return reject('Rule has no tiers configured');
+
+  const countedProductIds = rule.applicable_product_ids?.length
+    ? rule.applicable_product_ids
+    : null;
+  const count = countUnits(ctx.items, countedProductIds);
+  const tier = selectTier(tiers, count);
+
+  if (!tier) {
+    const lowest = Math.min(...tiers.map((t) => t.min_paired_count));
+    return reject(`Needs ${lowest} item(s), cart has ${count}`);
+  }
+
+  const amount = computeVolumeDiscount(tier, ctx.subtotal);
+  if (amount <= 0) return reject('Tier resolved to a zero discount');
+
+  return {
+    candidate: {
+      source: 'volume',
+      promoCodeId: rule.id,
+      code: rule.code,
+      label: ruleLabel(rule),
+      discountType: 'volume',
+      amount,
+      volume: { countedProductIds, count, tier },
     },
   };
 }
