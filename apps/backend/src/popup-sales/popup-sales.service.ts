@@ -20,6 +20,25 @@ import { toE164, toPaystackMomoFormat } from '../common/utils/phone';
 import { POPUP_REVENUE_STATUSES, round2 } from '../analytics/analytics.constants';
 import { DiscountEngineService } from '../promos/discount-engine.service';
 
+/** Postgres unique_violation. */
+const UNIQUE_VIOLATION = '23505';
+
+// Reconciliation windows for MoMo pop-up orders stuck in 'awaiting_payment'
+// (see reconcileAwaitingPayments) — same shape as the walk-in cron.
+// GRACE: leave the order alone while the stand's own poll is still the natural
+// way it gets confirmed; only chase genuinely stuck ones.
+const POPUP_RECONCILE_GRACE_MS = 5 * 60_000; // 5 minutes
+// After this, a charge Paystack still reports as unpaid is treated as one the
+// customer never completed, and cancelled so it stops sitting on the queue.
+const POPUP_RECONCILE_CANCEL_AFTER_MS = 24 * 60 * 60_000; // 24 hours
+// Cap per tick so a backlog can't blow up a single run.
+const POPUP_RECONCILE_BATCH_SIZE = 50;
+
+// Split rows are part of how an order was paid, so every read of an order
+// carries them — without this the breakdown is write-only.
+const ORDER_SELECT =
+  '*, profiles!served_by(id, first_name, last_name), popup_order_items(*), popup_split_payments(*)';
+
 @Injectable()
 export class PopupSalesService {
   private paystackSecretKey: string;
@@ -312,10 +331,7 @@ export class PopupSalesService {
 
     let q = db
       .from('popup_orders')
-      .select(
-        '*, profiles!served_by(id, first_name, last_name), popup_order_items(*)',
-        { count: 'exact' },
-      )
+      .select(ORDER_SELECT, { count: 'exact' })
       .eq('event_id', eventId)
       .order('created_at', { ascending: false })
       .range(from, to);
@@ -340,9 +356,7 @@ export class PopupSalesService {
     const db = this.supabase.getAdminClient();
     const { data, error } = await db
       .from('popup_orders')
-      .select(
-        '*, profiles!served_by(id, first_name, last_name), popup_order_items(*)',
-      )
+      .select(ORDER_SELECT)
       .eq('id', id)
       .single();
 
@@ -352,6 +366,10 @@ export class PopupSalesService {
 
   async createOrder(eventId: string, dto: CreatePopupOrderDto, userId: string) {
     const db = this.supabase.getAdminClient();
+
+    if (!dto.items || dto.items.length === 0) {
+      throw new BadRequestException('A pop-up order needs at least one item');
+    }
 
     // Verify event exists and is active
     const { data: event, error: eventError } = await db
@@ -363,21 +381,12 @@ export class PopupSalesService {
     if (eventError || !event) throw new NotFoundException('Event not found');
     if (event.status === 'closed') throw new BadRequestException('This event is closed and cannot accept new orders');
 
-    // Generate order number: POP-YYYY-XXXX
-    const year = new Date().getFullYear();
-    const { data: lastOrder } = await db
-      .from('popup_orders')
-      .select('order_number')
-      .like('order_number', `POP-${year}-%`)
-      .order('order_number', { ascending: false })
-      .limit(1);
-
-    let sequence = 1;
-    if (lastOrder && lastOrder.length > 0) {
-      const lastSeq = parseInt(lastOrder[0].order_number.split('-')[2], 10);
-      sequence = lastSeq + 1;
+    // A lost response must never cost the stand a duplicate sale. If this cart
+    // was already rung up, hand back the order that exists.
+    if (dto.idempotency_key) {
+      const existing = await this.findByIdempotencyKey(dto.idempotency_key);
+      if (existing) return this.findOrder(existing);
     }
-    const order_number = `POP-${year}-${String(sequence).padStart(4, '0')}`;
 
     // Totals — resolved server-side by the shared discount engine, same as the
     // storefront and walk-in. A typed promo code and any automatic bundle rules
@@ -406,33 +415,123 @@ export class PopupSalesService {
     const discountAmount = discount.discountAmount;
     const total = round2(Math.max(0, subtotal - discountAmount));
 
-    // Create order
-    const { data: order, error: orderError } = await db
-      .from('popup_orders')
-      .insert({
-        event_id: eventId,
-        order_number,
-        customer_name: dto.customer_name || null,
-        customer_phone: dto.customer_phone || null,
-        customer_email: dto.customer_email || null,
-        served_by: userId,
-        status: 'active',
-        payment_method: dto.payment_method || null,
-        payment_reference: dto.payment_reference || null,
-        subtotal: round2(subtotal),
-        discount_type: discount.channelDiscountType,
-        discount_amount: discountAmount,
-        discount_reason: discount.label,
-        applied_promo_code_id: discount.promoCodeId,
-        hold_duration_minutes: dto.hold_duration_minutes || null,
-        hold_note: dto.hold_note || null,
-        total,
-        notes: dto.notes || null,
-      })
-      .select()
-      .single();
+    // The stall's tally bar checks the split against a total the browser worked
+    // out. The figure that gets charged is the one resolved just above, and the
+    // two can differ — a promo that expired between preview and submit, a bundle
+    // rule that fires differently. Check the split against the real total before
+    // anything is written, so a mismatch is a refused sale rather than a silent
+    // discrepancy nobody finds until the till is counted.
+    const splitInputs = (dto.split_payments ?? []).filter(
+      (sp) => Number(sp.amount) > 0,
+    );
+    if (splitInputs.length === 1) {
+      // A single leg is the whole order by definition — the stall sends one for
+      // a plain MoMo sale just to carry the network and number. Snap it to the
+      // real total rather than refusing a sale over a stale preview.
+      splitInputs[0] = { ...splitInputs[0], amount: total };
+    } else if (splitInputs.length > 1) {
+      const allocated = round2(
+        splitInputs.reduce((sum, sp) => sum + Number(sp.amount), 0),
+      );
+      if (Math.abs(allocated - total) > 0.01) {
+        throw new BadRequestException(
+          `Split payments add up to GH₵${allocated.toFixed(2)} but the order total is GH₵${total.toFixed(2)}. ` +
+            'Re-check the amounts — the discount may have changed since the total was shown.',
+        );
+      }
+    }
 
-    if (orderError || !order) throw orderError;
+    // Normalised on the way in, the way walk-ins do it. chargeOrder writes E.164
+    // back later regardless, so storing the raw form here left the same customer
+    // under two formats and broke profile de-duplication.
+    const customerPhone = dto.customer_phone ? toE164(dto.customer_phone) : null;
+
+    // Cash is in the tin the moment the order is rung up — there is nothing left
+    // to confirm, so the sale completes here rather than waiting for someone to
+    // pick "Mark as Completed" off the row menu. A split counts as cash only if
+    // every leg is; anything with a MoMo or transfer leg still needs confirming.
+    // MoMo waits for Paystack (see chargeOrder → verifyPayment), and a bank
+    // transfer waits for the reference to be checked.
+    //
+    // A held ticket is the exception: it is deliberately unfinished, and the
+    // hold path transitions to 'on_hold' straight after this call — which
+    // 'completed' would refuse.
+    const isCashSale =
+      !dto.hold_duration_minutes &&
+      (splitInputs.length > 0
+        ? splitInputs.every((sp) => sp.method === 'cash')
+        : dto.payment_method === 'cash');
+
+    const insertOrder = (order_number: string) =>
+      db
+        .from('popup_orders')
+        .insert({
+          event_id: eventId,
+          order_number,
+          idempotency_key: dto.idempotency_key || null,
+          customer_name: dto.customer_name || null,
+          customer_phone: customerPhone,
+          customer_email: dto.customer_email || null,
+          served_by: userId,
+          status: isCashSale ? 'completed' : 'active',
+          payment_method: dto.payment_method || null,
+          payment_reference: dto.payment_reference || null,
+          subtotal: round2(subtotal),
+          discount_type: discount.channelDiscountType,
+          discount_amount: discountAmount,
+          discount_reason: discount.label,
+          applied_promo_code_id: discount.promoCodeId,
+          hold_duration_minutes: dto.hold_duration_minutes || null,
+          hold_note: dto.hold_note || null,
+          total,
+          notes: dto.notes || null,
+        })
+        .select()
+        .single();
+
+    // The order number is a read-then-increment against a UNIQUE column, so two
+    // tills ringing up at the same moment collide. Re-read and retry rather than
+    // failing a sale the customer is standing there paying for.
+    let order: any = null;
+    let orderError: any = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const result = await insertOrder(await this.nextOrderNumber());
+      order = result.data;
+      orderError = result.error;
+      if (!orderError && order) break;
+
+      // Someone else's request won the race on this cart's key — their order is
+      // this order.
+      if (
+        orderError?.code === UNIQUE_VIOLATION &&
+        orderError?.message?.includes('idempotency_key') &&
+        dto.idempotency_key
+      ) {
+        const existing = await this.findByIdempotencyKey(dto.idempotency_key);
+        if (existing) return this.findOrder(existing);
+      }
+
+      if (orderError?.code !== UNIQUE_VIOLATION) break;
+    }
+
+    if (orderError || !order) {
+      throw new InternalServerErrorException(
+        `Could not create the pop-up order: ${orderError?.message ?? 'no row returned'}`,
+      );
+    }
+
+    /**
+     * Everything below this point can fail with the order row already written.
+     * Leaving it behind gives the stand a ghost order — no items, or no record
+     * of how it was paid — that staff will re-ring anyway. Undo and rethrow, the
+     * way walkin-sales.service does.
+     */
+    const rollback = async (reason: string) => {
+      await db.from('popup_orders').delete().eq('id', order.id);
+      await this.discountEngine
+        .revertForOrder('popup_orders', order.id, reason)
+        .catch(() => {});
+    };
 
     try {
       await this.discountEngine.reserve({
@@ -442,8 +541,11 @@ export class PopupSalesService {
         orderId: order.id,
         orderNumber: order.order_number,
         customerEmail: dto.customer_email ?? null,
-        customerPhone: dto.customer_phone ?? null,
+        customerPhone: customerPhone,
         appliedBy: userId,
+        // Cash is collected on the spot, so its seat is taken outright rather
+        // than left pending on a sale that might never be confirmed.
+        confirmImmediately: isCashSale,
       });
     } catch (err) {
       // Do not strand a half-built order behind an exhausted code.
@@ -468,11 +570,16 @@ export class PopupSalesService {
       .from('popup_order_items')
       .insert(items);
 
-    if (itemsError) throw itemsError;
+    if (itemsError) {
+      await rollback('Order items insert failed');
+      throw new InternalServerErrorException(
+        `Could not save the pop-up order's items: ${itemsError.message}`,
+      );
+    }
 
     // Insert split payments if provided
-    if (dto.split_payments && dto.split_payments.length > 0) {
-      const splits = dto.split_payments.map((sp) => {
+    if (splitInputs.length > 0) {
+      const splits = splitInputs.map((sp) => {
         const phone = sp.phone ? toE164(sp.phone) : null;
         return {
           order_id: order.id,
@@ -488,10 +595,55 @@ export class PopupSalesService {
       const { error: splitError } = await db
         .from('popup_split_payments')
         .insert(splits);
-      if (splitError) throw splitError;
+      if (splitError) {
+        await rollback('Split payment insert failed');
+        throw new InternalServerErrorException(
+          `Could not save the pop-up order's split payments: ${splitError.message}`,
+        );
+      }
+    }
+
+    // Deduct stock and send the receipt. Runs last so it reads a complete order
+    // — and so a failed item or split insert rolls back before any of it fires.
+    if (isCashSale) {
+      await this.applyCompletion(order.id);
     }
 
     return this.findOrder(order.id);
+  }
+
+  /** The id of the order already recorded for this cart key, if there is one. */
+  private async findByIdempotencyKey(key: string): Promise<string | null> {
+    const { data } = await this.supabase
+      .getAdminClient()
+      .from('popup_orders')
+      .select('id')
+      .eq('idempotency_key', key)
+      .maybeSingle();
+    return data?.id ?? null;
+  }
+
+  /**
+   * Next number in the POP-YYYY-XXXX series. Ordered by the numeric tail rather
+   * than the whole string, which would put POP-2026-9999 above POP-2026-10000.
+   * Callers must handle a unique collision — this is a read, not a reservation.
+   */
+  private async nextOrderNumber(): Promise<string> {
+    const year = new Date().getFullYear();
+    const { data: recent } = await this.supabase
+      .getAdminClient()
+      .from('popup_orders')
+      .select('order_number')
+      .like('order_number', `POP-${year}-%`)
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    let sequence = 1;
+    for (const row of recent ?? []) {
+      const seq = parseInt(row.order_number.split('-')[2], 10);
+      if (Number.isFinite(seq) && seq >= sequence) sequence = seq + 1;
+    }
+    return `POP-${year}-${String(sequence).padStart(4, '0')}`;
   }
 
   async updateOrder(id: string, dto: UpdatePopupOrderDto) {
@@ -506,13 +658,18 @@ export class PopupSalesService {
 
     const wasAlreadyCompleted = existingOrder?.status === 'completed';
     const isBeingCompleted = dto.status === 'completed' && !wasAlreadyCompleted;
+    // Only a completed order has stock to give back — nothing else deducted any.
+    const isBeingCancelled = dto.status === 'cancelled' && wasAlreadyCompleted;
 
     const VALID_TRANSITIONS: Partial<Record<string, string[]>> = {
       active:           ['awaiting_payment', 'on_hold', 'completed', 'cancelled'],
       on_hold:          ['active', 'cancelled'],
       awaiting_payment: ['completed', 'active', 'cancelled'],
       confirmed:        ['completed', 'cancelled'],
-      completed:        ['refunded'],
+      // Cash sales are now completed the moment they're rung up, so a mis-ring
+      // has to be undoable without going through a refund. Cancelling returns
+      // the stock, same as the walk-in counter.
+      completed:        ['refunded', 'cancelled'],
       cancelled:        [],
       refunded:         [],
     };
@@ -618,17 +775,12 @@ export class PopupSalesService {
       });
     }
 
-    // A completed order has money behind it; a cancelled one gives its seat back.
-    if (isBeingCompleted) {
-      await this.discountEngine
-        .confirmForOrder('popup_orders', id)
-        .catch((err) =>
-          console.error(
-            `Failed to confirm promo redemption for pop-up ${data.order_number}:`,
-            err,
-          ),
-        );
+    if (isBeingCancelled) {
+      await this.restoreInventory(id, data.order_number);
     }
+
+    // A cancelled order gives its promo seat back; a completed one has money
+    // behind it, and confirms the seat inside applyCompletion below.
     if (dto.status === 'cancelled') {
       await this.discountEngine
         .revertForOrder('popup_orders', id, `Order ${data.order_number} cancelled`)
@@ -640,78 +792,123 @@ export class PopupSalesService {
         );
     }
 
-    // ── Inventory deduction on completion ─────────────────────────────────────
+    // Stock deduction + receipt. Both live in applyCompletion so the async MoMo
+    // confirmation path runs exactly the same side effects — it used to run none
+    // of them, and every MoMo sale at the stand oversold its stock.
     if (isBeingCompleted) {
-      const { data: orderItems } = await db
-        .from('popup_order_items')
-        .select('variant_id, quantity, product_name, variant_title, unit_price, total_price, product:products(vendor)')
-        .eq('order_id', id);
+      await this.applyCompletion(id);
+    }
 
-      if (orderItems && orderItems.length > 0) {
-        for (const item of orderItems) {
-          if (!item.variant_id) continue;
+    return data;
+  }
 
-          // Read current quantity
-          const { data: variant } = await db
-            .from('product_variants')
-            .select('inventory_quantity')
-            .eq('id', item.variant_id)
-            .single();
+  /**
+   * Runs the side effects of a pop-up order reaching 'completed' exactly once:
+   * confirms the promo seat, deducts inventory (with movement rows) and sends
+   * the customer's receipt. Reads the order back from the DB so it serves both
+   * the manual "Mark as Completed" path and the async MoMo confirmation path
+   * (the stand's poll and the Paystack webhook), which used to skip all of it.
+   */
+  private async applyCompletion(orderId: string) {
+    const db = this.supabase.getAdminClient();
 
-          if (!variant) continue;
+    const { data: order } = await db
+      .from('popup_orders')
+      .select('*, popup_order_items(*, product:products(vendor))')
+      .eq('id', orderId)
+      .single();
+    if (!order) return;
 
-          const newQty = Math.max(0, (variant.inventory_quantity ?? 0) - item.quantity);
+    const items: any[] = order.popup_order_items ?? [];
 
-          // Decrement inventory
-          await db
-            .from('product_variants')
-            .update({ inventory_quantity: newQty })
-            .eq('id', item.variant_id);
+    await this.discountEngine
+      .confirmForOrder('popup_orders', orderId)
+      .catch((err) =>
+        console.error(
+          `Failed to confirm promo redemption for pop-up ${order.order_number}:`,
+          err,
+        ),
+      );
 
-          // Log movement
-          await db.from('inventory_movements').insert({
-            variant_id: item.variant_id,
-            quantity_change: -item.quantity,
-            quantity_before: variant.inventory_quantity ?? 0,
-            quantity_after: newQty,
-            movement_type: 'sale',
-            notes: `Pop-up order ${id} completed`,
-          });
-        }
-      }
+    // Quantities are summed per variant first: two lines for the same variant
+    // would otherwise read the same `before` and the second write would clobber
+    // the first. Distinct variants touch distinct rows, so they run together —
+    // this is on the response path.
+    const byVariant = new Map<string, number>();
+    for (const item of items) {
+      if (!item.variant_id) continue;
+      byVariant.set(
+        item.variant_id,
+        (byVariant.get(item.variant_id) ?? 0) + item.quantity,
+      );
+    }
 
-      if (data.customer_email) {
-        const { data: evt } = await db
-          .from('popup_events')
-          .select('name, location, event_date')
-          .eq('id', data.event_id)
+    await Promise.all(
+      [...byVariant].map(async ([variantId, quantity]) => {
+        const { data: variant } = await db
+          .from('product_variants')
+          .select('inventory_quantity')
+          .eq('id', variantId)
           .single();
-        const itemVendors = (orderItems ?? []).map((i: any) => (i.product as any)?.vendor || '1NRI');
-        const brand = itemVendors.length > 0 && itemVendors.every((v: string) => v === 'Unlikely Alliances') ? 'Unlikely Alliances' : '1NRI';
-        this.emailService.sendPopupOrderSummary({
-          email: data.customer_email,
-          customer_name: data.customer_name ?? null,
-          order_number: data.order_number,
+        if (!variant) return;
+
+        const before = variant.inventory_quantity ?? 0;
+        const after = Math.max(0, before - quantity);
+
+        await db
+          .from('product_variants')
+          .update({ inventory_quantity: after })
+          .eq('id', variantId);
+
+        await db.from('inventory_movements').insert({
+          variant_id: variantId,
+          quantity_change: -quantity,
+          quantity_before: before,
+          quantity_after: after,
+          movement_type: 'sale',
+          notes: `Pop-up order ${order.order_number} completed`,
+        });
+      }),
+    );
+
+    if (order.customer_email) {
+      const { data: evt } = await db
+        .from('popup_events')
+        .select('name, location, event_date')
+        .eq('id', order.event_id)
+        .single();
+      const itemVendors = items.map((i: any) => i.product?.vendor || '1NRI');
+      const brand =
+        itemVendors.length > 0 &&
+        itemVendors.every((v: string) => v === 'Unlikely Alliances')
+          ? 'Unlikely Alliances'
+          : '1NRI';
+      this.emailService
+        .sendPopupOrderSummary({
+          email: order.customer_email,
+          customer_name: order.customer_name ?? null,
+          order_number: order.order_number,
           event_name: evt?.name ?? 'Pop-up Event',
           event_location: evt?.location ?? null,
           event_date: evt?.event_date ?? null,
-          items: (orderItems ?? []).map((i: any) => ({
+          items: items.map((i: any) => ({
             product_name: i.product_name,
             variant_title: i.variant_title ?? null,
             quantity: i.quantity,
             unit_price: Number(i.unit_price),
             total_price: Number(i.total_price),
           })),
-          subtotal: Number(data.subtotal),
-          discount_amount: Number(data.discount_amount) > 0 ? Number(data.discount_amount) : null,
-          total: Number(data.total),
-          payment_method: data.payment_method,
+          subtotal: Number(order.subtotal),
+          discount_amount:
+            Number(order.discount_amount) > 0
+              ? Number(order.discount_amount)
+              : null,
+          total: Number(order.total),
+          payment_method: order.payment_method,
           brand,
-        }).catch(() => {});
-      }
+        })
+        .catch(() => {});
     }
-
-    return data;
   }
 
 
@@ -854,15 +1051,8 @@ export class PopupSalesService {
       return { status: 'completed', confirmed: true };
     }
 
-    const response = await fetch(
-      `https://api.paystack.co/charge/${order.payment_reference}`,
-      {
-        headers: { Authorization: `Bearer ${this.paystackSecretKey}` },
-      },
-    );
-
-    const result = (await response.json()) as any;
-    const paystackStatus: string = result.data?.status ?? 'unknown';
+    const paystackStatus =
+      (await this.fetchChargeStatus(order.payment_reference)) ?? 'unknown';
 
     if (paystackStatus === 'success') {
       await this.confirmByReference(order.payment_reference);
@@ -872,7 +1062,27 @@ export class PopupSalesService {
     return { status: paystackStatus, confirmed: false };
   }
 
-  // Called by the Paystack webhook when charge.success fires
+  /**
+   * Paystack's view of a MoMo charge, or null if we couldn't get an answer.
+   * Null means "don't know", never "not paid" — callers must retry rather than
+   * act on it.
+   */
+  private async fetchChargeStatus(reference: string): Promise<string | null> {
+    try {
+      const response = await fetch(
+        `https://api.paystack.co/charge/${reference}`,
+        { headers: { Authorization: `Bearer ${this.paystackSecretKey}` } },
+      );
+      const result = (await response.json()) as any;
+      return result?.data?.status ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Called by the Paystack webhook when charge.success fires, and by the stand's
+  // own poll via verifyPayment. Flips the order to completed exactly once, then
+  // runs the shared completion side effects (promo, stock, receipt).
   async confirmByReference(reference: string): Promise<boolean> {
     const db = this.supabase.getAdminClient();
     const { data, error } = await db
@@ -880,52 +1090,108 @@ export class PopupSalesService {
       .update({ status: 'completed' })
       .eq('payment_reference', reference)
       .eq('status', 'awaiting_payment')
-      .select('id, customer_email, customer_name, order_number, event_id, subtotal, discount_amount, total, payment_method')
+      .select('id')
       .maybeSingle();
 
     if (error) {
       console.error('Error confirming popup order by reference:', error.message);
     }
 
-    if (data?.customer_email) {
-      (async () => {
-        try {
-          const { data: items } = await db
-            .from('popup_order_items')
-            .select('*, product:products(vendor)')
-            .eq('order_id', data.id);
-          const { data: evt } = await db
-            .from('popup_events')
-            .select('name, location, event_date')
-            .eq('id', data.event_id)
-            .single();
-          const itemVendors = (items ?? []).map((i: any) => (i.product as any)?.vendor || '1NRI');
-          const brand = itemVendors.length > 0 && itemVendors.every((v: string) => v === 'Unlikely Alliances') ? 'Unlikely Alliances' : '1NRI';
-          await this.emailService.sendPopupOrderSummary({
-            email: data.customer_email,
-            customer_name: data.customer_name ?? null,
-            order_number: data.order_number,
-            event_name: evt?.name ?? 'Pop-up Event',
-            event_location: evt?.location ?? null,
-            event_date: evt?.event_date ?? null,
-            items: (items ?? []).map((i: any) => ({
-              product_name: i.product_name,
-              variant_title: i.variant_title ?? null,
-              quantity: i.quantity,
-              unit_price: Number(i.unit_price),
-              total_price: Number(i.total_price),
-            })),
-            subtotal: Number(data.subtotal),
-            discount_amount: Number(data.discount_amount) > 0 ? Number(data.discount_amount) : null,
-            total: Number(data.total),
-            payment_method: data.payment_method,
-            brand,
-          });
-        } catch { /* silent */ }
-      })();
+    if (data?.id) {
+      await this.applyCompletion(data.id);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Safety net for a MoMo pop-up order whose confirmation never arrived by either
+   * route: the stand's tab was closed mid-payment (killing its poll) AND the
+   * Paystack webhook was never delivered. Without this the sale sits in
+   * 'awaiting_payment' forever — cash taken, stock never deducted, customer never
+   * sent their receipt. Runs on a schedule (see PopupReconciliationCron).
+   *
+   * For each awaiting order past the grace window we ask Paystack for the truth:
+   *   - success                          → confirmByReference() recovers the sale
+   *   - unpaid AND older than CANCEL age → cancel it, and free the promo seat
+   *   - unpaid but still young           → leave it, retry next tick
+   * Every order is handled independently so one failure can't stall the batch.
+   */
+  async reconcileAwaitingPayments(): Promise<{
+    recovered: number;
+    cancelled: number;
+  }> {
+    if (!this.paystackSecretKey) return { recovered: 0, cancelled: 0 };
+
+    const db = this.supabase.getAdminClient();
+    const now = Date.now();
+    const graceCutoff = new Date(now - POPUP_RECONCILE_GRACE_MS).toISOString();
+
+    const { data: rows, error } = await db
+      .from('popup_orders')
+      .select('id, order_number, payment_reference, created_at')
+      .eq('status', 'awaiting_payment')
+      .not('payment_reference', 'is', null)
+      .lt('created_at', graceCutoff)
+      .order('created_at', { ascending: true })
+      .limit(POPUP_RECONCILE_BATCH_SIZE);
+
+    if (error) throw error;
+    if (!rows?.length) return { recovered: 0, cancelled: 0 };
+
+    let recovered = 0;
+    let cancelled = 0;
+
+    for (const order of rows) {
+      try {
+        const status = await this.fetchChargeStatus(order.payment_reference);
+        if (status === null) continue; // lookup failed — retry next tick
+
+        if (status === 'success') {
+          // Idempotent: gated on status still being 'awaiting_payment'.
+          if (await this.confirmByReference(order.payment_reference)) {
+            recovered += 1;
+          }
+          continue;
+        }
+
+        const age = now - new Date(order.created_at).getTime();
+        if (age <= POPUP_RECONCILE_CANCEL_AFTER_MS) continue;
+
+        const { data: updated } = await db
+          .from('popup_orders')
+          .update({ status: 'cancelled' })
+          .eq('id', order.id)
+          .eq('status', 'awaiting_payment') // guard: never cancel a paid order
+          .select('id')
+          .maybeSingle();
+        if (!updated) continue;
+
+        // No inventory to restore — stock is only deducted on completion. The
+        // promo seat, though, was reserved when the order was created and has to
+        // go back.
+        await this.discountEngine
+          .revertForOrder(
+            'popup_orders',
+            order.id,
+            `Order ${order.order_number} never paid`,
+          )
+          .catch((err) =>
+            console.error(
+              `Failed to revert promo redemption for pop-up ${order.order_number}:`,
+              err,
+            ),
+          );
+        cancelled += 1;
+      } catch (err: any) {
+        console.error(
+          `reconcileAwaitingPayments failed for ${order.order_number}:`,
+          err?.message ?? err,
+        );
+      }
     }
 
-    return !!data;
+    return { recovered, cancelled };
   }
 
   // ─── Refund ──────────────────────────────────────────────────────────────────
@@ -1028,38 +1294,9 @@ export class PopupSalesService {
         ),
       );
 
-    // ── Restore inventory (only if order was completed — that's when stock was deducted) ──
+    // Only a completed order deducted any stock in the first place.
     if (order.status === 'completed') {
-      const items: { variant_id: string | null; quantity: number }[] =
-        order.popup_order_items ?? [];
-
-      for (const item of items) {
-        if (!item.variant_id) continue;
-
-        const { data: variant } = await db
-          .from('product_variants')
-          .select('inventory_quantity')
-          .eq('id', item.variant_id)
-          .single();
-
-        if (!variant) continue;
-
-        const restoredQty = (variant.inventory_quantity ?? 0) + item.quantity;
-
-        await db
-          .from('product_variants')
-          .update({ inventory_quantity: restoredQty })
-          .eq('id', item.variant_id);
-
-        await db.from('inventory_movements').insert({
-          variant_id: item.variant_id,
-          quantity_change: item.quantity,
-          quantity_before: variant.inventory_quantity ?? 0,
-          quantity_after: restoredQty,
-          movement_type: 'return',
-          notes: `Refund for pop-up order ${id}`,
-        });
-      }
+      await this.restoreInventory(id, order.order_number);
     }
 
     // ── Send SMS confirmation to customer ─────────────────────────────────────
@@ -1142,5 +1379,55 @@ export class PopupSalesService {
     }
 
     return { id: authData.user.id, isNew: true };
+  }
+
+  /**
+   * Puts back the stock a completed order took, with a movement row per variant.
+   * Shared by the refund path and by cancelling a completed (cash) order.
+   */
+  private async restoreInventory(orderId: string, orderNumber: string) {
+    const db = this.supabase.getAdminClient();
+    const { data: items } = await db
+      .from('popup_order_items')
+      .select('variant_id, quantity')
+      .eq('order_id', orderId);
+
+    // Summed per variant for the same reason applyCompletion sums them: two
+    // lines on one variant would otherwise read the same `before` and the second
+    // write would clobber the first.
+    const byVariant = new Map<string, number>();
+    for (const item of items ?? []) {
+      if (!item.variant_id) continue;
+      byVariant.set(
+        item.variant_id,
+        (byVariant.get(item.variant_id) ?? 0) + item.quantity,
+      );
+    }
+
+    for (const [variantId, quantity] of byVariant) {
+      const { data: variant } = await db
+        .from('product_variants')
+        .select('inventory_quantity')
+        .eq('id', variantId)
+        .single();
+      if (!variant) continue;
+
+      const before = variant.inventory_quantity ?? 0;
+      const after = before + quantity;
+
+      await db
+        .from('product_variants')
+        .update({ inventory_quantity: after })
+        .eq('id', variantId);
+
+      await db.from('inventory_movements').insert({
+        variant_id: variantId,
+        quantity_change: quantity,
+        quantity_before: before,
+        quantity_after: after,
+        movement_type: 'return',
+        notes: `Refund/cancel for pop-up order ${orderNumber}`,
+      });
+    }
   }
 }

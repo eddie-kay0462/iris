@@ -229,6 +229,13 @@ function OrderDetailModal({
     ? [order.profiles.first_name, order.profiles.last_name].filter(Boolean).join(" ") || "—"
     : "—";
 
+  const splits = order.popup_split_payments ?? [];
+  const splitTotal = splits.reduce((s, p) => s + Number(p.amount), 0);
+  // Server-side validation blocks a mismatched split at creation, but a later
+  // discount edit re-prices the order without touching the split rows — so the
+  // drawer still has to be able to say when the two have drifted apart.
+  const splitsBalance = Math.abs(splitTotal - Number(order.total)) < 0.01;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-lg rounded-xl bg-white shadow-xl overflow-hidden">
@@ -312,7 +319,11 @@ function OrderDetailModal({
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Payment Method</p>
               <p className="mt-1 text-sm text-slate-800">
-                {order.payment_method ? PAYMENT_LABELS[order.payment_method] : "—"}
+                {splits.length > 0
+                  ? `Split — ${splits.length} payments`
+                  : order.payment_method
+                    ? PAYMENT_LABELS[order.payment_method]
+                    : "—"}
               </p>
             </div>
             {order.payment_reference && (
@@ -322,6 +333,53 @@ function OrderDetailModal({
               </div>
             )}
           </div>
+
+          {/* Split breakdown — what actually went into the till, per method */}
+          {splits.length > 0 && (
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+                Payment Breakdown
+              </p>
+              <div className="divide-y divide-slate-100 rounded-lg border border-slate-100">
+                {splits.map((sp) => {
+                  const detail = [
+                    sp.method === "momo" ? sp.network?.toUpperCase() : sp.bank_name,
+                    sp.phone,
+                    sp.reference,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
+                  return (
+                    <div key={sp.id} className="flex items-start justify-between px-4 py-2.5">
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">
+                          {PAYMENT_LABELS[sp.method]}
+                        </p>
+                        {detail && <p className="text-xs text-slate-400">{detail}</p>}
+                        {sp.sent_to_paystack && (
+                          <p className="text-xs text-amber-600">Sent to Paystack — confirm manually</p>
+                        )}
+                      </div>
+                      <p className="ml-4 shrink-0 text-sm font-medium text-slate-800">
+                        {formatCurrency(Number(sp.amount))}
+                      </p>
+                    </div>
+                  );
+                })}
+                <div className="flex justify-between px-4 py-2.5 text-sm font-semibold text-slate-900">
+                  <span>Allocated</span>
+                  <span className={splitsBalance ? "" : "text-red-600"}>
+                    {formatCurrency(splitTotal)}
+                  </span>
+                </div>
+              </div>
+              {!splitsBalance && (
+                <p className="mt-1.5 text-xs text-red-600">
+                  Does not match the order total of {formatCurrency(Number(order.total))}.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Notes */}
           {order.notes && (
@@ -423,9 +481,11 @@ function OrderActionsMenu({
         show: order.status === "on_hold",
       },
       {
+        // Cash sales complete on creation, so cancelling is the only way to undo
+        // a mis-ring. The server puts the stock back when the order was completed.
         label: "Cancel Order",
         status: "cancelled" as PopupOrderStatus,
-        show: order.status !== "completed" && order.status !== "cancelled",
+        show: order.status !== "cancelled" && order.status !== "refunded",
       },
     ] as { label: string; status: PopupOrderStatus; show: boolean }[]
   ).filter((a) => a.show);
@@ -436,7 +496,10 @@ function OrderActionsMenu({
   const confirmConfigs: Partial<Record<PopupOrderStatus, { title: string; message: string; confirmLabel: string; danger: boolean }>> = {
     cancelled: {
       title: "Cancel this order?",
-      message: `Order ${order.order_number} will be cancelled. This cannot be undone.`,
+      message:
+        order.status === "completed"
+          ? `Order ${order.order_number} will be cancelled and its stock put back. Use Issue Refund instead if the customer has already paid.`
+          : `Order ${order.order_number} will be cancelled. This cannot be undone.`,
       confirmLabel: "Yes, cancel order",
       danger: true,
     },
@@ -975,6 +1038,7 @@ function EditOrderModal({
   // shown as read-only until staff deliberately replace it.
   const engineResolved =
     order.discount_type === "code" || order.discount_type === "pairing";
+  const hasSplits = (order.popup_split_payments?.length ?? 0) > 0;
   const [discountType, setDiscountType] = useState<"none" | "percentage" | "fixed">(
     engineResolved ? "none" : ((order.discount_type as "none" | "percentage" | "fixed") ?? "none"),
   );
@@ -1091,6 +1155,16 @@ function EditOrderModal({
           <div>
             <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">Discount</p>
             <div className="space-y-3">
+              {/* Re-pricing rewrites the order total but leaves the split rows
+                  alone, so the two stop agreeing. Say so here rather than let it
+                  surface when the till is counted. */}
+              {hasSplits && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  This order was paid in {order.popup_split_payments!.length} parts. Changing the
+                  discount re-prices it without adjusting those amounts — update the split record
+                  by hand afterwards.
+                </div>
+              )}
               {engineResolved && (
                 <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
                   Currently <strong>{order.discount_reason || "a discount rule"}</strong> —{" "}
@@ -1318,6 +1392,18 @@ function NewOrderModal({
 
   // ── Pre-order mode ─────────────────────────────────────────────────────────
   const [isPreorderMode, setIsPreorderMode] = useState(false);
+  // A pre-order is not automatically a paid one. This used to inherit the sale
+  // radio, which defaults to Cash, so every pre-order was filed as paid whether
+  // money changed hands or not — and then counted toward Road-to-HQ revenue.
+  const [preorderPaidNow, setPreorderPaidNow] = useState(false);
+
+  // One key per open cart. A retry after a lost response (venue wifi) returns
+  // the order that already exists instead of ringing the sale up twice.
+  const idempotencyKey = useRef(
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `popup-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
 
   // ── Product state ──────────────────────────────────────────────────────────
   const [productSearch, setProductSearch] = useState("");
@@ -1477,6 +1563,20 @@ function NewOrderModal({
   const allocatedAmount = splits.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
   const isAllocatedOk = Math.abs(allocatedAmount - total) < 0.01;
   const hasAwaitingConfirmation = isSplit && splits.some((p) => p.sentToPaystack);
+  // Pre-orders are placed against a specific variant, so an ad-hoc counter line
+  // has nothing to attach to. It used to be filtered out silently — a cart of
+  // only ad-hoc lines submitted an empty pre-order and closed as if it worked.
+  const adHocLines = items.filter((i) => !i.variant_id);
+  const preorderBlocked = isPreorderMode && adHocLines.length > 0;
+  // Mirrors the server's rule (popup-sales.service.ts createOrder): cash is
+  // already in the tin, so the sale completes on save. Anything with a MoMo or
+  // transfer leg still has to be confirmed afterwards.
+  const cashLegs = splits.filter((p) => parseFloat(p.amount) > 0);
+  const isCashSale =
+    !isPreorderMode &&
+    (isSplit
+      ? cashLegs.length > 0 && cashLegs.every((p) => p.method === "cash")
+      : paymentMethod === "cash");
 
   // ── Cart helpers ───────────────────────────────────────────────────────────
   const addItem = useCallback((product: ProductSearchResult, variant: ProductSearchResult["product_variants"][0]) => {
@@ -1526,6 +1626,7 @@ function NewOrderModal({
 
     // ── Pre-order mode path ────────────────────────────────────────────────
     if (isPreorderMode) {
+      if (preorderBlocked) return;
       await createPreorder.mutateAsync({
         items: items
           .filter((item) => !!item.variant_id)
@@ -1539,10 +1640,13 @@ function NewOrderModal({
         customer_name: customerForm.name || undefined,
         customer_email: customerForm.email || undefined,
         customer_phone: customerForm.phone,
-        payment_method: (paymentMethod as "cash" | "momo" | "bank_transfer") ?? "pending",
-        payment_reference:
-          paymentMethod === "momo" ? momoReference || undefined :
-          paymentMethod === "bank_transfer" ? bankReference || undefined : undefined,
+        // 'pending' leaves payment_status as 'awaiting' server-side, so an unpaid
+        // pre-order does not count as revenue until the money actually arrives.
+        payment_method: preorderPaidNow ? paymentMethod : "pending",
+        payment_reference: !preorderPaidNow
+          ? undefined
+          : paymentMethod === "momo" ? momoReference || undefined :
+            paymentMethod === "bank_transfer" ? bankReference || undefined : undefined,
         notes: undefined,
         event_id: eventId,
         delivery_fee: deliveryFeeNum,
@@ -1574,10 +1678,13 @@ function NewOrderModal({
         : undefined;
 
     const newOrder = await createOrder.mutateAsync({
+      idempotency_key: idempotencyKey.current,
       customer_name: customerForm.name || undefined,
       customer_phone: customerForm.phone || (paymentMethod === "momo" && !isSplit ? momoPhone || undefined : undefined),
       customer_email: customerForm.email || undefined,
-      payment_method: paymentMethod,
+      // A split order has no single method — sending the leftover radio value
+      // filed cash+MoMo sales under whichever button happened to be selected.
+      payment_method: isSplit ? undefined : paymentMethod,
       payment_reference: isSplit ? undefined : (paymentMethod === "momo" ? momoReference || undefined : paymentMethod === "bank_transfer" ? bankReference || undefined : undefined),
       promo_code: appliedCode || undefined,
       discount_type: discountType !== "none" ? discountType : undefined,
@@ -1603,8 +1710,9 @@ function NewOrderModal({
 
   async function handleChargeSubmit() {
     if (items.length === 0) return;
+    if (isSplit && !isAllocatedOk) return;
     const splitPayloads = isSplit
-      ? splits.map((p) => ({
+      ? splits.filter((p) => parseFloat(p.amount) > 0).map((p) => ({
           method: p.method as PopupPaymentMethod,
           amount: parseFloat(p.amount) || 0,
           network: p.network,
@@ -1618,6 +1726,7 @@ function NewOrderModal({
         : undefined;
 
     const newOrder = await createOrder.mutateAsync({
+      idempotency_key: idempotencyKey.current,
       customer_name: customerForm.name || undefined,
       customer_phone: customerForm.phone || momoPhone || undefined,
       customer_email: customerForm.email || undefined,
@@ -1651,6 +1760,7 @@ function NewOrderModal({
     }
     discountConfirmed.current = false;
     const newOrder = await createOrder.mutateAsync({
+      idempotency_key: idempotencyKey.current,
       customer_name: customerForm.name || undefined,
       customer_phone: customerForm.phone || undefined,
       customer_email: customerForm.email || undefined,
@@ -1692,7 +1802,14 @@ function NewOrderModal({
               {/* Pre-order mode toggle */}
               <button
                 type="button"
-                onClick={() => setIsPreorderMode((v) => !v)}
+                onClick={() =>
+                  setIsPreorderMode((v) => {
+                    // Splits aren't carried through the pre-order path — leaving
+                    // the toggle on would drop whatever was entered there.
+                    if (!v) setIsSplit(false);
+                    return !v;
+                  })
+                }
                 className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                   isPreorderMode
                     ? "border-purple-300 bg-purple-100 text-purple-700"
@@ -2268,7 +2385,9 @@ function NewOrderModal({
                 <section className="p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Payment</p>
-                    <label className="flex cursor-pointer items-center gap-2">
+                    {/* Split payments aren't carried through the pre-order path,
+                        so the toggle would silently drop what staff entered. */}
+                    <label className={cn("flex cursor-pointer items-center gap-2", isPreorderMode && "hidden")}>
                       <span className="text-xs text-slate-600">Split</span>
                       <button
                         type="button"
@@ -2288,7 +2407,36 @@ function NewOrderModal({
                     </label>
                   </div>
 
-                  {!isSplit ? (
+                  {/* Pre-order: was the money taken now, or on collection? */}
+                  {isPreorderMode && (
+                    <div className="mb-4 grid grid-cols-2 gap-2">
+                      {[
+                        { paid: false, label: "Pay on collection" },
+                        { paid: true, label: "Paid now" },
+                      ].map((opt) => (
+                        <button
+                          key={String(opt.paid)}
+                          type="button"
+                          onClick={() => setPreorderPaidNow(opt.paid)}
+                          className={cn(
+                            "rounded-lg border py-2 text-xs font-medium transition-all",
+                            preorderPaidNow === opt.paid
+                              ? "border-slate-800 bg-slate-900 text-white"
+                              : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {isPreorderMode && !preorderPaidNow ? (
+                    <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                      Recorded as awaiting payment. It won&apos;t count as revenue until the
+                      balance is settled on the pre-orders page.
+                    </p>
+                  ) : !isSplit ? (
                     <>
                       {/* Method selector */}
                       <div className="mb-4 grid grid-cols-3 gap-2">
@@ -2394,7 +2542,13 @@ function NewOrderModal({
                           <button
                             type="button"
                             onClick={handleChargeSubmit}
-                            disabled={!momoPhone.trim() || items.length === 0 || createOrder.isPending}
+                            disabled={
+                              !momoPhone.trim() ||
+                              items.length === 0 ||
+                              createOrder.isPending ||
+                              isPreorderMode ||
+                              (isSplit && !isAllocatedOk)
+                            }
                             className="w-full rounded-lg bg-violet-700 py-2 text-xs font-semibold text-white hover:bg-violet-800 disabled:opacity-50"
                           >
                             {createOrder.isPending ? "Creating order…" : "Create Order & Charge via Paystack"}
@@ -2586,10 +2740,39 @@ function NewOrderModal({
                     {(createOrder.error as { message?: string })?.message || "Failed to create order. Please try again."}
                   </p>
                 )}
+                {/* The pre-order path has its own rejections — an item whose
+                    variant isn't pre-order enabled, a pre-order limit already
+                    full — and they used to surface as nothing at all. */}
+                {createPreorder.isError && (
+                  <p className="border-b border-red-100 bg-red-50 px-4 py-2 text-center text-xs text-red-600">
+                    {(createPreorder.error as { message?: string })?.message || "Failed to create pre-order. Please try again."}
+                  </p>
+                )}
+                {preorderBlocked && (
+                  <p className="border-b border-amber-100 bg-amber-50 px-4 py-2 text-center text-xs text-amber-800">
+                    {adHocLines.length} item{adHocLines.length > 1 ? "s have" : " has"} no variant.
+                    A pre-order has to be placed against a specific variant — remove or replace
+                    {adHocLines.length > 1 ? " them" : " it"} first.
+                  </p>
+                )}
+                {!isPreorderMode && (
+                  <p className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-center text-xs text-slate-500">
+                    {isCashSale ? (
+                      <>
+                        Completes the sale now — stock is deducted and the receipt goes out.
+                      </>
+                    ) : (
+                      <>
+                        Saves as an <span className="font-medium">Active</span> order. Mark it
+                        Completed from the order list to deduct stock and count the sale.
+                      </>
+                    )}
+                  </p>
+                )}
                 <div className="flex items-center gap-3 px-4 py-3">
                   <button
                     onClick={() => setShowHold(true)}
-                    disabled={items.length === 0}
+                    disabled={items.length === 0 || isPreorderMode}
                     className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Pause className="h-3.5 w-3.5" />
@@ -2601,14 +2784,24 @@ function NewOrderModal({
                   </div>
                   <button
                     onClick={handleSubmit}
-                    disabled={items.length === 0 || createOrder.isPending || (isSplit && !isAllocatedOk)}
+                    disabled={
+                      items.length === 0 ||
+                      createOrder.isPending ||
+                      createPreorder.isPending ||
+                      preorderBlocked ||
+                      (isSplit && !isAllocatedOk)
+                    }
                     className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {createOrder.isPending
+                    {createOrder.isPending || createPreorder.isPending
                       ? "Saving…"
-                      : hasAwaitingConfirmation
-                        ? "Save & Queue Confirmation"
-                        : "Complete Order"}
+                      : isPreorderMode
+                        ? "Save Pre-order"
+                        : hasAwaitingConfirmation
+                          ? "Save (confirm MoMo manually)"
+                          : isCashSale
+                            ? "Complete Sale"
+                            : "Save Order"}
                   </button>
                 </div>
               </div>
@@ -3306,7 +3499,14 @@ function OrderTable({
                   {timeAgo(order.created_at)}
                 </td>
                 <td className="px-5 py-4">
-                  <OrderActionsMenu order={order} onUpdate={onUpdate} onChargeMomo={onChargeMomo} onViewDetails={onViewDetails} onEditOrder={onEditOrder} onRefundOrder={onRefundOrder} />
+                  {/* Synthetic row: its id is a `preorders` id, so the pop-up
+                      order actions have nothing to act on. Managed from the
+                      Pre-orders page instead. */}
+                  {order._isPreorder ? (
+                    <span className="text-xs text-slate-400">Pre-orders page</span>
+                  ) : (
+                    <OrderActionsMenu order={order} onUpdate={onUpdate} onChargeMomo={onChargeMomo} onViewDetails={onViewDetails} onEditOrder={onEditOrder} onRefundOrder={onRefundOrder} />
+                  )}
                 </td>
               </tr>
             );
@@ -3618,21 +3818,31 @@ export default function PopupSalesPage() {
   const orders = ordersData?.data ?? [];
   const awaitingCount = stats?.awaiting_payment ?? 0;
 
-  const { data: fulfilledPreordersData } = usePopupEventPreorders(
-    activeTab === "completed" ? selectedEventId : null,
-    { status: "fulfilled" }
+  // Every pre-order taken at this stand, whatever its stage. Filtering to
+  // 'fulfilled' meant a pre-order vanished from this page the moment it was
+  // saved — it is created as 'pending' — and staff would re-enter it thinking
+  // it had failed. Cancelled and refunded rows are dropped below.
+  const { data: eventPreordersData } = usePopupEventPreorders(
+    activeTab === "active" || activeTab === "completed" ? selectedEventId : null
   );
 
   const preorderDisplayRows = useMemo<DisplayOrder[]>(() => {
-    const all = fulfilledPreordersData?.data ?? [];
+    const all = eventPreordersData?.data ?? [];
     const groups = new Map<string, Preorder[]>();
     for (const p of all) {
+      // A pre-order's line items all share one order_number — that grouping is
+      // the pre-order. See the 20260829000000 migration.
+      if (p.status === "cancelled" || p.status === "refunded") continue;
       if (!groups.has(p.order_number)) groups.set(p.order_number, []);
       groups.get(p.order_number)!.push(p);
     }
     return Array.from(groups.values()).map((items) => {
       const first = items[0];
-      const total = items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+      const lineTotal = items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+      // delivery_fee is stamped on every row of the group, so it is read from
+      // the first one and never summed (same as the walk-ins page).
+      const deliveryFee = Number(first.delivery_fee ?? 0);
+      const total = lineTotal + deliveryFee;
       return {
         id: first.id,
         event_id: selectedEventId ?? "",
@@ -3641,10 +3851,12 @@ export default function PopupSalesPage() {
         customer_phone: first.customer_phone,
         customer_email: first.customer_email,
         served_by: null,
-        status: "completed" as PopupOrderStatus,
+        // 'fulfilled' is the only pre-order stage that belongs on Completed;
+        // everything still open reads as an active ticket on the stand.
+        status: (first.status === "fulfilled" ? "completed" : "active") as PopupOrderStatus,
         payment_method: (first.payment_method as PopupPaymentMethod) ?? null,
         payment_reference: first.payment_reference,
-        subtotal: total,
+        subtotal: lineTotal,
         discount_type: null,
         discount_amount: 0,
         discount_reason: null,
@@ -3672,11 +3884,17 @@ export default function PopupSalesPage() {
         _isPreorder: true,
       };
     });
-  }, [fulfilledPreordersData, selectedEventId]);
+  }, [eventPreordersData, selectedEventId]);
 
   const mergedOrders: DisplayOrder[] = useMemo(() => {
-    if (activeTab !== "completed") return orders as DisplayOrder[];
-    return [...(orders as DisplayOrder[]), ...preorderDisplayRows].sort(
+    if (activeTab !== "completed" && activeTab !== "active") {
+      return orders as DisplayOrder[];
+    }
+    const wanted = activeTab === "completed" ? "completed" : "active";
+    return [
+      ...(orders as DisplayOrder[]),
+      ...preorderDisplayRows.filter((r) => r.status === wanted),
+    ].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
   }, [orders, preorderDisplayRows, activeTab]);

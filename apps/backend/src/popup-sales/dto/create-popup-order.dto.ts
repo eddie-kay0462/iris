@@ -1,4 +1,5 @@
 import {
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsEnum,
@@ -71,6 +72,14 @@ export class CreateSplitPaymentDto {
 }
 
 export class CreatePopupOrderDto {
+  /**
+   * One id per cart, minted by the stall UI. A retry after a lost response hands
+   * back the order that already exists instead of ringing the sale up twice.
+   */
+  @IsOptional()
+  @IsString()
+  idempotency_key?: string;
+
   @IsOptional()
   @IsString()
   customer_name?: string;
@@ -138,6 +147,7 @@ export class CreatePopupOrderDto {
   split_payments?: CreateSplitPaymentDto[];
 
   @IsArray()
+  @ArrayMinSize(1, { message: 'A pop-up order needs at least one item' })
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
   items: CreateOrderItemDto[];

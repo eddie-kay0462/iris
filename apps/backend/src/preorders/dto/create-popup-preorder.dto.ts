@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsArray, ValidateNested, Min, IsIn, IsUUID } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsArray, ArrayMinSize, ValidateNested, Min, IsIn, IsUUID } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class PreorderItemDto {
@@ -23,6 +23,7 @@ class PreorderItemDto {
 
 export class CreatePopupPreorderDto {
   @IsArray()
+  @ArrayMinSize(1, { message: 'A pre-order needs at least one item' })
   @ValidateNested({ each: true })
   @Type(() => PreorderItemDto)
   items: PreorderItemDto[];

@@ -5,11 +5,17 @@ import { PromosModule } from '../promos/promos.module';
 import { SettingsModule } from '../settings/settings.module';
 import { PopupCollectionsService } from './popup-collections.service';
 import { PopupPickupReminderCron } from './popup-pickup-reminder.cron';
+import { PopupReconciliationCron } from './popup-reconciliation.cron';
 
 @Module({
   imports: [PromosModule, SettingsModule],
   controllers: [PopupSalesController],
-  providers: [PopupSalesService, PopupCollectionsService, PopupPickupReminderCron],
+  providers: [
+    PopupSalesService,
+    PopupCollectionsService,
+    PopupPickupReminderCron,
+    PopupReconciliationCron,
+  ],
   exports: [PopupSalesService, PopupCollectionsService],
 })
 export class PopupSalesModule {}
