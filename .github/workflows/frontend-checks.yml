@@ -1,0 +1,25 @@
+name: Frontend checks
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+
+jobs:
+  hooks:
+    name: Rules of hooks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      # Scoped to react-hooks/rules-of-hooks rather than the full lint run: the
+      # repo carries pre-existing lint errors, so `npm run lint` cannot gate a
+      # merge yet, while this rule is clean and guards the class of bug that
+      # took every Google-indexed product link down (see the script's header).
+      - run: npm run lint:hooks
