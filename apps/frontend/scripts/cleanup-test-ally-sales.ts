@@ -95,7 +95,8 @@ async function main() {
   let totalUnits = 0;
   console.log(`Ally sales matched (${found.length}):`);
   for (const s of found) {
-    const units = ((s.ally_sale_items as any[]) ?? []).reduce((n, i) => n + (i.quantity ?? 0), 0);
+    const items = (s.ally_sale_items ?? []) as { quantity?: number }[];
+    const units = items.reduce((n, i) => n + (i.quantity ?? 0), 0);
     totalUnits += units;
     console.log(
       `  ${s.order_number}  status=${s.status}  ${s.customer_name ?? "-"}  GHS${s.total}  units=${units}`,

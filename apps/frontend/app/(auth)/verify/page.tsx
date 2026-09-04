@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiClient, setToken } from "@/lib/api/client";
 import { toast } from "sonner";
+import { apiErrorMessage, thrownMessage } from "@/lib/api/errors";
 
 const CODE_LENGTH = 8;
 const EMPTY_CODE = Array(CODE_LENGTH).fill("");
@@ -43,9 +44,11 @@ function VerifyForm() {
 
         setToken(data.access_token);
         router.push("/products");
-      } catch (err: any) {
-        const msg = err?.data?.message ?? err?.message;
-        toast.error(typeof msg === "string" ? msg : "Invalid verification code", { duration: 6000 });
+      } catch (err) {
+        toast.error(
+          apiErrorMessage(err) ?? thrownMessage(err) ?? "Invalid verification code",
+          { duration: 6000 },
+        );
         setCode([...EMPTY_CODE]);
         inputRefs.current[0]?.focus();
       } finally {

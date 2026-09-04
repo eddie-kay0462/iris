@@ -7,6 +7,7 @@ import { Minus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocale } from "@/lib/locale/locale-provider";
 import VolumeNudge from "@/app/(shop)/components/VolumeNudge";
+import Image from "next/image";
 
 export default function CartPage() {
   const { items, subtotal, removeItem, updateQuantity } = useCart();
@@ -49,9 +50,11 @@ export default function CartPage() {
           >
             {/* Image */}
             {item.image ? (
-              <img
+              <Image
                 src={item.image}
                 alt={item.productTitle}
+                width={96}
+                height={96}
                 className="h-24 w-24 rounded-md object-cover"
               />
             ) : (

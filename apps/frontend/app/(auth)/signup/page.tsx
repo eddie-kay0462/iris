@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import PhoneInput from "@/components/PhoneInput";
 import PasswordInput from "../components/PasswordInput";
 import GoogleAuthButton from "../components/GoogleAuthButton";
+import { apiErrorMessage } from "@/lib/api/errors";
 
 const signupSchema = z
   .object({
@@ -63,8 +64,8 @@ export default function SignupPage() {
       });
 
       router.push(`/verify?email=${encodeURIComponent(data.email)}`);
-    } catch (err: any) {
-      toast.error(err?.data?.message || err?.data?.error || "Something went wrong", { duration: 6000 });
+    } catch (err) {
+      toast.error(apiErrorMessage(err) ?? "Something went wrong", { duration: 6000 });
     } finally {
       setLoading(false);
     }

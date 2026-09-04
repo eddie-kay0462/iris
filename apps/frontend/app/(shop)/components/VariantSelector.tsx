@@ -133,7 +133,6 @@ export function VariantSelector({
                 group,
                 value,
               );
-              const disabled = !available || !inStock;
 
               return (
                 <button

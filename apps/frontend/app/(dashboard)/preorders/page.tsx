@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getMyPreorders, type MyPreorder, type PreorderStatus } from "@/lib/api/preorders";
+import Image from "next/image";
 
 const STATUS_LABELS: Record<PreorderStatus, string> = {
   pending: "Pending",
@@ -97,9 +98,11 @@ export default function MyPreordersPage() {
                 <div className="flex items-start gap-4">
                   {/* Thumbnail */}
                   {image && (
-                    <img
+                    <Image
                       src={image}
                       alt={order.product_name}
+                      width={64}
+                      height={64}
                       className="h-16 w-16 flex-shrink-0 rounded-lg object-cover"
                     />
                   )}

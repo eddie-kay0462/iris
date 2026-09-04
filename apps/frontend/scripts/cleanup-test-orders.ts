@@ -97,7 +97,7 @@ async function main() {
     console.log(`Online orders (${found.length} of ${irdNumbers.length} requested found):`);
     for (const o of found) {
       console.log(
-        `  ${o.order_number}  status=${o.status}  ${o.email}  items=${(o.order_items as any[])?.length ?? 0}`,
+        `  ${o.order_number}  status=${o.status}  ${o.email}  items=${(o.order_items as unknown[])?.length ?? 0}`,
       );
     }
     if (missing.length) console.log(`  ⚠ not found: ${missing.join(", ")}`);

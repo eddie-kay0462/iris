@@ -29,5 +29,5 @@ export default function AccountPage() {
     );
   }
 
-  return <AccountShell profile={profile as any} />;
+  return <AccountShell profile={profile} />;
 }

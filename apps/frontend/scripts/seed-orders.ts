@@ -253,7 +253,8 @@ async function main() {
 
       if (hasProducts) {
         const v = randomEl(variants!);
-        const product = (v as any).products;
+        const product = (v as { products?: { title?: string; base_price?: number | null } })
+          .products;
         const price = v.price ?? product?.base_price ?? 150;
         const variantParts = [v.option1_value, v.option2_value].filter(Boolean);
 

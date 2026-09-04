@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiClient, setToken } from "@/lib/api/client";
+import { apiErrorMessage, thrownMessage } from "@/lib/api/errors";
 import { toast } from "sonner";
 import PasswordInput from "../components/PasswordInput";
 import GoogleAuthButton from "../components/GoogleAuthButton";
@@ -37,10 +38,9 @@ function LoginForm() {
       setToken(data.access_token);
       toast.success("Signed in. Welcome back!");
       router.push("/");
-    } catch (err: any) {
-      const msg = err?.data?.message ?? err?.message;
+    } catch (err) {
       toast.error(
-        typeof msg === "string" ? msg : "Invalid email or password",
+        apiErrorMessage(err) ?? thrownMessage(err) ?? "Invalid email or password",
         { duration: 6000 }
       );
     } finally {

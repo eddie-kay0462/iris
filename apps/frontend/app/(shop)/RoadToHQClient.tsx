@@ -282,7 +282,7 @@ export default function RoadToHQPage({
       if (t < 1) requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
-  }, []);
+  }, [UNITS_SOLD]);
 
   const scrollToLearnMore = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
     // Let modified clicks (new tab/window) behave normally.

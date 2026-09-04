@@ -5,7 +5,9 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@/lib/validation";
 import { apiClient } from "@/lib/api/client";
+import type { DefaultAddress } from "@/lib/api/profile";
 import { toast } from "sonner";
+import { apiErrorMessage } from "@/lib/api/errors";
 
 const schema = z.object({
   fullName: z.string().min(1, "Required"),
@@ -20,20 +22,33 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 interface Props {
-  defaultAddress: Record<string, string> | null;
+  defaultAddress: StoredAddress | null;
   profileName: string;
 }
 
-function mapAddressToForm(raw: Record<string, unknown> | null): Partial<FormValues> {
+/**
+ * A stored address is either the current `DefaultAddress` shape or the older
+ * camelCase one still sitting on long-standing accounts, so both sets of keys
+ * are read.
+ */
+type StoredAddress = DefaultAddress & {
+  fullName?: string;
+  address?: string;
+  address_2?: string;
+  region?: string;
+  postalCode?: string;
+};
+
+function mapAddressToForm(raw: StoredAddress | null): Partial<FormValues> {
   if (!raw) return {};
   return {
-    fullName: (raw.fullName as string) ?? "",
-    address: ((raw.address ?? raw.address1) as string) ?? "",
-    address2: ((raw.address2 ?? raw.address_2) as string) ?? "",
-    city: (raw.city as string) ?? "",
-    region: ((raw.region ?? raw.province_code) as string) ?? "",
-    postalCode: ((raw.postalCode ?? raw.zip) as string) ?? "",
-    phone: (raw.phone as string) ?? "",
+    fullName: raw.fullName ?? "",
+    address: raw.address ?? raw.address1 ?? "",
+    address2: raw.address2 ?? raw.address_2 ?? "",
+    city: raw.city ?? "",
+    region: raw.region ?? raw.province_code ?? "",
+    postalCode: raw.postalCode ?? raw.zip ?? "",
+    phone: raw.phone ?? "",
   };
 }
 
@@ -53,7 +68,7 @@ export default function ShippingTab({ defaultAddress, profileName }: Props) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const mapped = mapAddressToForm(defaultAddress as any);
+  const mapped = mapAddressToForm(defaultAddress);
 
   const {
     register,
@@ -81,8 +96,8 @@ export default function ShippingTab({ defaultAddress, profileName }: Props) {
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch (err: any) {
-      toast.error(err?.data?.message || err?.data?.error || "Save failed.", { duration: 6000 });
+    } catch (err) {
+      toast.error(apiErrorMessage(err) ?? "Save failed.", { duration: 6000 });
     } finally {
       setSaving(false);
     }

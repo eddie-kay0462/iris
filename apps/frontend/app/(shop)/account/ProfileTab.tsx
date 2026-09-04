@@ -6,6 +6,7 @@ import { z } from "zod";
 import { zodResolver } from "@/lib/validation";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "sonner";
+import { apiErrorMessage } from "@/lib/api/errors";
 
 const schema = z.object({
   first_name: z.string().optional(),
@@ -87,8 +88,8 @@ export default function ProfileTab({ profile }: Props) {
       await apiClient("/profile", { method: "PUT", body: payload });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch (err: any) {
-      toast.error(err?.data?.message || err?.data?.error || "Save failed.", { duration: 6000 });
+    } catch (err) {
+      toast.error(apiErrorMessage(err) ?? "Save failed.", { duration: 6000 });
     } finally {
       setSaving(false);
     }
@@ -110,6 +111,9 @@ export default function ProfileTab({ profile }: Props) {
           aria-label="Upload profile photo"
         >
           {avatar ? (
+            /* Also holds a data: URL while previewing a freshly picked file,
+               which next/image cannot optimise. */
+            // eslint-disable-next-line @next/next/no-img-element
             <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
           ) : (
             <span className="text-invert-fg text-2xl font-light tracking-[0.04em] uppercase select-none">

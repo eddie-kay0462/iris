@@ -7,6 +7,7 @@ import { zodResolver } from "@/lib/validation";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "sonner";
 import PhoneInput from "@/components/PhoneInput";
+import { apiErrorMessage } from "@/lib/api/errors";
 
 const profileSchema = z.object({
   first_name: z.string().optional(),
@@ -68,8 +69,8 @@ export default function ProfilePage() {
       });
 
       toast.success("Profile updated.");
-    } catch (err: any) {
-      toast.error(err?.data?.message || err?.data?.error || "Save failed.", { duration: 6000 });
+    } catch (err) {
+      toast.error(apiErrorMessage(err) ?? "Save failed.", { duration: 6000 });
     } finally {
       setSaving(false);
     }
