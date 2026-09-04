@@ -25,17 +25,16 @@ function generateReference() {
 }
 
 function StockHoldTimer({ expiresAt }: { expiresAt: string }) {
-  const [remainingMs, setRemainingMs] = useState(
-    () => new Date(expiresAt).getTime() - Date.now(),
-  );
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    setRemainingMs(new Date(expiresAt).getTime() - Date.now());
-    const interval = setInterval(() => {
-      setRemainingMs(new Date(expiresAt).getTime() - Date.now());
-    }, 1000);
+    const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [expiresAt]);
+  }, []);
+
+  // Derived rather than stored, so a new `expiresAt` is reflected on the very
+  // next render instead of waiting for the following tick.
+  const remainingMs = new Date(expiresAt).getTime() - now;
 
   if (remainingMs <= 0) {
     return (
@@ -139,9 +138,6 @@ function PayNowButton({
   onBeforeOpen: () => Promise<boolean>;
   disabled: boolean;
 }) {
-  const phoneRef = React.useRef(phone);
-  phoneRef.current = phone;
-
   const config = {
     email,
     amount: Math.round(amount * 100),
@@ -158,7 +154,7 @@ function PayNowButton({
       onClick={async () => {
         const ok = await onBeforeOpen();
         if (!ok) return;
-        const currentPhone = phoneRef.current;
+        const currentPhone = phone;
         initializePayment({
           onSuccess,
           onClose,

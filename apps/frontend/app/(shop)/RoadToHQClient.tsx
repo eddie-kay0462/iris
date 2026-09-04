@@ -265,6 +265,9 @@ export default function RoadToHQPage({
 
   useEffect(() => {
     const target = new Date(DEADLINE + "T00:00:00");
+    // Depends on the visitor's clock, so it has to land after mount — computing
+    // it during render would disagree with the server-rendered HTML.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDaysLeft(Math.max(0, Math.ceil((target.getTime() - Date.now()) / 86400000)));
   }, []);
 

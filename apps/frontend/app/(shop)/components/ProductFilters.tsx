@@ -140,7 +140,7 @@ export function ProductFilters({
           {search && (
             <span className="flex items-center gap-1.5 rounded-full border border-line-strong bg-fill px-3 py-1 text-xs text-text-secondary">
               <svg className="h-3 w-3 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35" strokeLinecap="round"/></svg>
-              "{search}"
+              &ldquo;{search}&rdquo;
               <button onClick={() => onSearchChange("")} className="ml-0.5 text-text-muted hover:text-text">×</button>
             </span>
           )}

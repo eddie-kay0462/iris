@@ -187,6 +187,9 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const cached = loadCachedRates();
+    // Cached rates live in localStorage, so they can't be read during render
+    // without diverging from the server-rendered prices.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (cached) { setRates(cached); return; }
     fetch("https://open.er-api.com/v6/latest/GHS")
       .then((r) => r.json())

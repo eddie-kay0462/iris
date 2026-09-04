@@ -7,7 +7,7 @@
  * Settings → General.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
@@ -24,6 +24,15 @@ export default function NewsletterModal({ enabled }: { enabled: boolean }) {
   const [status, setStatus] = useState<Status>("idle");
   const [alreadySubscribed, setAlreadySubscribed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const dismiss = useCallback(() => {
+    setOpen(false);
+    try {
+      localStorage.setItem(STORAGE_KEY, "1");
+    } catch {
+      /* private mode — pop-up just reappears next visit */
+    }
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;
@@ -53,22 +62,13 @@ export default function NewsletterModal({ enabled }: { enabled: boolean }) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, [open, dismiss]);
 
   useEffect(() => {
     if (!error) return;
     const t = setTimeout(() => setError(null), 3000);
     return () => clearTimeout(t);
   }, [error]);
-
-  function dismiss() {
-    setOpen(false);
-    try {
-      localStorage.setItem(STORAGE_KEY, "1");
-    } catch {
-      /* private mode — pop-up just reappears next visit */
-    }
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -111,6 +111,9 @@ function CartLink({ isTransparent = false }: { isTransparent?: boolean }) {
       return;
     }
     if (itemCount > prevCount.current) {
+      // Fires the bump animation on an increase. This is a side effect of the
+      // count changing, not a value derivable from the current render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBump(true);
       const t = setTimeout(() => setBump(false), 450);
       prevCount.current = itemCount;
@@ -227,6 +230,9 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
+      // Resetting the box is part of closing the drawer, alongside the body
+      // scroll lock either side of it.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery("");
     }
     return () => { document.body.style.overflow = ""; };
@@ -307,7 +313,7 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
               </span>
               <div>
                 <p className="text-[14px] text-text">
-                  Search for <span className="font-semibold">"{query.trim()}"</span>
+                  Search for <span className="font-semibold">&ldquo;{query.trim()}&rdquo;</span>
                 </p>
                 <p className="text-[12px] text-text-muted">Browse all matching products</p>
               </div>
