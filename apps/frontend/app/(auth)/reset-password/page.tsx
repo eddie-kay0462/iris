@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { thrownMessage } from "@/lib/api/errors";
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState("");
@@ -27,8 +28,8 @@ export default function ResetPasswordPage() {
       if (resetError) throw resetError;
 
       setSubmitted(true);
-    } catch (err: any) {
-      toast.error(err?.message || "Something went wrong. Please try again.", { duration: 6000 });
+    } catch (err) {
+      toast.error(thrownMessage(err) ?? "Something went wrong. Please try again.", { duration: 6000 });
     } finally {
       setLoading(false);
     }

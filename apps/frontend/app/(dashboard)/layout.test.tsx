@@ -21,7 +21,7 @@ vi.mock("next/link", () => ({
 
 // Mock next/image
 vi.mock("next/image", () => ({
-  default: ({ alt, ...props }: { alt: string; [key: string]: any }) => (
+  default: ({ alt, ...props }: { alt: string; [key: string]: unknown }) => (
     // eslint-disable-next-line @next/next/no-img-element
     <img alt={alt} {...props} />
   ),
@@ -38,7 +38,7 @@ const mockApiClient = vi.fn();
 const mockClearToken = vi.fn();
 
 vi.mock("@/lib/api/client", () => ({
-  apiClient: (...args: any[]) => mockApiClient(...args),
+  apiClient: (...args: unknown[]) => mockApiClient(...args),
   clearToken: () => mockClearToken(),
 }));
 

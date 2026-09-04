@@ -28,6 +28,8 @@ function RecoverContent() {
     handled.current = true;
 
     if (!token) {
+      // The outcome of running recovery, not a value derived from props.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError("This recovery link is missing or invalid.");
       return;
     }

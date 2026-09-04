@@ -97,7 +97,7 @@ export default function CustomerOrderDetailPage({ params }: PageProps) {
       <div className="rounded-lg border border-gray-200 p-4">
         <h2 className="mb-3 font-semibold">Items</h2>
         <div className="space-y-3">
-          {(order.order_items || []).map((item: any) => (
+          {(order.order_items || []).map((item) => (
             <div
               key={item.id}
               className="flex items-center justify-between text-sm"

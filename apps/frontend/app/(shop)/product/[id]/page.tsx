@@ -536,6 +536,9 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
 
   useEffect(() => {
     if (product) addRecentlyViewed(product);
+    // Keyed on the id alone: a refetch hands back an equal-but-new object, and
+    // re-recording the same product on every one of those is pointless.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.id]);
 
   if (isLoading) return <ProductDetailSkeleton />;

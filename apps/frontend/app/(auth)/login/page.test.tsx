@@ -24,9 +24,13 @@ const mockApiClient = vi.fn();
 const mockSetToken = vi.fn();
 
 vi.mock("@/lib/api/client", () => ({
-  apiClient: (...args: any[]) => mockApiClient(...args),
-  setToken: (...args: any[]) => mockSetToken(...args),
+  apiClient: (...args: unknown[]) => mockApiClient(...args),
+  setToken: (...args: unknown[]) => mockSetToken(...args),
 }));
+
+// Feedback is delivered as toasts, not inline text.
+const toast = { success: vi.fn(), error: vi.fn() };
+vi.mock("sonner", () => ({ toast: { success: (...a: unknown[]) => toast.success(...a), error: (...a: unknown[]) => toast.error(...a) } }));
 
 describe("LoginPage", () => {
   beforeEach(() => {
@@ -36,7 +40,7 @@ describe("LoginPage", () => {
 
   it("renders the login form", () => {
     render(<LoginPage />);
-    expect(screen.getByText("Log in")).toBeInTheDocument();
+    expect(screen.getByText("Log In")).toBeInTheDocument();
     expect(screen.getByText("Enter your credentials to continue.")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Email address")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Password")).toBeInTheDocument();
@@ -45,8 +49,8 @@ describe("LoginPage", () => {
 
   it("shows signup and reset-password links", () => {
     render(<LoginPage />);
-    expect(screen.getByRole("link", { name: "Sign up" })).toHaveAttribute("href", "/signup");
-    expect(screen.getByRole("link", { name: "Forgot password?" })).toHaveAttribute("href", "/reset-password");
+    expect(screen.getByRole("link", { name: "Sign Up" })).toHaveAttribute("href", "/signup");
+    expect(screen.getByRole("link", { name: "Forgot Password?" })).toHaveAttribute("href", "/reset-password");
   });
 
   it("disables sign in button when fields are empty", () => {
@@ -64,19 +68,17 @@ describe("LoginPage", () => {
     expect(screen.getByText("Sign in")).not.toBeDisabled();
   });
 
-  it("shows password-updated banner when ?message=password-updated", () => {
+  it("toasts the password-updated notice when ?message=password-updated", () => {
     mockSearchParams.set("message", "password-updated");
     render(<LoginPage />);
-    expect(
-      screen.getByText("Password updated successfully. Please log in with your new password.")
-    ).toBeInTheDocument();
+    expect(toast.success).toHaveBeenCalledWith(
+      "Password updated successfully. Please log in with your new password.",
+    );
   });
 
-  it("does not show the banner without query param", () => {
+  it("does not toast the notice without the query param", () => {
     render(<LoginPage />);
-    expect(
-      screen.queryByText(/Password updated successfully/)
-    ).not.toBeInTheDocument();
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("submits and redirects on success", async () => {
@@ -99,9 +101,10 @@ describe("LoginPage", () => {
     });
   });
 
-  it("shows error message on failed login", async () => {
-    const error: any = new Error("Invalid email or password");
-    error.data = { message: "Invalid email or password" };
+  it("toasts the error on failed login", async () => {
+    const error = Object.assign(new Error("Invalid email or password"), {
+      data: { message: "Invalid email or password" },
+    });
     mockApiClient.mockRejectedValue(error);
 
     const user = userEvent.setup();
@@ -112,7 +115,7 @@ describe("LoginPage", () => {
     await user.click(screen.getByText("Sign in"));
 
     await waitFor(() => {
-      expect(screen.getByText("Invalid email or password")).toBeInTheDocument();
+      expect(toast.error).toHaveBeenCalledWith("Invalid email or password", { duration: 6000 });
     });
   });
 });

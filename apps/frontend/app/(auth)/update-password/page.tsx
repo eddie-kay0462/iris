@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import PasswordInput from "../components/PasswordInput";
+import { thrownMessage } from "@/lib/api/errors";
 
 export default function UpdatePasswordPage() {
   const router = useRouter();
@@ -43,8 +44,8 @@ export default function UpdatePasswordPage() {
       await supabase.auth.signOut();
 
       router.push("/login?message=password-updated");
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to update password. Please try again.", { duration: 6000 });
+    } catch (err) {
+      toast.error(thrownMessage(err) ?? "Failed to update password. Please try again.", { duration: 6000 });
     } finally {
       setLoading(false);
     }

@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getToken } from "./api/client";
 import { getMyFavourites, addFavourite, removeFavourite } from "./api/favourites";
+import type { FavouriteProduct } from "./api/favourites";
 import { useFavouritesDrawer } from "./favourites-drawer";
 
 export function useFavourites() {
@@ -25,15 +26,25 @@ export function useToggleFavourite(productId: string) {
     mutationFn: () => (isFavourited ? removeFavourite(productId) : addFavourite(productId)),
     onMutate: async () => {
       await qc.cancelQueries({ queryKey: ["favourites"] });
-      const prev = qc.getQueryData(["favourites"]);
-      qc.setQueryData(["favourites"], (old: any[] = []) =>
+      const prev = qc.getQueryData<FavouriteProduct[]>(["favourites"]);
+      qc.setQueryData<FavouriteProduct[]>(["favourites"], (old = []) =>
         isFavourited
           ? old.filter((f) => f.product_id !== productId)
-          : [...old, { id: "optimistic", product_id: productId, created_at: new Date().toISOString(), products: {} }],
+          : [
+              ...old,
+              {
+                id: "optimistic",
+                product_id: productId,
+                created_at: new Date().toISOString(),
+                // Filled in by the refetch in onSettled; the drawer only reads
+                // these once the real row lands.
+                products: {} as FavouriteProduct["products"],
+              },
+            ],
       );
       return { prev };
     },
-    onError: (_err, _vars, ctx: any) => {
+    onError: (_err, _vars, ctx) => {
       qc.setQueryData(["favourites"], ctx?.prev);
     },
     onSettled: () => {

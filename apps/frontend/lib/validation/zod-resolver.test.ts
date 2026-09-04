@@ -12,9 +12,7 @@ describe("zodResolver", () => {
   it("returns values and empty errors on valid input", async () => {
     const resolver = zodResolver(schema);
     const result = await resolver(
-      { email: "test@example.com", password: "12345678", name: "Test" },
-      {} as any,
-      {} as any
+      { email: "test@example.com", password: "12345678", name: "Test" }
     );
 
     expect(result.errors).toEqual({});
@@ -28,9 +26,7 @@ describe("zodResolver", () => {
   it("returns field errors on invalid input", async () => {
     const resolver = zodResolver(schema);
     const result = await resolver(
-      { email: "", password: "short", name: "" },
-      {} as any,
-      {} as any
+      { email: "", password: "short", name: "" }
     );
 
     expect(result.errors.email).toBeDefined();
@@ -45,9 +41,7 @@ describe("zodResolver", () => {
   it("returns error for invalid email format", async () => {
     const resolver = zodResolver(schema);
     const result = await resolver(
-      { email: "not-an-email", password: "12345678" },
-      {} as any,
-      {} as any
+      { email: "not-an-email", password: "12345678" }
     );
 
     expect(result.errors.email).toBeDefined();
@@ -57,9 +51,7 @@ describe("zodResolver", () => {
   it("handles optional fields correctly", async () => {
     const resolver = zodResolver(schema);
     const result = await resolver(
-      { email: "test@example.com", password: "12345678" },
-      {} as any,
-      {} as any
+      { email: "test@example.com", password: "12345678" }
     );
 
     expect(result.errors).toEqual({});
@@ -81,17 +73,13 @@ describe("zodResolver", () => {
 
     // Matching passwords
     const validResult = await resolver(
-      { password: "12345678", confirmPassword: "12345678" },
-      {} as any,
-      {} as any
+      { password: "12345678", confirmPassword: "12345678" }
     );
     expect(validResult.errors).toEqual({});
 
     // Mismatched passwords
     const invalidResult = await resolver(
-      { password: "12345678", confirmPassword: "different" },
-      {} as any,
-      {} as any
+      { password: "12345678", confirmPassword: "different" }
     );
     expect(invalidResult.errors.confirmPassword).toBeDefined();
     expect(invalidResult.errors.confirmPassword).toHaveProperty(
@@ -107,7 +95,7 @@ describe("zodResolver", () => {
     });
 
     const resolver = zodResolver(strictSchema);
-    const result = await resolver({ value: "" }, {} as any, {} as any);
+    const result = await resolver({ value: "" });
 
     // Should have exactly one error for "value"
     expect(result.errors.value).toBeDefined();

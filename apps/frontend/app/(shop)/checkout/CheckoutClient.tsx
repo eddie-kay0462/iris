@@ -9,6 +9,7 @@ import { usePaystackPayment } from "react-paystack";
 import { useCart } from "@/lib/cart";
 import { useCreateOrder, confirmPaymentByReference, releaseStockHold, usePreviewFulfillment } from "@/lib/api/orders";
 import PhoneInput from "@/components/PhoneInput";
+import { thrownMessage } from "@/lib/api/errors";
 import { useProfile, parseDefaultAddress } from "@/lib/api/profile";
 import { apiClient, hasToken, getToken } from "@/lib/api/client";
 import { PAYSTACK_PUBLIC_KEY } from "@/lib/paystack/client";
@@ -17,6 +18,7 @@ import { useResolveDiscount, DiscountResolution } from "@/lib/api/promos";
 import { ChevronDown } from "lucide-react";
 import { useLocale } from "@/lib/locale/locale-provider";
 import { track, snapshotCheckout } from "@/lib/analytics/tracker";
+import Image from "next/image";
 
 function generateReference() {
   const ts = Date.now();
@@ -25,17 +27,16 @@ function generateReference() {
 }
 
 function StockHoldTimer({ expiresAt }: { expiresAt: string }) {
-  const [remainingMs, setRemainingMs] = useState(
-    () => new Date(expiresAt).getTime() - Date.now(),
-  );
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    setRemainingMs(new Date(expiresAt).getTime() - Date.now());
-    const interval = setInterval(() => {
-      setRemainingMs(new Date(expiresAt).getTime() - Date.now());
-    }, 1000);
+    const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [expiresAt]);
+  }, []);
+
+  // Derived rather than stored, so a new `expiresAt` is reflected on the very
+  // next render instead of waiting for the following tick.
+  const remainingMs = new Date(expiresAt).getTime() - now;
 
   if (remainingMs <= 0) {
     return (
@@ -134,14 +135,11 @@ function PayNowButton({
   amount: number;
   reference: string;
   phone?: string;
-  onSuccess: (ref: any) => void;
+  onSuccess: () => void;
   onClose: () => void;
   onBeforeOpen: () => Promise<boolean>;
   disabled: boolean;
 }) {
-  const phoneRef = React.useRef(phone);
-  phoneRef.current = phone;
-
   const config = {
     email,
     amount: Math.round(amount * 100),
@@ -158,7 +156,7 @@ function PayNowButton({
       onClick={async () => {
         const ok = await onBeforeOpen();
         if (!ok) return;
-        const currentPhone = phoneRef.current;
+        const currentPhone = phone;
         initializePayment({
           onSuccess,
           onClose,
@@ -311,7 +309,6 @@ export default function CheckoutClient() {
       postalCode: prev.postalCode || addr.zip || "",
       phone: prev.phone || addr.phone || "",
     }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile]);
 
   // Express shipping isn't offered for pre-orders (pre-ordered lines ship
@@ -522,8 +519,11 @@ export default function CheckoutClient() {
       }
 
       return true;
-    } catch (err: any) {
-      toast.error(err?.message || "Could not start your order. Please try again.", { duration: 6000 });
+    } catch (err) {
+      toast.error(
+        thrownMessage(err) ?? "Could not start your order. Please try again.",
+        { duration: 6000 },
+      );
       setProcessing(false);
       // Start fresh on the next attempt — if the previous reservation expired
       // for good, retrying with the same payment reference would just fail again.
@@ -540,12 +540,6 @@ export default function CheckoutClient() {
     const confirmed = await confirmPaymentByReference(reference);
     const orderNum = confirmed?.order_number ?? pendingOrderNumber ?? reference;
     router.push(`/checkout/confirmation?order=${orderNum}`);
-  }
-
-  function handlePaymentClose() {
-    // Customer closed the Paystack modal without paying. The pending order
-    // still exists on the backend; allow them to retry without re-creating.
-    setProcessing(false);
   }
 
   const inputClass =
@@ -906,9 +900,11 @@ export default function CheckoutClient() {
             {items.map((item) => (
               <div key={item.variantId} className="flex gap-4">
                 {item.image ? (
-                  <img
+                  <Image
                     src={item.image}
                     alt={item.productTitle}
+                    width={80}
+                    height={80}
                     className="h-20 w-20 rounded-md object-cover"
                   />
                 ) : (

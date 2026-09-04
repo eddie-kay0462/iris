@@ -21,8 +21,12 @@ vi.mock("next/link", () => ({
 const mockApiClient = vi.fn();
 
 vi.mock("@/lib/api/client", () => ({
-  apiClient: (...args: any[]) => mockApiClient(...args),
+  apiClient: (...args: unknown[]) => mockApiClient(...args),
 }));
+
+// Feedback is delivered as toasts, not inline text.
+const toast = { success: vi.fn(), error: vi.fn() };
+vi.mock("sonner", () => ({ toast: { success: (...a: unknown[]) => toast.success(...a), error: (...a: unknown[]) => toast.error(...a) } }));
 
 describe("SignupPage", () => {
   beforeEach(() => {
@@ -35,7 +39,7 @@ describe("SignupPage", () => {
     expect(screen.getByPlaceholderText("First name")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Last name")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Email address")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Phone number (optional)")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("024 123 4567")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Password")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Confirm password")).toBeInTheDocument();
     expect(screen.getByText("Sign up")).toBeInTheDocument();
@@ -43,7 +47,7 @@ describe("SignupPage", () => {
 
   it("shows link to login page", () => {
     render(<SignupPage />);
-    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+    expect(screen.getByRole("link", { name: "Log In" })).toHaveAttribute("href", "/login");
   });
 
   it("shows validation error for empty email", async () => {
@@ -109,9 +113,10 @@ describe("SignupPage", () => {
     });
   });
 
-  it("shows server error when signup fails", async () => {
-    const error: any = new Error("An account with this email already exists");
-    error.data = { message: "An account with this email already exists" };
+  it("toasts the server error when signup fails", async () => {
+    const error = Object.assign(new Error("An account with this email already exists"), {
+      data: { message: "An account with this email already exists" },
+    });
     mockApiClient.mockRejectedValue(error);
 
     const user = userEvent.setup();
@@ -123,13 +128,14 @@ describe("SignupPage", () => {
     await user.click(screen.getByText("Sign up"));
 
     await waitFor(() => {
-      expect(
-        screen.getByText("An account with this email already exists")
-      ).toBeInTheDocument();
+      expect(toast.error).toHaveBeenCalledWith(
+        "An account with this email already exists",
+        { duration: 6000 },
+      );
     });
   });
 
-  it("shows fallback error on network failure", async () => {
+  it("toasts a fallback error on network failure", async () => {
     mockApiClient.mockRejectedValue(new Error("fetch failed"));
 
     const user = userEvent.setup();
@@ -141,7 +147,7 @@ describe("SignupPage", () => {
     await user.click(screen.getByText("Sign up"));
 
     await waitFor(() => {
-      expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+      expect(toast.error).toHaveBeenCalledWith("Something went wrong", { duration: 6000 });
     });
   });
 });

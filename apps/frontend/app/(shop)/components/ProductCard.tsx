@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
@@ -49,7 +49,7 @@ export function ProductCard({
   product: Product;
   priority?: boolean;
 }) {
-  const images = product.product_images || [];
+  const images = useMemo(() => product.product_images ?? [], [product.product_images]);
   const image = images[0];
   const { addItem } = useCart();
   // Automatic bundle deal on this product, if it's the anchor of one.
@@ -57,7 +57,7 @@ export function ProductCard({
   const { formatPrice } = useLocale();
   const queryClient = useQueryClient();
 
-  const variants = product.product_variants || [];
+  const variants = useMemo(() => product.product_variants ?? [], [product.product_variants]);
   const firstVariant = variants[0] ?? null;
   const price = firstVariant?.price ?? product.base_price;
   const compareAtPrice = firstVariant?.compare_at_price ?? null;
@@ -166,6 +166,10 @@ export function ProductCard({
 
   // Start a crossfade whenever the selected image changes (swatch / hover-leave).
   useEffect(() => {
+    // The crossfade is a timed sequence — stage the incoming image, then promote
+    // it once it has loaded — so this state tracks an animation in progress
+    // rather than anything derivable from the current render.
+    /* eslint-disable react-hooks/set-state-in-effect */
     const src = currentImage?.src;
     if (!src || src === displaySrc) {
       setPendingSrc(null);
@@ -174,6 +178,7 @@ export function ProductCard({
     }
     setPendingSrc(src);
     setPendingReady(false);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [currentImage?.src, displaySrc]);
 
   const handleColorSelect = useCallback(

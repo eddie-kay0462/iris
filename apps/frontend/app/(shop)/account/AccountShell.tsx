@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient, clearToken } from "@/lib/api/client";
 import { parseDefaultAddress } from "@/lib/api/profile";
+import type { UserProfile } from "@/lib/api/profile";
 import type { PaginatedOrders } from "@/lib/api/orders";
 import type { MyPreorder } from "@/lib/api/preorders";
-import { toast } from "sonner";
 import ProfileTab from "./ProfileTab";
 import OrdersTab from "./OrdersTab";
 import PreordersTab from "./PreordersTab";
@@ -22,20 +22,8 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "shipping", label: "Shipping" },
 ];
 
-interface ProfileData {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-  phone_number: string | null;
-  email_notifications?: boolean;
-  sms_notifications?: boolean;
-  default_address: unknown;
-  avatar_url?: string | null;
-}
-
 interface Props {
-  profile: ProfileData;
+  profile: UserProfile;
 }
 
 export default function AccountShell({ profile }: Props) {
@@ -83,9 +71,7 @@ export default function AccountShell({ profile }: Props) {
   }
 
   const firstName = profile.first_name ?? "";
-  const parsedAddress = parseDefaultAddress(
-    profile.default_address as Parameters<typeof parseDefaultAddress>[0]
-  );
+  const parsedAddress = parseDefaultAddress(profile.default_address);
 
   return (
     <div className="max-w-[1280px] mx-auto px-4">
@@ -179,7 +165,7 @@ export default function AccountShell({ profile }: Props) {
             className="acct-tab-panel"
           >
             <ShippingTab
-              defaultAddress={parsedAddress as any}
+              defaultAddress={parsedAddress}
               profileName={[profile.first_name, profile.last_name].filter(Boolean).join(" ")}
             />
           </div>

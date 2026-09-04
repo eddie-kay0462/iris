@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 
 // We test the route protection logic by extracting it into testable conditions.
 // The actual proxy depends on Supabase server client which is hard to mock,

@@ -45,7 +45,20 @@ type ApiOptions = Omit<RequestInit, 'body'> & {
   body?: unknown;
 };
 
-/** Make an authenticated request to the backend API */
+/** The JSON body the API returns on a failed request. */
+type ApiErrorBody = { message?: string | string[]; error?: string };
+
+/** An Error carrying the failed response's status and parsed body. */
+type ApiError = Error & { status?: number; data?: unknown };
+
+/**
+ * Make an authenticated request to the backend API.
+ *
+ * `T` defaults to `any` rather than `unknown` so the 26 call sites that don't
+ * name a response type keep working; narrowing it is a per-call-site job, not
+ * something to change here.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function apiClient<T = any>(
   path: string,
   options: ApiOptions = {},
@@ -77,7 +90,7 @@ export async function apiClient<T = any>(
     throw new Error('Unauthorized');
   }
 
-  let data: any;
+  let data: unknown;
   try {
     data = await res.json();
   } catch {
@@ -85,13 +98,14 @@ export async function apiClient<T = any>(
   }
 
   if (!res.ok) {
+    const body = (typeof data === 'object' && data !== null ? data : {}) as ApiErrorBody;
     // NestJS message can be a string or array of strings
-    const msg = Array.isArray(data.message)
-      ? data.message[0]
-      : data.message || data.error || 'Request failed';
-    const error = new Error(msg);
-    (error as any).status = res.status;
-    (error as any).data = data;
+    const msg = Array.isArray(body.message)
+      ? body.message[0]
+      : body.message || body.error || 'Request failed';
+    const error: ApiError = new Error(msg);
+    error.status = res.status;
+    error.data = data;
     throw error;
   }
 

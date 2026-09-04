@@ -11,7 +11,13 @@ const JWT_COOKIE = "iris_jwt";
  * The proxy only needs to read the role claim for route protection.
  * Actual verification happens on the NestJS backend.
  */
-function decodeJwtPayload(token: string): any | null {
+interface JwtPayload {
+  exp?: number;
+  role?: string;
+  [claim: string]: unknown;
+}
+
+function decodeJwtPayload(token: string): JwtPayload | null {
   try {
     const parts = token.split(".");
     if (parts.length !== 3) return null;
