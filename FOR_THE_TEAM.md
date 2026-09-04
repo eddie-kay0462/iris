@@ -5992,3 +5992,47 @@ A note on refunds, so the numbers aren't surprising: a refunded walk-in still co
 - **Hours are read as Ghana time.** Because Ghana doesn't shift from UTC, the timestamp we store *is* the local trading hour. If we ever sell from a shop in another timezone, the Busiest Hours chart is the thing that would need revisiting.
 - **Sales with no one attached** show as "Unattributed" in Sales by staff. Shouldn't happen for anything rung up in the admin app, but old or imported records might land there.
 - **Not yet checked in a browser.** The numbers have been verified directly against the live database — 15 completed walk-ins, GH₵7,300, matching the Walk-in Sales page exactly — and everything compiles and builds. But nobody has actually looked at the new tab on screen yet, so treat step 1 above as a genuine test rather than a formality.
+
+---
+
+## Product Pages From Google Were Showing an Error Screen (September 2026)
+
+If you found one of our products through a Google search and clicked the result, you got the site's error page — the big "500 / Something came apart at the seams" screen — instead of the product. Clicking **Try again** loaded the product perfectly, which is why this went unnoticed for a while: anyone testing by browsing the shop themselves never saw it.
+
+That's the bit worth understanding. **The bug only ever hit people arriving cold from outside the site.** If you were already on 1nri.store and clicked a product from the grid, it always worked, because the site quietly loads a product's details in the background the moment your mouse touches its card. By the time you clicked, the page already had what it needed. Arrive straight from a Google result and nothing has been loaded ahead of time — and that was the exact situation the page couldn't handle. It tried to draw itself once while waiting for the product, then a second time once the product arrived, and the two attempts didn't line up, so it gave up and showed the error screen.
+
+The initial report was that links "without a colour tag in the URL" were the broken ones. That turned out to be a coincidence worth recording, because it's a genuinely misleading clue: links with a colour attached (`?color=Black`) are the ones the shop's own product cards produce — the prefetching ones that always worked. Links *without* a colour are the plain ones we give Google. So the colour in the address was a marker of where the link came from, not the cause of anything.
+
+This affected **every product page reached from a search result**, not just the clogs, so it's a meaningful chunk of people who came looking for us and bounced off an error screen.
+
+### Two smaller things fixed alongside it
+
+- **A colour with no photo of its own no longer leaves a blank grey box.** The gallery filters photos down to whichever colour is selected. If a colour existed as an option but no photo had been tagged with it, you'd get an empty space where the product shots should be. It now falls back to showing all the photos rather than none. No current product was hitting this, but it was waiting to happen the next time someone added a colour before the photos were tagged.
+- **The page now works out which colour and size to show up front**, rather than drawing itself once with nothing selected and then correcting itself. Same end result on screen, one less thing that can go wrong mid-load.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/frontend/app/(shop)/product/[id]/page.tsx` | The actual fix. One line moved to where it belongs, plus the two smaller improvements above. |
+| `apps/frontend/app/(shop)/product/[id]/page.test.tsx` | New. Six automated checks that load the product page the way a Google visitor does — with nothing pre-loaded. Confirmed these fail against the old code with the exact error real visitors were getting, and pass now. |
+| `apps/frontend/scripts/check-rules-of-hooks.mjs` | New. An automatic check for this specific class of mistake anywhere in the storefront. |
+| `.github/workflows/frontend-checks.yml` | New. Runs that check on every push and pull request, so this can't quietly come back. |
+| `apps/frontend/package.json` | Registers the new check so it can be run with one command. |
+
+> **Heads-up — no action required**
+>
+> No database migration, no new settings, nothing to configure. This ships as a normal deploy.
+
+### How to test
+
+1. Open a **private / incognito window** — this matters, because a normal window may have the product already cached and hide the bug.
+2. Paste a product address in directly, e.g. `https://1nri.store/product/clogs`, and press enter. Do **not** get there by clicking through the shop, or you won't be testing the thing that was broken.
+3. The product should appear first time, with no error screen and no need to press "Try again".
+4. Try the same with a colour on the end — `https://1nri.store/product/clogs?color=Black` — and confirm it still opens with Black already selected.
+5. Google "1nri clogs" (or any of our products) and click the result. That's the exact journey that was failing.
+
+### Worth knowing
+
+- **Not yet clicked through in a browser by a person.** The automated checks reproduce the original failure precisely and now pass, the site builds, and the built site was run locally and served the page. But nobody has watched it load on screen yet, so step 3 above is a real test, not a formality.
+- **There are four separate URL problems still open**, found while digging into this and deliberately left alone so this fix stayed small. None of them cause the error screen. In short: some old Shopify-era addresses still lead to "page not found" rather than redirecting, and when a link carrying `?color=` gets redirected, the colour is dropped along the way. Worth a follow-up, but nothing is on fire.

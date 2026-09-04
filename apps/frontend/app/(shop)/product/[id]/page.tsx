@@ -149,10 +149,14 @@ function PDPGallery({
     const anyTagged = allSorted.some((img) => (img.color_tags ?? []).length > 0);
     const cfLower = colorFilter?.toLowerCase();
     if (!anyTagged || !cfLower) return allSorted;
-    return allSorted.filter((img) => {
+    const forColor = allSorted.filter((img) => {
       const tags = img.color_tags ?? [];
       return tags.length === 0 || tags.some((t) => t.toLowerCase() === cfLower);
     });
+    // A colour with no tagged image of its own would otherwise leave the gallery
+    // empty (a bare grey box that reads as a broken page) — show the full set
+    // instead of nothing.
+    return forColor.length > 0 ? forColor : allSorted;
   }, [images, colorFilter]);
 
   // Index of the variant's representative image within a set (0 when none).
@@ -464,25 +468,30 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
   const { formatPrice } = useLocale();
   const { addItem } = useCart();
   const { isFavourited, toggle: toggleFavourite } = useToggleFavourite(product?.id ?? "");
-  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
-  const [initialized, setInitialized] = useState(false);
+  // Only the option values the shopper has actively picked. The rest come from
+  // `defaultOptions` below.
+  const [pickedOptions, setPickedOptions] = useState<Record<string, string>>({});
   const [added, setAdded] = useState(false);
   const [openAccordion, setOpenAccordion] = useState<string | null>("details");
 
-  const variants = product?.product_variants || [];
+  const variants = useMemo(
+    () => product?.product_variants ?? [],
+    [product?.product_variants],
+  );
   const optionGroups = useMemo(() => extractOptionGroups(variants), [variants]);
   const images = useMemo(
     () => [...(product?.product_images ?? [])].sort((a, b) => a.position - b.position),
     [product?.product_images],
   );
 
-  useEffect(() => {
-    if (initialized || variants.length === 0) return;
-    const groups = extractOptionGroups(variants);
-    if (groups.length === 0) { setInitialized(true); return; }
-    const firstInStock = variants.find(isVariantInStock) ?? variants[0]!;
+  // Derived during render rather than assigned from an effect, so the very
+  // first render that has variants already carries the right selection — no
+  // second render with an empty gallery in between.
+  const defaultOptions = useMemo(() => {
     const sel: Record<string, string> = {};
-    for (const g of groups) {
+    if (variants.length === 0 || optionGroups.length === 0) return sel;
+    const firstInStock = variants.find(isVariantInStock) ?? variants[0]!;
+    for (const g of optionGroups) {
       if (g.name.toLowerCase() === "size" && g.values.length > 1) continue;
       const key = g.slot === 1 ? "option1_value" : g.slot === 2 ? "option2_value" : "option3_value";
       const isColorGroup = g.name.toLowerCase() === "color" || g.name.toLowerCase() === "colour";
@@ -493,9 +502,13 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
       const val = firstInStock[key];
       if (val) sel[g.name] = val;
     }
-    setSelectedOptions(sel);
-    setInitialized(true);
-  }, [variants, initialized, initialColor]);
+    return sel;
+  }, [variants, optionGroups, initialColor]);
+
+  const selectedOptions = useMemo(
+    () => ({ ...defaultOptions, ...pickedOptions }),
+    [defaultOptions, pickedOptions],
+  );
 
   const activeVariant = useMemo(() => {
     if (variants.length === 0) return null;
@@ -505,18 +518,21 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
   }, [variants, selectedOptions]);
 
   const handleOptionSelect = useCallback((optionName: string, value: string) => {
-    setSelectedOptions((prev) => {
-      const group = optionGroups.find((g) => g.name === optionName);
-      if (group && !isValueAvailable(variants, optionGroups, prev, group, value)) {
-        return prev;
-      }
-      return { ...prev, [optionName]: value };
-    });
-  }, [optionGroups, variants]);
+    const group = optionGroups.find((g) => g.name === optionName);
+    if (group && !isValueAvailable(variants, optionGroups, selectedOptions, group, value)) {
+      return;
+    }
+    setPickedOptions((prev) => ({ ...prev, [optionName]: value }));
+  }, [optionGroups, variants, selectedOptions]);
 
   const { data: similarProducts } = useSimilarProducts(product?.handle ?? "", 6);
   const { data: allProducts } = useProducts({ limit: 8, sort_by: "created_at", sort_order: "desc" });
   const { items: recentlyViewed } = useRecentlyViewed(product?.id);
+  // Automatic bundle deal on this product, if it's the anchor of one. Must stay
+  // above the early returns below — it's a hook, and a cold load renders once
+  // while loading and again with data, so calling it later changes the hook
+  // count between those renders and throws.
+  const bundleOffer = useBundleOfferFor(product?.id);
 
   useEffect(() => {
     if (product) addRecentlyViewed(product);
@@ -545,8 +561,6 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
   const priceVariant = active ?? activeVariant ?? variants[0] ?? null;
   const displayPrice = priceVariant?.price ?? product.base_price;
   const comparePrice = priceVariant?.compare_at_price ?? null;
-  // Automatic bundle deal on this product, if it's the anchor of one.
-  const bundleOffer = useBundleOfferFor(product?.id);
   const inStock = active ? isVariantInStock(active) : false;
   const lowStock = active && inStock && active.inventory_quantity <= 3;
   const canPreorder = active ? (!inStock && (active.preorder_enabled ?? false)) : false;
