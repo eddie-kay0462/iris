@@ -21,6 +21,10 @@ vi.mock("@/lib/supabase/client", () => ({
   }),
 }));
 
+// Feedback is delivered as toasts, not inline text.
+const toast = { success: vi.fn(), error: vi.fn() };
+vi.mock("sonner", () => ({ toast: { success: (...a: unknown[]) => toast.success(...a), error: (...a: unknown[]) => toast.error(...a) } }));
+
 describe("ResetPasswordPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -68,7 +72,7 @@ describe("ResetPasswordPage", () => {
     expect(screen.queryByPlaceholderText("Email address")).not.toBeInTheDocument();
   });
 
-  it("shows error on Supabase failure", async () => {
+  it("toasts the error on Supabase failure", async () => {
     mockResetPasswordForEmail.mockResolvedValue({
       error: { message: "Something went wrong. Please try again." },
     });
@@ -80,14 +84,16 @@ describe("ResetPasswordPage", () => {
     await user.click(screen.getByText("Send reset link"));
 
     await waitFor(() => {
-      expect(screen.getByText("Something went wrong. Please try again.")).toBeInTheDocument();
+      expect(toast.error).toHaveBeenCalledWith("Something went wrong. Please try again.", {
+        duration: 6000,
+      });
     });
 
     // Form should still be visible
     expect(screen.getByPlaceholderText("Email address")).toBeInTheDocument();
   });
 
-  it("shows error on network failure", async () => {
+  it("toasts the error on network failure", async () => {
     mockResetPasswordForEmail.mockRejectedValue(new Error("Network failure"));
 
     const user = userEvent.setup();
@@ -97,7 +103,7 @@ describe("ResetPasswordPage", () => {
     await user.click(screen.getByText("Send reset link"));
 
     await waitFor(() => {
-      expect(screen.getByText("Network failure")).toBeInTheDocument();
+      expect(toast.error).toHaveBeenCalledWith("Network failure", { duration: 6000 });
     });
   });
 });

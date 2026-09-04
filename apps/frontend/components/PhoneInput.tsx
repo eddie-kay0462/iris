@@ -30,23 +30,36 @@ export default function PhoneInput({
   placeholder = "024 123 4567",
   className = "",
 }: PhoneInputProps) {
-  const initial =
-    DIAL_CODES.find((d) => d.code === defaultCountry) ?? DIAL_CODES[0];
-  const [selected, setSelected] = useState<DialEntry>(initial);
+  // Null until the shopper picks a country themselves.
+  const [picked, setPicked] = useState<DialEntry | null>(null);
 
-  // When defaultCountry changes (e.g. user changes shipping country), sync selector
+  // The country the current value actually belongs to. Longest dial code first,
+  // so a longer code always beats a shorter one that prefixes it.
+  const fromValue = value.startsWith("+")
+    ? [...DIAL_CODES]
+        .sort((a, b) => b.dial.length - a.dial.length)
+        .find((d) => value.startsWith(d.dial))
+    : undefined;
+
+  // An explicit pick wins; failing that the value's own dial code, so a stored
+  // number is never shown under the wrong country. `defaultCountry` (which
+  // follows the shipping country at checkout) is the fallback for an empty
+  // field.
   const activeEntry =
-    DIAL_CODES.find((d) => d.code === defaultCountry) ?? selected;
+    picked ??
+    fromValue ??
+    DIAL_CODES.find((d) => d.code === defaultCountry) ??
+    DIAL_CODES[0];
 
-  // Strip dial code; re-add trunk prefix (e.g. "0" for Ghana) for display
-  const nsn = value.startsWith(activeEntry.dial)
-    ? value.slice(activeEntry.dial.length)
-    : value.startsWith("+")
-    ? value
-    : value;
-  const displayValue = nsn && activeEntry.trunk && !nsn.startsWith(activeEntry.trunk)
-    ? activeEntry.trunk + nsn
-    : nsn;
+  // Strip dial code; re-add trunk prefix (e.g. "0" for Ghana) for display. A
+  // value carrying an unrecognised dial code is shown as-is rather than having
+  // a trunk prefix bolted onto the front of it.
+  const hasKnownDial = value.startsWith(activeEntry.dial);
+  const nsn = hasKnownDial ? value.slice(activeEntry.dial.length) : value;
+  const displayValue =
+    hasKnownDial && nsn && activeEntry.trunk && !nsn.startsWith(activeEntry.trunk)
+      ? activeEntry.trunk + nsn
+      : nsn;
 
   function handleChange(raw: string) {
     let digits = raw.replace(/\D/g, "");
@@ -60,7 +73,7 @@ export default function PhoneInput({
 
   function handleCountryChange(code: string) {
     const entry = DIAL_CODES.find((d) => d.code === code) ?? DIAL_CODES[0];
-    setSelected(entry);
+    setPicked(entry);
     // Re-use the raw NSN digits (without trunk prefix)
     const localDigits = nsn.replace(/\D/g, "").replace(new RegExp(`^${entry.trunk}`), "");
     onChange(localDigits ? `${entry.dial}${localDigits}` : "");

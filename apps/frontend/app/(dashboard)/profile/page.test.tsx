@@ -7,8 +7,12 @@ import ProfilePage from "./page";
 const mockApiClient = vi.fn();
 
 vi.mock("@/lib/api/client", () => ({
-  apiClient: (...args: any[]) => mockApiClient(...args),
+  apiClient: (...args: unknown[]) => mockApiClient(...args),
 }));
+
+// Feedback is delivered as toasts, not inline text.
+const toast = { success: vi.fn(), error: vi.fn() };
+vi.mock("sonner", () => ({ toast: { success: (...a: unknown[]) => toast.success(...a), error: (...a: unknown[]) => toast.error(...a) } }));
 
 describe("ProfilePage", () => {
   beforeEach(() => {
@@ -25,7 +29,7 @@ describe("ProfilePage", () => {
       ...profile,
     };
 
-    mockApiClient.mockImplementation(async (path: string, options?: any) => {
+    mockApiClient.mockImplementation(async (path: string, options?: { method?: string }) => {
       if (path === "/profile" && (!options || options.method !== "PUT")) {
         return defaultProfile;
       }
@@ -53,19 +57,21 @@ describe("ProfilePage", () => {
     });
 
     expect(screen.getByDisplayValue("Doe")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("+1234567890")).toBeInTheDocument();
+    // Rendered by PhoneInput: the +1 dial code moves into the country selector.
+    expect(screen.getByDisplayValue("234567890")).toBeInTheDocument();
+    expect((screen.getByLabelText("Country dial code") as HTMLSelectElement).value).toBe("US");
   });
 
-  it("shows error when profile fetch fails", async () => {
+  it("toasts an error when profile fetch fails", async () => {
     mockApiClient.mockRejectedValue(new Error("Not found"));
     render(<ProfilePage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Failed to load profile.")).toBeInTheDocument();
+      expect(toast.error).toHaveBeenCalledWith("Failed to load profile.", { duration: 6000 });
     });
   });
 
-  it("saves profile changes and shows success message", async () => {
+  it("saves profile changes and toasts success", async () => {
     mockProfileFetch();
 
     const user = userEvent.setup();
@@ -86,18 +92,16 @@ describe("ProfilePage", () => {
         method: "PUT",
         body: expect.objectContaining({ first_name: "Jane" }),
       }));
-      expect(screen.getByText("Profile updated.")).toBeInTheDocument();
+      expect(toast.success).toHaveBeenCalledWith("Profile updated.");
     });
   });
 
-  it("shows error when save fails", async () => {
-    mockApiClient.mockImplementation(async (path: string, options?: any) => {
+  it("toasts an error when save fails", async () => {
+    mockApiClient.mockImplementation(async (path: string, options?: { method?: string }) => {
       if (path === "/profile" && (!options || options.method !== "PUT")) {
         return { first_name: "John", last_name: "Doe", phone_number: "", email_notifications: false, sms_notifications: false };
       }
-      const error: any = new Error("Update failed");
-      error.data = { error: "Update failed" };
-      throw error;
+      throw Object.assign(new Error("Update failed"), { data: { error: "Update failed" } });
     });
 
     const user = userEvent.setup();
@@ -110,7 +114,7 @@ describe("ProfilePage", () => {
     await user.click(screen.getByText("Save changes"));
 
     await waitFor(() => {
-      expect(screen.getByText("Update failed")).toBeInTheDocument();
+      expect(toast.error).toHaveBeenCalledWith("Update failed", { duration: 6000 });
     });
   });
 
