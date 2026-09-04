@@ -6036,3 +6036,54 @@ This affected **every product page reached from a search result**, not just the 
 
 - **Not yet clicked through in a browser by a person.** The automated checks reproduce the original failure precisely and now pass, the site builds, and the built site was run locally and served the page. But nobody has watched it load on screen yet, so step 3 above is a real test, not a formality.
 - **There are four separate URL problems still open**, found while digging into this and deliberately left alone so this fix stayed small. None of them cause the error screen. In short: some old Shopify-era addresses still lead to "page not found" rather than redirecting, and when a link carrying `?color=` gets redirected, the colour is dropped along the way. Worth a follow-up, but nothing is on fire.
+
+---
+
+## Customers Outside Ghana Couldn't Enter Their Phone Number (September 2026)
+
+This one turned up while cleaning up after the fix above, and it's worth knowing about on its own.
+
+The phone field — the one on sign-up, at checkout, and on the account page — has a little country dropdown next to it (🇬🇭 +233, 🇺🇸 +1, 🇬🇧 +44, and so on). **That dropdown never did anything.** You could pick any country you liked and the field carried on treating your number as Ghanaian. There was no way to enter a non-Ghanaian number correctly.
+
+It got worse for anyone who already had a foreign number saved. The field puts a leading "0" on Ghanaian numbers, the way people actually write them. Because every number was being treated as Ghanaian, a saved US number like `+1234567890` was displayed back as `0+1234567890` — a "0" stuck on the front of a complete international number. Anyone who saved their profile from that screen would have written the mangled version back.
+
+The field now works out which country a number belongs to from the number itself, so a saved number is always shown under the right flag, and picking a country from the dropdown does what you'd expect. At checkout, where the phone country follows the shipping country you've chosen, that still happens — but only as a starting point for an empty field, never overriding a number that's already there.
+
+We don't know how many customers this turned away. Anyone outside Ghana who tried to enter their real number would have hit it.
+
+### Also done in the same pass
+
+Housekeeping rather than anything you'd see on the site, but it's what makes the above less likely to happen again:
+
+- **The storefront's automated code checks were completely red** — 74 code-quality errors and 14 broken tests. Both are now at zero, and the checks run automatically on every change, so new problems get caught rather than piling up. The `useBundleOfferFor` bug that caused the error screen had in fact been flagged by these checks all along; nobody was running them.
+- **Those 14 broken tests weren't finding real bugs** — they'd simply been left behind when we moved error messages over to the pop-up "toast" notifications, and were still looking for the old on-page text. They check the toasts now.
+- **Product thumbnails in the cart, checkout and pre-orders list** now go through the image optimiser like the rest of the site. Small speed win, and it means those images actually get cached.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/frontend/components/PhoneInput.tsx` | The country selector fix. |
+| `apps/frontend/components/PhoneInput.test.tsx` | New. Nine checks covering the dropdown, foreign numbers, and Ghanaian ones. Four of them fail against the old code. |
+| `apps/frontend/lib/api/errors.ts` | New. One place that knows how to pull an error message out of a failed request, replacing eight hand-rolled copies. |
+| `apps/frontend/lib/recently-viewed.ts` | "Recently viewed" rewritten on a sturdier footing, with tests. |
+| `apps/frontend/app/(auth)/*`, `app/(shop)/account/*`, `app/(shop)/checkout/*` | Error handling moved onto the shared helper; some duplicated type definitions collapsed into the real ones. |
+| `.github/workflows/frontend-checks.yml` | Runs the code checks, type checks and tests on every push and pull request. |
+| Various test files | Updated to match how the site actually behaves now. |
+
+> **Heads-up — no action required**
+>
+> No migration, no settings. Normal deploy.
+
+### How to test
+
+1. Go to sign-up (or the Shipping tab of your account) and find the phone field.
+2. Change the country dropdown to 🇺🇸 +1. The flag and code should actually change — before, it snapped straight back to Ghana.
+3. Type a number and confirm it's kept under that country rather than being read as Ghanaian.
+4. If you have a non-Ghanaian number saved on your account, open the account page and check it now shows correctly rather than with a stray "0" in front.
+5. At checkout, set your shipping country and confirm the phone field starts on that country when it's empty — and that it does *not* jump countries once you've typed a number.
+
+### Worth knowing
+
+- **Only five countries are in the dropdown** — Ghana, US, Canada, UK, Netherlands. That was already the case; the fix makes those five work rather than adding more. If we're selling somewhere else, the list needs extending.
+- **The three other apps (admin, allies, backend) have no code checks set up at all** — ESLint isn't configured for them, so the new automatic checks cover the storefront only. Worth doing for the others at some point; it's a separate piece of work.
