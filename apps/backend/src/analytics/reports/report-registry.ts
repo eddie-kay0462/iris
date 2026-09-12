@@ -96,7 +96,9 @@ async function financials(ctx: ReportContext, w: Window) {
     const b = at(o.created_at);
     b.grossSales += num(o.subtotal);
     b.discounts += num(o.discount_amount);
-    b.orders += 1;
+    // A pop-up's unitemized total is real money but an unknown number of sales,
+    // so it belongs in gross sales and not in the order count.
+    if (!(o as any).is_aggregate) b.orders += 1;
   }
   for (const o of refunded) at(o.created_at).returns += num(o.total);
   // popup_refunds rows carry the real (possibly partial) refunded amount.
@@ -490,7 +492,10 @@ export const REPORTS: Record<string, ReportDefinition> = {
       const load = async (w: Window) => {
         const [online, popup, walkin] = await Promise.all([
           ctx.onlineOrders(w),
-          ctx.popupOrders(w),
+          // Excluded from revenue as well as the count here: a pop-up's whole
+          // takings over one "order" would inflate the average by the entire
+          // event, which is worse than leaving it out of an average-per-order.
+          ctx.popupItemizedOrders(w),
           ctx.walkinOrders(w),
         ]);
         const map = new Map<string, { revenue: number; orders: number }>();
@@ -522,15 +527,18 @@ export const REPORTS: Record<string, ReportDefinition> = {
         const v = m.get(b) ?? { revenue: 0, orders: 0 };
         return { aov: v.orders > 0 ? v.revenue / v.orders : 0, orders: v.orders, revenue: v.revenue };
       };
-      return overTime(
-        ctx,
-        [col('aov', 'Average order value', 'currency'), col('orders', 'Orders', 'number'), col('revenue', 'Revenue', 'currency')],
-        makeSeries(ctx, 'current', fill(cur)),
-        makeSeries(ctx, 'previous', fill(prev)),
-        totals,
-        prevTotals,
-        [metric('aov', 'Average order value', totals.aov, prevTotals.aov, 'currency')],
-      );
+      return {
+        ...overTime(
+          ctx,
+          [col('aov', 'Average order value', 'currency'), col('orders', 'Orders', 'number'), col('revenue', 'Revenue', 'currency')],
+          makeSeries(ctx, 'current', fill(cur)),
+          makeSeries(ctx, 'previous', fill(prev)),
+          totals,
+          prevTotals,
+          [metric('aov', 'Average order value', totals.aov, prevTotals.aov, 'currency')],
+        ),
+        note: 'Excludes pop-up sales recorded as a single unitemized total, which have no per-order breakdown.',
+      };
     },
   },
 
@@ -544,6 +552,9 @@ export const REPORTS: Record<string, ReportDefinition> = {
       const agg = (items: ItemRow[]) => {
         const map = new Map<string, { netSales: number; unitsSold: number; orders: Set<string> }>();
         for (const i of items) {
+          // Unattributed units fall back to the 1NRI house brand, which would
+          // credit a whole pop-up's revenue to a brand that may not have sold it.
+          if (i.isAggregate) continue;
           const k = i.vendor ?? '1NRI';
           if (!map.has(k)) map.set(k, { netSales: 0, unitsSold: 0, orders: new Set() });
           const v = map.get(k)!;
@@ -587,6 +598,9 @@ export const REPORTS: Record<string, ReportDefinition> = {
         const items = await ctx.orderItems(w);
         const map = new Map<string, { units: number; orders: Set<string> }>();
         for (const i of items) {
+          // One row holding a whole pop-up's units would read as a basket of
+          // N items, destroying the average.
+          if (i.isAggregate) continue;
           const k = bucketOf(i.created_at, ctx.granularity);
           if (!map.has(k)) map.set(k, { units: 0, orders: new Set() });
           const b = map.get(k)!;
@@ -612,15 +626,18 @@ export const REPORTS: Record<string, ReportDefinition> = {
         if (!v) return { unitsPerOrder: 0, units: 0, orders: 0 };
         return { unitsPerOrder: v.orders.size > 0 ? v.units / v.orders.size : 0, units: v.units, orders: v.orders.size };
       };
-      return overTime(
-        ctx,
-        [col('unitsPerOrder', 'Units per order', 'number'), col('units', 'Units sold', 'number'), col('orders', 'Orders', 'number')],
-        makeSeries(ctx, 'current', fill(cur)),
-        makeSeries(ctx, 'previous', fill(prev)),
-        totals,
-        prevTotals,
-        [metric('unitsPerOrder', 'Units per order', totals.unitsPerOrder, prevTotals.unitsPerOrder, 'number')],
-      );
+      return {
+        ...overTime(
+          ctx,
+          [col('unitsPerOrder', 'Units per order', 'number'), col('units', 'Units sold', 'number'), col('orders', 'Orders', 'number')],
+          makeSeries(ctx, 'current', fill(cur)),
+          makeSeries(ctx, 'previous', fill(prev)),
+          totals,
+          prevTotals,
+          [metric('unitsPerOrder', 'Units per order', totals.unitsPerOrder, prevTotals.unitsPerOrder, 'number')],
+        ),
+        note: 'Excludes pop-up sales recorded as a single unitemized total, which have no per-order breakdown.',
+      };
     },
   },
 
@@ -635,7 +652,8 @@ export const REPORTS: Record<string, ReportDefinition> = {
       const load = async (w: Window) => {
         const [online, popup, walkin] = await Promise.all([
           ctx.onlineOrders(w),
-          ctx.popupOrders(w),
+          // A pure count of orders, so the unitemized totals stay out.
+          ctx.popupItemizedOrders(w),
           ctx.walkinOrders(w),
         ]);
         const map = new Map<string, ReturnType<typeof zero>>();
@@ -1384,14 +1402,24 @@ export const REPORTS: Record<string, ReportDefinition> = {
         ctx.walkinOrders('current'),
       ]);
       const map = new Map<string, { orders: number; revenue: number }>();
-      const add = (method: string, total: number) => {
+      const add = (method: string, total: number, countsAsOrder = true) => {
         if (!map.has(method)) map.set(method, { orders: 0, revenue: 0 });
         const m = map.get(method)!;
-        m.orders += 1;
+        if (countsAsOrder) m.orders += 1;
         m.revenue += total;
       };
       for (const o of online) add(o.payment_provider ?? 'online', num(o.total));
-      for (const o of [...popup, ...walkin]) add(o.payment_method ?? 'unknown', num(o.total));
+      for (const o of [...popup, ...walkin]) {
+        // This is a Finances report, so a pop-up's unitemized total must not
+        // vanish from it — but we genuinely don't know how it was paid, and it
+        // isn't one order. Give it its own labelled bucket with no order count
+        // rather than letting it pose as an 'unknown' payment method.
+        if ((o as any).is_aggregate) {
+          add('unitemized pop-up sales', num(o.total), false);
+          continue;
+        }
+        add(o.payment_method ?? 'unknown', num(o.total));
+      }
       const rows = Array.from(map.entries())
         .map(([method, v]) => ({ method, orders: v.orders, revenue: v.revenue }))
         .sort((a, b) => b.revenue - a.revenue);

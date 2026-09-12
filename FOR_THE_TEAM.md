@@ -6087,3 +6087,69 @@ Housekeeping rather than anything you'd see on the site, but it's what makes the
 
 - **Only five countries are in the dropdown** — Ghana, US, Canada, UK, Netherlands. That was already the case; the fix makes those five work rather than adding more. If we're selling somewhere else, the list needs extending.
 - **The three other apps (admin, allies, backend) have no code checks set up at all** — ESLint isn't configured for them, so the new automatic checks cover the storefront only. Worth doing for the others at some point; it's a separate piece of work.
+
+---
+
+## Recording Sales From a Pop-up That Was Too Busy to Ring Them Up (September 2026)
+
+Some pop-ups are chaos. Nobody gets to key each sale into the till, and afterwards all we have is the stall's paper tally: **this much money came in, this many units went out.**
+
+Until now those two numbers had nowhere to go. Everything the system knows about revenue and units it works out from individual sales records, so a pop-up that was never rung up properly was simply **invisible** — its money never showed up in any revenue report, and its units never moved the public Road to HQ counter on the homepage. A real day of trading counted for nothing.
+
+You can now enter those two numbers against a past pop-up, and they count. Open Pop-up Sales, find a finished pop-up, and hit **Record Unitemized Totals**. Type in the revenue and the unit count, optionally note where the figures came from ("from the stall's paper tally"), and save. The money lands in revenue reports **dated to the day the pop-up actually happened**, not today, and the units go straight onto the Road to HQ goal. You can come back and correct the figures any time, or remove them.
+
+Two deliberate limits, both because we genuinely don't know the detail:
+
+- **It doesn't touch stock.** We don't know *which* products sold, so the system won't guess. Inventory still gets corrected by the normal stock count.
+- **It doesn't pretend to be individual sales.** The totals show up in revenue and units, but they're kept out of order counts, average order value, conversion rate, the hour-by-hour charts, the payment breakdown, the product rankings and the customer list — because one entry standing in for a hundred sales would wreck every one of those numbers. Anywhere this is in play, the screen now says so plainly, so the figures never look broken or mysteriously inconsistent.
+
+**Anyone on staff can do this** — you don't need manager access, since the people who worked the stand are the ones holding the tally.
+
+### Also fixed in the same pass: the Road to HQ counter was stuck
+
+Worth flagging on its own, because it was quietly wrong and nobody would have noticed.
+
+The homepage Road to HQ counter was only ever counting **the first 1,000 sales records it could see per sales channel**, then silently stopping — not because of a rule anyone wrote, but because of an unnoticed default limit on how many records get fetched at once. Past that point, new sales stopped moving the counter, and *which* sales got counted was essentially arbitrary.
+
+This is fixed, so the counter now reflects everything. Two things follow from that: the new pop-up totals actually reach the goal (they wouldn't have reliably before), and **the counter may jump when this ships** — if we were over that limit, the number on the homepage has been too low, possibly for a while. That jump is the counter becoming correct, not a bug.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `supabase/migrations/20260912000000_popup_aggregate_sales.sql` | New. Adds the marker that distinguishes a "this is the whole event's totals" entry from a real individual sale, and enforces one set of totals per pop-up so the same money can't be counted twice. |
+| `apps/backend/src/popup-sales/aggregate-sale.ts` | New. The rules for how the totals are stored — including dating them to the event rather than to today. |
+| `apps/backend/src/popup-sales/aggregate-sale.spec.ts` | New. Sixteen automated checks, the main one proving revenue goes up while order counts and averages stay untouched. |
+| `apps/backend/src/popup-sales/dto/save-event-aggregate.dto.ts` | New. Checks the numbers coming in are sane (nothing negative, whole units). |
+| `apps/backend/src/popup-sales/popup-sales.service.ts` | Saving, editing and removing the totals; blocks refunding or editing them as if they were a real order. |
+| `apps/backend/src/popup-sales/popup-sales.controller.ts` | The two new staff-accessible endpoints. |
+| `apps/backend/src/analytics/analytics.service.ts` | The Road to HQ counter fix, plus keeping the totals out of every count, average and product ranking across the analytics. |
+| `apps/backend/src/analytics/reports/report-context.ts`, `report-registry.ts` | Same split applied to the reports engine — revenue in, order counts out. |
+| `apps/admin/app/(dashboard)/popup-sales/page.tsx` | The **Record Unitemized Totals** button and form, the double-counting warning, and the "Unitemized" label in the orders table. |
+| `apps/admin/app/(dashboard)/analytics/components/PopupsView.tsx` | The notice explaining which figures on the pop-up analytics page include the totals and which don't. |
+| `apps/admin/lib/api/popup-sales.ts` | Wiring between the admin screens and the new endpoints. |
+| `apps/frontend/lib/api/road-to-hq.server.ts` | Picks up the walk-in figure the counter had been returning but the storefront was ignoring. |
+
+> **Heads-up — there IS a database migration**
+>
+> `20260912000000_popup_aggregate_sales.sql` needs to run on deploy. Nothing else to configure, no new settings, no env vars.
+>
+> Also expect the homepage Road to HQ number to **go up** once this is live — see the section above. That's the fix, not a fault.
+
+### How to test
+
+1. Go to **Pop-up Sales** in admin. Find a pop-up that's closed or whose date has passed.
+2. Hit **Record Unitemized Totals**. Enter something memorable — say `4200` revenue and `86` units — and save.
+3. Check the card now shows `Unitemized: GH₵ 4200.00 · 86 units`.
+4. Open the homepage and check the Road to HQ counter has gone up by **86** — allow up to 5 minutes, the homepage caches that number.
+5. In **Analytics → Pop-ups**, pick that event. Total Revenue should include the 4,200, and there should be a grey notice at the top spelling out which figures include it and which don't. Average order value should *not* have leapt up.
+6. In **Analytics → Reports → Total sales over time**, set the range to cover the pop-up's date and confirm the 4,200 appears **in that month**, not this one.
+7. Go back and change the figures, save again, and confirm the numbers move to match rather than doubling. Then remove them and confirm everything returns to where it started.
+8. Try it on a pop-up that already has real rung-up orders — you should get an amber warning telling you how much is already recorded, so you only enter what's missing.
+
+### Worth knowing
+
+- **Nothing here has been run against a real database yet.** The code is built, type-checked and covered by automated checks across all three apps, but the migration hasn't been applied anywhere, so every step above is a genuine first test rather than a formality.
+- **You can still double-count if you try hard enough.** The system stops you recording two sets of totals for the same pop-up, only offers the button on finished pop-ups, and warns you when real orders already exist — but it won't stop you typing in a figure that overlaps sales already in the till. The warning is there to be read.
+- **A multi-day pop-up books everything to its start date.** If one straddles the end of a month, all of it lands in the first month. Fine for now; say something if that causes a reporting headache.
+- **Bundles count as physical units here.** Normally a bundle can count as more than one unit toward the goal; since we don't know which products these were, each unit counts as one. Count physical items when you enter the number.

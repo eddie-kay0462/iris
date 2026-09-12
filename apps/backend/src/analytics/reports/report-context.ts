@@ -26,6 +26,13 @@ export interface OnlineOrderRow {
 
 export interface PopupOrderRow {
   id: string;
+  /**
+   * True for the one reconciliation row standing in for a pop-up nobody could
+   * ring up sale by sale. Its money is real and belongs in every revenue sum;
+   * it is not one order, so it must stay out of order counts and per-order
+   * averages. Use `popupItemizedOrders()` when the denominator is an order.
+   */
+  is_aggregate: boolean;
   customer_email: string | null;
   customer_phone: string | null;
   customer_name: string | null;
@@ -79,6 +86,8 @@ export interface ItemRow {
   vendor: string | null;
   order_id: string;
   created_at: string;
+  /** See PopupOrderRow.is_aggregate. Always false for online and walk-in items. */
+  isAggregate: boolean;
 }
 
 export interface EventRow {
@@ -224,7 +233,7 @@ export class ReportContext {
         this.db
           .from('popup_orders')
           .select(
-            'id, customer_email, customer_phone, customer_name, status, subtotal, total, discount_amount, discount_type, payment_method, created_at',
+            'id, customer_email, customer_phone, customer_name, status, subtotal, total, discount_amount, discount_type, payment_method, created_at, is_aggregate',
           )
           .in('status', POPUP_REVENUE_STATUSES)
           .gte('created_at', from)
@@ -233,6 +242,15 @@ export class ReportContext {
           .range(a, b),
       ),
     );
+  }
+
+  /**
+   * Pop-up orders minus the reconciliation rows — the set to use whenever the
+   * denominator is a real order (counts, averages per order). Derived from the
+   * memoized `popupOrders()` load, so it costs no extra query.
+   */
+  async popupItemizedOrders(w: Window): Promise<PopupOrderRow[]> {
+    return (await this.popupOrders(w)).filter((o) => !o.is_aggregate);
   }
 
   /**
@@ -248,7 +266,7 @@ export class ReportContext {
         this.db
           .from('popup_orders')
           .select(
-            'id, customer_email, customer_phone, customer_name, status, subtotal, total, discount_amount, discount_type, payment_method, created_at',
+            'id, customer_email, customer_phone, customer_name, status, subtotal, total, discount_amount, discount_type, payment_method, created_at, is_aggregate',
           )
           .eq('status', 'refunded')
           .gte('created_at', from)
@@ -375,7 +393,7 @@ export class ReportContext {
           this.db
             .from('popup_order_items')
             .select(
-              'order_id, product_id, product_name, sku, quantity, unit_price, total_price, product:products(vendor), order:popup_orders!inner(status, created_at)',
+              'order_id, product_id, product_name, sku, quantity, unit_price, total_price, product:products(vendor), order:popup_orders!inner(status, created_at, is_aggregate)',
             )
             .gte('popup_orders.created_at', from)
             .lte('popup_orders.created_at', to)
@@ -404,6 +422,7 @@ export class ReportContext {
         vendor: item.product?.vendor ?? null,
         order_id: `${channel}_${item.order_id ?? item.walkin_order_id}`,
         created_at: item.order?.created_at ?? '',
+        isAggregate: item.order?.is_aggregate ?? false,
       });
       return [
         ...online.map((i) => mapRow(i, 'online')),

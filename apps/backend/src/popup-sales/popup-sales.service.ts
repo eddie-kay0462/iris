@@ -16,9 +16,17 @@ import { QueryPopupOrdersDto } from './dto/query-popup-orders.dto';
 import { ChargePopupOrderDto } from './dto/charge-popup-order.dto';
 import { CreatePopupCustomerDto } from './dto/create-popup-customer.dto';
 import { RefundPopupOrderDto } from './dto/refund-popup-order.dto';
+import { SaveEventAggregateDto } from './dto/save-event-aggregate.dto';
 import { toE164, toPaystackMomoFormat } from '../common/utils/phone';
 import { POPUP_REVENUE_STATUSES, round2 } from '../analytics/analytics.constants';
 import { DiscountEngineService } from '../promos/discount-engine.service';
+import {
+  AGGREGATE_ITEM_NAME,
+  aggregateLine,
+  aggregateOrderNumber,
+  aggregateTimestamp,
+  countsAsOrder,
+} from './aggregate-sale';
 
 /** Postgres unique_violation. */
 const UNIQUE_VIOLATION = '23505';
@@ -36,6 +44,15 @@ const POPUP_RECONCILE_BATCH_SIZE = 50;
 
 // Split rows are part of how an order was paid, so every read of an order
 // carries them — without this the breakdown is write-only.
+/** An event's unitemized totals, as every read surfaces them. */
+export interface PopupAggregate {
+  revenue: number;
+  units: number;
+  /** Backdated to the event date — when the money was actually earned. */
+  recordedAt: string;
+  note: string | null;
+}
+
 const ORDER_SELECT =
   '*, profiles!served_by(id, first_name, last_name), popup_order_items(*), popup_split_payments(*)';
 
@@ -57,13 +74,34 @@ export class PopupSalesService {
 
   async findAllEvents() {
     const db = this.supabase.getAdminClient();
-    const { data, error } = await db
-      .from('popup_events')
-      .select('*, profiles!created_by(id, first_name, last_name)')
-      .order('created_at', { ascending: false });
+    const [{ data, error }, { data: aggregates }] = await Promise.all([
+      db
+        .from('popup_events')
+        .select('*, profiles!created_by(id, first_name, last_name)')
+        .order('created_at', { ascending: false }),
+      // One query for every event's unitemized totals rather than one per card.
+      db
+        .from('popup_orders')
+        .select('event_id, total, created_at, notes, popup_order_items(quantity)')
+        .eq('is_aggregate', true),
+    ]);
 
     if (error) throw error;
-    return data || [];
+
+    const byEvent = new Map<string, PopupAggregate>();
+    for (const a of aggregates ?? []) {
+      byEvent.set(a.event_id, {
+        revenue: round2(Number(a.total)),
+        units: ((a as any).popup_order_items ?? []).reduce(
+          (s: number, i: any) => s + (i.quantity ?? 0),
+          0,
+        ),
+        recordedAt: a.created_at,
+        note: a.notes ?? null,
+      });
+    }
+
+    return (data || []).map((e) => ({ ...e, aggregate: byEvent.get(e.id) ?? null }));
   }
 
   async createEvent(dto: CreateEventDto, userId: string) {
@@ -99,6 +137,208 @@ export class PopupSalesService {
     return data;
   }
 
+
+  // ─── Aggregate ("unitemized") totals ───────────────────────────────────────
+  //
+  // A pop-up too busy to ring up sale by sale gets one reconciliation order
+  // standing in for the whole event. See aggregate-sale.ts for why the row looks
+  // the way it does.
+
+  /**
+   * Create or correct an event's unitemized totals. Idempotent by event: there is
+   * at most one aggregate order per pop-up (enforced by a partial unique index),
+   * so saving twice edits the figures rather than double-counting them.
+   */
+  async saveEventAggregate(
+    eventId: string,
+    dto: SaveEventAggregateDto,
+    userId: string,
+    retried = false,
+  ): Promise<any> {
+    const db = this.supabase.getAdminClient();
+
+    const { data: event } = await db
+      .from('popup_events')
+      .select('id, event_date')
+      .eq('id', eventId)
+      .single();
+
+    if (!event) throw new NotFoundException('Event not found');
+
+    // Without a date there is no period to book the money into, and backdating is
+    // the entire point — booking it as today would quietly move a past pop-up's
+    // takings into this month's revenue.
+    if (!event.event_date) {
+      throw new BadRequestException(
+        "Set this pop-up's event date before recording its totals — the revenue has to land on the day it was earned.",
+      );
+    }
+
+    // Nothing to record is how you remove the totals.
+    if (dto.revenue === 0 && dto.units === 0) {
+      await this.deleteEventAggregate(eventId);
+      return null;
+    }
+
+    const createdAt = aggregateTimestamp(event.event_date);
+    const line = aggregateLine(dto.revenue, dto.units);
+    const total = round2(dto.revenue);
+
+    const { data: existing } = await db
+      .from('popup_orders')
+      .select('id')
+      .eq('event_id', eventId)
+      .eq('is_aggregate', true)
+      .maybeSingle();
+
+    let orderId: string = existing?.id ?? '';
+    let inserted = false;
+
+    if (orderId) {
+      const { error } = await db
+        .from('popup_orders')
+        .update({
+          subtotal: total,
+          total,
+          discount_type: 'none',
+          discount_amount: 0,
+          status: 'completed',
+          // Re-derived in case the event's date was corrected since.
+          created_at: createdAt,
+          notes: dto.note ?? null,
+          served_by: userId,
+        })
+        .eq('id', orderId);
+
+      if (error) {
+        throw new InternalServerErrorException(
+          `Could not update the pop-up totals: ${error.message}`,
+        );
+      }
+    } else {
+      const { data, error } = await db
+        .from('popup_orders')
+        .insert({
+          event_id: eventId,
+          order_number: aggregateOrderNumber(eventId, event.event_date),
+          // A second, DB-level guard against a double submit, riding the partial
+          // unique index added in 20260830000000.
+          idempotency_key: `popup-aggregate:${eventId}`,
+          is_aggregate: true,
+          status: 'completed',
+          // Deliberately blank, and load-bearing: popupCustomerKey() returns null
+          // for a row with no email and no phone, which is what keeps this out of
+          // new-vs-returning, customer cohorts and the top-customers list without
+          // any of them needing to know aggregates exist.
+          customer_name: null,
+          customer_phone: null,
+          customer_email: null,
+          payment_method: null,
+          payment_reference: null,
+          served_by: userId,
+          subtotal: total,
+          total,
+          discount_type: 'none',
+          discount_amount: 0,
+          created_at: createdAt,
+          notes: dto.note ?? null,
+        })
+        .select('id')
+        .single();
+
+      // Two staff saving at once: whoever lost the race already wrote the row we
+      // wanted, so re-read and edit it instead of failing. Covers the aggregate,
+      // order_number and idempotency_key indexes alike. Retried once only, so a
+      // persistent constraint error surfaces rather than looping.
+      if (error?.code === UNIQUE_VIOLATION && !retried) {
+        return this.saveEventAggregate(eventId, dto, userId, true);
+      }
+
+      if (error || !data) {
+        throw new InternalServerErrorException(
+          `Could not record the pop-up totals: ${error?.message ?? 'no row returned'}`,
+        );
+      }
+
+      orderId = data.id;
+      inserted = true;
+    }
+
+    // Replaced wholesale rather than updated, so an edit can never leave a row
+    // count other than one behind.
+    await db.from('popup_order_items').delete().eq('order_id', orderId);
+
+    const { error: itemError } = await db.from('popup_order_items').insert({
+      order_id: orderId,
+      // No product and no variant: this is what keeps inventory untouched, and
+      // what makes the units count 1:1 toward Road to HQ rather than picking up
+      // some product's bundle multiplier.
+      product_id: null,
+      variant_id: null,
+      product_name: AGGREGATE_ITEM_NAME,
+      variant_title: null,
+      sku: null,
+      ...line,
+    });
+
+    if (itemError) {
+      // An order with no item is a pop-up with revenue but no units — worse than
+      // no record at all. Undo a fresh insert; leave an existing row alone, since
+      // its old item is already gone and re-saving is the fix.
+      if (inserted) await db.from('popup_orders').delete().eq('id', orderId);
+      throw new InternalServerErrorException(
+        `Could not record the pop-up units: ${itemError.message}`,
+      );
+    }
+
+    // Note: applyCompletion() is deliberately not called. It deducts stock and
+    // emails a receipt; both would no-op here (no variant_id, no customer_email)
+    // but going through it would write a misleading inventory_movements note.
+    return this.findOrder(orderId);
+  }
+
+  /** Remove an event's unitemized totals. The line item cascades. */
+  async deleteEventAggregate(eventId: string) {
+    const db = this.supabase.getAdminClient();
+    const { error } = await db
+      .from('popup_orders')
+      .delete()
+      .eq('event_id', eventId)
+      .eq('is_aggregate', true);
+
+    if (error) {
+      throw new InternalServerErrorException(
+        `Could not remove the pop-up totals: ${error.message}`,
+      );
+    }
+    return { success: true };
+  }
+
+  /**
+   * An event's unitemized totals, or null. Shared by the stats, analytics and
+   * event-list reads so they all describe the aggregate the same way.
+   */
+  private async loadEventAggregate(eventId: string): Promise<PopupAggregate | null> {
+    const db = this.supabase.getAdminClient();
+    const { data } = await db
+      .from('popup_orders')
+      .select('total, created_at, notes, popup_order_items(quantity)')
+      .eq('event_id', eventId)
+      .eq('is_aggregate', true)
+      .maybeSingle();
+
+    if (!data) return null;
+    return {
+      revenue: round2(Number(data.total)),
+      units: (data.popup_order_items ?? []).reduce(
+        (s: number, i: any) => s + (i.quantity ?? 0),
+        0,
+      ),
+      recordedAt: data.created_at,
+      note: data.notes ?? null,
+    };
+  }
+
   // ─── Analytics ──────────────────────────────────────────────────────────────
 
   async getEventAnalytics(eventId: string) {
@@ -121,15 +361,31 @@ export class PopupSalesService {
     if (error) throw error;
     const allOrders = orders || [];
 
+    /**
+     * A pop-up too busy to ring up sale by sale is recorded as one aggregate
+     * order carrying the event's whole takings and unit count. Money sums must
+     * include it; anything that counts orders, averages per order, splits by
+     * hour, attributes to a product or identifies a customer must not — one row
+     * standing in for a hundred sales would wreck every one of those figures.
+     */
+    const aggregateOrder = allOrders.find((o) => o.is_aggregate) ?? null;
+    const realOrders = allOrders.filter(countsAsOrder);
+
     // ── Revenue & conversion ─────────────────────────────────────────────────
     const revenueOrders = allOrders.filter(
       (o) => POPUP_REVENUE_STATUSES.includes(o.status),
     );
+    // The only figure that deliberately includes the unitemized total.
     const totalRevenue = revenueOrders.reduce((s, o) => s + Number(o.total), 0);
-    const totalTransactions = revenueOrders.length;
-    const totalOrders = allOrders.length;
+
+    const realRevenueOrders = revenueOrders.filter(countsAsOrder);
+    const realRevenue = realRevenueOrders.reduce((s, o) => s + Number(o.total), 0);
+    const totalTransactions = realRevenueOrders.length;
+    const totalOrders = realOrders.length;
     const conversionRate = totalOrders > 0 ? (totalTransactions / totalOrders) * 100 : 0;
-    const aov = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
+    // Averaged over real transactions only — dividing the unitemized total by the
+    // one row that carries it would inflate AOV by the whole pop-up.
+    const aov = totalTransactions > 0 ? realRevenue / totalTransactions : 0;
 
     const visitorCount: number | null = (event as any)?.visitor_count ?? null;
     const revenuePerVisitor =
@@ -137,10 +393,12 @@ export class PopupSalesService {
 
     // ── Existing vs New customer AOV ─────────────────────────────────────────
     // Treat orders with no email AND no phone as walk-ins (new)
-    const existingOrders = revenueOrders.filter(
+    const existingOrders = realRevenueOrders.filter(
       (o) => o.customer_email || o.customer_phone,
     );
-    const newOrders = revenueOrders.filter(
+    // The aggregate has no contacts, so without countsAsOrder it would land here
+    // and crush the walk-in AOV.
+    const newOrders = realRevenueOrders.filter(
       (o) => !o.customer_email && !o.customer_phone,
     );
     const existingRevenue = existingOrders.reduce((s, o) => s + Number(o.total), 0);
@@ -150,8 +408,9 @@ export class PopupSalesService {
     const newAov = newOrders.length > 0 ? newRevenue / newOrders.length : 0;
 
     // ── Discount impact ──────────────────────────────────────────────────────
-    const discountedOrders = revenueOrders.filter((o) => Number(o.discount_amount) > 0);
-    const fullPriceOrders = revenueOrders.filter((o) => !Number(o.discount_amount));
+    const discountedOrders = realRevenueOrders.filter((o) => Number(o.discount_amount) > 0);
+    // The aggregate carries no discount information, so it would inflate this.
+    const fullPriceOrders = realRevenueOrders.filter((o) => !Number(o.discount_amount));
     const discountedRevenue = discountedOrders.reduce((s, o) => s + Number(o.total), 0);
     const fullPriceRevenue = fullPriceOrders.reduce((s, o) => s + Number(o.total), 0);
     const avgDiscountPct =
@@ -163,8 +422,10 @@ export class PopupSalesService {
         : 0;
 
     // ── Payment method breakdown ─────────────────────────────────────────────
+    // payment_method is null on an aggregate; it is reported on its own instead of
+    // swelling an "unknown" bucket here.
     const paymentBreakdown: Record<string, { count: number; revenue: number }> = {};
-    for (const o of revenueOrders) {
+    for (const o of realRevenueOrders) {
       const method = o.payment_method || 'unknown';
       if (!paymentBreakdown[method]) paymentBreakdown[method] = { count: 0, revenue: 0 };
       paymentBreakdown[method].count++;
@@ -172,8 +433,10 @@ export class PopupSalesService {
     }
 
     // ── Revenue over time (by hour) ─────────────────────────────────────────
+    // An aggregate is backdated to noon, so including it would invent a single
+    // fake 12:00 spike holding the entire event.
     const revenueByHour: Record<string, number> = {};
-    for (const o of revenueOrders) {
+    for (const o of realRevenueOrders) {
       const hour = new Date(o.created_at).getHours();
       const label = `${String(hour).padStart(2, '0')}:00`;
       revenueByHour[label] = (revenueByHour[label] || 0) + Number(o.total);
@@ -181,7 +444,7 @@ export class PopupSalesService {
 
     // ── Orders by hour ───────────────────────────────────────────────────────
     const ordersByHour: Record<string, number> = {};
-    for (const o of allOrders) {
+    for (const o of realOrders) {
       const hour = new Date(o.created_at).getHours();
       const label = `${String(hour).padStart(2, '0')}:00`;
       ordersByHour[label] = (ordersByHour[label] || 0) + 1;
@@ -192,7 +455,9 @@ export class PopupSalesService {
       string,
       { name: string; unitsSold: number; revenue: number; sku: string | null }
     > = {};
-    for (const o of revenueOrders) {
+    // The aggregate's line item is not a product, and on revenue it would sort
+    // straight to the top. Its units are reported separately.
+    for (const o of realRevenueOrders) {
       for (const item of o.popup_order_items ?? []) {
         const key = item.product_id || item.product_name;
         if (!productMap[key]) {
@@ -213,7 +478,7 @@ export class PopupSalesService {
 
     // ── Status breakdown ─────────────────────────────────────────────────────
     const statusBreakdown: Record<string, number> = {};
-    for (const o of [...allOrders]) {
+    for (const o of realOrders) {
       statusBreakdown[o.status] = (statusBreakdown[o.status] || 0) + 1;
     }
 
@@ -226,11 +491,12 @@ export class PopupSalesService {
       totalSpend: number;
     }[] = [];
 
-    for (const o of allOrders) {
+    // Keyed with a fallback to o.id, so an aggregate would appear as a blank row.
+    for (const o of realOrders) {
       const key = o.customer_email || o.customer_phone || o.id;
       if (!seen.has(key)) {
         seen.add(key);
-        const spend = revenueOrders
+        const spend = realRevenueOrders
           .filter(
             (r) =>
               (o.customer_email && r.customer_email === o.customer_email) ||
@@ -261,6 +527,24 @@ export class PopupSalesService {
       eventLocation: event?.location ?? null,
       visitorCount,
       totalRevenue: Math.round(totalRevenue * 100) / 100,
+      /**
+       * Non-null when part of this event's revenue was recorded as one
+       * unitemized total. The UI must say so: totalRevenue and the Road to HQ
+       * units include it, while totalTransactions, aov, conversionRate,
+       * revenueByHour, paymentBreakdown, productPerformance and customerCapture
+       * all describe only the sales that were actually rung up.
+       */
+      unitemized: aggregateOrder
+        ? {
+            revenue: round2(Number(aggregateOrder.total)),
+            units: (aggregateOrder.popup_order_items ?? []).reduce(
+              (s: number, i: any) => s + (i.quantity ?? 0),
+              0,
+            ),
+            recordedAt: aggregateOrder.created_at,
+            note: aggregateOrder.notes ?? null,
+          }
+        : null,
       totalTransactions,
       totalOrders,
       conversionRate: Math.round(conversionRate * 100) / 100,
@@ -299,24 +583,31 @@ export class PopupSalesService {
   async getEventStats(eventId: string) {
     const db = this.supabase.getAdminClient();
 
-    const { data: orders, error } = await db
-      .from('popup_orders')
-      .select('status, total')
-      .eq('event_id', eventId)
-      .neq('status', 'cancelled');
+    const [{ data: orders, error }, aggregate] = await Promise.all([
+      db
+        .from('popup_orders')
+        .select('status, total, is_aggregate')
+        .eq('event_id', eventId)
+        .neq('status', 'cancelled'),
+      this.loadEventAggregate(eventId),
+    ]);
 
     if (error) throw error;
 
     const allOrders = orders || [];
+    // Revenue includes the unitemized total — that is the point of recording it.
     const session_revenue = allOrders
       .filter((o) => POPUP_REVENUE_STATUSES.includes(o.status))
       .reduce((sum, o) => sum + Number(o.total), 0);
+    // The counts below are counts of real sales, so the aggregate stays out.
+    const realOrders = allOrders.filter(countsAsOrder);
 
     return {
       session_revenue: Math.round(session_revenue * 100) / 100,
-      orders_completed: allOrders.filter((o) => o.status === 'completed').length,
-      on_hold: allOrders.filter((o) => o.status === 'on_hold').length,
-      awaiting_payment: allOrders.filter((o) => o.status === 'awaiting_payment').length,
+      orders_completed: realOrders.filter((o) => o.status === 'completed').length,
+      on_hold: realOrders.filter((o) => o.status === 'on_hold').length,
+      awaiting_payment: realOrders.filter((o) => o.status === 'awaiting_payment').length,
+      aggregate,
     };
   }
 
@@ -652,9 +943,19 @@ export class PopupSalesService {
     // Fetch current order status so we can detect a transition to 'completed'
     const { data: existingOrder } = await db
       .from('popup_orders')
-      .select('id, status, discount_type, order_number, customer_email, customer_phone, served_by')
+      .select(
+        'id, status, discount_type, order_number, customer_email, customer_phone, served_by, is_aggregate',
+      )
       .eq('id', id)
       .single();
+
+    // An aggregate stands in for a whole pop-up. Cancelling it would drop the
+    // event's revenue out of the whitelist with nothing in the UI to explain why.
+    if (existingOrder?.is_aggregate) {
+      throw new BadRequestException(
+        'These are a pop-up\'s unitemized totals, not a real order. Edit them from the event instead.',
+      );
+    }
 
     const wasAlreadyCompleted = existingOrder?.status === 'completed';
     const isBeingCompleted = dto.status === 'completed' && !wasAlreadyCompleted;
@@ -1211,6 +1512,14 @@ export class PopupSalesService {
       .single();
 
     if (error || !order) throw new NotFoundException('Order not found');
+
+    // There is no payment reference behind an aggregate and nothing to restore.
+    // Correcting a refunded sale means editing the event's totals down.
+    if (order.is_aggregate) {
+      throw new BadRequestException(
+        'These are a pop-up\'s unitemized totals, not a real order. Edit them from the event instead.',
+      );
+    }
 
     // Only confirmed or completed orders can be refunded
     if (order.status !== 'confirmed' && order.status !== 'completed') {
