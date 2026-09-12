@@ -144,13 +144,20 @@ export class DiscountEngineService {
 
     const rejected: RejectedRule[] = [];
 
-    const codeCandidate = await this.buildCodeCandidate(input.code, ctx);
-    const { candidates: pairingCandidates, rejected: pairingRejects } =
-      await this.buildPairingCandidates(ctx);
-    rejected.push(...pairingRejects);
+    // Three independent promo_codes reads. They used to run one after another,
+    // and two of them fire on every sale even when no code was typed — three
+    // serial round trips on the path a customer is waiting at the till for.
+    const [
+      codeCandidate,
+      { candidates: pairingCandidates, rejected: pairingRejects },
+      { candidates: volumeCandidates, rejected: volumeRejects },
+    ] = await Promise.all([
+      this.buildCodeCandidate(input.code, ctx),
+      this.buildPairingCandidates(ctx),
+      this.buildVolumeCandidates(ctx),
+    ]);
 
-    const { candidates: volumeCandidates, rejected: volumeRejects } =
-      await this.buildVolumeCandidates(ctx);
+    rejected.push(...pairingRejects);
     rejected.push(...volumeRejects);
 
     const manualCandidate = this.buildManualCandidate(

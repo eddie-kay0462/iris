@@ -6153,3 +6153,78 @@ This is fixed, so the counter now reflects everything. Two things follow from th
 - **You can still double-count if you try hard enough.** The system stops you recording two sets of totals for the same pop-up, only offers the button on finished pop-ups, and warns you when real orders already exist — but it won't stop you typing in a figure that overlaps sales already in the till. The warning is there to be read.
 - **A multi-day pop-up books everything to its start date.** If one straddles the end of a month, all of it lands in the first month. Fine for now; say something if that causes a reporting headache.
 - **Bundles count as physical units here.** Normally a bundle can count as more than one unit toward the goal; since we don't know which products these were, each unit counts as one. Count physical items when you enter the number.
+
+---
+
+## The Pop-up Till Now Finishes Sales By Itself (September 2026)
+
+This came straight out of feedback from the last pop-up: the server felt slow when recording an order, session revenue read **GH₵ 0.00**, and the Close/Activate Event buttons weren't earning their keep. Three complaints, and they turned out to be mostly one problem.
+
+### Sales finish themselves now
+
+**"Mark as Completed" is gone.** So is "Confirm Payment" and "Mark as Awaiting Payment". A sale is finished when the money is in, full stop:
+
+- **Cash** — done the moment you save. (This already worked.)
+- **Bank transfer, or a MoMo reference you typed in** — now also done the moment you save. **This was the bug behind the GH₵ 0.00.** Everything except cash used to be saved as "active", which counts as no revenue at all, and sat there until somebody dug into the row menu and marked it completed by hand. A pop-up run on transfers or MoMo genuinely reported zero takings while the orders sat in a tab.
+- **MoMo through Paystack** — completes on its own when the customer approves on their phone. That part always worked; you just couldn't see it happening. The order now says "Waiting for customer to approve", and after two minutes switches to "Check the customer's phone" so you know to chase rather than stand there.
+
+The row menu is down to **Complete Sale** (only for a ticket you parked on hold) and **Cancel Order**. Nothing else to remember.
+
+There was a nastier version of this hiding behind it. The old "Confirm Payment" button marked an order as revenue but **never took the stock off** and never sent the customer a receipt. Seven old orders are sitting in that state (about GH₵ 1,290, four items of stock). We've left them alone deliberately — chasing four units from March isn't worth emailing people receipts months late — but nothing new can land there.
+
+### The "Active" tab is gone
+
+Nothing lands in limbo any more, so the tab would have been permanently empty. Tabs are now **Completed · Confirmation Queue · On Hold · Refunded · Collections**, opening on Completed. Pre-orders still waiting to be handed over moved to **On Hold**, which is what they actually are.
+
+### Recording an order is quicker
+
+Saving a sale was making the server do about fourteen separate trips to the database, one after the other, then a **second** save on top for the customer's details — and only then would the window close. On venue wifi that's a second or two of a customer watching you wait.
+
+- The customer's details now save quietly in the background. Nothing on screen depends on them, and that was the single slowest part of the whole thing.
+- The new order **appears in the list instantly** instead of a moment after the window shuts. That's the "I see it save behind" thing.
+- Behind the scenes: order numbers are handed out in one go instead of scanning the last 200 orders and retrying on a clash; stock comes off in one database call instead of three per item; and three promo-code lookups that ran one-after-another now run together. Roughly fourteen trips down to eight.
+- The page also used to poll the server twice every 15 seconds, including while you were mid-sale. It now polls less, and stops entirely while a window is open.
+- Two smaller fixes fell out of this: the Save button could re-enable itself mid-save (so you could ring the same sale twice), and clicking outside the window mid-save would dismiss it leaving you unsure whether it saved. Both fixed.
+
+### Close / Activate Event have been removed
+
+A pop-up is now simply **on when its dates say it is**, and stops taking orders the day after it ends. Nothing to press, nothing to forget. Events that are on today sort to the top of the list and open automatically, so you don't pick from the list every time.
+
+Events closed by hand in the past stay closed — one of them has no date on it at all, and would otherwise have quietly started accepting orders again.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `supabase/migrations/20260912120000_popup_fast_till.sql` | New. Hands out order numbers safely when two tills ring up at once, and takes stock off in a single step (previously two people selling the last of something could both write over each other). |
+| `apps/backend/src/popup-sales/popup-rules.ts` | New. The two rules everything now hangs off: when a sale counts as finished, and when a pop-up is over. |
+| `apps/backend/src/popup-sales/popup-rules.spec.ts` | New. Nineteen automated checks pinning down those rules — every payment type, splits, held tickets, and the event dates. |
+| `apps/backend/src/popup-sales/popup-sales.service.ts` | The lifecycle change, plus most of the speed work. |
+| `apps/backend/src/promos/discount-engine.service.ts` | Three promo lookups now happen together rather than in sequence. |
+| `apps/backend/src/preorders/preorders.service.ts`, `apps/backend/src/orders/orders.service.ts` | Use the event's dates instead of its status. |
+| `apps/admin/app/(dashboard)/popup-sales/page.tsx` | The menu, the tabs, removing Close/Activate, the MoMo waiting message, and the faster save. |
+| `apps/admin/lib/api/popup-sales.ts` | New orders appear instantly; gentler polling. |
+| `apps/backend/scripts/complete-stranded-popup-orders.js` | New. A one-off tidy-up for orders stuck in the old "active" state. **Already run — it found nothing to fix**, because those orders had been completed by hand after the event. Kept in case it's ever needed again. |
+
+> **Heads-up — there IS a database migration**
+>
+> `20260912120000_popup_fast_till.sql` needs to run on deploy. Nothing else to configure.
+>
+> One behaviour change worth knowing: **a bank transfer now counts as paid the moment you enter a reference.** Only enter one once you've actually seen the money land. If you enter it too early, cancelling the order undoes both the revenue and the stock.
+
+### How to test
+
+1. Open **Pop-up Sales**. If a pop-up is on today it should open by itself rather than making you pick from the list.
+2. Ring up a **cash** sale. The window should close immediately and the order should already be in the list — not appear a beat later. Session Revenue should go up straight away.
+3. Do the same with a **bank transfer**, entering a reference. It should also complete immediately — this is the one that used to vanish into nothing.
+4. Check the row menu on any order: there should be **no "Mark as Completed"** and no "Confirm Payment". Only Complete Sale (on held tickets), Cancel, and the usual view/edit/refund.
+5. Put a sale **on hold**, then use **Complete Sale** on it from the row menu.
+6. Charge a **MoMo** payment. It should sit in the Confirmation Queue saying it's waiting for the customer, then complete on its own once they approve — without anybody clicking anything. Leave one unapproved for two minutes and check the message turns amber.
+7. Confirm there's **no Close Event or Activate Event button** anywhere, and that a pop-up whose end date has passed shows the amber "this pop-up has finished" message instead of a New Order button.
+
+### Worth knowing
+
+- **The MoMo/Paystack flow hasn't been tested with a real payment.** That part of the code is unchanged and was already working, but nobody has put an actual charge through since. Step 6 above is a real test.
+- **Nothing else here has been tried on a real till either** — it all builds and the automated checks pass, but the migration hasn't been applied anywhere yet.
+- **The "Active" state still exists in the database** for old orders, it just can't be created any more. We checked the live data and there are none left, so nothing is hidden by dropping the tab.
+- **Event status is still stored, just ignored.** If the dates-instead-of-buttons approach turns out to be wrong, putting the buttons back is easy — nothing was deleted.

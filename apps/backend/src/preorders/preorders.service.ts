@@ -11,6 +11,7 @@ import { CreatePopupPreorderDto } from './dto/create-popup-preorder.dto';
 import { QueryPreordersDto } from './dto/query-preorders.dto';
 import { RefundPreorderDto } from './dto/refund-preorder.dto';
 import { RestockPreorderDto } from './dto/restock-preorder.dto';
+import { hasFinished } from '../popup-sales/popup-rules';
 
 @Injectable()
 export class PreordersService {
@@ -402,11 +403,17 @@ export class PreordersService {
     if (dto.event_id) {
       const { data: event, error: eventError } = await db
         .from('popup_events')
-        .select('id, status')
+        .select('id, event_date, end_date, status')
         .eq('id', dto.event_id)
         .single();
       if (eventError || !event) throw new BadRequestException('Event not found');
-      if (event.status === 'closed') throw new BadRequestException('This event is closed and cannot accept new orders');
+      // Gated on the event's own dates rather than a status someone has to
+      // remember to set — same rule the pop-up till uses.
+      if (hasFinished(event)) {
+        throw new BadRequestException(
+          'This pop-up has finished and cannot accept new orders',
+        );
+      }
     }
 
     const orderNumber = await this.generateOrderNumber();
