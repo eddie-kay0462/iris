@@ -29,6 +29,8 @@ import {
   Unlock,
   Sparkles,
   Package,
+  Sigma,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCreatePopupPreorder, usePopupEventPreorders, type Preorder } from "@/lib/api/preorders";
@@ -45,6 +47,8 @@ import {
   useVerifyPopupPayment,
   useCreatePopupCustomer,
   useRefundPopupOrder,
+  useSaveEventAggregate,
+  useDeleteEventAggregate,
   type PopupEvent,
   type PopupEventStatus,
   type PopupOrder,
@@ -3226,6 +3230,220 @@ function EditEventModal({ event, onClose }: { event: PopupEvent; onClose: () => 
   );
 }
 
+// ─── Record Unitemized Totals Modal ──────────────────────────────────────────
+
+/**
+ * Some pop-ups are too busy to ring up sale by sale. Afterwards all the team has
+ * is the stall's paper tally: money in, units out. This books those two numbers
+ * as one reconciliation entry against the event.
+ *
+ * Separate from EditEventModal on purpose: that one needs `popup:manage`, which
+ * the staff who actually worked the stand do not hold.
+ */
+function RecordTotalsModal({ event, onClose }: { event: PopupEvent; onClose: () => void }) {
+  const saveAggregate = useSaveEventAggregate();
+  const deleteAggregate = useDeleteEventAggregate();
+  const { data: stats } = usePopupStats(event.id);
+
+  const existing = event.aggregate ?? null;
+  const [revenue, setRevenue] = useState(existing ? String(existing.revenue) : "");
+  const [units, setUnits] = useState(existing ? String(existing.units) : "");
+  const [note, setNote] = useState(existing?.note ?? "");
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
+  const hasDate = !!event.event_date;
+  // Already-rung-up sales on the same event are the one real way to double count.
+  const rungUpOrders = stats?.orders_completed ?? 0;
+  const rungUpRevenue = (stats?.session_revenue ?? 0) - (existing?.revenue ?? 0);
+
+  const parsedRevenue = revenue === "" ? 0 : parseFloat(revenue);
+  const parsedUnits = units === "" ? 0 : parseInt(units, 10);
+  const valid =
+    hasDate &&
+    Number.isFinite(parsedRevenue) &&
+    Number.isFinite(parsedUnits) &&
+    parsedRevenue >= 0 &&
+    parsedUnits >= 0 &&
+    (revenue !== "" || units !== "");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!valid) return;
+    try {
+      await saveAggregate.mutateAsync({
+        eventId: event.id,
+        dto: { revenue: parsedRevenue, units: parsedUnits, note: note.trim() || undefined },
+      });
+      toast.success(
+        parsedRevenue === 0 && parsedUnits === 0
+          ? "Unitemized totals removed."
+          : `Recorded ${formatCurrency(parsedRevenue)} and ${parsedUnits} units for ${event.name}.`,
+      );
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save the totals.");
+    }
+  }
+
+  async function handleRemove() {
+    try {
+      await deleteAggregate.mutateAsync(event.id);
+      toast.success("Unitemized totals removed.");
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not remove the totals.");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <h2 className="text-base font-semibold text-slate-900">
+            {existing ? "Edit Unitemized Totals" : "Record Unitemized Totals"}
+          </h2>
+          <button
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4 p-6">
+          <p className="text-xs leading-relaxed text-slate-500">
+            For a pop-up that was too busy to ring up sale by sale. This books one
+            entry against <span className="font-medium text-slate-700">{formatEventDates(event)}</span> —
+            it counts toward revenue reports and the Road to HQ unit goal, moves no
+            stock, and sends no receipt. You can change it any time.
+          </p>
+
+          {!hasDate && (
+            <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <p className="text-xs leading-relaxed text-amber-800">
+                Set this pop-up&apos;s event date first, so the revenue lands in the
+                period it was actually earned.
+              </p>
+            </div>
+          )}
+
+          {!existing && rungUpOrders > 0 && (
+            <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <p className="text-xs leading-relaxed text-amber-800">
+                This pop-up already has {rungUpOrders} rung-up{" "}
+                {rungUpOrders === 1 ? "order" : "orders"} worth{" "}
+                {formatCurrency(Math.max(0, rungUpRevenue))}. Enter only the sales
+                that are <span className="font-semibold">not</span> already recorded
+                here, or they&apos;ll be counted twice.
+              </p>
+            </div>
+          )}
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">
+              Total revenue (GH₵)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              disabled={!hasDate}
+              value={revenue}
+              onChange={(e) => setRevenue(e.target.value)}
+              placeholder="e.g. 4200.00"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+            />
+            <p className="mt-1 text-[11px] text-slate-400">
+              Everything taken at the stand that isn&apos;t already an order above.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">
+              Total units sold
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              disabled={!hasDate}
+              value={units}
+              onChange={(e) => setUnits(e.target.value)}
+              placeholder="e.g. 86"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+            />
+            <p className="mt-1 text-[11px] text-slate-400">
+              Counts toward the Road to HQ goal. Count bundles as the number of
+              physical units — we can&apos;t tell which products these were.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">
+              Note <span className="font-normal text-slate-400">(optional)</span>
+            </label>
+            <input
+              type="text"
+              maxLength={500}
+              disabled={!hasDate}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="e.g. From the stall's paper tally"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!valid || saveAggregate.isPending}
+              className="flex-1 rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            >
+              {saveAggregate.isPending
+                ? "Saving…"
+                : existing
+                  ? "Update Totals"
+                  : "Save Totals"}
+            </button>
+          </div>
+
+          {existing && (
+            <button
+              type="button"
+              onClick={() => setConfirmRemove(true)}
+              className="w-full text-center text-xs text-slate-400 hover:text-red-600"
+            >
+              Remove these totals
+            </button>
+          )}
+        </form>
+      </div>
+
+      {confirmRemove && (
+        <ConfirmDialog
+          title="Remove these totals?"
+          message={`${formatCurrency(existing?.revenue ?? 0)} and ${existing?.units ?? 0} units will stop counting toward revenue reports and the Road to HQ goal.`}
+          confirmLabel="Remove"
+          danger
+          onConfirm={() => {
+            setConfirmRemove(false);
+            handleRemove();
+          }}
+          onCancel={() => setConfirmRemove(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Event Hub ────────────────────────────────────────────────────────────────
 
 function formatEventDates(event: PopupEvent): string {
@@ -3265,7 +3483,9 @@ function EventHubView({
 }) {
   const [editingEvent, setEditingEvent] = useState<PopupEvent | null>(null);
   const [closingEvent, setClosingEvent] = useState<PopupEvent | null>(null);
+  const [totalsEvent, setTotalsEvent] = useState<PopupEvent | null>(null);
   const updateEvent = useUpdatePopupEvent();
+  const today = new Date().toISOString().split("T")[0];
 
   const active = events.filter((e) => e.status === "active");
   const drafts = events.filter((e) => e.status === "draft");
@@ -3322,6 +3542,15 @@ function EventHubView({
                       <span>{event.location}</span>
                     </div>
                   )}
+                  {event.aggregate && (
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <Sigma className="h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        Unitemized: {formatCurrency(event.aggregate.revenue)} ·{" "}
+                        {event.aggregate.units} units
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="mt-4 flex gap-2">
                   <button
@@ -3345,6 +3574,18 @@ function EventHubView({
                     </button>
                   )}
                 </div>
+                {/* Offered for finished pop-ups only: recording a lump total while
+                    staff are still ringing sales up is how you double count. */}
+                {(event.status === "closed" ||
+                  (event.event_date && (event.end_date ?? event.event_date) < today)) && (
+                  <button
+                    onClick={() => setTotalsEvent(event)}
+                    className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                  >
+                    <Sigma className="h-3.5 w-3.5" />
+                    {event.aggregate ? "Edit Unitemized Totals" : "Record Unitemized Totals"}
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -3353,6 +3594,9 @@ function EventHubView({
 
       {editingEvent && (
         <EditEventModal event={editingEvent} onClose={() => setEditingEvent(null)} />
+      )}
+      {totalsEvent && (
+        <RecordTotalsModal event={totalsEvent} onClose={() => setTotalsEvent(null)} />
       )}
       {closingEvent && (
         <ConfirmDialog
@@ -3450,12 +3694,21 @@ function OrderTable({
                         Pre-order
                       </span>
                     )}
+                    {order.is_aggregate && (
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        Unitemized
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="px-5 py-4">
                   <p className="text-sm text-slate-800">
-                    {order.customer_name || (
-                      <span className="text-slate-400">Walk-in</span>
+                    {order.is_aggregate ? (
+                      <span className="text-slate-400">Event totals</span>
+                    ) : (
+                      order.customer_name || (
+                        <span className="text-slate-400">Walk-in</span>
+                      )
                     )}
                   </p>
                   {order.customer_phone && (
@@ -3477,7 +3730,9 @@ function OrderTable({
                   </div>
                 </td>
                 <td className="px-5 py-4 text-sm text-slate-600">
-                  {itemCount} {itemCount === 1 ? "item" : "items"}
+                  {order.is_aggregate
+                    ? `${order.popup_order_items?.[0]?.quantity ?? 0} units · unitemized`
+                    : `${itemCount} ${itemCount === 1 ? "item" : "items"}`}
                 </td>
                 <td className="px-5 py-4 text-sm font-medium text-slate-800">
                   {formatCurrency(Number(order.total))}
@@ -3504,6 +3759,11 @@ function OrderTable({
                       Pre-orders page instead. */}
                   {order._isPreorder ? (
                     <span className="text-xs text-slate-400">Pre-orders page</span>
+                  ) : order.is_aggregate ? (
+                    /* An accounting entry, not a sale — completing, cancelling,
+                       charging or refunding it are all either blocked server-side
+                       or meaningless. Corrected from the event instead. */
+                    <span className="text-xs text-slate-400">Edit from event</span>
                   ) : (
                     <OrderActionsMenu order={order} onUpdate={onUpdate} onChargeMomo={onChargeMomo} onViewDetails={onViewDetails} onEditOrder={onEditOrder} onRefundOrder={onRefundOrder} />
                   )}
@@ -3881,6 +4141,8 @@ export default function PopupSalesPage() {
           total_price: i.unit_price * i.quantity,
           created_at: i.created_at,
         })),
+        // A pre-order is a real sale, just held in another table.
+        is_aggregate: false,
         _isPreorder: true,
       };
     });

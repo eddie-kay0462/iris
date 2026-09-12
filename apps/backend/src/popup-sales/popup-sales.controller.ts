@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -18,6 +20,7 @@ import { QueryPopupOrdersDto } from './dto/query-popup-orders.dto';
 import { ChargePopupOrderDto } from './dto/charge-popup-order.dto';
 import { CreatePopupCustomerDto } from './dto/create-popup-customer.dto';
 import { RefundPopupOrderDto } from './dto/refund-popup-order.dto';
+import { SaveEventAggregateDto } from './dto/save-event-aggregate.dto';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -48,6 +51,31 @@ export class PopupSalesController {
   @RequirePermission('popup:manage')
   updateEvent(@Param('id') id: string, @Body() dto: UpdateEventDto) {
     return this.popupSalesService.updateEvent(id, dto);
+  }
+
+  // ─── Unitemized totals ─────────────────────────────────────────────────────
+  //
+  // For a pop-up too busy to ring up sale by sale. `popup:update` rather than
+  // `popup:manage` deliberately: the staff who worked the stand are the ones with
+  // the paper tally, and they do not hold `popup:manage`.
+  //
+  // PUT because it is idempotent by event — there is at most one aggregate per
+  // pop-up, so saving twice corrects the figures instead of double-counting them.
+
+  @Put('events/:id/aggregate')
+  @RequirePermission('popup:update')
+  saveEventAggregate(
+    @Param('id') id: string,
+    @Body() dto: SaveEventAggregateDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.popupSalesService.saveEventAggregate(id, dto, user.sub);
+  }
+
+  @Delete('events/:id/aggregate')
+  @RequirePermission('popup:update')
+  deleteEventAggregate(@Param('id') id: string) {
+    return this.popupSalesService.deleteEventAggregate(id);
   }
 
   // ─── Stats ──────────────────────────────────────────────────────────────────

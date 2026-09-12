@@ -14,6 +14,26 @@ export type PopupOrderStatus =
   | "refunded";
 export type PopupPaymentMethod = "cash" | "momo" | "bank_transfer";
 
+/**
+ * A pop-up too busy to ring up sale by sale, recorded as two numbers off the
+ * stall's paper tally. Stored as one flagged reconciliation order, so it counts
+ * toward revenue reports and the Road to HQ unit goal — but never toward order
+ * counts, average order value, hourly splits or product performance.
+ */
+export interface PopupAggregate {
+  revenue: number;
+  units: number;
+  /** Backdated to the event date — when the money was actually earned. */
+  recordedAt: string;
+  note: string | null;
+}
+
+export interface SaveAggregateInput {
+  revenue: number;
+  units: number;
+  note?: string;
+}
+
 export interface PopupEvent {
   id: string;
   name: string;
@@ -23,6 +43,8 @@ export interface PopupEvent {
   end_date: string | null;
   status: PopupEventStatus;
   visitor_count: number | null;
+  /** Non-null when this pop-up's sales were recorded as one unitemized total. */
+  aggregate?: PopupAggregate | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -78,6 +100,8 @@ export interface PopupOrder {
   hold_note: string | null;
   total: number;
   notes: string | null;
+  /** True for the reconciliation row carrying a pop-up's unitemized totals. */
+  is_aggregate: boolean;
   created_at: string;
   updated_at: string;
   profiles?: { id: string; first_name: string | null; last_name: string | null } | null;
@@ -94,10 +118,12 @@ export interface PopupOrdersResult {
 }
 
 export interface PopupStats {
+  /** Includes any unitemized total; `orders_completed` deliberately does not. */
   session_revenue: number;
   orders_completed: number;
   on_hold: number;
   awaiting_payment: number;
+  aggregate: PopupAggregate | null;
 }
 
 export interface CreateOrderItemInput {
@@ -210,6 +236,45 @@ export function useUpdatePopupEvent() {
       qc.invalidateQueries({ queryKey: ["popup-events"] });
     },
   });
+}
+
+/**
+ * Record or correct a pop-up's unitemized totals. Idempotent by event — saving
+ * twice edits the same reconciliation row rather than double-counting the pop-up.
+ */
+export function useSaveEventAggregate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ eventId, dto }: { eventId: string; dto: SaveAggregateInput }) =>
+      apiClient<PopupOrder | null>(`/popup-sales/events/${eventId}/aggregate`, {
+        method: "PUT",
+        body: dto,
+      }),
+    onSuccess: (_d, { eventId }) => invalidateAggregate(qc, eventId),
+  });
+}
+
+export function useDeleteEventAggregate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (eventId: string) =>
+      apiClient<{ success: boolean }>(`/popup-sales/events/${eventId}/aggregate`, {
+        method: "DELETE",
+      }),
+    onSuccess: (_d, eventId) => invalidateAggregate(qc, eventId),
+  });
+}
+
+/**
+ * Unitemized totals move the event's own figures, every revenue report, and the
+ * public Road to HQ counter at once, so all of them have to be refetched.
+ */
+function invalidateAggregate(qc: ReturnType<typeof useQueryClient>, eventId: string) {
+  qc.invalidateQueries({ queryKey: ["popup-events"] });
+  qc.invalidateQueries({ queryKey: ["popup-stats", eventId] });
+  qc.invalidateQueries({ queryKey: ["popup-orders"] });
+  qc.invalidateQueries({ queryKey: ["popup-analytics", eventId] });
+  qc.invalidateQueries({ queryKey: ["analytics"] });
 }
 
 export function usePopupStats(eventId: string | null) {
@@ -384,6 +449,14 @@ export interface PopupAnalytics {
   eventLocation: string | null;
   visitorCount: number | null;
   totalRevenue: number;
+  /**
+   * Non-null when part of totalRevenue was recorded as one unitemized total.
+   * Revenue and the Road to HQ units include it; totalTransactions, aov,
+   * conversionRate, revenueByHour, paymentBreakdown, productPerformance and
+   * customerCapture all describe only the sales that were actually rung up — so
+   * the UI has to say so wherever this is set.
+   */
+  unitemized: PopupAggregate | null;
   totalTransactions: number;
   totalOrders: number;
   conversionRate: number;

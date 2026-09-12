@@ -347,6 +347,7 @@ function StatusBreakdown({ data }: { data: Record<string, number> }) {
 function AnalyticsBody({ data }: { data: PopupAnalytics }) {
   const {
     totalRevenue,
+    unitemized,
     totalTransactions,
     totalOrders,
     conversionRate,
@@ -369,18 +370,47 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
 
   return (
     <div className="space-y-6 print-body">
+      {/* Without this the page looks broken: revenue says one thing and the order
+          count says another. Say plainly which figures include the lump total. */}
+      {unitemized && (
+        <div className="flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-slate-800">
+              Includes unitemized sales
+            </p>
+            <p className="text-xs leading-relaxed text-slate-600">
+              {fmt(unitemized.revenue)} and {unitemized.units.toLocaleString()} units
+              from this pop-up were recorded as one event total rather than as
+              individual sales. Total revenue and the Road to HQ units include them;
+              order count, average order value, conversion rate, revenue by hour,
+              payment mix, product performance and the customer list below do not.
+            </p>
+            {unitemized.note && (
+              <p className="text-xs italic text-slate-500">“{unitemized.note}”</p>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <MetricCard
           label="Total Revenue"
           value={fmt(totalRevenue)}
-          sub={`${totalTransactions} paid orders`}
+          sub={
+            unitemized
+              ? `${totalTransactions} paid orders + unitemized total`
+              : `${totalTransactions} paid orders`
+          }
           icon={DollarSign}
           accent="bg-slate-900 text-white"
         />
         <MetricCard
           label="Avg. Order Value"
           value={fmt(aov)}
-          sub="Per paid transaction"
+          sub={
+            unitemized ? "Per paid transaction (excl. unitemized)" : "Per paid transaction"
+          }
           icon={ShoppingCart}
           accent="bg-slate-100 text-slate-700"
         />
@@ -477,7 +507,13 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
 
       {productPerformance.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <SectionCard title="Product Performance — Revenue">
+          <SectionCard
+            title={
+              unitemized
+                ? "Product Performance — Revenue (excl. unitemized)"
+                : "Product Performance — Revenue"
+            }
+          >
             <HorizontalBarChart
               items={productPerformance}
               valueKey="revenue"
@@ -486,7 +522,13 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
               formatValue={(v) => `GH₵${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
             />
           </SectionCard>
-          <SectionCard title="Product Performance — Units Sold">
+          <SectionCard
+            title={
+              unitemized
+                ? "Product Performance — Units Sold (excl. unitemized)"
+                : "Product Performance — Units Sold"
+            }
+          >
             <HorizontalBarChart
               items={productPerformance}
               valueKey="unitsSold"

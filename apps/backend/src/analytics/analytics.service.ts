@@ -115,44 +115,68 @@ export class AnalyticsService {
   }> {
     const db = this.supabase.getAdminClient();
 
-    const [onlineRes, popupRes, allyRes, walkinRes, preorderRes, baseline, target] = await Promise.all([
-      db
-        .from('order_items')
-        .select('quantity, products(hq_unit_count), orders!inner(status, deleted_at)')
-        .in('orders.status', ONLINE_REVENUE_STATUSES)
-        .is('orders.deleted_at', null),
-      db
-        .from('popup_order_items')
-        .select('quantity, products(hq_unit_count), popup_orders!inner(status)')
-        .in('popup_orders.status', POPUP_REVENUE_STATUSES),
-      db
-        .from('ally_sale_items')
-        .select('quantity, products(hq_unit_count), ally_sales!inner(status)')
-        .in('ally_sales.status', ALLY_REVENUE_STATUSES),
-      db
-        .from('walkin_order_items')
-        .select('quantity, products(hq_unit_count), walkin_orders!inner(status)')
-        .in('walkin_orders.status', WALKIN_REVENUE_STATUSES),
-      db
-        .from('preorders')
-        .select('quantity, status, payment_status, product_variants(products(hq_unit_count))')
-        .eq('payment_status', 'paid')
-        .in('status', PREORDER_COUNTED_STATUSES),
-      this.settings.getRoadToHqBaseline(),
-      this.settings.getRoadToHqTarget(),
-    ]);
+    /**
+     * Every one of these is paged with `fetchAll`. A bare select stops at
+     * PostgREST's 1000-row ceiling with no error, which was quietly capping the
+     * public counter: past that many line items the goal simply stopped moving,
+     * and which rows came back was arbitrary without an order.
+     */
+    const [onlineRows, popupRows, allyRows, walkinRows, preorderRows, baseline, target] =
+      await Promise.all([
+        fetchAll<any>((a, b) =>
+          db
+            .from('order_items')
+            .select('quantity, products(hq_unit_count), orders!inner(status, deleted_at)')
+            .in('orders.status', ONLINE_REVENUE_STATUSES)
+            .is('orders.deleted_at', null)
+            .range(a, b),
+        ),
+        fetchAll<any>((a, b) =>
+          db
+            .from('popup_order_items')
+            .select('quantity, products(hq_unit_count), popup_orders!inner(status)')
+            .in('popup_orders.status', POPUP_REVENUE_STATUSES)
+            .range(a, b),
+        ),
+        fetchAll<any>((a, b) =>
+          db
+            .from('ally_sale_items')
+            .select('quantity, products(hq_unit_count), ally_sales!inner(status)')
+            .in('ally_sales.status', ALLY_REVENUE_STATUSES)
+            .range(a, b),
+        ),
+        fetchAll<any>((a, b) =>
+          db
+            .from('walkin_order_items')
+            .select('quantity, products(hq_unit_count), walkin_orders!inner(status)')
+            .in('walkin_orders.status', WALKIN_REVENUE_STATUSES)
+            .range(a, b),
+        ),
+        fetchAll<any>((a, b) =>
+          db
+            .from('preorders')
+            .select('quantity, status, payment_status, product_variants(products(hq_unit_count))')
+            .eq('payment_status', 'paid')
+            .in('status', PREORDER_COUNTED_STATUSES)
+            .range(a, b),
+        ),
+        this.settings.getRoadToHqBaseline(),
+        this.settings.getRoadToHqTarget(),
+      ]);
 
     // Bundle products count for more than one unit toward the goal via their
     // `hq_unit_count` (default 1). This multiplier applies to Road to HQ only.
     const weighted = (rows: any[], unitCount: (r: any) => number) =>
       (rows ?? []).reduce((sum, r) => sum + (r.quantity ?? 0) * (unitCount(r) || 1), 0);
 
-    const online = weighted(onlineRes.data ?? [], (r) => r.products?.hq_unit_count ?? 1);
-    const popup = weighted(popupRes.data ?? [], (r) => r.products?.hq_unit_count ?? 1);
-    const allies = weighted(allyRes.data ?? [], (r) => r.products?.hq_unit_count ?? 1);
-    const walkin = weighted(walkinRes.data ?? [], (r) => r.products?.hq_unit_count ?? 1);
+    const online = weighted(onlineRows, (r) => r.products?.hq_unit_count ?? 1);
+    // An unitemized pop-up total has no product, so `products` comes back null and
+    // the multiplier falls to 1 — exactly right when we can't know what sold.
+    const popup = weighted(popupRows, (r) => r.products?.hq_unit_count ?? 1);
+    const allies = weighted(allyRows, (r) => r.products?.hq_unit_count ?? 1);
+    const walkin = weighted(walkinRows, (r) => r.products?.hq_unit_count ?? 1);
     const preorders = weighted(
-      preorderRes.data ?? [],
+      preorderRows,
       (r) => r.product_variants?.products?.hq_unit_count ?? 1,
     );
 
@@ -233,12 +257,12 @@ export class AnalyticsService {
     const [{ data: curPopup }, { data: prevPopup }] = await Promise.all([
       db
         .from('popup_orders')
-        .select('total, status, created_at')
+        .select('total, status, created_at, is_aggregate')
         .gte('created_at', from)
         .lte('created_at', to),
       db
         .from('popup_orders')
-        .select('total, status, created_at')
+        .select('total, status, created_at, is_aggregate')
         .gte('created_at', prevFrom)
         .lte('created_at', prevTo),
     ]);
@@ -310,8 +334,11 @@ export class AnalyticsService {
 
     const curOrderCount = (curOrders ?? []).length;
     const prevOrderCount = (prevOrders ?? []).length;
-    const curPopupCount = (curPopup ?? []).length;
-    const prevPopupCount = (prevPopup ?? []).length;
+    // A pop-up's unitemized total is real revenue (counted above) but stands in
+    // for an unknown number of sales, so it never counts as an order.
+    const itemized = (orders: any[] | null) => (orders ?? []).filter((o) => !o.is_aggregate);
+    const curPopupCount = itemized(curPopup).length;
+    const prevPopupCount = itemized(prevPopup).length;
     const curWalkinCount = (curWalkin ?? []).length;
     const prevWalkinCount = (prevWalkin ?? []).length;
 
@@ -320,11 +347,11 @@ export class AnalyticsService {
       (orders ?? []).filter((o) => statuses.includes(o.status)).length;
     const curRevenueOrders =
       countRevenue(curOrders ?? [], ONLINE_REVENUE_STATUSES) +
-      countRevenue(curPopup ?? [], POPUP_REVENUE_STATUSES) +
+      countRevenue(itemized(curPopup), POPUP_REVENUE_STATUSES) +
       countRevenue(curWalkin ?? [], WALKIN_REVENUE_STATUSES);
     const prevRevenueOrders =
       countRevenue(prevOrders ?? [], ONLINE_REVENUE_STATUSES) +
-      countRevenue(prevPopup ?? [], POPUP_REVENUE_STATUSES) +
+      countRevenue(itemized(prevPopup), POPUP_REVENUE_STATUSES) +
       countRevenue(prevWalkin ?? [], WALKIN_REVENUE_STATUSES);
 
     const curAov = curRevenueOrders > 0 ? curTotalRevenue / curRevenueOrders : 0;
@@ -339,7 +366,7 @@ export class AnalyticsService {
       onlineStatusBreakdown[o.status] = (onlineStatusBreakdown[o.status] ?? 0) + 1;
     }
     const popupStatusBreakdown: Record<string, number> = {};
-    for (const o of curPopup ?? []) {
+    for (const o of itemized(curPopup)) {
       popupStatusBreakdown[o.status] = (popupStatusBreakdown[o.status] ?? 0) + 1;
     }
     const walkinStatusBreakdown: Record<string, number> = {};
@@ -481,6 +508,9 @@ export class AnalyticsService {
           .gte('popup_orders.created_at', from)
           .lte('popup_orders.created_at', to)
           .in('popup_orders.status', POPUP_REVENUE_STATUSES)
+          // Unitemized pop-up units have no product, so they would rank as a
+          // phantom product. Their units are reported on the event itself.
+          .eq('popup_orders.is_aggregate', false)
           .range(a, b),
       ),
       fetchAll<any>((a, b) =>
@@ -562,6 +592,9 @@ export class AnalyticsService {
           .gte('created_at', from)
           .lte('created_at', to)
           .in('status', POPUP_REVENUE_STATUSES)
+          // An unitemized total has no customer at all; without this it keys to
+          // 'popup:unknown' and shows up as a fabricated top customer.
+          .eq('is_aggregate', false)
           .range(a, b),
       ),
       fetchAll<any>((a, b) =>
@@ -652,7 +685,7 @@ export class AnalyticsService {
 
     const { data: orders } = await db
       .from('popup_orders')
-      .select('id, event_id, total, status, payment_method, discount_amount, created_at')
+      .select('id, event_id, total, status, payment_method, discount_amount, created_at, is_aggregate')
       .gte('created_at', from)
       .lte('created_at', to);
 
@@ -661,20 +694,30 @@ export class AnalyticsService {
       .select('order_id, product_name, quantity, total_price, popup_orders!inner(event_id, status, created_at)')
       .gte('popup_orders.created_at', from)
       .lte('popup_orders.created_at', to)
-      .in('popup_orders.status', POPUP_REVENUE_STATUSES);
+      .in('popup_orders.status', POPUP_REVENUE_STATUSES)
+      // Not a product — see getTopProducts.
+      .eq('popup_orders.is_aggregate', false);
 
     // Per-event aggregation
     const eventMap: Record<string, any> = {};
     for (const e of events ?? []) {
-      eventMap[e.id] = { ...e, revenue: 0, orderCount: 0, completedOrders: 0, cancelledOrders: 0, refundedOrders: 0, discountTotal: 0 };
+      eventMap[e.id] = { ...e, revenue: 0, unitemizedRevenue: 0, orderCount: 0, completedOrders: 0, cancelledOrders: 0, refundedOrders: 0, discountTotal: 0 };
     }
 
     const paymentMethods: Record<string, number> = {};
     for (const o of orders ?? []) {
       if (eventMap[o.event_id]) {
-        eventMap[o.event_id].orderCount += 1;
+        // An unitemized total is the event's revenue but not one of its orders,
+        // so it is summed into revenue and reported on its own alongside.
         if (POPUP_REVENUE_STATUSES.includes(o.status)) {
           eventMap[o.event_id].revenue += parseFloat(o.total ?? 0);
+        }
+        if (o.is_aggregate) {
+          eventMap[o.event_id].unitemizedRevenue += parseFloat(o.total ?? 0);
+          continue;
+        }
+        eventMap[o.event_id].orderCount += 1;
+        if (POPUP_REVENUE_STATUSES.includes(o.status)) {
           eventMap[o.event_id].completedOrders += 1;
         }
         if (o.status === 'cancelled') eventMap[o.event_id].cancelledOrders += 1;
@@ -706,6 +749,9 @@ export class AnalyticsService {
       eventDate: e.event_date,
       status: e.status,
       revenue: Math.round(e.revenue * 100) / 100,
+      // Part of `revenue` that was recorded as one unitemized total rather than
+      // as individual sales, so the UI can explain why orderCount is lower.
+      unitemizedRevenue: Math.round(e.unitemizedRevenue * 100) / 100,
       orderCount: e.orderCount,
       completedOrders: e.completedOrders,
       cancelledOrders: e.cancelledOrders,
@@ -792,7 +838,7 @@ export class AnalyticsService {
         .order('created_at', { ascending: false }),
       db
         .from('popup_orders')
-        .select('id, order_number, customer_name, customer_email, customer_phone, status, payment_method, subtotal, total, discount_amount, discount_type, created_at, popup_events!inner(name)')
+        .select('id, order_number, customer_name, customer_email, customer_phone, status, payment_method, subtotal, total, discount_amount, discount_type, created_at, is_aggregate, popup_events!inner(name)')
         .gte('created_at', from)
         .lte('created_at', to)
         .order('created_at', { ascending: false }),
@@ -805,6 +851,14 @@ export class AnalyticsService {
       POPUP_REVENUE_STATUSES.includes(o.status),
     );
 
+    // This report deliberately carries every status, for the accountants. The
+    // unitemized totals belong in its revenue, and their rows stay in the returned
+    // arrays flagged `is_aggregate` — but they are not orders, so they are kept
+    // out of the counts and the average below.
+    const itemizedPopup = (popupOrders ?? []).filter((o) => !o.is_aggregate);
+    const paidOrderCount =
+      completedOnline.length + completedPopup.filter((o) => !o.is_aggregate).length;
+
     const onlineRevenue = completedOnline.reduce((s, o) => s + parseFloat(o.total ?? 0), 0);
     const popupRevenue = completedPopup.reduce((s, o) => s + parseFloat(o.total ?? 0), 0);
     const totalDiscount =
@@ -814,15 +868,15 @@ export class AnalyticsService {
     return {
       period: { from, to },
       summary: {
-        totalOrders: (onlineOrders ?? []).length + (popupOrders ?? []).length,
-        completedOrders: completedOnline.length + completedPopup.length,
+        totalOrders: (onlineOrders ?? []).length + itemizedPopup.length,
+        completedOrders: paidOrderCount,
         totalRevenue: Math.round((onlineRevenue + popupRevenue) * 100) / 100,
         onlineRevenue: Math.round(onlineRevenue * 100) / 100,
         popupRevenue: Math.round(popupRevenue * 100) / 100,
         totalDiscountGiven: Math.round(totalDiscount * 100) / 100,
         averageOrderValue:
-          completedOnline.length + completedPopup.length > 0
-            ? Math.round(((onlineRevenue + popupRevenue) / (completedOnline.length + completedPopup.length)) * 100) / 100
+          paidOrderCount > 0
+            ? Math.round(((onlineRevenue + popupRevenue) / paidOrderCount) * 100) / 100
             : 0,
       },
       onlineOrders: onlineOrders ?? [],
@@ -963,7 +1017,9 @@ export class AnalyticsService {
         .select('product_id, product_name, sku, quantity, unit_price, total_price, popup_orders!inner(status, created_at)')
         .gte('popup_orders.created_at', from)
         .lte('popup_orders.created_at', to)
-        .in('popup_orders.status', POPUP_REVENUE_STATUSES),
+        .in('popup_orders.status', POPUP_REVENUE_STATUSES)
+        // Not a product — see getTopProducts.
+        .eq('popup_orders.is_aggregate', false),
       db
         .from('orders')
         .select('id')
@@ -1158,7 +1214,7 @@ export class AnalyticsService {
         .is('deleted_at', null),
       db
         .from('popup_orders')
-        .select('payment_method, total, status, created_at')
+        .select('payment_method, total, status, created_at, is_aggregate')
         .gte('created_at', from)
         .lte('created_at', to),
       db
@@ -1180,9 +1236,15 @@ export class AnalyticsService {
 
     const popupByMethod: Record<string, { count: number; revenue: number }> = {};
     for (const o of popupOrders ?? []) {
-      const method = o.payment_method ?? 'unknown';
+      // We genuinely don't know how an unitemized total was paid, and it isn't
+      // one order. Keep the money (this report has to balance) in its own
+      // labelled bucket with no order count, rather than letting it pose as an
+      // 'unknown' payment method alongside real ones.
+      const method = o.is_aggregate
+        ? 'unitemized'
+        : o.payment_method ?? 'unknown';
       if (!popupByMethod[method]) popupByMethod[method] = { count: 0, revenue: 0 };
-      popupByMethod[method].count += 1;
+      if (!o.is_aggregate) popupByMethod[method].count += 1;
       if (POPUP_REVENUE_STATUSES.includes(o.status)) {
         popupByMethod[method].revenue += parseFloat(o.total ?? 0);
       }
@@ -1386,7 +1448,9 @@ export class AnalyticsService {
       for (const o of [...popup, ...popupRefunded, ...walkin, ...walkinRefunded]) {
         grossSales += num(o.subtotal);
         discounts += num(o.discount_amount);
-        orders += 1;
+        // Mirrors financials() in report-registry: a pop-up's unitemized total is
+        // real money but an unknown number of sales.
+        if (!(o as any).is_aggregate) orders += 1;
       }
       for (const o of refunded) returns += num(o.total);
       for (const r of popupRefunds) returns += num(r.amount);
