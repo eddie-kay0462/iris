@@ -27,6 +27,7 @@ import {
   aggregateTimestamp,
   countsAsOrder,
 } from './aggregate-sale';
+import { hasFinished, settlesAtTheTill } from './popup-rules';
 
 /** Postgres unique_violation. */
 const UNIQUE_VIOLATION = '23505';
@@ -42,8 +43,13 @@ const POPUP_RECONCILE_CANCEL_AFTER_MS = 24 * 60 * 60_000; // 24 hours
 // Cap per tick so a backlog can't blow up a single run.
 const POPUP_RECONCILE_BATCH_SIZE = 50;
 
-// Split rows are part of how an order was paid, so every read of an order
-// carries them — without this the breakdown is write-only.
+/** Just enough of an event to write a receipt, passed around to save a re-read. */
+export interface PopupEventSummary {
+  name?: string | null;
+  location?: string | null;
+  event_date?: string | null;
+}
+
 /** An event's unitemized totals, as every read surfaces them. */
 export interface PopupAggregate {
   revenue: number;
@@ -53,6 +59,8 @@ export interface PopupAggregate {
   note: string | null;
 }
 
+// Split rows are part of how an order was paid, so every read of an order
+// carries them — without this the breakdown is write-only.
 const ORDER_SELECT =
   '*, profiles!served_by(id, first_name, last_name), popup_order_items(*), popup_split_payments(*)';
 
@@ -662,15 +670,20 @@ export class PopupSalesService {
       throw new BadRequestException('A pop-up order needs at least one item');
     }
 
-    // Verify event exists and is active
+    // Verify the event exists and hasn't already finished. The gate is its dates
+    // rather than a status someone has to remember to set — see hasFinished().
     const { data: event, error: eventError } = await db
       .from('popup_events')
-      .select('id, status, name, location, event_date')
+      .select('id, name, location, event_date, end_date, status')
       .eq('id', eventId)
       .single();
 
     if (eventError || !event) throw new NotFoundException('Event not found');
-    if (event.status === 'closed') throw new BadRequestException('This event is closed and cannot accept new orders');
+    if (hasFinished(event)) {
+      throw new BadRequestException(
+        'This pop-up has finished and cannot accept new orders. Record its totals from the event instead.',
+      );
+    }
 
     // A lost response must never cost the stand a duplicate sale. If this cart
     // was already rung up, hand back the order that exists.
@@ -737,21 +750,24 @@ export class PopupSalesService {
     // under two formats and broke profile de-duplication.
     const customerPhone = dto.customer_phone ? toE164(dto.customer_phone) : null;
 
-    // Cash is in the tin the moment the order is rung up — there is nothing left
-    // to confirm, so the sale completes here rather than waiting for someone to
-    // pick "Mark as Completed" off the row menu. A split counts as cash only if
-    // every leg is; anything with a MoMo or transfer leg still needs confirming.
-    // MoMo waits for Paystack (see chargeOrder → verifyPayment), and a bank
-    // transfer waits for the reference to be checked.
-    //
-    // A held ticket is the exception: it is deliberately unfinished, and the
-    // hold path transitions to 'on_hold' straight after this call — which
-    // 'completed' would refuse.
-    const isCashSale =
-      !dto.hold_duration_minutes &&
-      (splitInputs.length > 0
-        ? splitInputs.every((sp) => sp.method === 'cash')
-        : dto.payment_method === 'cash');
+    // The money is in the moment the order is rung up, unless the ticket is
+    // being parked or a MoMo charge still needs the customer's approval. See
+    // settlesAtTheTill() for why this is no longer cash-only.
+    const settled = settlesAtTheTill({
+      payment_method: dto.payment_method,
+      payment_reference: dto.payment_reference,
+      hold_duration_minutes: dto.hold_duration_minutes,
+      splits: splitInputs,
+    });
+
+    // A parked ticket goes straight to 'on_hold' rather than being created and
+    // then PATCHed a second time, which used to cost the stand two round trips
+    // for one button press.
+    const initialStatus = dto.hold_duration_minutes
+      ? 'on_hold'
+      : settled
+        ? 'completed'
+        : 'awaiting_payment';
 
     const insertOrder = (order_number: string) =>
       db
@@ -764,7 +780,7 @@ export class PopupSalesService {
           customer_phone: customerPhone,
           customer_email: dto.customer_email || null,
           served_by: userId,
-          status: isCashSale ? 'completed' : 'active',
+          status: initialStatus,
           payment_method: dto.payment_method || null,
           payment_reference: dto.payment_reference || null,
           subtotal: round2(subtotal),
@@ -780,29 +796,21 @@ export class PopupSalesService {
         .select()
         .single();
 
-    // The order number is a read-then-increment against a UNIQUE column, so two
-    // tills ringing up at the same moment collide. Re-read and retry rather than
-    // failing a sale the customer is standing there paying for.
-    let order: any = null;
-    let orderError: any = null;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const result = await insertOrder(await this.nextOrderNumber());
-      order = result.data;
-      orderError = result.error;
-      if (!orderError && order) break;
+    // The number is reserved atomically now, so it can no longer collide and the
+    // old five-attempt retry loop is gone. One race remains: two requests
+    // carrying the same cart key, where whoever loses should be handed the
+    // order the winner already created rather than an error.
+    const { data: order, error: orderError } = await insertOrder(
+      await this.nextOrderNumber(),
+    );
 
-      // Someone else's request won the race on this cart's key — their order is
-      // this order.
-      if (
-        orderError?.code === UNIQUE_VIOLATION &&
-        orderError?.message?.includes('idempotency_key') &&
-        dto.idempotency_key
-      ) {
-        const existing = await this.findByIdempotencyKey(dto.idempotency_key);
-        if (existing) return this.findOrder(existing);
-      }
-
-      if (orderError?.code !== UNIQUE_VIOLATION) break;
+    if (
+      orderError?.code === UNIQUE_VIOLATION &&
+      orderError?.message?.includes('idempotency_key') &&
+      dto.idempotency_key
+    ) {
+      const existing = await this.findByIdempotencyKey(dto.idempotency_key);
+      if (existing) return this.findOrder(existing);
     }
 
     if (orderError || !order) {
@@ -834,9 +842,9 @@ export class PopupSalesService {
         customerEmail: dto.customer_email ?? null,
         customerPhone: customerPhone,
         appliedBy: userId,
-        // Cash is collected on the spot, so its seat is taken outright rather
-        // than left pending on a sale that might never be confirmed.
-        confirmImmediately: isCashSale,
+        // A settled sale's money is already collected, so its seat is taken
+        // outright rather than left pending on a sale that might never confirm.
+        confirmImmediately: settled,
       });
     } catch (err) {
       // Do not strand a half-built order behind an exhausted code.
@@ -896,8 +904,8 @@ export class PopupSalesService {
 
     // Deduct stock and send the receipt. Runs last so it reads a complete order
     // — and so a failed item or split insert rolls back before any of it fires.
-    if (isCashSale) {
-      await this.applyCompletion(order.id);
+    if (settled) {
+      await this.applyCompletion(order.id, event);
     }
 
     return this.findOrder(order.id);
@@ -915,26 +923,25 @@ export class PopupSalesService {
   }
 
   /**
-   * Next number in the POP-YYYY-XXXX series. Ordered by the numeric tail rather
-   * than the whole string, which would put POP-2026-9999 above POP-2026-10000.
-   * Callers must handle a unique collision — this is a read, not a reservation.
+   * Next number in the POP-YYYY-NNNN series, reserved atomically.
+   *
+   * This used to read the 200 newest rows and take the max in JavaScript — a
+   * scan per sale, and a read-then-increment race that two tills could both win,
+   * which is why callers wrapped it in a retry loop. The counter behind
+   * next_popup_order_number() is incremented in a single statement, so the
+   * number it returns is already reserved and cannot collide.
    */
   private async nextOrderNumber(): Promise<string> {
-    const year = new Date().getFullYear();
-    const { data: recent } = await this.supabase
+    const { data, error } = await this.supabase
       .getAdminClient()
-      .from('popup_orders')
-      .select('order_number')
-      .like('order_number', `POP-${year}-%`)
-      .order('created_at', { ascending: false })
-      .limit(200);
+      .rpc('next_popup_order_number', { p_year: new Date().getFullYear() });
 
-    let sequence = 1;
-    for (const row of recent ?? []) {
-      const seq = parseInt(row.order_number.split('-')[2], 10);
-      if (Number.isFinite(seq) && seq >= sequence) sequence = seq + 1;
+    if (error || !data) {
+      throw new InternalServerErrorException(
+        `Could not allocate a pop-up order number: ${error?.message ?? 'no value returned'}`,
+      );
     }
-    return `POP-${year}-${String(sequence).padStart(4, '0')}`;
+    return data as string;
   }
 
   async updateOrder(id: string, dto: UpdatePopupOrderDto) {
@@ -962,14 +969,25 @@ export class PopupSalesService {
     // Only a completed order has stock to give back — nothing else deducted any.
     const isBeingCancelled = dto.status === 'cancelled' && wasAlreadyCompleted;
 
+    /**
+     * A sale now has one unfinished shape — parked, or waiting on the customer's
+     * phone — and one way out of it: completed. 'confirmed' is deliberately not
+     * a destination any more. It counted as revenue but never ran
+     * applyCompletion, so an order left there was reported as sold while its
+     * stock was never deducted and no receipt was ever sent. Historical rows
+     * keep the status and keep counting; nothing new can land on it.
+     *
+     * 'active' is likewise no longer written by createOrder, but old rows still
+     * carry it, so it keeps a route forward.
+     */
     const VALID_TRANSITIONS: Partial<Record<string, string[]>> = {
-      active:           ['awaiting_payment', 'on_hold', 'completed', 'cancelled'],
-      on_hold:          ['active', 'cancelled'],
-      awaiting_payment: ['completed', 'active', 'cancelled'],
+      active:           ['completed', 'awaiting_payment', 'on_hold', 'cancelled'],
+      on_hold:          ['completed', 'awaiting_payment', 'cancelled'],
+      awaiting_payment: ['completed', 'on_hold', 'cancelled'],
       confirmed:        ['completed', 'cancelled'],
-      // Cash sales are now completed the moment they're rung up, so a mis-ring
-      // has to be undoable without going through a refund. Cancelling returns
-      // the stock, same as the walk-in counter.
+      // A settled sale is completed the moment it's rung up, so a mis-ring has
+      // to be undoable without going through a refund. Cancelling returns the
+      // stock, same as the walk-in counter.
       completed:        ['refunded', 'cancelled'],
       cancelled:        [],
       refunded:         [],
@@ -1107,10 +1125,13 @@ export class PopupSalesService {
    * Runs the side effects of a pop-up order reaching 'completed' exactly once:
    * confirms the promo seat, deducts inventory (with movement rows) and sends
    * the customer's receipt. Reads the order back from the DB so it serves both
-   * the manual "Mark as Completed" path and the async MoMo confirmation path
-   * (the stand's poll and the Paystack webhook), which used to skip all of it.
+   * the till's own completion and the async MoMo confirmation path (the stand's
+   * poll and the Paystack webhook), which used to skip all of it.
+   *
+   * `knownEvent` lets the create path hand over the event row it already
+   * fetched, saving a round trip while a customer waits at the stand.
    */
-  private async applyCompletion(orderId: string) {
+  private async applyCompletion(orderId: string, knownEvent?: PopupEventSummary) {
     const db = this.supabase.getAdminClient();
 
     const { data: order } = await db
@@ -1122,62 +1143,41 @@ export class PopupSalesService {
 
     const items: any[] = order.popup_order_items ?? [];
 
-    await this.discountEngine
-      .confirmForOrder('popup_orders', orderId)
-      .catch((err) =>
-        console.error(
-          `Failed to confirm promo redemption for pop-up ${order.order_number}:`,
-          err,
+    // Stock and the promo seat are independent of each other, and the stock work
+    // is now a single atomic RPC rather than three round trips per variant — so
+    // they run together instead of one after the other.
+    await Promise.all([
+      this.discountEngine
+        .confirmForOrder('popup_orders', orderId)
+        .catch((err) =>
+          console.error(
+            `Failed to confirm promo redemption for pop-up ${order.order_number}:`,
+            err,
+          ),
         ),
-      );
-
-    // Quantities are summed per variant first: two lines for the same variant
-    // would otherwise read the same `before` and the second write would clobber
-    // the first. Distinct variants touch distinct rows, so they run together —
-    // this is on the response path.
-    const byVariant = new Map<string, number>();
-    for (const item of items) {
-      if (!item.variant_id) continue;
-      byVariant.set(
-        item.variant_id,
-        (byVariant.get(item.variant_id) ?? 0) + item.quantity,
-      );
-    }
-
-    await Promise.all(
-      [...byVariant].map(async ([variantId, quantity]) => {
-        const { data: variant } = await db
-          .from('product_variants')
-          .select('inventory_quantity')
-          .eq('id', variantId)
-          .single();
-        if (!variant) return;
-
-        const before = variant.inventory_quantity ?? 0;
-        const after = Math.max(0, before - quantity);
-
-        await db
-          .from('product_variants')
-          .update({ inventory_quantity: after })
-          .eq('id', variantId);
-
-        await db.from('inventory_movements').insert({
-          variant_id: variantId,
-          quantity_change: -quantity,
-          quantity_before: before,
-          quantity_after: after,
-          movement_type: 'sale',
-          notes: `Pop-up order ${order.order_number} completed`,
-        });
+      // Sums per variant, locks each row and writes the movement rows in one
+      // statement. Doing it in application code was a lost update: two tills
+      // selling the last of a variant both read the same `before`.
+      db.rpc('popup_apply_stock', { p_order_id: orderId }).then(({ error }) => {
+        if (error) {
+          console.error(
+            `Failed to deduct stock for pop-up ${order.order_number}:`,
+            error,
+          );
+        }
       }),
-    );
+    ]);
 
     if (order.customer_email) {
-      const { data: evt } = await db
-        .from('popup_events')
-        .select('name, location, event_date')
-        .eq('id', order.event_id)
-        .single();
+      const evt =
+        knownEvent ??
+        (
+          await db
+            .from('popup_events')
+            .select('name, location, event_date')
+            .eq('id', order.event_id)
+            .single()
+        ).data;
       const itemVendors = items.map((i: any) => i.product?.vendor || '1NRI');
       const brand =
         itemVendors.length > 0 &&
@@ -1428,11 +1428,14 @@ export class PopupSalesService {
     const now = Date.now();
     const graceCutoff = new Date(now - POPUP_RECONCILE_GRACE_MS).toISOString();
 
+    // Referenceless rows are included deliberately. A MoMo order is created as
+    // 'awaiting_payment' and only gets its reference once chargeOrder runs, so a
+    // charge the staff member abandoned has none — and would otherwise sit in
+    // the confirmation queue forever with nothing able to clear it.
     const { data: rows, error } = await db
       .from('popup_orders')
       .select('id, order_number, payment_reference, created_at')
       .eq('status', 'awaiting_payment')
-      .not('payment_reference', 'is', null)
       .lt('created_at', graceCutoff)
       .order('created_at', { ascending: true })
       .limit(POPUP_RECONCILE_BATCH_SIZE);
@@ -1445,15 +1448,19 @@ export class PopupSalesService {
 
     for (const order of rows) {
       try {
-        const status = await this.fetchChargeStatus(order.payment_reference);
-        if (status === null) continue; // lookup failed — retry next tick
+        // No reference means the charge was never sent, so there is nothing to
+        // ask Paystack about — it can only age out below.
+        if (order.payment_reference) {
+          const status = await this.fetchChargeStatus(order.payment_reference);
+          if (status === null) continue; // lookup failed — retry next tick
 
-        if (status === 'success') {
-          // Idempotent: gated on status still being 'awaiting_payment'.
-          if (await this.confirmByReference(order.payment_reference)) {
-            recovered += 1;
+          if (status === 'success') {
+            // Idempotent: gated on status still being 'awaiting_payment'.
+            if (await this.confirmByReference(order.payment_reference)) {
+              recovered += 1;
+            }
+            continue;
           }
-          continue;
         }
 
         const age = now - new Date(order.created_at).getTime();

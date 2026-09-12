@@ -871,11 +871,14 @@ export class OrdersService {
   ): Promise<string | null> {
     if (!pickupDate) return null;
     const db = this.supabase.getAdminClient();
+    // Matched purely on dates. This used to also exclude events marked 'closed',
+    // which is now redundant: the window below already requires the event to
+    // still be running on the pickup date, so one that has finished cannot
+    // claim it whether anybody pressed Close or not.
     const { data } = await db
       .from('popup_events')
       .select('id, event_date, end_date')
       .lte('event_date', pickupDate)
-      .neq('status', 'closed')
       .order('event_date', { ascending: false })
       .limit(5);
 

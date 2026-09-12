@@ -26,7 +26,6 @@ import {
   Calendar,
   MapPin,
   Lock,
-  Unlock,
   Sparkles,
   Package,
   Sigma,
@@ -50,7 +49,6 @@ import {
   useSaveEventAggregate,
   useDeleteEventAggregate,
   type PopupEvent,
-  type PopupEventStatus,
   type PopupOrder,
   type PopupOrderStatus,
   type PopupPaymentMethod,
@@ -70,6 +68,18 @@ type DisplayOrder = PopupOrder & { _isPreorder?: boolean };
 
 function formatCurrency(amount: number) {
   return `GH₵ ${amount.toFixed(2)}`;
+}
+
+/**
+ * A MoMo charge the customer hasn't approved after a couple of minutes is worth
+ * chasing — usually the prompt never reached their phone. Matches the backend's
+ * own reconciliation grace period, which leaves an order alone for five minutes
+ * before going looking for it.
+ */
+const STALLED_PAYMENT_MS = 2 * 60_000;
+
+function isStalled(createdAt: string): boolean {
+  return Date.now() - new Date(createdAt).getTime() > STALLED_PAYMENT_MS;
 }
 
 function timeAgo(dateStr: string) {
@@ -132,18 +142,20 @@ const PAYMENT_LABELS: Record<PopupPaymentMethod, string> = {
 };
 
 type Tab =
-  | "active"
-  | "on_hold"
   | "completed"
+  | "on_hold"
   | "awaiting_payment"
   | "refunded"
   | "collections";
 
+// No "Active" tab: a sale is either finished, parked, or waiting on the
+// customer's phone. Orders no longer land in limbo, so a tab for it would sit
+// permanently empty. (Rows predating this still carry 'active'; the backfill in
+// scripts/complete-stranded-popup-orders.ts settles them.)
 const TABS: { id: Tab; label: string; status?: PopupOrderStatus }[] = [
-  { id: "active", label: "Active", status: "active" },
-  { id: "on_hold", label: "On Hold", status: "on_hold" },
   { id: "completed", label: "Completed", status: "completed" },
   { id: "awaiting_payment", label: "Confirmation Queue", status: "awaiting_payment" },
+  { id: "on_hold", label: "On Hold", status: "on_hold" },
   { id: "refunded", label: "Refunded", status: "refunded" },
   // Online pre-orders being handed over at this pop-up. Different table
   // entirely (`orders`, not `popup_orders`), hence no status here.
@@ -457,36 +469,31 @@ function OrderActionsMenu({
     }
   }
 
+  /**
+   * A sale finishes itself now — cash and anything with a payment reference
+   * complete as they're rung up, and a MoMo charge completes when Paystack says
+   * the customer approved. So there is no "Mark as Completed" to hunt for, and
+   * no "Confirm Payment", which used to leave an order counted as revenue with
+   * its stock never deducted.
+   *
+   * What's left is the two things a person genuinely decides: settling a ticket
+   * they parked, and undoing a mis-ring.
+   */
   const actions: { label: string; status: PopupOrderStatus; show: boolean }[] = (
     [
       {
-        label: "Mark as Awaiting Payment",
-        status: "awaiting_payment" as PopupOrderStatus,
-        show: order.status === "active",
-      },
-      {
-        label: "Confirm Payment",
-        status: "confirmed" as PopupOrderStatus,
-        show: order.status === "awaiting_payment",
-      },
-      {
-        label: "Mark as Completed",
+        label: "Complete Sale",
         status: "completed" as PopupOrderStatus,
-        show: order.status === "confirmed" || order.status === "active",
+        show: order.status === "on_hold" || order.status === "active",
       },
       {
         label: "Put On Hold",
         status: "on_hold" as PopupOrderStatus,
-        show: order.status === "active" || order.status === "awaiting_payment",
+        show: order.status === "awaiting_payment" || order.status === "active",
       },
       {
-        label: "Reactivate",
-        status: "active" as PopupOrderStatus,
-        show: order.status === "on_hold",
-      },
-      {
-        // Cash sales complete on creation, so cancelling is the only way to undo
-        // a mis-ring. The server puts the stock back when the order was completed.
+        // Sales complete on creation, so cancelling is the only way to undo a
+        // mis-ring. The server puts the stock back when the order was completed.
         label: "Cancel Order",
         status: "cancelled" as PopupOrderStatus,
         show: order.status !== "cancelled" && order.status !== "refunded",
@@ -508,9 +515,9 @@ function OrderActionsMenu({
       danger: true,
     },
     completed: {
-      title: "Mark as completed?",
-      message: `Order ${order.order_number} will be marked as completed and inventory will be deducted.`,
-      confirmLabel: "Yes, complete order",
+      title: "Complete this sale?",
+      message: `Order ${order.order_number} will be completed, its revenue counted and its stock deducted.`,
+      confirmLabel: "Yes, complete sale",
       danger: false,
     },
   };
@@ -606,7 +613,7 @@ function MoMoChargeModal({
   order: PopupOrder;
   onClose: () => void;
 }) {
-  const charge = useChargePopupOrder();
+  const charge = useChargePopupOrder(order.event_id);
   const submitOtp = useSubmitPopupOtp();
   const verify = useVerifyPopupPayment();
   const [phone, setPhone] = useState(
@@ -821,7 +828,7 @@ function RefundOrderModal({
   order: PopupOrder;
   onClose: () => void;
 }) {
-  const refund = useRefundPopupOrder();
+  const refund = useRefundPopupOrder(order.event_id);
   const [reason, setReason] = useState("");
   const [isFullRefund, setIsFullRefund] = useState(true);
   const [customAmount, setCustomAmount] = useState("");
@@ -1390,7 +1397,6 @@ function NewOrderModal({
   onClose: () => void;
 }) {
   const createOrder = useCreatePopupOrder(eventId);
-  const updateOrder = useUpdatePopupOrder();
   const saveCustomer = useCreatePopupCustomer();
   const createPreorder = useCreatePopupPreorder();
 
@@ -1400,6 +1406,11 @@ function NewOrderModal({
   // radio, which defaults to Cash, so every pre-order was filed as paid whether
   // money changed hands or not — and then counted toward Road-to-HQ revenue.
   const [preorderPaidNow, setPreorderPaidNow] = useState(false);
+
+  // Any request that must finish before the modal can be dismissed. The customer
+  // save is deliberately absent — it runs in the background and the sale doesn't
+  // depend on it.
+  const isSubmitting = createOrder.isPending || createPreorder.isPending;
 
   // One key per open cart. A retry after a lost response (venue wifi) returns
   // the order that already exists instead of ringing the sale up twice.
@@ -1700,16 +1711,32 @@ function NewOrderModal({
       items: items.map(({ _localId, inventory_quantity, ...rest }) => rest),
     });
 
-    // Save customer to the database if requested and not already an existing customer
-    if (!selectedCustomerId && customerForm.saveToDatabase && (customerForm.name || customerForm.phone || customerForm.email)) {
-      await saveCustomer.mutateAsync({
+    // Deliberately not awaited. Saving the customer creates an auth user, which
+    // is the slowest call in the whole flow, and nothing on screen depends on
+    // it — the sale is already recorded. Awaiting it held the modal open (and
+    // the customer waiting) for a second request after the one that mattered.
+    saveCustomerInBackground();
+
+    onClose();
+  }
+
+  /** Capture the customer for next time, without holding up the till. */
+  function saveCustomerInBackground() {
+    if (selectedCustomerId || !customerForm.saveToDatabase) return;
+    if (!customerForm.name && !customerForm.phone && !customerForm.email) return;
+    saveCustomer.mutate(
+      {
         name: customerForm.name || undefined,
         phone: customerForm.phone || undefined,
         email: customerForm.email || undefined,
-      });
-    }
-
-    onClose();
+      },
+      {
+        // The sale itself is safe either way, so this must never surface as a
+        // failed sale — just say the details weren't kept.
+        onError: () =>
+          toast.error("Sale saved, but the customer's details weren't kept."),
+      },
+    );
   }
 
   async function handleChargeSubmit() {
@@ -1744,13 +1771,7 @@ function NewOrderModal({
       items: items.map(({ _localId, inventory_quantity, ...rest }) => rest),
     });
 
-    if (!selectedCustomerId && customerForm.saveToDatabase && (customerForm.name || customerForm.phone || customerForm.email)) {
-      await saveCustomer.mutateAsync({
-        name: customerForm.name || undefined,
-        phone: customerForm.phone || undefined,
-        email: customerForm.email || undefined,
-      });
-    }
+    saveCustomerInBackground();
 
     setChargeTargetOrder(newOrder);
   }
@@ -1779,7 +1800,9 @@ function NewOrderModal({
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       items: items.map(({ _localId, inventory_quantity, ...rest }) => rest),
     });
-    await updateOrder.mutateAsync({ id: newOrder.id, dto: { status: "on_hold" } });
+    // The server puts a held ticket straight into 'on_hold', so the second
+    // request that used to follow this one is gone.
+    saveCustomerInBackground();
     setShowHold(false);
     onClose();
   }
@@ -1790,7 +1813,12 @@ function NewOrderModal({
       {/* ── Backdrop ────────────────────────────────────────────────────────── */}
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-        onClick={(e) => e.target === e.currentTarget && onClose()}
+        // Ignored while a sale is going through: a stray click outside used to
+        // dismiss the modal mid-request, leaving staff unsure whether it saved.
+        onClick={(e) => {
+          if (isSubmitting) return;
+          if (e.target === e.currentTarget) onClose();
+        }}
       >
         {/* ── Modal shell ─────────────────────────────────────────────────── */}
         <div
@@ -2946,17 +2974,17 @@ function NewEventModal({ onClose }: { onClose: () => void }) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isMultiDay, setIsMultiDay] = useState(false);
-  const [status, setStatus] = useState<"draft" | "active">("active");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
+    // No status sent — the dates govern. The column keeps its 'draft' default,
+    // which accepts orders exactly like 'active' always did.
     await createEvent.mutateAsync({
       name,
       location: location || undefined,
       event_date: startDate || undefined,
       end_date: isMultiDay && endDate ? endDate : undefined,
-      status,
     });
     onClose();
   }
@@ -3050,19 +3078,8 @@ function NewEventModal({ onClose }: { onClose: () => void }) {
               />
             </div>
           )}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              Status
-            </label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as "draft" | "active")}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
-            >
-              <option value="active">Active</option>
-              <option value="draft">Draft</option>
-            </select>
-          </div>
+          {/* No status to pick. A pop-up is on when its dates say it is, and it
+              stops taking orders the day after it ends. */}
           <div className="flex gap-3 pt-2">
             <button
               type="button"
@@ -3446,6 +3463,30 @@ function RecordTotalsModal({ event, onClose }: { event: PopupEvent; onClose: () 
 
 // ─── Event Hub ────────────────────────────────────────────────────────────────
 
+/**
+ * A pop-up's own dates decide whether it's running, not a status someone has to
+ * remember to set. Mirrors `hasFinished` / `isRunningToday` in the backend's
+ * popup-rules.ts — the server enforces it, this just keeps the UI honest.
+ * Ghana is UTC+0, so the UTC date is the local business day.
+ */
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function hasFinished(event: PopupEvent, now = todayISO()): boolean {
+  // Legacy events closed by hand stay closed — one of them has no date at all.
+  if (event.status === "closed") return true;
+  const last = event.end_date ?? event.event_date;
+  return !!last && last.slice(0, 10) < now;
+}
+
+function isRunningToday(event: PopupEvent, now = todayISO()): boolean {
+  if (!event.event_date) return false;
+  const start = event.event_date.slice(0, 10);
+  const end = (event.end_date ?? event.event_date).slice(0, 10);
+  return start <= now && now <= end;
+}
+
 function formatEventDates(event: PopupEvent): string {
   if (!event.event_date) return "No date set";
   const start = new Date(event.event_date + "T00:00:00").toLocaleDateString("en-GB", {
@@ -3460,16 +3501,24 @@ function formatEventDates(event: PopupEvent): string {
   return start;
 }
 
-const EVENT_STATUS_STYLES: Record<PopupEventStatus, string> = {
-  active: "bg-green-50 text-green-700 border-green-200",
-  closed: "bg-slate-100 text-slate-500 border-slate-200",
-  draft: "bg-amber-50 text-amber-700 border-amber-200",
+/** Where a pop-up is in its own life, worked out from its dates. */
+type EventPhase = "today" | "upcoming" | "past";
+
+function eventPhase(event: PopupEvent): EventPhase {
+  if (isRunningToday(event)) return "today";
+  return hasFinished(event) ? "past" : "upcoming";
+}
+
+const EVENT_PHASE_STYLES: Record<EventPhase, string> = {
+  today: "bg-green-50 text-green-700 border-green-200",
+  upcoming: "bg-amber-50 text-amber-700 border-amber-200",
+  past: "bg-slate-100 text-slate-500 border-slate-200",
 };
 
-const EVENT_STATUS_LABELS: Record<PopupEventStatus, string> = {
-  active: "Active",
-  closed: "Closed",
-  draft: "Draft",
+const EVENT_PHASE_LABELS: Record<EventPhase, string> = {
+  today: "On today",
+  upcoming: "Upcoming",
+  past: "Finished",
 };
 
 function EventHubView({
@@ -3482,15 +3531,22 @@ function EventHubView({
   onCreateEvent: () => void;
 }) {
   const [editingEvent, setEditingEvent] = useState<PopupEvent | null>(null);
-  const [closingEvent, setClosingEvent] = useState<PopupEvent | null>(null);
   const [totalsEvent, setTotalsEvent] = useState<PopupEvent | null>(null);
-  const updateEvent = useUpdatePopupEvent();
-  const today = new Date().toISOString().split("T")[0];
 
-  const active = events.filter((e) => e.status === "active");
-  const drafts = events.filter((e) => e.status === "draft");
-  const closed = events.filter((e) => e.status === "closed");
-  const sorted = [...active, ...drafts, ...closed];
+  // Today's pop-up first — it's the one someone is standing at. Then what's
+  // coming, then history, newest first. This used to be grouped by a status
+  // staff had to maintain by hand.
+  const sorted = useMemo(() => {
+    const byDateDesc = (a: PopupEvent, b: PopupEvent) =>
+      (b.event_date ?? "").localeCompare(a.event_date ?? "");
+    const byDateAsc = (a: PopupEvent, b: PopupEvent) =>
+      (a.event_date ?? "").localeCompare(b.event_date ?? "");
+    return [
+      ...events.filter((e) => eventPhase(e) === "today").sort(byDateAsc),
+      ...events.filter((e) => eventPhase(e) === "upcoming").sort(byDateAsc),
+      ...events.filter((e) => eventPhase(e) === "past").sort(byDateDesc),
+    ];
+  }, [events]);
 
   return (
     <>
@@ -3520,15 +3576,17 @@ function EventHubView({
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {sorted.map((event) => (
+            {sorted.map((event) => {
+              const phase = eventPhase(event);
+              return (
               <div
                 key={event.id}
-                className={`group rounded-xl border bg-white p-5 shadow-sm transition-shadow hover:shadow-md ${event.status === "active" ? "border-green-300 ring-1 ring-green-200" : "border-slate-200"}`}
+                className={`group rounded-xl border bg-white p-5 shadow-sm transition-shadow hover:shadow-md ${phase === "today" ? "border-green-300 ring-1 ring-green-200" : "border-slate-200"}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="text-sm font-semibold text-slate-900 leading-snug">{event.name}</h3>
-                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${EVENT_STATUS_STYLES[event.status]}`}>
-                    {EVENT_STATUS_LABELS[event.status]}
+                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${EVENT_PHASE_STYLES[phase]}`}>
+                    {EVENT_PHASE_LABELS[phase]}
                   </span>
                 </div>
                 <div className="mt-3 space-y-1.5">
@@ -3557,7 +3615,7 @@ function EventHubView({
                     onClick={() => onSelectEvent(event.id)}
                     className="flex-1 rounded-lg bg-slate-900 py-2 text-xs font-medium text-white hover:bg-slate-800"
                   >
-                    {event.status === "closed" ? "View Orders" : "Open Event"}
+                    {phase === "past" ? "View Orders" : "Open Event"}
                   </button>
                   <button
                     onClick={() => setEditingEvent(event)}
@@ -3565,19 +3623,10 @@ function EventHubView({
                   >
                     Edit
                   </button>
-                  {event.status !== "closed" && (
-                    <button
-                      onClick={() => setClosingEvent(event)}
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
-                    >
-                      Close
-                    </button>
-                  )}
                 </div>
                 {/* Offered for finished pop-ups only: recording a lump total while
                     staff are still ringing sales up is how you double count. */}
-                {(event.status === "closed" ||
-                  (event.event_date && (event.end_date ?? event.event_date) < today)) && (
+                {phase === "past" && (
                   <button
                     onClick={() => setTotalsEvent(event)}
                     className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
@@ -3587,7 +3636,8 @@ function EventHubView({
                   </button>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
@@ -3597,26 +3647,6 @@ function EventHubView({
       )}
       {totalsEvent && (
         <RecordTotalsModal event={totalsEvent} onClose={() => setTotalsEvent(null)} />
-      )}
-      {closingEvent && (
-        <ConfirmDialog
-          title={`Close "${closingEvent.name}"?`}
-          message="This will set the end date to today and mark the event as closed. No new orders will be allowed. You can reopen it at any time."
-          confirmLabel="Close Event"
-          danger
-          onConfirm={() => {
-            const today = new Date().toISOString().split("T")[0];
-            updateEvent.mutate({
-              id: closingEvent.id,
-              dto: {
-                status: "closed",
-                end_date: closingEvent.end_date ?? today,
-              },
-            });
-            setClosingEvent(null);
-          }}
-          onCancel={() => setClosingEvent(null)}
-        />
       )}
     </>
   );
@@ -3749,6 +3779,22 @@ function OrderTable({
                   >
                     {STATUS_LABELS[order.status]}
                   </span>
+                  {/* A MoMo charge completes itself when the customer approves,
+                      so nobody needs to act — but standing there not knowing
+                      whether it's working is its own problem. Say what's
+                      happening, and after a couple of minutes say it's worth
+                      chasing. */}
+                  {order.status === "awaiting_payment" && !order._isPreorder && (
+                    <p
+                      className={`mt-1 text-[11px] ${
+                        isStalled(order.created_at) ? "text-amber-600" : "text-slate-400"
+                      }`}
+                    >
+                      {isStalled(order.created_at)
+                        ? "Check the customer's phone"
+                        : "Waiting for customer to approve"}
+                    </p>
+                  )}
                 </td>
                 <td className="px-5 py-4 text-sm text-slate-400">
                   {timeAgo(order.created_at)}
@@ -4033,7 +4079,13 @@ export default function PopupSalesPage() {
     const saved = localStorage.getItem("popup_selected_event_id");
     if (saved && events.some((e) => e.id === saved)) {
       setSelectedEventId(saved);
+      return;
     }
+    // Nothing remembered, so open today's pop-up if there is exactly one. Staff
+    // used to land on the event list every time and pick manually before they
+    // could ring anything up.
+    const runningToday = events.filter((e) => isRunningToday(e));
+    if (runningToday.length === 1) setSelectedEventId(runningToday[0].id);
   }, [eventsLoading, events]);
 
   function selectEvent(id: string | null) {
@@ -4041,7 +4093,7 @@ export default function PopupSalesPage() {
     if (id) localStorage.setItem("popup_selected_event_id", id);
     else localStorage.removeItem("popup_selected_event_id");
   }
-  const [activeTab, setActiveTab] = useState<Tab>("active");
+  const [activeTab, setActiveTab] = useState<Tab>("completed");
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [showNewEvent, setShowNewEvent] = useState(false);
   const [momoChargeOrder, setMomoChargeOrder] = useState<PopupOrder | null>(null);
@@ -4049,23 +4101,28 @@ export default function PopupSalesPage() {
   const [editOrder, setEditOrder] = useState<PopupOrder | null>(null);
   const [refundOrder, setRefundOrder] = useState<PopupOrder | null>(null);
   const [showRevenue, setShowRevenue] = useState(false);
-  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   const selectedEvent = events.find((e) => e.id === selectedEventId) ?? null;
-  const isClosed = selectedEvent?.status === "closed";
-  const updateEvent = useUpdatePopupEvent();
+  // Derived from the event's own dates rather than a status someone has to
+  // remember to set. A pop-up that's over stops taking orders by itself.
+  const isPast = selectedEvent ? hasFinished(selectedEvent) : false;
 
-  const { data: stats } = usePopupStats(selectedEventId);
+  // Both polls stop while a modal is open. They were firing mid-sale and
+  // competing with the create request the customer is waiting on.
+  const pollsPaused = showNewOrder || !!momoChargeOrder || !!editOrder || !!refundOrder;
+
+  const { data: stats } = usePopupStats(selectedEventId, pollsPaused);
   // Loaded for every tab, not just the Collections one, so the badge tells staff
   // there are people waiting without them having to go looking.
   const { data: collectionsData } = usePopupCollections(selectedEventId);
   const collectionsAwaiting = collectionsData?.awaiting.length ?? 0;
   const { data: ordersData, isLoading: ordersLoading } = usePopupOrders(
     selectedEventId,
-    { status: TABS.find((t) => t.id === activeTab)?.status }
+    { status: TABS.find((t) => t.id === activeTab)?.status },
+    pollsPaused
   );
 
-  const updateOrder = useUpdatePopupOrder();
+  const updateOrder = useUpdatePopupOrder(selectedEventId ?? undefined);
 
   function handleUpdateOrder(
     id: string,
@@ -4083,7 +4140,7 @@ export default function PopupSalesPage() {
   // saved — it is created as 'pending' — and staff would re-enter it thinking
   // it had failed. Cancelled and refunded rows are dropped below.
   const { data: eventPreordersData } = usePopupEventPreorders(
-    activeTab === "active" || activeTab === "completed" ? selectedEventId : null
+    activeTab === "on_hold" || activeTab === "completed" ? selectedEventId : null
   );
 
   const preorderDisplayRows = useMemo<DisplayOrder[]>(() => {
@@ -4111,9 +4168,10 @@ export default function PopupSalesPage() {
         customer_phone: first.customer_phone,
         customer_email: first.customer_email,
         served_by: null,
-        // 'fulfilled' is the only pre-order stage that belongs on Completed;
-        // everything still open reads as an active ticket on the stand.
-        status: (first.status === "fulfilled" ? "completed" : "active") as PopupOrderStatus,
+        // 'fulfilled' is the only pre-order stage that belongs on Completed.
+        // Everything still open is a commitment waiting to be handed over, which
+        // is what On Hold means now that ordinary sales finish by themselves.
+        status: (first.status === "fulfilled" ? "completed" : "on_hold") as PopupOrderStatus,
         payment_method: (first.payment_method as PopupPaymentMethod) ?? null,
         payment_reference: first.payment_reference,
         subtotal: lineTotal,
@@ -4149,13 +4207,12 @@ export default function PopupSalesPage() {
   }, [eventPreordersData, selectedEventId]);
 
   const mergedOrders: DisplayOrder[] = useMemo(() => {
-    if (activeTab !== "completed" && activeTab !== "active") {
+    if (activeTab !== "completed" && activeTab !== "on_hold") {
       return orders as DisplayOrder[];
     }
-    const wanted = activeTab === "completed" ? "completed" : "active";
     return [
       ...(orders as DisplayOrder[]),
-      ...preorderDisplayRows.filter((r) => r.status === wanted),
+      ...preorderDisplayRows.filter((r) => r.status === activeTab),
     ].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
@@ -4190,15 +4247,6 @@ export default function PopupSalesPage() {
     );
   }
 
-  function handleToggleEventStatus() {
-    if (!selectedEvent) return;
-    if (selectedEvent.status === "active") {
-      setShowCloseConfirm(true);
-    } else {
-      updateEvent.mutate({ id: selectedEvent.id, dto: { status: "active" } });
-    }
-  }
-
   return (
     <>
       <section className="space-y-6">
@@ -4216,34 +4264,13 @@ export default function PopupSalesPage() {
               {selectedEvent?.name ?? "Pop-up Sales"}
             </h1>
             {selectedEvent && (
-              <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${EVENT_STATUS_STYLES[selectedEvent.status]}`}>
-                {EVENT_STATUS_LABELS[selectedEvent.status]}
+              <span className="text-sm text-slate-400">
+                {formatEventDates(selectedEvent)}
               </span>
             )}
           </div>
           <div className="flex items-center gap-3">
-            {selectedEvent && (
-              <button
-                onClick={handleToggleEventStatus}
-                disabled={updateEvent.isPending}
-                className={`flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
-                  isClosed
-                    ? "border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
-                    : selectedEvent.status === "draft"
-                    ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                {isClosed ? (
-                  <><Unlock className="h-4 w-4" />Reopen Event</>
-                ) : selectedEvent.status === "draft" ? (
-                  <><Unlock className="h-4 w-4" />Activate Event</>
-                ) : (
-                  <><Lock className="h-4 w-4" />Close Event</>
-                )}
-              </button>
-            )}
-            {!isClosed && (
+            {!isPast && (
               <button
                 onClick={() => setShowNewOrder(true)}
                 className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
@@ -4255,11 +4282,16 @@ export default function PopupSalesPage() {
           </div>
         </div>
 
-        {/* Closed event banner */}
-        {isClosed && (
+        {/* Finished-event banner. No Close button to press any more — a pop-up
+            stops taking orders the day after it ends, on its own. */}
+        {isPast && (
           <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             <Lock className="h-4 w-4 shrink-0" />
-            <span>This pop-up is closed. New orders cannot be added. Click <strong>Reopen Event</strong> to allow orders again.</span>
+            <span>
+              This pop-up has finished, so new orders can&apos;t be added. If sales
+              were taken but never rung up, record them from the event list with{" "}
+              <strong>Record Unitemized Totals</strong>.
+            </span>
           </div>
         )}
 
@@ -4331,11 +4363,14 @@ export default function PopupSalesPage() {
             ))}
           </div>
 
-          {/* Confirmation banner */}
-          {activeTab === "active" && awaitingCount > 0 && (
+          {/* Confirmation banner. Shown on Completed, which is where staff now
+              sit between sales, so a MoMo payment still waiting on a customer's
+              phone doesn't go unnoticed. */}
+          {activeTab === "completed" && awaitingCount > 0 && (
             <div className="border-b border-amber-100 bg-amber-50 px-5 py-2.5 text-sm text-amber-700">
-              {awaitingCount} order{awaitingCount !== 1 ? "s" : ""} awaiting
-              payment confirmation. Serve next customer while you wait.
+              {awaitingCount} order{awaitingCount !== 1 ? "s" : ""} waiting on
+              payment. They complete themselves once the customer approves —
+              serve the next customer meanwhile.
             </div>
           )}
 
@@ -4355,20 +4390,7 @@ export default function PopupSalesPage() {
         </div>
       </section>
 
-      {showCloseConfirm && selectedEvent && (
-        <ConfirmDialog
-          title="Close this pop-up?"
-          message="Closing will prevent any new orders from being added. Existing orders can still be edited. You can reopen it at any time."
-          confirmLabel="Close Event"
-          danger
-          onConfirm={() => {
-            updateEvent.mutate({ id: selectedEvent.id, dto: { status: "closed" } });
-            setShowCloseConfirm(false);
-          }}
-          onCancel={() => setShowCloseConfirm(false)}
-        />
-      )}
-      {showNewOrder && selectedEventId && !isClosed && (
+      {showNewOrder && selectedEventId && !isPast && (
         <NewOrderModal
           eventId={selectedEventId}
           onClose={() => setShowNewOrder(false)}

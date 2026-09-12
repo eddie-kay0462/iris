@@ -277,18 +277,24 @@ function invalidateAggregate(qc: ReturnType<typeof useQueryClient>, eventId: str
   qc.invalidateQueries({ queryKey: ["analytics"] });
 }
 
-export function usePopupStats(eventId: string | null) {
+/**
+ * `paused` stops the till polling while a modal is open. Two 15s polls were
+ * landing mid-sale and competing with the create request for the same
+ * connection, which is a large part of why the server felt slow at the stand.
+ */
+export function usePopupStats(eventId: string | null, paused = false) {
   return useQuery({
     queryKey: ["popup-stats", eventId],
     queryFn: () => apiClient<PopupStats>(`/popup-sales/events/${eventId}/stats`),
     enabled: !!eventId,
-    refetchInterval: 15_000,
+    refetchInterval: paused ? false : 15_000,
   });
 }
 
 export function usePopupOrders(
   eventId: string | null,
-  params: { status?: PopupOrderStatus; page?: number; limit?: number } = {}
+  params: { status?: PopupOrderStatus; page?: number; limit?: number } = {},
+  paused = false
 ) {
   const sp = new URLSearchParams();
   if (params.status) sp.set("status", params.status);
@@ -301,7 +307,9 @@ export function usePopupOrders(
     queryFn: () =>
       apiClient<PopupOrdersResult>(`/popup-sales/events/${eventId}/orders${qs}`),
     enabled: !!eventId,
-    refetchInterval: 15_000,
+    // The heavier of the two polls — each row carries its items, split payments
+    // and server profile — so it runs at half the rate of the stats poll.
+    refetchInterval: paused ? false : 30_000,
   });
 }
 
@@ -313,14 +321,51 @@ export function useCreatePopupOrder(eventId: string) {
         method: "POST",
         body: dto,
       }),
-    onSuccess: () => {
+    onSuccess: (order) => {
+      // The order comes back fully formed and already shaped like a list row, so
+      // put it straight into the cache. Without this the modal closed and staff
+      // watched the row appear a moment later when the refetch landed — the
+      // "it saves behind" complaint. The invalidations still run underneath to
+      // reconcile, but the row is on screen before they finish.
+      writeOrderIntoCache(qc, eventId, order);
       qc.invalidateQueries({ queryKey: ["popup-orders", eventId] });
       qc.invalidateQueries({ queryKey: ["popup-stats", eventId] });
     },
   });
 }
 
-export function useUpdatePopupOrder() {
+/**
+ * Insert or replace one order across every cached page of an event's list.
+ *
+ * Each cache entry is keyed by its tab's filter, which isn't readable from here,
+ * so an order is only *added* to a page that already holds one of its status —
+ * otherwise a completed sale would appear under On Hold. Replacing is
+ * unconditional, so a row that changed status is updated wherever it sits and
+ * the following refetch moves it.
+ */
+function writeOrderIntoCache(
+  qc: ReturnType<typeof useQueryClient>,
+  eventId: string,
+  order: PopupOrder
+) {
+  qc.setQueriesData<PopupOrdersResult>(
+    { queryKey: ["popup-orders", eventId] },
+    (prev) => {
+      if (!prev) return prev;
+      const existing = prev.data.findIndex((o) => o.id === order.id);
+      if (existing >= 0) {
+        const data = [...prev.data];
+        data[existing] = order;
+        return { ...prev, data };
+      }
+      const belongsHere = prev.data.some((o) => o.status === order.status);
+      if (!belongsHere) return prev;
+      return { ...prev, data: [order, ...prev.data], total: prev.total + 1 };
+    }
+  );
+}
+
+export function useUpdatePopupOrder(eventId?: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, dto }: { id: string; dto: UpdateOrderInput }) =>
@@ -328,9 +373,12 @@ export function useUpdatePopupOrder() {
         method: "PATCH",
         body: dto,
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["popup-orders"] });
-      qc.invalidateQueries({ queryKey: ["popup-stats"] });
+    onSuccess: (order) => {
+      // Scoped to the event when the caller knows it. Invalidating the bare keys
+      // threw away every other event's cache too.
+      if (eventId) writeOrderIntoCache(qc, eventId, order);
+      qc.invalidateQueries({ queryKey: ["popup-orders", ...(eventId ? [eventId] : [])] });
+      qc.invalidateQueries({ queryKey: ["popup-stats", ...(eventId ? [eventId] : [])] });
     },
   });
 }
@@ -346,7 +394,7 @@ export interface ChargeOrderResult {
   message: string;
 }
 
-export function useChargePopupOrder() {
+export function useChargePopupOrder(eventId?: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, dto }: { id: string; dto: ChargeOrderInput }) =>
@@ -355,8 +403,8 @@ export function useChargePopupOrder() {
         body: dto,
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["popup-orders"] });
-      qc.invalidateQueries({ queryKey: ["popup-stats"] });
+      qc.invalidateQueries({ queryKey: ["popup-orders", ...(eventId ? [eventId] : [])] });
+      qc.invalidateQueries({ queryKey: ["popup-stats", ...(eventId ? [eventId] : [])] });
     },
   });
 }
@@ -425,7 +473,7 @@ export interface RefundOrderResult {
   created_at: string;
 }
 
-export function useRefundPopupOrder() {
+export function useRefundPopupOrder(eventId?: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, dto }: { id: string; dto: RefundOrderInput }) =>
@@ -434,8 +482,8 @@ export function useRefundPopupOrder() {
         body: dto,
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["popup-orders"] });
-      qc.invalidateQueries({ queryKey: ["popup-stats"] });
+      qc.invalidateQueries({ queryKey: ["popup-orders", ...(eventId ? [eventId] : [])] });
+      qc.invalidateQueries({ queryKey: ["popup-stats", ...(eventId ? [eventId] : [])] });
     },
   });
 }
