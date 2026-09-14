@@ -1,0 +1,48 @@
+# Caddy fronts the Iris API: TLS termination, load balancing, access logs.
+#
+# SITE_ADDRESS defaults to the production hostname. Override it for local
+# testing (`SITE_ADDRESS=:80 docker compose up`) so Caddy doesn't try to get a
+# public certificate for a domain that isn't pointed at your laptop.
+
+{
+	# Let's Encrypt needs a contact address for expiry warnings.
+	email {$ACME_EMAIL:1nriworldwide@gmail.com}
+}
+
+{$SITE_ADDRESS:iris-api.1nri.store} {
+	encode zstd gzip
+
+	log {
+		output stdout
+		format json
+	}
+
+	reverse_proxy api1:4000 api2:4000 api3:4000 {
+		# Endpoint cost is very uneven here — an analytics report is orders of
+		# magnitude heavier than a product fetch — so route by outstanding work
+		# rather than round-robin.
+		lb_policy least_conn
+
+		# Active health checks. These are why the upstreams are named services
+		# rather than `deploy: replicas:` — Caddy only health-checks static
+		# upstreams, and against a replica set it would resolve the service
+		# name once and pin a single container.
+		health_uri      /api/health
+		health_interval 10s
+		health_timeout  3s
+		health_status   2xx
+
+		# Take a node out of rotation after it fails, and retry another one
+		# rather than surfacing the error, so a single dying replica is
+		# invisible to the storefront.
+		fail_duration     30s
+		max_fails         3
+		lb_try_duration   5s
+		lb_try_interval   250ms
+
+		# Long-running analytics reports must not be cut off mid-flight.
+		transport http {
+			read_timeout 120s
+		}
+	}
+}

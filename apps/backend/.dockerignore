@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+.env.*
+test
+**/*.spec.ts
+**/*.test.ts
+vitest.config.mts
+db
+scripts
+test_service.js
+README.md
