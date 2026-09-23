@@ -89,7 +89,24 @@ KbdInteractiveAuthentication no
 PubkeyAuthentication yes
 SSHCONF
 sshd -t || die "sshd config test failed — NOT restarting sshd. Fix /etc/ssh/sshd_config.d/99-iris.conf first."
+
+# Enable, don't just restart. Ubuntu normally enables ssh itself, but this box
+# runs unattended-upgrades and reboots unprompted — an sshd that isn't enabled
+# at boot comes back with port 22 closed, and the only way in is the provider's
+# console. Docker gets the same treatment further down for the same reason.
+systemctl enable ssh 2>/dev/null || true
 systemctl restart ssh
+
+# Ubuntu 24.04 can front sshd with systemd socket activation. Where that unit
+# exists it owns port 22, so it has to survive a reboot too.
+if systemctl cat ssh.socket >/dev/null 2>&1; then
+  systemctl enable ssh.socket 2>/dev/null || true
+  systemctl restart ssh.socket 2>/dev/null || true
+fi
+
+# Never leave this box without proving the door still opens.
+ss -lnt 2>/dev/null | grep -q ':22 ' \
+  || die "nothing is listening on port 22 after restarting ssh. Fix it from THIS session — once you log out, only the provider's console can get you back in."
 
 log "Enabling fail2ban"
 systemctl enable --now fail2ban
