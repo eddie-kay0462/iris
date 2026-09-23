@@ -72,6 +72,12 @@ grep -qxF "$SSH_PUBKEY" "/home/$DEPLOY_USER/.ssh/authorized_keys" \
 chmod 600 "/home/$DEPLOY_USER/.ssh/authorized_keys"
 chown -R "$DEPLOY_USER:$DEPLOY_USER" "/home/$DEPLOY_USER/.ssh"
 
+# The next section disables password login, so a key that didn't survive the
+# trip here locks everyone out and the only way back is a reinstall. Prove it
+# parses first — cheap check, expensive failure.
+ssh-keygen -l -f "/home/$DEPLOY_USER/.ssh/authorized_keys" >/dev/null 2>&1 \
+  || die "No valid public key in /home/$DEPLOY_USER/.ssh/authorized_keys — refusing to disable password login. Check SSH_PUBKEY was quoted and pasted literally (\$(cat ~/.ssh/...) would read from THIS server, not your laptop)."
+
 # ------------------------------------------------------------------- ssh ----
 # Contabo hands over a root-with-password box, which is the single most-scanned
 # thing on the internet. Keys only, no root login.
