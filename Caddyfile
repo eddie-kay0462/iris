@@ -3,7 +3,6 @@
 # SITE_ADDRESS defaults to the production hostname. Override it for local
 # testing (`SITE_ADDRESS=:80 docker compose up`) so Caddy doesn't try to get a
 # public certificate for a domain that isn't pointed at your laptop.
-
 {
 	# Let's Encrypt needs a contact address for expiry warnings.
 	email {$ACME_EMAIL:1nriworldwide@gmail.com}
@@ -27,18 +26,18 @@
 		# rather than `deploy: replicas:` — Caddy only health-checks static
 		# upstreams, and against a replica set it would resolve the service
 		# name once and pin a single container.
-		health_uri      /api/health
+		health_uri /api/health
 		health_interval 10s
-		health_timeout  3s
-		health_status   2xx
+		health_timeout 3s
+		health_status 2xx
 
 		# Take a node out of rotation after it fails, and retry another one
 		# rather than surfacing the error, so a single dying replica is
 		# invisible to the storefront.
-		fail_duration     30s
-		max_fails         3
-		lb_try_duration   5s
-		lb_try_interval   250ms
+		fail_duration 30s
+		max_fails 3
+		lb_try_duration 5s
+		lb_try_interval 250ms
 
 		# Long-running analytics reports must not be cut off mid-flight.
 		transport http {
