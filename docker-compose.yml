@@ -1,0 +1,141 @@
+# Iris production stack — one Contabo VPS, everything behind Caddy.
+#
+#   caddy            TLS + load balancer. The ONLY service that binds a host port.
+#   api1/api2/api3   identical NestJS replicas, load-balanced, schedulers OFF.
+#   worker           the same image with schedulers ON, kept out of the LB pool.
+#   recommender      FastAPI, internal only.
+#
+# Nothing but Caddy publishes a port on purpose: Docker writes its own iptables
+# rules and a published port would sail straight past ufw.
+#
+# Secrets live in /opt/iris/.env on the server (chmod 600) and are never baked
+# into an image. Copy deploy/env.production.example to get started.
+
+x-api-common: &api-common
+  build:
+    context: ./apps/backend
+    dockerfile: Dockerfile
+  image: iris-backend:local
+  env_file: [.env]
+  environment:
+    NODE_ENV: production
+    PORT: "4000"
+    LOG_FORMAT: json
+    # Internal Docker DNS instead of a round trip to a hosted recommender.
+    RECOMMENDER_URL: http://recommender:8000
+  depends_on:
+    recommender:
+      condition: service_started
+  networks: [iris]
+  restart: unless-stopped
+  # PID 1 in the container must forward SIGTERM to node, or graceful shutdown
+  # never runs and in-flight requests are cut off on every deploy.
+  init: true
+  logging: &json-logs
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "10"
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: iris-caddy
+    environment:
+      # Caddy reads these from its own environment via {$VAR} in the Caddyfile,
+      # so they have to be passed through explicitly. Override the hostname for
+      # pre-DNS testing: SITE_ADDRESS=":80" ./deploy/deploy.sh
+      SITE_ADDRESS: ${SITE_ADDRESS:-iris-api.1nri.store}
+      ACME_EMAIL: ${ACME_EMAIL:-1nriworldwide@gmail.com}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # caddy_data holds the Let's Encrypt account and certificates. Losing it
+      # means re-issuing on every restart, which will hit rate limits.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api1, api2, api3]
+    networks: [iris]
+    restart: unless-stopped
+    logging: *json-logs
+
+  api1:
+    <<: *api-common
+    container_name: iris-api1
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      LOG_FORMAT: json
+      RECOMMENDER_URL: http://recommender:8000
+      INSTANCE_ID: api1
+      RUN_CRONS: "false"
+
+  api2:
+    <<: *api-common
+    container_name: iris-api2
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      LOG_FORMAT: json
+      RECOMMENDER_URL: http://recommender:8000
+      INSTANCE_ID: api2
+      RUN_CRONS: "false"
+
+  api3:
+    <<: *api-common
+    container_name: iris-api3
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      LOG_FORMAT: json
+      RECOMMENDER_URL: http://recommender:8000
+      INSTANCE_ID: api3
+      RUN_CRONS: "false"
+
+  # The one container that owns the schedulers. Reconciliation and the pickup
+  # reminder must fire once per tick, not once per replica — duplicates would
+  # mean repeated Paystack reconciliation and duplicate customer SMS. It is
+  # deliberately absent from Caddy's upstream list, so cron work never adds
+  # latency to a request.
+  worker:
+    <<: *api-common
+    container_name: iris-worker
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      LOG_FORMAT: json
+      RECOMMENDER_URL: http://recommender:8000
+      INSTANCE_ID: worker
+      RUN_CRONS: "true"
+
+  recommender:
+    build:
+      context: ./recommender
+      dockerfile: Dockerfile
+    image: iris-recommender:local
+    container_name: iris-recommender
+    environment:
+      HF_HOME: /app/.cache/huggingface
+    volumes:
+      # Only used if a cold-start path pulls a sentence-transformers model;
+      # keeps that download from repeating on every restart.
+      - hf_cache:/app/.cache/huggingface
+    networks: [iris]
+    restart: unless-stopped
+    # Serving reads precomputed .pkl artifacts and FAISS indexes, so this sits
+    # well under the cap. The cap is here to stop a cold-start model load from
+    # squeezing the API replicas on an 8 GB box.
+    mem_limit: 3g
+    logging: *json-logs
+
+networks:
+  iris:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
+  hf_cache:

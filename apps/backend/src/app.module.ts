@@ -5,6 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { SupabaseModule } from './common/supabase/supabase.module';
 import { ActivityLogModule } from './common/activity/activity-log.module';
+import { HealthModule } from './common/health/health.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -36,13 +37,22 @@ import { AlliesModule } from './allies/allies.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    // In-process scheduler for the abandoned-checkout recovery cron.
-    ScheduleModule.forRoot(),
+    // In-process scheduler for the reconciliation and reminder crons.
+    //
+    // In production the API runs as several identical replicas, and every
+    // @Cron would otherwise fire once per replica — duplicate Paystack
+    // reconciliation, duplicate customer SMS. Only the dedicated worker
+    // container sets RUN_CRONS=true, so everywhere else the scheduler is never
+    // registered and the @Cron decorators are inert metadata. Gating here
+    // rather than unregistering later matters: jobs are created during
+    // app.init() and would already be live by the time main.ts could stop them.
+    ...(process.env.RUN_CRONS === 'true' ? [ScheduleModule.forRoot()] : []),
     // Rate limiting — only enforced where ThrottlerGuard is mounted
     // (public analytics ingest routes), not globally.
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     SupabaseModule,
     ActivityLogModule,
+    HealthModule,
     LetsfishModule,
     AuthModule,
     ProfileModule,
