@@ -27,7 +27,12 @@ import {
   aggregateTimestamp,
   countsAsOrder,
 } from './aggregate-sale';
-import { hasFinished, settlesAtTheTill } from './popup-rules';
+import {
+  hasFinished,
+  normalizeEventDates,
+  settlesAtTheTill,
+  unstructuredSwitchError,
+} from './popup-rules';
 
 /** Postgres unique_violation. */
 const UNIQUE_VIOLATION = '23505';
@@ -114,16 +119,20 @@ export class PopupSalesService {
 
   async createEvent(dto: CreateEventDto, userId: string) {
     const db = this.supabase.getAdminClient();
+    const dates = normalizeEventDates(dto.event_date, dto.end_date);
+    if ('error' in dates) throw new BadRequestException(dates.error);
+
     const { data, error } = await db
       .from('popup_events')
       .insert({
         name: dto.name,
         description: dto.description || null,
         location: dto.location || null,
-        event_date: dto.event_date || null,
+        ...dates,
         status: dto.status || 'draft',
         created_by: userId,
         visitor_count: (dto as any).visitor_count ?? null,
+        is_unstructured: dto.is_unstructured ?? false,
       })
       .select()
       .single();
@@ -134,9 +143,58 @@ export class PopupSalesService {
 
   async updateEvent(id: string, dto: UpdateEventDto) {
     const db = this.supabase.getAdminClient();
+
+    const { data: current } = await db
+      .from('popup_events')
+      .select('event_date, end_date, is_unstructured')
+      .eq('id', id)
+      .single();
+
+    if (!current) throw new NotFoundException('Event not found');
+
+    const update: Record<string, unknown> = { ...dto };
+
+    // Checked against the stored dates too, so moving only the start date can't
+    // leave the end behind it. A cleared end date (the edit form sends null for
+    // a single-day pop-up) becomes the start date.
+    if (dto.event_date !== undefined || dto.end_date !== undefined) {
+      const dates = normalizeEventDates(
+        dto.event_date !== undefined ? dto.event_date : current.event_date,
+        dto.end_date !== undefined ? dto.end_date : current.end_date,
+      );
+      if ('error' in dates) throw new BadRequestException(dates.error);
+      Object.assign(update, dates);
+    }
+
+    if (dto.is_unstructured !== undefined) {
+      // Only a real change needs checking; re-sending the current value is a no-op.
+      if (current.is_unstructured !== dto.is_unstructured) {
+        const [{ count: realOrderCount }, { count: aggregateCount }] = await Promise.all([
+          db
+            .from('popup_orders')
+            .select('id', { count: 'exact', head: true })
+            .eq('event_id', id)
+            .eq('is_aggregate', false)
+            .neq('status', 'cancelled'),
+          db
+            .from('popup_orders')
+            .select('id', { count: 'exact', head: true })
+            .eq('event_id', id)
+            .eq('is_aggregate', true),
+        ]);
+
+        const reason = unstructuredSwitchError({
+          toUnstructured: dto.is_unstructured,
+          realOrderCount: realOrderCount ?? 0,
+          hasAggregate: (aggregateCount ?? 0) > 0,
+        });
+        if (reason) throw new BadRequestException(reason);
+      }
+    }
+
     const { data, error } = await db
       .from('popup_events')
-      .update({ ...dto })
+      .update(update)
       .eq('id', id)
       .select()
       .single();
@@ -167,11 +225,19 @@ export class PopupSalesService {
 
     const { data: event } = await db
       .from('popup_events')
-      .select('id, event_date')
+      .select('id, event_date, is_unstructured')
       .eq('id', eventId)
       .single();
 
     if (!event) throw new NotFoundException('Event not found');
+
+    // A structured pop-up's sales are rung up individually; a lump total on top
+    // of them would count the same money and units twice.
+    if (!event.is_unstructured) {
+      throw new BadRequestException(
+        'This pop-up takes individual orders, so it has no unitemized totals. Mark it as unstructured first.',
+      );
+    }
 
     // Without a date there is no period to book the money into, and backdating is
     // the entire point — booking it as today would quietly move a past pop-up's
@@ -674,11 +740,16 @@ export class PopupSalesService {
     // rather than a status someone has to remember to set — see hasFinished().
     const { data: event, error: eventError } = await db
       .from('popup_events')
-      .select('id, name, location, event_date, end_date, status')
+      .select('id, name, location, event_date, end_date, status, is_unstructured')
       .eq('id', eventId)
       .single();
 
     if (eventError || !event) throw new NotFoundException('Event not found');
+    if (event.is_unstructured) {
+      throw new BadRequestException(
+        'This is an unstructured pop-up. Record its totals instead of ringing up sales.',
+      );
+    }
     if (hasFinished(event)) {
       throw new BadRequestException(
         'This pop-up has finished and cannot accept new orders. Record its totals from the event instead.',

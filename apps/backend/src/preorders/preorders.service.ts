@@ -403,10 +403,16 @@ export class PreordersService {
     if (dto.event_id) {
       const { data: event, error: eventError } = await db
         .from('popup_events')
-        .select('id, event_date, end_date, status')
+        .select('id, event_date, end_date, status, is_unstructured')
         .eq('id', dto.event_id)
         .single();
       if (eventError || !event) throw new BadRequestException('Event not found');
+      // An unstructured pop-up has no till — its sales are one recorded total.
+      if (event.is_unstructured) {
+        throw new BadRequestException(
+          'This is an unstructured pop-up and does not take individual orders',
+        );
+      }
       // Gated on the event's own dates rather than a status someone has to
       // remember to set — same rule the pop-up till uses.
       if (hasFinished(event)) {

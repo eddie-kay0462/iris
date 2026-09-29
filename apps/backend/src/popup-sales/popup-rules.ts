@@ -49,6 +49,54 @@ export function isRunningToday(event: EventDates, now = today()): boolean {
   return start <= now && now <= end;
 }
 
+/**
+ * The dates an event should be saved with, or an error message.
+ *
+ * A single-day pop-up ends on the day it starts, so a missing end date is filled
+ * in with the start date — every event then carries both ends of its own range
+ * instead of each reader having to know the fallback. An end before the start
+ * is refused rather than guessed at.
+ */
+export function normalizeEventDates(
+  startDate: string | null | undefined,
+  endDate: string | null | undefined,
+): { event_date: string | null; end_date: string | null } | { error: string } {
+  const start = startDate ? startDate.slice(0, 10) : null;
+  const end = endDate ? endDate.slice(0, 10) : start;
+  if (start && end && end < start) {
+    return { error: 'A pop-up can’t end before it starts.' };
+  }
+  return { event_date: start, end_date: end };
+}
+
+export interface UnstructuredSwitch {
+  /** The value the event is being switched to. */
+  toUnstructured: boolean;
+  /** Rung-up sales on the event: not aggregates, not cancelled. */
+  realOrderCount: number;
+  /** Whether the event already carries recorded unitemized totals. */
+  hasAggregate: boolean;
+}
+
+/**
+ * Why a pop-up can't be switched between structured and unstructured, or null
+ * if it can.
+ *
+ * An event holds either rung-up sales or one lump total, never both — both at
+ * once is how the same money and units get counted twice. So a switch that
+ * would leave the event holding the wrong kind of record is refused, and staff
+ * clear that record first.
+ */
+export function unstructuredSwitchError(input: UnstructuredSwitch): string | null {
+  if (input.toUnstructured && input.realOrderCount > 0) {
+    return 'This pop-up already has rung-up sales, so it can’t be made unstructured. Cancel or refund them first.';
+  }
+  if (!input.toUnstructured && input.hasAggregate) {
+    return 'This pop-up has recorded totals. Remove them before switching it back to taking individual orders.';
+  }
+  return null;
+}
+
 export interface SettlementInput {
   payment_method?: string | null;
   payment_reference?: string | null;

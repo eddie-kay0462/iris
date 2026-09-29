@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { Anton } from "next/font/google";
 import {
   Plus,
   Minus,
@@ -30,6 +31,7 @@ import {
   Package,
   Sigma,
   Info,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCreatePopupPreorder, usePopupEventPreorders, type Preorder } from "@/lib/api/preorders";
@@ -2967,6 +2969,41 @@ function NewOrderModal({
 }
 // ─── New Event Modal ──────────────────────────────────────────────────────────
 
+/**
+ * Shared by the New and Edit event modals. An unstructured pop-up never rings
+ * anything up — all it records is the stall's total revenue and units sold.
+ */
+function UnstructuredToggle({
+  id,
+  checked,
+  onChange,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id={id}
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+        />
+        <label htmlFor={id} className="text-sm text-slate-600 cursor-pointer">
+          Unstructured pop-up
+        </label>
+      </div>
+      <p className="mt-1 pl-6 text-[11px] text-slate-400">
+        No individual orders — record only total revenue and units sold. Counts
+        toward revenue and Road to HQ.
+      </p>
+    </div>
+  );
+}
+
 function NewEventModal({ onClose }: { onClose: () => void }) {
   const createEvent = useCreatePopupEvent();
   const [name, setName] = useState("");
@@ -2974,6 +3011,7 @@ function NewEventModal({ onClose }: { onClose: () => void }) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isMultiDay, setIsMultiDay] = useState(false);
+  const [isUnstructured, setIsUnstructured] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -2985,6 +3023,7 @@ function NewEventModal({ onClose }: { onClose: () => void }) {
       location: location || undefined,
       event_date: startDate || undefined,
       end_date: isMultiDay && endDate ? endDate : undefined,
+      is_unstructured: isUnstructured,
     });
     onClose();
   }
@@ -3078,6 +3117,11 @@ function NewEventModal({ onClose }: { onClose: () => void }) {
               />
             </div>
           )}
+          <UnstructuredToggle
+            id="new-unstructured"
+            checked={isUnstructured}
+            onChange={setIsUnstructured}
+          />
           {/* No status to pick. A pop-up is on when its dates say it is, and it
               stops taking orders the day after it ends. */}
           <div className="flex gap-3 pt-2">
@@ -3113,23 +3157,35 @@ function EditEventModal({ event, onClose }: { event: PopupEvent; onClose: () => 
   const [visitorCount, setVisitorCount] = useState(
     event.visitor_count != null ? String(event.visitor_count) : "",
   );
-  const isMultiDay = !!(event.end_date);
+  // A single-day pop-up is saved with its end date equal to its start date, so
+  // having an end date alone doesn't make it multi-day.
+  const isMultiDay = !!event.end_date && event.end_date !== event.event_date;
   const [multiDay, setMultiDay] = useState(isMultiDay);
+  const [unstructured, setUnstructured] = useState(!!event.is_unstructured);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    await updateEvent.mutateAsync({
-      id: event.id,
-      dto: {
-        name,
-        location: location || undefined,
-        event_date: startDate || undefined,
-        end_date: multiDay && endDate ? endDate : null as any,
-        visitor_count: visitorCount !== "" ? parseInt(visitorCount, 10) : undefined,
-      },
-    });
-    onClose();
+    try {
+      await updateEvent.mutateAsync({
+        id: event.id,
+        dto: {
+          name,
+          location: location || undefined,
+          event_date: startDate || undefined,
+          // Single-day: null, which the server turns into the start date.
+          end_date: multiDay && endDate ? endDate : null as any,
+          visitor_count: visitorCount !== "" ? parseInt(visitorCount, 10) : undefined,
+          // Sent only on a change: the server checks a switch against the event's
+          // existing sales and totals, and refuses one that would double count.
+          is_unstructured:
+            unstructured !== !!event.is_unstructured ? unstructured : undefined,
+        },
+      });
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save the event.");
+    }
   }
 
   return (
@@ -3225,6 +3281,11 @@ function EditEventModal({ event, onClose }: { event: PopupEvent; onClose: () => 
               Foot traffic at the event — enables conversion rate and revenue-per-visitor analytics.
             </p>
           </div>
+          <UnstructuredToggle
+            id="edit-unstructured"
+            checked={unstructured}
+            onChange={setUnstructured}
+          />
           <div className="flex gap-3 pt-2">
             <button
               type="button"
@@ -3372,7 +3433,7 @@ function RecordTotalsModal({ event, onClose }: { event: PopupEvent; onClose: () 
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
             />
             <p className="mt-1 text-[11px] text-slate-400">
-              Everything taken at the stand that isn&apos;t already an order above.
+              Everything taken at the stand.
             </p>
           </div>
 
@@ -3458,6 +3519,132 @@ function RecordTotalsModal({ event, onClose }: { event: PopupEvent; onClose: () 
         />
       )}
     </div>
+  );
+}
+
+// ─── Unstructured Event Overview ─────────────────────────────────────────────
+
+// A condensed block face for the overview's two headline figures. latin-ext is
+// needed as well as latin: that is the subset the ₵ glyph lives in.
+const blockFigures = Anton({ weight: "400", subsets: ["latin", "latin-ext"] });
+
+/**
+ * What an unstructured pop-up opens to instead of the till. There are no orders
+ * to list — just the event and the two numbers it was recorded with.
+ */
+function UnstructuredEventOverview({
+  event,
+  onBack,
+}: {
+  event: PopupEvent;
+  onBack: () => void;
+}) {
+  const [showTotals, setShowTotals] = useState(false);
+  const phase = eventPhase(event);
+  const aggregate = event.aggregate ?? null;
+
+  return (
+    <>
+      <section className="space-y-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Events
+          </button>
+          <h1 className="text-xl font-semibold text-slate-900">{event.name}</h1>
+          <span className="text-sm text-slate-400">{formatEventDates(event)}</span>
+        </div>
+
+        {/* Details */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${EVENT_PHASE_STYLES[phase]}`}>
+              {EVENT_PHASE_LABELS[phase]}
+            </span>
+            <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-medium text-slate-500">
+              Unstructured
+            </span>
+          </div>
+          <div className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 shrink-0 text-slate-400" />
+              <span>{formatEventDates(event)}</span>
+            </div>
+            {event.location && (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 shrink-0 text-slate-400" />
+                <span>{event.location}</span>
+              </div>
+            )}
+            {event.visitor_count != null && (
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 shrink-0 text-slate-400" />
+                <span>{event.visitor_count.toLocaleString()} estimated visitors</span>
+              </div>
+            )}
+            {aggregate?.note && (
+              <div className="flex items-center gap-2">
+                <Info className="h-4 w-4 shrink-0 text-slate-400" />
+                <span>{aggregate.note}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* The two numbers this pop-up is recorded with */}
+        <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center">
+          {/* Side by side (stacked on phones). Each column is its own container,
+              so cqw is measured against that half of the card (Anton is condensed,
+              hence the larger cqw than a regular face would allow); both figures share
+              one size — the one a full revenue amount fits at — so they read as a
+              pair, and vh keeps the overview on one screen. */}
+          <div className="grid gap-8 sm:grid-cols-2">
+            <div className="[container-type:inline-size]">
+              <p className="text-sm font-medium text-slate-500">Revenue</p>
+              <p
+                className={`${blockFigures.className} mt-3 whitespace-nowrap leading-none tabular-nums text-black`}
+                style={{ fontSize: "min(10rem, 17.5cqw, 14.5vh)" }}
+              >
+                {aggregate
+                  ? `₵${aggregate.revenue.toLocaleString("en-GB", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}`
+                  : "—"}
+              </p>
+            </div>
+            <div className="[container-type:inline-size]">
+              <p className="text-sm font-medium text-slate-500">Units sold</p>
+              <p
+                className={`${blockFigures.className} mt-3 whitespace-nowrap leading-none tabular-nums text-black`}
+                style={{ fontSize: "min(10rem, 17.5cqw, 14.5vh)" }}
+              >
+                {aggregate ? aggregate.units.toLocaleString() : "—"}
+              </p>
+            </div>
+          </div>
+          <p className="mt-8 text-xs text-slate-400">
+            {aggregate
+              ? "Counts toward revenue reports and the Road to HQ goal."
+              : "No totals recorded yet."}
+          </p>
+          <button
+            onClick={() => setShowTotals(true)}
+            className="mx-auto mt-6 flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
+          >
+            <Sigma className="h-4 w-4" />
+            {aggregate ? "Edit Unitemized Totals" : "Record Unitemized Totals"}
+          </button>
+        </div>
+      </section>
+
+      {showTotals && (
+        <RecordTotalsModal event={event} onClose={() => setShowTotals(false)} />
+      )}
+    </>
   );
 }
 
@@ -3585,9 +3772,16 @@ function EventHubView({
               >
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="text-sm font-semibold text-slate-900 leading-snug">{event.name}</h3>
-                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${EVENT_PHASE_STYLES[phase]}`}>
-                    {EVENT_PHASE_LABELS[phase]}
-                  </span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {event.is_unstructured && (
+                      <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-medium text-slate-500">
+                        Unstructured
+                      </span>
+                    )}
+                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${EVENT_PHASE_STYLES[phase]}`}>
+                      {EVENT_PHASE_LABELS[phase]}
+                    </span>
+                  </div>
                 </div>
                 <div className="mt-3 space-y-1.5">
                   <div className="flex items-center gap-1.5 text-xs text-slate-500">
@@ -3615,7 +3809,11 @@ function EventHubView({
                     onClick={() => onSelectEvent(event.id)}
                     className="flex-1 rounded-lg bg-slate-900 py-2 text-xs font-medium text-white hover:bg-slate-800"
                   >
-                    {phase === "past" ? "View Orders" : "Open Event"}
+                    {event.is_unstructured
+                      ? "View Pop-up"
+                      : phase === "past"
+                        ? "View Orders"
+                        : "Open Event"}
                   </button>
                   <button
                     onClick={() => setEditingEvent(event)}
@@ -3624,9 +3822,11 @@ function EventHubView({
                     Edit
                   </button>
                 </div>
-                {/* Offered for finished pop-ups only: recording a lump total while
-                    staff are still ringing sales up is how you double count. */}
-                {phase === "past" && (
+                {/* Unstructured pop-ups only. They have no till, so there are no
+                    rung-up sales to double count against, and totals can be
+                    recorded or corrected at any point — a running tally on a
+                    multi-day pop-up included. */}
+                {event.is_unstructured && (
                   <button
                     onClick={() => setTotalsEvent(event)}
                     className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
@@ -4106,10 +4306,15 @@ export default function PopupSalesPage() {
   // Derived from the event's own dates rather than a status someone has to
   // remember to set. A pop-up that's over stops taking orders by itself.
   const isPast = selectedEvent ? hasFinished(selectedEvent) : false;
+  // An unstructured pop-up has no till at all — its sales are one recorded total.
+  const isUnstructured = !!selectedEvent?.is_unstructured;
+  const canTakeOrders = !isPast && !isUnstructured;
 
   // Both polls stop while a modal is open. They were firing mid-sale and
   // competing with the create request the customer is waiting on.
-  const pollsPaused = showNewOrder || !!momoChargeOrder || !!editOrder || !!refundOrder;
+  // An unstructured pop-up has no orders to poll for.
+  const pollsPaused =
+    isUnstructured || showNewOrder || !!momoChargeOrder || !!editOrder || !!refundOrder;
 
   const { data: stats } = usePopupStats(selectedEventId, pollsPaused);
   // Loaded for every tab, not just the Collections one, so the badge tells staff
@@ -4247,6 +4452,13 @@ export default function PopupSalesPage() {
     );
   }
 
+  // No till for an unstructured pop-up — just its overview and totals.
+  if (selectedEvent?.is_unstructured) {
+    return (
+      <UnstructuredEventOverview event={selectedEvent} onBack={() => selectEvent(null)} />
+    );
+  }
+
   return (
     <>
       <section className="space-y-6">
@@ -4270,7 +4482,7 @@ export default function PopupSalesPage() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            {!isPast && (
+            {canTakeOrders && (
               <button
                 onClick={() => setShowNewOrder(true)}
                 className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
@@ -4287,11 +4499,7 @@ export default function PopupSalesPage() {
         {isPast && (
           <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             <Lock className="h-4 w-4 shrink-0" />
-            <span>
-              This pop-up has finished, so new orders can&apos;t be added. If sales
-              were taken but never rung up, record them from the event list with{" "}
-              <strong>Record Unitemized Totals</strong>.
-            </span>
+            <span>This pop-up has finished, so new orders can&apos;t be added.</span>
           </div>
         )}
 
@@ -4390,7 +4598,7 @@ export default function PopupSalesPage() {
         </div>
       </section>
 
-      {showNewOrder && selectedEventId && !isPast && (
+      {showNewOrder && selectedEventId && canTakeOrders && (
         <NewOrderModal
           eventId={selectedEventId}
           onClose={() => setShowNewOrder(false)}

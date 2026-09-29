@@ -3,6 +3,8 @@ import {
   hasFinished,
   isRunningToday,
   settlesAtTheTill,
+  normalizeEventDates,
+  unstructuredSwitchError,
 } from './popup-rules';
 
 /**
@@ -159,5 +161,65 @@ describe('isRunningToday', () => {
     expect(isRunningToday({ event_date: '2026-09-11' }, now)).toBe(false);
     expect(isRunningToday({ event_date: '2026-09-13' }, now)).toBe(false);
     expect(isRunningToday({}, now)).toBe(false);
+  });
+});
+
+/**
+ * An event holds rung-up sales or one lump total, never both — both is how the
+ * same pop-up gets counted twice in revenue and Road to HQ.
+ */
+describe('unstructuredSwitchError', () => {
+  it('allows making an event with no sales unstructured', () => {
+    expect(
+      unstructuredSwitchError({ toUnstructured: true, realOrderCount: 0, hasAggregate: false }),
+    ).toBeNull();
+  });
+
+  it('refuses making an event with rung-up sales unstructured', () => {
+    expect(
+      unstructuredSwitchError({ toUnstructured: true, realOrderCount: 3, hasAggregate: false }),
+    ).toMatch(/rung-up sales/);
+  });
+
+  it('allows switching back to structured once the totals are gone', () => {
+    expect(
+      unstructuredSwitchError({ toUnstructured: false, realOrderCount: 0, hasAggregate: false }),
+    ).toBeNull();
+  });
+
+  it('refuses switching back to structured while totals are recorded', () => {
+    expect(
+      unstructuredSwitchError({ toUnstructured: false, realOrderCount: 0, hasAggregate: true }),
+    ).toMatch(/recorded totals/);
+  });
+});
+
+describe('normalizeEventDates', () => {
+  it('ends a single-day pop-up on the day it starts', () => {
+    expect(normalizeEventDates('2026-09-12', null)).toEqual({
+      event_date: '2026-09-12',
+      end_date: '2026-09-12',
+    });
+    expect(normalizeEventDates('2026-09-12', undefined)).toEqual({
+      event_date: '2026-09-12',
+      end_date: '2026-09-12',
+    });
+  });
+
+  it('keeps a multi-day range as given', () => {
+    expect(normalizeEventDates('2026-09-10', '2026-09-14')).toEqual({
+      event_date: '2026-09-10',
+      end_date: '2026-09-14',
+    });
+  });
+
+  it('refuses an end before the start', () => {
+    expect(normalizeEventDates('2026-09-14', '2026-09-10')).toEqual({
+      error: expect.stringMatching(/end before it starts/),
+    });
+  });
+
+  it('leaves an undated event undated', () => {
+    expect(normalizeEventDates(null, null)).toEqual({ event_date: null, end_date: null });
   });
 });
