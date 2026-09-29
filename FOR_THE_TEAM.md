@@ -6228,3 +6228,101 @@ Events closed by hand in the past stay closed — one of them has no date on it 
 - **Nothing else here has been tried on a real till either** — it all builds and the automated checks pass, but the migration hasn't been applied anywhere yet.
 - **The "Active" state still exists in the database** for old orders, it just can't be created any more. We checked the live data and there are none left, so nothing is hidden by dropping the tab.
 - **Event status is still stored, just ignored.** If the dates-instead-of-buttons approach turns out to be wrong, putting the buttons back is easy — nothing was deleted.
+
+---
+
+## Moved the site's engine room onto our own server (September 2026)
+
+The part of the site that does the actual work — handling orders, talking to the database, sending receipts — used to run on a rented service called Render. It now runs on a server we rent outright from Contabo. Same web address, nothing to change on your end, and customers can't tell the difference. We get noticeably more computing power for roughly the same money (about $8.60 a month, including daily backups).
+
+The bigger win is that **there are now three copies of it running instead of one.** Before, if it crashed or we pushed an update, the site's checkout was down for those few seconds. Now traffic is shared between three, and if one falls over the other two pick it up without anyone noticing. Updates go out one copy at a time, so there's no moment where nothing is answering. We tested this by deliberately killing one mid-traffic — every request still went through.
+
+The recommender (the thing that suggests products) moved onto the same server. It used to be a separate rented service that our site had to reach across the public internet; now they're side by side, which is both faster and one less bill.
+
+### Two real bugs turned up while doing this
+
+Neither was caused by the move — both were already there, and running multiple copies is what made them obvious.
+
+- **Scheduled jobs would have run three times over.** Things like "check Paystack for payments we missed" and "remind customers about pop-up collection" run on a timer. With three copies of the server, each would have run its own timer — meaning **customers could have received the same SMS three times**, and payment reconciliation would have tripped over itself. There's now one dedicated copy that owns all the timers, and the other three have them switched off entirely. This was the single most important thing to get right, and it's checked explicitly every time we deploy.
+- **Rate limiting was counting every visitor as the same person.** The site limits how fast the analytics tracker can send data, to stop abuse. Because of how the server was reading visitor addresses, it was treating *everyone* as one visitor — so once the whole store went past about 60 events a minute, it would start silently dropping analytics data for everybody. This was almost certainly already happening on Render. Fixed.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `docker-compose.yml` | New. The blueprint for the whole thing: three copies of the API, one timer worker, the recommender, and the traffic director in front. |
+| `Caddyfile` | New. Configures the traffic director — shares requests between the three copies, notices when one is unhealthy and routes around it, and handles the padlock/HTTPS certificate automatically. |
+| `apps/backend/Dockerfile`, `apps/backend/.dockerignore` | New. Recipe for packaging the backend so it runs identically everywhere. |
+| `recommender/Dockerfile` | Same for the recommender, plus a change that cut its size from several gigabytes to about 1.5 — it was downloading a big graphics-card library it can never use. |
+| `apps/backend/src/main.ts`, `apps/backend/src/app.module.ts` | The two bug fixes above, plus shutting down cleanly mid-update instead of dropping whatever it was doing. |
+| `apps/backend/src/common/health/` | New. A simple "are you alive?" endpoint the traffic director checks every 10 seconds to decide which copies get traffic. |
+| `deploy/bootstrap.sh` | New. One-time setup for a fresh server — locks down remote access, firewall, automatic security patches. |
+| `deploy/deploy.sh` | New. The deploy command. Updates one copy at a time and waits for each to be healthy before touching the next. |
+| `deploy/env.production.example`, `deploy/README.md` | New. The list of settings the server needs, and the full written instructions: setting up, going live, rolling back, and how to read the logs. |
+
+> **Heads-up — the old Render services are suspended, not deleted**
+>
+> That's deliberate. If anything turns out to be wrong, switching back is a single DNS change that takes about five minutes — but only while those services still exist. Please don't delete them for at least a week.
+
+### How to test
+
+Mostly just use the site normally — if nothing seems different, that's the correct outcome. Specifically worth a look:
+
+1. Place a real order end to end and confirm the receipt arrives and the order shows in admin. **(Already done once — it worked.)**
+2. Log into admin, open Orders and Products, and run an analytics report. The reports are the heaviest thing the server does, so they're the best test of the new machine.
+3. Check the padlock in the browser on `iris-api.1nri.store` — the security certificate is now issued and renewed automatically rather than by Render.
+4. Over the next few days, keep half an eye out for **duplicate SMS** to customers. That's the failure we specifically guarded against, and it's the one thing that would be most visible if we got it wrong.
+
+### Worth knowing
+
+- **The old Render setup is still there, suspended.** Rollback is a five-minute DNS change for as long as it stays that way.
+- **We now look after this server ourselves.** Render handled security patches and restarts invisibly; that's our job now. Automatic security updates are switched on, and there are daily backups with one-click restore through Contabo.
+- **The setup already had one rough moment.** The server rebooted itself for a routine update and remote access didn't come back — the site itself was completely unaffected and kept serving the whole time, but we couldn't log in to administer it until we fixed it through Contabo's emergency console. The cause is fixed and the setup script now refuses to finish unless it has proven remote access still works.
+- **One thing is deliberately looser than before.** The analytics rate limit now counts separately on each of the three copies, so it's effectively three times as permissive. That's fine for its purpose (stopping abuse), and tightening it properly would mean adding another moving part we don't need yet.
+- **Product images and the database haven't moved** — they're still on Supabase, exactly as before. This change is only about the server that does the thinking.
+
+---
+
+## Unstructured pop-ups (September 2026)
+
+Some pop-ups are too busy to ring up sale by sale — all we have afterwards is the paper tally: how much money came in, and how many units went out. We could already record those two numbers, but the button for it sat on **every** finished pop-up, and nothing stopped someone recording a lump total on top of sales that had already been rung up. That's the one way to count the same money and units twice.
+
+Now it's a choice you make on the pop-up itself. When creating or editing a pop-up there's a new **"Unstructured pop-up"** tick box:
+
+- **Unstructured** — no till at all. The card says **View Pop-up**, which opens a simple overview page: the pop-up's details, with its **revenue and units sold shown big in the middle** (in a bold block font), and a button underneath to record or edit the totals. You can enter or correct the totals at any time, not just after the pop-up ends — handy for a running tally on a multi-day pop-up. The numbers count toward revenue reports and the Road to HQ counter.
+- **Normal (structured)** — works exactly as before, and the "Unitemized Totals" button no longer appears on its card.
+
+To keep the two from mixing, you **can't** make a pop-up unstructured once it has rung-up sales, and you can't switch one back to normal while it has recorded totals — clear those first. The site explains why if you try.
+
+### Two date fixes along the way
+
+- **Multi-day pop-ups were losing their end date.** Creating a pop-up never actually saved the end date, so a multi-day pop-up was treated as over after its first day and stopped taking orders. Fixed — but pop-ups created before the fix need their end date set again via **Edit**.
+- **Single-day pop-ups now end on the day they start**, rather than having a blank end date. Existing pop-ups were updated to match; nothing about when they close has changed.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `supabase/migrations/20260929000000_popup_events_unstructured.sql` | New. Adds the "unstructured" setting to pop-ups, and marks every pop-up that already had recorded totals as unstructured so those stay editable. |
+| `supabase/migrations/20260929000001_popup_events_end_date_default.sql` | New. Fills in the end date for existing single-day pop-ups. |
+| `apps/backend/src/popup-sales/popup-rules.ts`, `popup-rules.spec.ts` | The rules for when a pop-up can switch between the two kinds, and how start/end dates are saved — with automated tests. |
+| `apps/backend/src/popup-sales/popup-sales.service.ts` | Saves the new setting and the end date; refuses till sales on unstructured pop-ups and totals on normal ones; blocks switches that would double count. |
+| `apps/backend/src/popup-sales/dto/create-event.dto.ts`, `update-event.dto.ts` | Accept the new setting. |
+| `apps/backend/src/preorders/preorders.service.ts` | Pre-orders taken at the till are refused on unstructured pop-ups too. |
+| `apps/admin/lib/api/popup-sales.ts` | Knows about the new setting. |
+| `apps/admin/app/(dashboard)/popup-sales/page.tsx` | The tick box, the "Unstructured" tag on cards, the new overview page, and the till hidden for unstructured pop-ups. |
+
+> **Heads-up** — both migrations have already been applied to the live database. The only thing to do by hand is re-enter end dates on any multi-day pop-ups created before this fix.
+
+### How to test
+
+1. Create a pop-up with **Unstructured pop-up** ticked. Its card should show an "Unstructured" tag and a **View Pop-up** button.
+2. Open it — you should see its details and two large dashes, with a **Record Unitemized Totals** button. Record some numbers and watch them appear big on the page.
+3. Try unticking "Unstructured" in **Edit** — it should refuse while totals are recorded.
+4. Open a normal pop-up — the till works as usual, and its card has no totals button.
+5. Create a multi-day pop-up and confirm its end date shows on the card straight away.
+
+### Worth knowing
+
+- **This hasn't been clicked through in a real browser yet** — it builds and the automated checks pass, but the page design (especially the big figures) is worth a look on both a laptop and a phone.
+- The big revenue figure shows **₵** without the "GH", everywhere else on the pop-up pages still says **GH₵**.

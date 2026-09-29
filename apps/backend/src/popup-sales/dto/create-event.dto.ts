@@ -1,4 +1,4 @@
-import { IsDateString, IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsOptional, IsString } from 'class-validator';
 
 export class CreateEventDto {
   @IsString()
@@ -23,4 +23,9 @@ export class CreateEventDto {
   @IsOptional()
   @IsEnum(['draft', 'active'])
   status?: 'draft' | 'active';
+
+  // Records only total revenue and units instead of individual orders.
+  @IsOptional()
+  @IsBoolean()
+  is_unstructured?: boolean;
 }

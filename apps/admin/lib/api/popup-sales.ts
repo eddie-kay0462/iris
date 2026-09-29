@@ -43,6 +43,8 @@ export interface PopupEvent {
   end_date: string | null;
   status: PopupEventStatus;
   visitor_count: number | null;
+  /** Records only total revenue and units — no till, no individual orders. */
+  is_unstructured: boolean;
   /** Non-null when this pop-up's sales were recorded as one unitemized total. */
   aggregate?: PopupAggregate | null;
   created_by: string | null;
@@ -192,6 +194,7 @@ export interface CreateEventInput {
   event_date?: string;
   end_date?: string;
   status?: "draft" | "active";
+  is_unstructured?: boolean;
 }
 
 export interface UpdateEventInput {
@@ -202,6 +205,7 @@ export interface UpdateEventInput {
   end_date?: string;
   status?: PopupEventStatus;
   visitor_count?: number;
+  is_unstructured?: boolean;
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────

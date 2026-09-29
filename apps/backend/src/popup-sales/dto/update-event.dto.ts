@@ -1,4 +1,4 @@
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class UpdateEventDto {
@@ -32,4 +32,10 @@ export class UpdateEventDto {
   @IsInt()
   @Min(0)
   visitor_count?: number;
+
+  // Records only total revenue and units instead of individual orders. Switches
+  // that would conflict with the event's existing records are refused.
+  @IsOptional()
+  @IsBoolean()
+  is_unstructured?: boolean;
 }
