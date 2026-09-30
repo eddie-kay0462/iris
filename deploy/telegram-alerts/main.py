@@ -14,6 +14,7 @@ See deploy/README.md → "Telegram alerts" for setup.
 from __future__ import annotations
 
 import html
+import httpx
 import logging
 import os
 import re
@@ -37,6 +38,13 @@ CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
 DIGEST_HOUR = int(os.environ.get("ALERT_DIGEST_HOUR", "21"))
 TZ = ZoneInfo(os.environ.get("TZ", "Africa/Accra"))
 DEDUP_WINDOW = int(os.environ.get("ALERT_DEDUP_SECONDS", "600"))
+# Probed from inside the box, through public DNS and TLS, the way a customer's
+# browser reaches it. Every container can be healthy while this fails — Caddy
+# left on plain :80, a lapsed certificate, a firewall change — and nothing in
+# the logs would say so. Set to "off" to disable.
+PUBLIC_URL = os.environ.get("ALERT_PUBLIC_URL", "https://iris-api.1nri.store/api/health")
+PROBE_EVERY = 60
+PROBE_FAILS_BEFORE_ALERT = 3
 
 
 def esc(s: str) -> str:
@@ -50,6 +58,9 @@ class Alerter:
         self.dedup = Deduper(DEDUP_WINDOW)
         self.samples: dict[str, str] = {}
         self.muted_until = 0.0
+        self.probe_failures = 0
+        self.probe_last_error = ""
+        self.probe_down_since: float | None = None
         self._lock = threading.Lock()
         self.docker = DockerSource(self.on_record, self.on_container_event)
 
@@ -90,6 +101,40 @@ class Alerter:
             top = "\n".join(rec.stack.strip().splitlines()[:8])
             parts.append(f"<pre>{esc(top[:1500])}</pre>")
         return "\n".join(parts)
+
+    # -- public reachability -------------------------------------------------
+
+    def run_public_probe(self):
+        if PUBLIC_URL.lower() == "off":
+            return
+        client = httpx.Client(timeout=10.0, follow_redirects=False)
+        while True:
+            try:
+                r = client.get(PUBLIC_URL)
+                ok, err = r.status_code == 200, f"HTTP {r.status_code}"
+            except httpx.HTTPError as e:
+                ok, err = False, f"{type(e).__name__}: {e}"
+            self._probe_result(ok, err)
+            time.sleep(PROBE_EVERY)
+
+    def _probe_result(self, ok: bool, err: str = ""):
+        if ok:
+            if self.probe_down_since is not None:
+                mins = max(1, round((time.time() - self.probe_down_since) / 60))
+                self.tg.send(f"✅ <b>API reachable again</b> from the internet (was down ~{mins} min)")
+                self.stats.record_container_event("public API unreachable")
+            self.probe_failures, self.probe_down_since = 0, None
+            return
+        self.probe_failures += 1
+        self.probe_last_error = err
+        # Not muteable: this is "customers can't reach us", not an error log.
+        if self.probe_failures == PROBE_FAILS_BEFORE_ALERT:
+            self.probe_down_since = time.time() - PROBE_EVERY * (PROBE_FAILS_BEFORE_ALERT - 1)
+            self.tg.send(
+                f"🔴 <b>API unreachable from the internet</b>\n{esc(PUBLIC_URL)}\n"
+                f"<code>{esc(err[:300])}</code>\n"
+                "Containers may all look healthy — check Caddy / TLS / DNS / firewall."
+            )
 
     # -- housekeeping -------------------------------------------------------
 
@@ -140,10 +185,14 @@ class Alerter:
 
         if cmd == "/status":
             req, c4, err = self.stats.last_hour()
+            probe = ""
+            if PUBLIC_URL.lower() != "off":
+                probe = ("\n🌍 public URL: OK" if not self.probe_failures
+                         else f"\n🌍 public URL: FAILING ({self.probe_failures}×) — {esc(self.probe_last_error[:120])}")
             mute = f"\n🔕 muted for another {int((self.muted_until - time.time()) // 60)} min" if self.muted else ""
             return (
                 "<b>Iris status</b>\n" + "\n".join(self.docker.status_lines()) +
-                f"\n\n<b>Last hour:</b> {req:,} requests · {c4:,} 4xx · {err:,} errors{mute}"
+                f"\n\n<b>Last hour:</b> {req:,} requests · {c4:,} 4xx · {err:,} errors{probe}{mute}"
             )
 
         if cmd == "/errors":
@@ -223,6 +272,7 @@ def main():
         ("sender", tg.run_sender, ()),
         ("events", alerter.docker.run_events, ()),
         ("poller", tg.run_poller, (alerter.handle_command,)),
+        ("probe", alerter.run_public_probe, ()),
     ):
         threading.Thread(target=target, args=args, name=name, daemon=True).start()
 

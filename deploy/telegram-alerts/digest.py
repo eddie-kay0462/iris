@@ -40,7 +40,9 @@ class Stats:
         self.recent_errors: deque[ErrorEntry] = deque(maxlen=500)
         # minute -> [requests, 4xx, 5xx]; drives /status's "last hour"
         self._minutes: dict[int, list[int]] = defaultdict(lambda: [0, 0, 0])
-        self.scheduler_state: str = "not seen since alerts started"
+        # service -> owns the schedulers? Every replica announces its mode at
+        # boot; exactly one (the worker) should say ENABLED.
+        self.schedulers: dict[str, bool] = {}
         self._reset_day()
 
     def _reset_day(self):
@@ -89,7 +91,7 @@ class Stats:
                 if "reconciliation failed" in rec.message.lower() or "cron" in rec.context.lower():
                     self.cron_failures += 1
             elif rec.kind == "scheduler":
-                self.scheduler_state = f"{rec.service}: {rec.message}"
+                self.schedulers[rec.service] = "ENABLED" in rec.message
             self._prune(minute)
 
     def record_container_event(self, label: str):
@@ -118,6 +120,16 @@ class Stats:
                     grouped[e.fp].append(e)
         out = [(fp, len(es), {e.service for e in es}, es[-1].message) for fp, es in grouped.items()]
         return sorted(out, key=lambda r: -r[1])
+
+    def scheduler_summary(self) -> str:
+        owners = sorted(s for s, on in self.schedulers.items() if on)
+        if not self.schedulers:
+            return "no container has started since alerts came up"
+        if len(owners) == 1:
+            return f"✅ {owners[0]} owns the crons"
+        if not owners:
+            return "⚠️ no container has the crons enabled — reconciliation is not running"
+        return f"⚠️ crons enabled on {', '.join(owners)} — jobs will run more than once"
 
     def render_digest(self, memory: dict[str, str] | None = None, reset: bool = False) -> str:
         with self._lock:
@@ -158,7 +170,7 @@ class Stats:
             if memory:
                 lines.append("  memory: " + ", ".join(f"{s} {m}" for s, m in sorted(memory.items())))
 
-            lines += ["", "<b>Schedulers:</b>", f"  {_esc(self.scheduler_state)}"]
+            lines += ["", "<b>Schedulers:</b>", f"  {_esc(self.scheduler_summary())}"]
             lines.append(f"  cron failures today: {self.cron_failures}")
 
             if reset:
