@@ -6326,3 +6326,43 @@ To keep the two from mixing, you **can't** make a pop-up unstructured once it ha
 
 - **This hasn't been clicked through in a real browser yet** — it builds and the automated checks pass, but the page design (especially the big figures) is worth a look on both a laptop and a phone.
 - The big revenue figure shows **₵** without the "GH", everywhere else on the pop-up pages still says **GH₵**.
+
+---
+
+## Iris alerts on Telegram (September 2026)
+
+Since the backend moved onto our own server, the only way to see what it was doing was to log into that server and read the raw logs. Nobody was going to do that every day, so problems could sit unnoticed. Now the server tells us itself, through a Telegram bot.
+
+It **doesn't** send every log line. The site writes one line per visitor request, which would be thousands of messages a day, and Telegram would block the bot anyway. Instead it sends only what's worth knowing:
+
+- **🔥 Something broke.** For example, an order failed to save, a background job such as the Paystack payment check failed, or the recommender crashed. If the same problem keeps happening, you get **one** message and then at most one "×37 more" update every 10 minutes, not a flood. Everyday "not logged in" or "page not found" errors are counted but never alerted.
+- **🔴 A part of the server went down** (crashed, ran out of memory, or stopped answering), and ✅ when it's back. Our own planned restarts during updates stay quiet.
+- **🚀 An update started / ✅ finished / ❌ failed.**
+- **📊 A daily summary at 9pm:** how busy the site was, how fast it responded, the slowest pages, the most common errors, and whether anything restarted.
+
+You can also message the bot: `/status` shows whether everything is up, `/errors 1h` shows what went wrong recently, `/tail api1 20` shows the latest log lines, and `/mute 1h` silences error alerts during maintenance (crash alerts still come through). The bot only answers the one chat it's set up for; anyone else who finds it gets no reply. Passwords, keys and login tokens are blanked out before any message leaves the server.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `deploy/telegram-alerts/` | New. The bot itself: reads the logs, decides what's worth sending, groups repeats, builds the daily summary, and answers commands. It comes with automated tests. |
+| `docker-compose.yml` | Runs the bot alongside the rest of the server, plus a locked-down go-between that lets it *read* logs but never start, stop or change anything. |
+| `deploy/deploy.sh` | Sends the "update started / finished / failed" messages. |
+| `deploy/env.production.example` | Lists the two new settings: the bot's token and which chat to send to. |
+| `deploy/README.md` | New "Telegram alerts" section: step-by-step setup, the commands, and how to test it. |
+
+> **Heads-up / action required** — to switch this on, someone with server access must create the bot through Telegram's @BotFather, put its token and the chat number in the server's `.env` file, and run a deploy. The exact steps are in `deploy/README.md` under "Telegram alerts". Until then the bot just sits idle.
+
+### How to test
+
+1. After setup and a deploy, you should get 🚀, then 🟢 *Iris alerts online*, then ✅ in Telegram.
+2. Send the bot `/status`. Every part of the server should show green.
+3. Ask whoever runs the server to deliberately crash one copy of the API (the command is in the README). A 🔴 message should arrive within seconds, and a recovery message shortly after.
+4. Wait for 9pm and check that the daily summary arrives.
+
+### Worth knowing
+
+- **It hasn't run on the real server yet.** The automated tests pass, and so does a full practice run against a fake Telegram. The first real deploy is the proper test, especially checking that a normal update *doesn't* trigger crash alerts.
+- **If the whole server goes down, the bot goes down with it** and can't tell us. The README recommends a free outside checker (UptimeRobot) that pings the site every few minutes and messages Telegram if it stops answering. That isn't set up yet.
+- The daily numbers are kept in memory, so if the bot itself restarts partway through a day, that day's summary only covers the time since the restart.

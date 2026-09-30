@@ -203,6 +203,92 @@ docker compose logs worker | grep -i reconcil
 Logs rotate at 20 MB × 10 files per container, set in both `docker-compose.yml`
 and `/etc/docker/daemon.json`.
 
+## Telegram alerts
+
+`log-alerts` (`deploy/telegram-alerts/`) follows every container's logs and
+pushes what matters to a private Telegram chat. It does **not** forward every
+line — one line per request would blow through Telegram's ~1 message/second
+limit in minutes — it sends:
+
+| What | When |
+|---|---|
+| 🔥 **Errors** | any 5xx, any non-HTTP `error` line (cron failures, Supabase errors), Caddy 502/503/504, Caddy TLS errors, recommender tracebacks. 4xx are counted for the digest, never alerted. |
+| 🔁 **Repeats** | the same error (grouped across replicas, users and ids) alerts once, then at most one "×N more" line per 10 minutes while it keeps firing |
+| 🔴 **Containers** | crash, OOM kill, failing health check — and ✅ when it recovers. Deploy restarts are recognised and stay silent. |
+| 🚀 **Deploys** | started / complete / ❌ failed, sent by `deploy.sh` |
+| 📊 **Daily digest** | 21:00 Accra: requests per replica, 4xx/5xx, p50/p95 latency, slowest routes, top errors, container restarts, memory, scheduler state |
+
+Messages are redacted before they leave the box (bearer tokens, JWTs, Paystack
+keys, `token=`/`password=`/`secret=` values).
+
+It reads Docker through `docker-proxy`, which allows only GET on containers and
+events, and it talks to Telegram by long polling — so there's no host socket in
+an app container and no new open port.
+
+### Setup (once)
+
+1. **Create the bot.** In Telegram, open **@BotFather** → `/newbot` → name it
+   (e.g. "Iris Ops") and give it a username ending in `bot`. Copy the token it
+   gives you (`123456789:AA…`). Treat it like a password.
+2. **Find your chat id.** Open a chat with your new bot and send it anything.
+   Then, from your laptop:
+   ```bash
+   curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates" | grep -o '"chat":{"id":[0-9-]*'
+   # "chat":{"id":123456789      <- that number
+   ```
+   If it comes back empty, send the bot another message and retry.
+3. **Add both to the server's `.env`.**
+   ```bash
+   ssh iris@<vps-ip>
+   nano /opt/iris/.env
+   #   TELEGRAM_BOT_TOKEN=123456789:AA…
+   #   TELEGRAM_CHAT_ID=123456789
+   ls -l /opt/iris/.env     # still -rw------- ?
+   ```
+4. **Deploy.** `cd /opt/iris && ./deploy/deploy.sh`. You should get 🚀, then
+   🟢 *Iris alerts online*, then ✅.
+5. **Prove it works.**
+   ```bash
+   docker compose kill api2       # 🔴 api2 crashed … within seconds
+   docker compose up -d api2      # 🔁 / ✅ once it's healthy
+   ```
+   `docker compose kill` sends a kill, which is normally read as deliberate —
+   to simulate a real crash use `docker compose exec api2 kill 1` instead.
+   Then send the bot `/status` and `/tail api1 10`.
+6. **Cover the case the bot can't.** If the whole VPS goes down, the alerter
+   goes with it. Add a free external monitor — UptimeRobot (it has a built-in
+   Telegram integration) or Healthchecks.io — on
+   `https://iris-api.1nri.store/api/health`, every 5 minutes.
+
+### Commands
+
+Only your `TELEGRAM_CHAT_ID` gets answers; anyone else who finds the bot is
+ignored.
+
+```
+/status                 containers, health, uptime, last hour's requests/errors
+/errors [30m|1h|6h|1d]  recent errors, grouped, most frequent first
+/tail <service> [n]     last n lines (max 50): api1 api2 api3 worker recommender caddy
+/digest                 today's digest so far
+/mute [1h]              silence error alerts during maintenance (crashes still alert)
+/unmute
+```
+
+### Operating it
+
+```bash
+docker compose logs -f log-alerts          # is it connected, what is it doing
+docker compose up -d --build log-alerts    # pick up an edit to the alerter
+pytest deploy/telegram-alerts              # rule tests, runs anywhere
+```
+
+Tuning lives in `.env`: `ALERT_DIGEST_HOUR` (default 21), `ALERT_DEDUP_SECONDS`
+(default 600). What counts as an alert lives in `deploy/telegram-alerts/rules.py`.
+
+If `TELEGRAM_*` is missing the alerter logs a warning and idles rather than
+crash-looping. To rotate the token: BotFather → `/revoke`, update `.env`,
+`docker compose up -d log-alerts`.
+
 ## Notes and known edges
 
 **Before this branch merges to `main`, while Render is still live.** The
