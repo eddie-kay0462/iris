@@ -84,3 +84,17 @@ Key tables defined in `apps/frontend/types/database.types.ts`:
 
 - **Paystack** - Webhook at `apps/frontend/app/api/webhooks/paystack/route.ts`
 - **Termii SMS** - Templates in `apps/frontend/lib/sms/termii.ts`
+
+## Deployment & Monitoring
+
+The backend API and recommender run on a Contabo VPS under Docker Compose,
+behind Caddy (`docker-compose.yml`, `Caddyfile`). The runbook — server setup,
+deploys, rollback, reading logs — is in [`deploy/README.md`](deploy/README.md).
+
+- **Deploy:** `cd /opt/iris && ./deploy/deploy.sh` on the server (rolling, zero downtime)
+- **Telegram alerts:** the `log-alerts` container (`deploy/telegram-alerts/`) pushes
+  errors, crashes, deploy notices and a daily digest to a private Telegram chat,
+  and answers `/status`, `/errors`, `/tail`, `/digest`, `/mute`. Setup steps:
+  [`deploy/README.md` → Telegram alerts](deploy/README.md#telegram-alerts).
+  Needs `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in the server's `.env`.
+- **Tests for the alert rules:** `pytest deploy/telegram-alerts`

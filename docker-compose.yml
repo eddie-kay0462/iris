@@ -4,6 +4,8 @@
 #   api1/api2/api3   identical NestJS replicas, load-balanced, schedulers OFF.
 #   worker           the same image with schedulers ON, kept out of the LB pool.
 #   recommender      FastAPI, internal only.
+#   log-alerts       follows every container's logs and pushes alerts to Telegram.
+#   docker-proxy     read-only Docker API for log-alerts; no host socket anywhere else.
 #
 # Nothing but Caddy publishes a port on purpose: Docker writes its own iptables
 # rules and a published port would sail straight past ufw.
@@ -131,9 +133,54 @@ services:
     mem_limit: 3g
     logging: *json-logs
 
+  # Read-only window onto the Docker API. log-alerts needs container logs,
+  # events and stats; handing it /var/run/docker.sock directly would be root on
+  # the host. This proxy allows GET on containers and events and refuses the
+  # rest (no POST, so no start/stop/exec/create).
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:v0.5.0
+    container_name: iris-docker-proxy
+    environment:
+      CONTAINERS: 1
+      EVENTS: 1
+      POST: 0
+      # Everything else the proxy knows about stays off (its defaults), apart
+      # from PING/VERSION, which the Docker SDK needs to connect.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [ops]
+    restart: unless-stopped
+    mem_limit: 64m
+    logging: *json-logs
+
+  # Errors, crashes and a daily digest to Telegram, plus /status and /tail.
+  # Talks to Telegram by long polling, so it publishes no port.
+  # Setup: deploy/README.md → "Telegram alerts".
+  log-alerts:
+    build:
+      context: ./deploy/telegram-alerts
+    image: iris-log-alerts:local
+    container_name: iris-log-alerts
+    # Only TELEGRAM_* is read from here, but one .env keeps secrets in one place.
+    env_file: [.env]
+    environment:
+      DOCKER_HOST: tcp://docker-proxy:2375
+      TZ: Africa/Accra
+    depends_on: [docker-proxy]
+    # ops to reach the proxy; iris because ops is internal and has no route
+    # out to api.telegram.org.
+    networks: [ops, iris]
+    restart: unless-stopped
+    mem_limit: 128m
+    logging: *json-logs
+
 networks:
   iris:
     driver: bridge
+  # No internet access: the only thing on it is the Docker API proxy.
+  ops:
+    driver: bridge
+    internal: true
 
 volumes:
   caddy_data:

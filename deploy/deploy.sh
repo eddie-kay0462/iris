@@ -31,11 +31,36 @@ for arg in "$@"; do
   esac
 done
 
-log()  { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
+STEP="starting"
+log()  { STEP="$*"; printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m    %s\033[0m\n' "$*"; }
 die()  { printf '\n\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 
 [[ -f "$APP_DIR/.env" ]] || die "$APP_DIR/.env is missing. Copy deploy/env.production.example and fill it in."
+
+# ---- Telegram notifications -------------------------------------------------
+# Read two keys out of .env rather than sourcing it: .env is written for
+# Compose, not bash, and a value with a space or a $ in it would break `source`.
+env_get() {
+  grep -E "^$1=" "$APP_DIR/.env" | tail -n1 | cut -d= -f2- | sed -E "s/^['\"]//; s/['\"]$//"
+}
+TG_TOKEN="$(env_get TELEGRAM_BOT_TOKEN || true)"
+TG_CHAT="$(env_get TELEGRAM_CHAT_ID || true)"
+
+# Best effort: a Telegram outage must never fail or slow a deploy.
+notify() {
+  [[ -n "$TG_TOKEN" && -n "$TG_CHAT" ]] || return 0
+  curl -s -o /dev/null --max-time 5 \
+    "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+    --data-urlencode "chat_id=${TG_CHAT}" \
+    --data-urlencode "text=$1" || true
+}
+
+on_exit() {
+  local code=$?
+  (( code == 0 )) || notify "❌ Iris deploy FAILED during: ${STEP} (exit ${code}) on $(hostname)"
+}
+trap on_exit EXIT
 
 # Wait for a compose service to report healthy via its container HEALTHCHECK.
 wait_healthy() {
@@ -66,11 +91,20 @@ if (( DO_PULL )); then
   git pull --ff-only
 fi
 
+REV="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+notify "🚀 Iris deploy started — ${BRANCH} @ ${REV}: $(git log -1 --pretty=%s 2>/dev/null | cut -c1-120)"
+
 # api1..api3 and worker all share one build context and one image tag
 # (iris-backend:local), so building a single service builds the image the rest
 # will run. Building all four would repeat identical work.
 log "Building backend image"
 docker compose build api1
+
+# Small and cached; rebuilding every time means a change to the alerter can
+# never be silently left behind.
+log "Building log-alerts image"
+docker compose build log-alerts
 
 if (( DO_RECOMMENDER )); then
   log "Building recommender image"
@@ -86,7 +120,11 @@ fi
 # Bring up anything not yet running (first deploy, or a new service) without
 # disturbing the replicas we're about to roll individually.
 log "Ensuring supporting services are up"
-docker compose up -d --no-recreate recommender caddy
+docker compose up -d --no-recreate recommender caddy docker-proxy
+# Up before the replicas roll, so it's watching — and so it can tell the
+# deliberate restarts below apart from crashes. Recreated only if its image or
+# config changed.
+docker compose up -d log-alerts
 
 # The worker is not in the load-balancer pool, so it can be replaced outright.
 log "Restarting worker (owns the schedulers)"
@@ -110,6 +148,8 @@ docker image prune -f >/dev/null
 
 log "Status"
 docker compose ps
+
+notify "✅ Iris deploy complete — ${BRANCH} @ ${REV}"
 
 cat <<'DONE'
 
