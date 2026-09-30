@@ -31,6 +31,8 @@ export const PERMISSIONS = {
   'popup:create': 'Create pop-up orders',
   'popup:update': 'Update pop-up order status and details',
   'popup:manage': 'Create/close pop-up events and confirm payments',
+  'b2b:read': 'View B2B clients, orders, costs and margins',
+  'b2b:manage': 'Create and edit B2B clients and orders, and change their status',
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -49,6 +51,7 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     'popup:read',
     'popup:create',
     'popup:update',
+    'b2b:read',
   ],
   manager: [
     'products:read',
@@ -69,6 +72,8 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     'popup:create',
     'popup:update',
     'popup:manage',
+    'b2b:read',
+    'b2b:manage',
   ],
   admin: [
     'products:read',
@@ -96,6 +101,8 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     'popup:create',
     'popup:update',
     'popup:manage',
+    'b2b:read',
+    'b2b:manage',
   ],
 };
 

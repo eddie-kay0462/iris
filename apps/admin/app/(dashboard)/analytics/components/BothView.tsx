@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { SALES_CHANNELS, useAnalytics } from "@/lib/api/orders";
+import { SALES_CHANNELS, orderRevenue, useAnalytics } from "@/lib/api/orders";
 import { usePopupEvents, usePopupAnalytics } from "@/lib/api/popup-sales";
 import { useDateRange, useReport } from "@/lib/api/analytics";
 import { ChartCard } from "@/app/components/charts/ChartCard";
@@ -196,7 +196,10 @@ function StorefrontColumn({ days }: { days: string }) {
   }, [days]);
 
   const { data, isLoading, error } = useAnalytics({ from_date: fromDate });
-  const aov = data && data.totalOrders > 0 ? data.totalRevenue / data.totalOrders : 0;
+  // B2B stays out of this column: it has its own tab, and its revenue has no
+  // orders in totalOrders to divide by.
+  const revenue = data ? orderRevenue(data) : 0;
+  const aov = data && data.totalOrders > 0 ? revenue / data.totalOrders : 0;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-6">
@@ -216,7 +219,7 @@ function StorefrontColumn({ days }: { days: string }) {
         <>
           <MetricRow
             label="Revenue"
-            value={fmt(data?.totalRevenue ?? 0)}
+            value={fmt(revenue)}
           />
           <MetricRow
             label="Orders"

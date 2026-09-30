@@ -9,6 +9,7 @@ import {
 } from '../analytics.constants';
 import {
   aggregateSessions,
+  B2bOrderRow,
   ItemRow,
   num,
   onlineCustomerKey,
@@ -54,7 +55,11 @@ const emptyFin = (): FinancialBucket => ({
 });
 
 /**
- * Shopify-style P&L buckets across all three revenue channels.
+ * Shopify-style P&L buckets across every revenue channel.
+ *
+ * Completed B2B orders add to gross sales on their completion date. They carry
+ * no discounts, shipping or tax, and stay out of the order count: one bulk
+ * order would otherwise swamp every per-order figure.
  *
  * Refunds are handled the way Shopify does: a refunded order still counts in
  * gross sales (the sale happened) and the refunded amount is subtracted once as
@@ -66,7 +71,7 @@ const emptyFin = (): FinancialBucket => ({
  * bucket's gross and returns always describe the same set of orders.
  */
 async function financials(ctx: ReportContext, w: Window) {
-  const [online, popup, walkin, refunded, popupRefunded, popupRefunds, walkinRefunded] =
+  const [online, popup, walkin, refunded, popupRefunded, popupRefunds, walkinRefunded, b2b] =
     await Promise.all([
       ctx.onlineOrders(w),
       ctx.popupOrders(w),
@@ -75,6 +80,7 @@ async function financials(ctx: ReportContext, w: Window) {
       ctx.popupRefundedOrders(w),
       ctx.popupRefunds(w),
       ctx.walkinRefunds(w),
+      ctx.b2bOrders(w),
     ]);
   const byBucket = new Map<string, FinancialBucket>();
   const at = (ts: string): FinancialBucket => {
@@ -100,6 +106,7 @@ async function financials(ctx: ReportContext, w: Window) {
     // so it belongs in gross sales and not in the order count.
     if (!(o as any).is_aggregate) b.orders += 1;
   }
+  for (const o of b2b) at(o.completed_at).grossSales += num(o.revenue);
   for (const o of refunded) at(o.created_at).returns += num(o.total);
   // popup_refunds rows carry the real (possibly partial) refunded amount.
   for (const r of popupRefunds) at(r.orderCreatedAt).returns += num(r.amount);
@@ -421,14 +428,15 @@ export const REPORTS: Record<string, ReportDefinition> = {
     id: 'sales-by-channel',
     name: 'Sales by channel',
     category: 'Sales',
-    description: 'Storefront, pop-up and walk-in sales per period.',
+    description: 'Storefront, pop-up, walk-in and B2B sales per period.',
     async build(ctx) {
-      const zero = () => ({ online: 0, popup: 0, walkin: 0, total: 0 });
+      const zero = () => ({ online: 0, popup: 0, walkin: 0, b2b: 0, total: 0 });
       const load = async (w: Window) => {
-        const [online, popup, walkin] = await Promise.all([
+        const [online, popup, walkin, b2b] = await Promise.all([
           ctx.onlineOrders(w),
           ctx.popupOrders(w),
           ctx.walkinOrders(w),
+          ctx.b2bOrders(w),
         ]);
         const map = new Map<string, ReturnType<typeof zero>>();
         const at = (ts: string) => {
@@ -446,6 +454,12 @@ export const REPORTS: Record<string, ReportDefinition> = {
         add(online, 'online');
         add(popup, 'popup');
         add(walkin, 'walkin');
+        // B2B is dated by completion, not creation.
+        for (const o of b2b) {
+          const b = at(o.completed_at);
+          b.b2b += num(o.revenue);
+          b.total += num(o.revenue);
+        }
         return map;
       };
       const [cur, prev] = await Promise.all([load('current'), load('previous')]);
@@ -455,6 +469,7 @@ export const REPORTS: Record<string, ReportDefinition> = {
           t.online += b.online;
           t.popup += b.popup;
           t.walkin += b.walkin;
+          t.b2b += b.b2b;
           t.total += b.total;
         }
         return t;
@@ -468,6 +483,7 @@ export const REPORTS: Record<string, ReportDefinition> = {
           col('online', 'Online store', 'currency'),
           col('popup', 'Pop-up', 'currency'),
           col('walkin', 'Walk-in', 'currency'),
+          col('b2b', 'B2B', 'currency'),
           col('total', 'Total', 'currency'),
         ],
         makeSeries(ctx, 'current', fill(cur)),
@@ -478,6 +494,7 @@ export const REPORTS: Record<string, ReportDefinition> = {
           metric('online', 'Online store', totals.online, prevTotals.online, 'currency'),
           metric('popup', 'Pop-up', totals.popup, prevTotals.popup, 'currency'),
           metric('walkin', 'Walk-in', totals.walkin, prevTotals.walkin, 'currency'),
+          metric('b2b', 'B2B', totals.b2b, prevTotals.b2b, 'currency'),
         ],
       );
     },
@@ -1684,7 +1701,138 @@ export const REPORTS: Record<string, ReportDefinition> = {
       );
     },
   },
+
+  // ── B2B ────────────────────────────────────────────────────────────────────
+  'b2b-sales-over-time': {
+    id: 'b2b-sales-over-time',
+    name: 'B2B sales over time',
+    category: 'Sales',
+    description: 'Revenue, cost, gross profit and margin from completed B2B orders per period.',
+    async build(ctx) {
+      const load = async (w: Window) => {
+        const map = new Map<string, B2bBucket>();
+        for (const o of await ctx.b2bOrders(w)) {
+          const k = bucketOf(o.completed_at, ctx.granularity);
+          if (!map.has(k)) map.set(k, emptyB2b());
+          addB2b(map.get(k)!, o);
+        }
+        for (const b of map.values()) deriveB2b(b);
+        return map;
+      };
+      const [cur, prev] = await Promise.all([load('current'), load('previous')]);
+      const totals = sumB2b(cur);
+      const prevTotals = sumB2b(prev);
+      const fill = (m: Map<string, B2bBucket>) => (b: string) => ({ ...(m.get(b) ?? emptyB2b()) });
+      return {
+        ...overTime(
+          ctx,
+          [
+            col('revenue', 'Revenue', 'currency'),
+            col('cost', 'Cost', 'currency'),
+            col('grossProfit', 'Gross profit', 'currency'),
+            col('margin', 'Gross margin', 'percent'),
+            col('units', 'Units', 'number'),
+            col('orders', 'Orders', 'number'),
+          ],
+          makeSeries(ctx, 'current', fill(cur)),
+          makeSeries(ctx, 'previous', fill(prev)),
+          totals,
+          prevTotals,
+          [
+            metric('revenue', 'Revenue', totals.revenue, prevTotals.revenue, 'currency'),
+            metric('grossProfit', 'Gross profit', totals.grossProfit, prevTotals.grossProfit, 'currency'),
+            // No previous revenue means no previous margin, not a 0% one.
+            metric('margin', 'Gross margin', totals.margin, prevTotals.revenue > 0 ? prevTotals.margin : null, 'percent'),
+            metric('units', 'Units', totals.units, prevTotals.units, 'number'),
+          ],
+        ),
+        note: 'B2B orders count on the day they are completed, not the day they were placed.',
+      };
+    },
+  },
+
+  'b2b-sales-by-client': {
+    id: 'b2b-sales-by-client',
+    name: 'B2B sales by client',
+    category: 'Sales',
+    description: 'Completed B2B orders, units, revenue and margin per client.',
+    async build(ctx) {
+      const load = async (w: Window) => {
+        const map = new Map<string, B2bBucket & { client: string }>();
+        for (const o of await ctx.b2bOrders(w)) {
+          if (!map.has(o.client_id)) map.set(o.client_id, { client: o.client_name, ...emptyB2b() });
+          addB2b(map.get(o.client_id)!, o);
+        }
+        for (const b of map.values()) deriveB2b(b);
+        return map;
+      };
+      const [cur, prev] = await Promise.all([load('current'), load('previous')]);
+      const rows = Array.from(cur.values()).sort((a, b) => b.revenue - a.revenue);
+      const totals = sumB2b(cur);
+      const prevTotals = sumB2b(prev);
+      return dimension(
+        [
+          col('client', 'Client', 'text'),
+          col('orders', 'Orders', 'number'),
+          col('units', 'Units', 'number'),
+          col('revenue', 'Revenue', 'currency'),
+          col('grossProfit', 'Gross profit', 'currency'),
+          col('margin', 'Gross margin', 'percent'),
+        ],
+        rows,
+        { ...totals },
+        [
+          metric('revenue', 'Revenue', totals.revenue, prevTotals.revenue, 'currency'),
+          metric('margin', 'Gross margin', totals.margin, prevTotals.revenue > 0 ? prevTotals.margin : null, 'percent'),
+        ],
+        { ...prevTotals },
+      );
+    },
+  },
 };
+
+// ─── B2B helpers ──────────────────────────────────────────────────────────────
+
+interface B2bBucket {
+  [key: string]: number | string;
+  revenue: number;
+  cost: number;
+  grossProfit: number;
+  /** Gross profit as a % of revenue, weighted by revenue across orders. */
+  margin: number;
+  units: number;
+  orders: number;
+}
+
+function emptyB2b(): B2bBucket {
+  return { revenue: 0, cost: 0, grossProfit: 0, margin: 0, units: 0, orders: 0 };
+}
+
+function addB2b(b: B2bBucket, o: B2bOrderRow) {
+  b.revenue += num(o.revenue);
+  b.cost += num(o.total_cost);
+  b.grossProfit += num(o.gross_profit);
+  b.units += o.units ?? 0;
+  b.orders += 1;
+}
+
+function deriveB2b<T extends B2bBucket>(b: T): T {
+  b.margin = b.revenue > 0 ? (b.grossProfit / b.revenue) * 100 : 0;
+  return b;
+}
+
+function sumB2b(byBucket: Map<string, B2bBucket>) {
+  const t = { revenue: 0, cost: 0, grossProfit: 0, margin: 0, units: 0, orders: 0 };
+  for (const b of byBucket.values()) {
+    t.revenue += b.revenue;
+    t.cost += b.cost;
+    t.grossProfit += b.grossProfit;
+    t.units += b.units;
+    t.orders += b.orders;
+  }
+  t.margin = t.revenue > 0 ? (t.grossProfit / t.revenue) * 100 : 0;
+  return t;
+}
 
 // Cohort builder needs full history beyond the report window.
 async function fetchAllOrders(

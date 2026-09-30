@@ -6366,3 +6366,58 @@ You can also message the bot: `/status` shows whether everything is up, `/errors
 - **It hasn't run on the real server yet.** The automated tests pass, and so does a full practice run against a fake Telegram. The first real deploy is the proper test, especially checking that a normal update *doesn't* trigger crash alerts.
 - **If the whole server goes down, the bot goes down with it** and can't tell us. The README recommends a free outside checker (UptimeRobot) that pings the site every few minutes and messages Telegram if it stops answering. That isn't set up yet.
 - The daily numbers are kept in memory, so if the bot itself restarts partway through a day, that day's summary only covers the time since the restart.
+
+---
+
+## B2B orders (September 2026)
+
+Until now the admin only tracked sales to individual shoppers (online, pop-ups and walk-ins). Bulk orders for businesses lived outside Iris, so they never showed up in our revenue or in the Road to HQ count. There's now a **B2B** tab in the admin sidebar for them.
+
+The B2B page shows the headline numbers for a chosen period: B2B revenue, units delivered, gross margin (how much of the price is profit after costs), average order value, the value of orders still in progress, number of clients, on-time delivery rate, and how many orders are overdue. Below that is a list of ongoing and past orders, and a list of clients with their totals. Each client has its own page with contact details and order history.
+
+Creating an order works like a calculator. You pick the client (or add a new one with company name, contact person, phone and email), set the expected start and delivery dates, and build up the costs line by line, e.g. "Fabric GH₵40", "Printing GH₵12". Each cost is either **per unit** or **per order**. A per-order cost is a one-off like a setup fee or delivery, and it gets split across all the units. The total cost per unit updates as you type. Then you enter the selling price and the number of units, and a side panel shows revenue, total cost, gross profit, margin and markup straight away. It warns you if the price is below cost.
+
+An order moves through **Draft → Confirmed → In production → Completed** (or Cancelled). **Only completed orders count.** When you mark one complete, you pick the date it was delivered (earlier dates are allowed for past orders). Its revenue then appears in the dashboard totals, the yearly revenue target, the "Sales by channel" chart and the reports, and its units are added to the Road to HQ counter on the homepage. Reopening or cancelling it takes those numbers back out. The Analytics page also has a new **B2B** tab (revenue and profit over time, top clients, pipeline), there are two new reports ("B2B sales over time" and "B2B sales by client"), and you can download the order list as a spreadsheet.
+
+A B2B order counts as revenue but **not** as an "order" in order counts or average order value. One 500-unit order would otherwise make the average order value meaningless. Staff can view everything, including costs and margins. Only managers and admins can create or change orders.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `supabase/migrations/20260930000000_create_b2b.sql` | New. Tables for B2B clients, orders and their cost lines, order numbering (B2B-0001…), and a safe way to save an order's costs all at once. |
+| `apps/backend/src/b2b/` | New. Everything behind the B2B pages: creating and editing clients and orders, the status steps, the headline numbers, and the cost/margin maths (with automated tests). |
+| `apps/backend/src/app.module.ts` | Switches the new B2B section on. |
+| `apps/backend/src/common/rbac/permissions.ts`, `apps/admin/lib/rbac/permissions.ts` | New "view B2B" (staff, managers, admins) and "manage B2B" (managers, admins) permissions. |
+| `apps/backend/src/analytics/analytics.constants.ts` | The rule that only completed B2B orders count, dated by completion. |
+| `apps/backend/src/analytics/analytics.service.ts` | Road to HQ now adds B2B units; the sales breakdown includes B2B sales. |
+| `apps/backend/src/analytics/reports/report-context.ts`, `report-registry.ts` | Reports can load B2B orders; "Sales by channel" and "Total sales" include B2B; two new B2B reports. |
+| `apps/backend/src/orders/orders.service.ts` | Dashboard revenue, charts and comparisons include B2B, and B2B is listed as its own channel. |
+| `apps/backend/src/export/export.controller.ts`, `export.service.ts` | New B2B orders spreadsheet download. |
+| `apps/admin/app/(dashboard)/b2b/` | New. The B2B page, the new/edit order page with the calculator, the order status buttons, and the client pages. |
+| `apps/admin/lib/api/b2b.ts`, `apps/admin/lib/b2b-math.ts` | New. How the admin talks to the B2B backend, and a copy of the calculator maths for the live figures. |
+| `apps/admin/lib/rbac/RoleContext.tsx`, `apps/admin/app/components/AdminShell.tsx` | New. Lets pages know the signed-in person's role, so staff don't see buttons they aren't allowed to use. |
+| `apps/admin/app/components/Sidebar.tsx` | "B2B" added to the menu. |
+| `apps/admin/app/(dashboard)/page.tsx`, `apps/admin/lib/api/orders.ts`, `apps/admin/lib/charts/theme.ts` | Dashboard shows B2B as a fourth (violet) channel; average order value leaves B2B out; wording updated. |
+| `apps/admin/app/(dashboard)/analytics/page.tsx`, `components/B2BView.tsx` | New B2B tab on the Analytics page. |
+| `apps/admin/app/(dashboard)/analytics/components/StorefrontView.tsx`, `BothView.tsx`, `apps/admin/lib/api/analytics.ts` | Keeps B2B out of average order value there, so those numbers don't jump. |
+| `apps/frontend/lib/api/road-to-hq.server.ts` | Knows about the new B2B part of the Road to HQ count. |
+
+> **Heads-up / action required** — the database change (`supabase/migrations/20260930000000_create_b2b.sql`) has **not** been applied yet. Someone needs to run it against Supabase before the B2B pages will work. Until then the B2B tab will show errors.
+
+### How to test
+
+1. Open **B2B** in the sidebar and click **New client**. Add a company with a contact person, phone and email.
+2. Click **New B2B order**, pick that client and set dates. Add a couple of per-unit costs and one per-order cost (e.g. "Setup GH₵500"). Enter a price and number of units, and watch the figures on the right update as you type. Try a price below cost to see the warning.
+3. Click **Create confirmed order**. It should open on its own page and show up under "Ongoing" on the B2B page.
+4. Note the dashboard's Total Sales, Orders and Avg. Order Value. Then click **Mark complete** on the order. Total Sales, the revenue target and the Road to HQ counter should go up by exactly that order's revenue and units. Orders and Avg. Order Value shouldn't change.
+5. Click **Reopen** and check the numbers go back down.
+6. Sign in as a staff member. You should see the B2B pages but no buttons to create or change anything.
+7. On the B2B page, click **Export CSV** and open the file in a spreadsheet.
+
+### Worth knowing
+
+- **This hasn't been tried against a real database or clicked through in a browser yet.** Everything builds and the automated checks pass, but the migration needs to go in first. The first proper test is the list above.
+- **B2B orders have no brand.** When the dashboard is filtered to 1NRI or Unlikely Alliances, B2B revenue isn't included, so the two brand totals add up to less than the overall total. The dashboard says so on screen.
+- B2B orders don't touch stock. They aren't linked to products in the catalogue.
+- The Compare tab's "Storefront" column already included pop-up and walk-in sales before this change. That hasn't been fixed here; B2B is just kept out of it.

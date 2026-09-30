@@ -4,9 +4,24 @@ import {
   ONLINE_REVENUE_STATUSES,
   POPUP_REVENUE_STATUSES,
   WALKIN_REVENUE_STATUSES,
+  B2B_REVENUE_STATUSES,
 } from '../analytics.constants';
 
 export type Window = 'current' | 'previous';
+
+/** A completed B2B order. There is no created_at here: B2B is dated by completed_at. */
+export interface B2bOrderRow {
+  id: string;
+  order_number: string;
+  client_id: string;
+  client_name: string;
+  units: number;
+  revenue: string | number;
+  total_cost: string | number;
+  gross_profit: string | number;
+  expected_delivery_date: string | null;
+  completed_at: string;
+}
 
 export interface OnlineOrderRow {
   id: string;
@@ -370,6 +385,32 @@ export class ReportContext {
           .range(a, b),
       ),
     );
+  }
+
+  /**
+   * B2B orders completed in the window, windowed by `completed_at` — the date
+   * B2B revenue is recognised on (see B2B_REVENUE_STATUSES).
+   */
+  b2bOrders(w: Window): Promise<B2bOrderRow[]> {
+    const { from, to } = this.window(w);
+    return this.memo(`b2b:${w}`, async () => {
+      const rows = await fetchAll<any>((a, b) =>
+        this.db
+          .from('b2b_orders')
+          .select(
+            'id, order_number, client_id, units, revenue, total_cost, gross_profit, expected_delivery_date, completed_at, client:b2b_clients(name)',
+          )
+          .in('status', B2B_REVENUE_STATUSES)
+          .gte('completed_at', from)
+          .lte('completed_at', to)
+          .order('completed_at', { ascending: true })
+          .range(a, b),
+      );
+      return rows.map((r) => {
+        const client = Array.isArray(r.client) ? r.client[0] : r.client;
+        return { ...r, client_name: client?.name ?? 'Unknown client' };
+      });
+    });
   }
 
   /** Order items (online + popup + walk-in combined) for whitelisted orders. */

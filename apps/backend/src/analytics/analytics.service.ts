@@ -16,6 +16,7 @@ import {
   POPUP_REVENUE_STATUSES,
   ALLY_REVENUE_STATUSES,
   WALKIN_REVENUE_STATUSES,
+  B2B_REVENUE_STATUSES,
   PREORDER_COUNTED_STATUSES,
   round2,
   bucketOf,
@@ -94,7 +95,8 @@ export class AnalyticsService {
   /**
    * Total units sold toward the HQ goal: online + popup + ally line-item
    * quantities (revenue statuses only) plus pre-order quantities (counted as soon
-   * as a pre-order is placed/paid, not only once fulfilled) plus a manual baseline
+   * as a pre-order is placed/paid, not only once fulfilled) plus units from
+   * completed B2B orders plus a manual baseline
    * for historical (Shopify) units not stored in this system. Public — powers the
    * storefront homepage.
    *
@@ -110,6 +112,7 @@ export class AnalyticsService {
     allies: number;
     walkin: number;
     preorders: number;
+    b2b: number;
     baseline: number;
     target: number;
   }> {
@@ -121,7 +124,7 @@ export class AnalyticsService {
      * public counter: past that many line items the goal simply stopped moving,
      * and which rows came back was arbitrary without an order.
      */
-    const [onlineRows, popupRows, allyRows, walkinRows, preorderRows, baseline, target] =
+    const [onlineRows, popupRows, allyRows, walkinRows, preorderRows, b2bRows, baseline, target] =
       await Promise.all([
         fetchAll<any>((a, b) =>
           db
@@ -160,6 +163,13 @@ export class AnalyticsService {
             .in('status', PREORDER_COUNTED_STATUSES)
             .range(a, b),
         ),
+        fetchAll<any>((a, b) =>
+          db
+            .from('b2b_orders')
+            .select('units')
+            .in('status', B2B_REVENUE_STATUSES)
+            .range(a, b),
+        ),
         this.settings.getRoadToHqBaseline(),
         this.settings.getRoadToHqTarget(),
       ]);
@@ -180,13 +190,18 @@ export class AnalyticsService {
       (r) => r.product_variants?.products?.hq_unit_count ?? 1,
     );
 
+    // A B2B order isn't tied to catalogue products, so there's no bundle
+    // multiplier: each unit delivered counts once.
+    const b2b = (b2bRows ?? []).reduce((sum, r) => sum + (r.units ?? 0), 0);
+
     return {
-      units: online + popup + allies + walkin + preorders + baseline,
+      units: online + popup + allies + walkin + preorders + b2b + baseline,
       online,
       popup,
       allies,
       walkin,
       preorders,
+      b2b,
       baseline,
       target,
     };
@@ -1421,7 +1436,7 @@ export class AnalyticsService {
     // refunded still happened. Without that, `returns` was subtracted from a
     // gross figure that never contained it and net sales came out too low.
     const load = async (w: 'current' | 'previous') => {
-      const [online, popup, walkin, refunded, popupRefunded, popupRefunds, walkinRefunded] =
+      const [online, popup, walkin, refunded, popupRefunded, popupRefunds, walkinRefunded, b2b] =
         await Promise.all([
           ctx.onlineOrders(w),
           ctx.popupOrders(w),
@@ -1430,6 +1445,7 @@ export class AnalyticsService {
           ctx.popupRefundedOrders(w),
           ctx.popupRefunds(w),
           ctx.walkinRefunds(w),
+          ctx.b2bOrders(w),
         ]);
       let grossSales = 0;
       let discounts = 0;
@@ -1452,6 +1468,11 @@ export class AnalyticsService {
         // real money but an unknown number of sales.
         if (!(o as any).is_aggregate) orders += 1;
       }
+      // Mirrors financials(): completed B2B orders are gross sales, not orders.
+      // Reported separately too, so a per-order average can leave it out.
+      let b2bSales = 0;
+      for (const o of b2b) b2bSales += num(o.revenue);
+      grossSales += b2bSales;
       for (const o of refunded) returns += num(o.total);
       for (const r of popupRefunds) returns += num(r.amount);
       for (const o of walkinRefunded) returns += num(o.total);
@@ -1465,6 +1486,8 @@ export class AnalyticsService {
         tax: round2(tax),
         totalSales: round2(netSales + shipping + tax),
         orders,
+        /** Part of grossSales (and so netSales) from B2B, which `orders` doesn't count. */
+        b2bSales: round2(b2bSales),
       };
     };
 

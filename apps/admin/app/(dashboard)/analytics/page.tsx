@@ -7,13 +7,15 @@ import { StorefrontView } from "./components/StorefrontView";
 import { PopupsView } from "./components/PopupsView";
 import { WalkinsView } from "./components/WalkinsView";
 import { BothView } from "./components/BothView";
+import { B2BView } from "./components/B2BView";
 
-type SourceTab = "storefront" | "popups" | "walkins" | "both";
+type SourceTab = "storefront" | "popups" | "walkins" | "b2b" | "both";
 
 const TABS: { id: SourceTab; label: string }[] = [
   { id: "storefront", label: "Storefront" },
   { id: "popups", label: "Pop-ups" },
   { id: "walkins", label: "Walk-ins" },
+  { id: "b2b", label: "B2B" },
   { id: "both", label: "Compare" },
 ];
 
@@ -56,6 +58,7 @@ export default function AdminAnalyticsPage() {
       {sourceTab === "storefront" && <StorefrontView />}
       {sourceTab === "popups" && <PopupsView />}
       {sourceTab === "walkins" && <WalkinsView />}
+      {sourceTab === "b2b" && <B2BView />}
       {sourceTab === "both" && <BothView />}
     </section>
   );

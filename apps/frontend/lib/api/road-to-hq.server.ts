@@ -15,6 +15,8 @@ export interface RoadToHQ {
   allies: number;
   walkin: number;
   preorders: number;
+  /** Units from completed B2B orders. Already included in `units`. */
+  b2b: number;
   baseline: number;
   target: number;
 }
