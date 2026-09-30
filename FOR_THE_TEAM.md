@@ -6403,7 +6403,9 @@ A B2B order counts as revenue but **not** as an "order" in order counts or avera
 | `apps/admin/app/(dashboard)/analytics/components/StorefrontView.tsx`, `BothView.tsx`, `apps/admin/lib/api/analytics.ts` | Keeps B2B out of average order value there, so those numbers don't jump. |
 | `apps/frontend/lib/api/road-to-hq.server.ts` | Knows about the new B2B part of the Road to HQ count. |
 
-> **Heads-up / action required** — the database change (`supabase/migrations/20260930000000_create_b2b.sql`) has **not** been applied yet. Someone needs to run it against Supabase before the B2B pages will work. Until then the B2B tab will show errors.
+> **Heads-up** — the database change (`supabase/migrations/20260930000000_create_b2b.sql`) is already applied to the live database, and the one test client and order made while trying it out have been deleted. Because of that test, the next real order will be numbered **B2B-0002**, not B2B-0001. Order numbers aren't reused after a delete, so this is only cosmetic. To start from B2B-0001, run `select setval('public.b2b_order_number_seq', 1, false);` in the Supabase SQL editor.
+>
+> **Testing happens on the live database.** A test order you mark complete really does add to revenue and to the Road to HQ counter on the homepage. Reopen or cancel test orders when you're done, and ask for them to be deleted.
 
 ### How to test
 
@@ -6417,7 +6419,7 @@ A B2B order counts as revenue but **not** as an "order" in order counts or avera
 
 ### Worth knowing
 
-- **This hasn't been tried against a real database or clicked through in a browser yet.** Everything builds and the automated checks pass, but the migration needs to go in first. The first proper test is the list above.
+- **It has only been lightly tried so far.** Everything builds, the automated checks pass, and one test client and order were created on the live database without trouble. Completing an order and watching the dashboard and Road to HQ move (steps 4–5 above) hasn't been checked yet.
 - **B2B orders have no brand.** When the dashboard is filtered to 1NRI or Unlikely Alliances, B2B revenue isn't included, so the two brand totals add up to less than the overall total. The dashboard says so on screen.
 - B2B orders don't touch stock. They aren't linked to products in the catalogue.
 - The Compare tab's "Storefront" column already included pop-up and walk-in sales before this change. That hasn't been fixed here; B2B is just kept out of it.
