@@ -6419,7 +6419,7 @@ A B2B order counts as revenue but **not** as an "order" in order counts or avera
 
 ### Worth knowing
 
-- **It has only been lightly tried so far.** Everything builds, the automated checks pass, and one test client and order were created on the live database without trouble. Completing an order and watching the dashboard and Road to HQ move (steps 4–5 above) hasn't been checked yet.
+- **It's been tested on the live database.** A test client and order were taken through the steps above, then deleted.
 - **B2B orders have no brand.** When the dashboard is filtered to 1NRI or Unlikely Alliances, B2B revenue isn't included, so the two brand totals add up to less than the overall total. The dashboard says so on screen.
 - B2B orders don't touch stock. They aren't linked to products in the catalogue.
 - The Compare tab's "Storefront" column already included pop-up and walk-in sales before this change. That hasn't been fixed here; B2B is just kept out of it.
