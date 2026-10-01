@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Store, ArrowRight } from "lucide-react";
-import { SALES_CHANNELS, useAdminStats, useAnalytics } from "@/lib/api/orders";
+import { SALES_CHANNELS, orderRevenue, useAdminStats, useAnalytics } from "@/lib/api/orders";
 import {
   useDateRange,
   useSalesBreakdown,
@@ -237,20 +237,27 @@ export default function AdminDashboardPage() {
     return analytics?.brandOrderCount?.[brandFilter] ?? 0;
   }, [analytics, brandFilter]);
 
-  const aov = displayOrders > 0 ? displayRevenue / displayOrders : 0;
+  // B2B revenue is in the totals but its bulk orders aren't in the order count,
+  // so it comes out of every revenue ÷ orders figure. Brand revenue never
+  // contains B2B, so the brand views need no adjustment.
+  const aovRevenue =
+    brandFilter === "both" ? (analytics ? orderRevenue(analytics) : 0) : displayRevenue;
+  const aov = displayOrders > 0 ? aovRevenue / displayOrders : 0;
   const prevAov =
     analytics && analytics.previousPeriodOrders > 0
-      ? analytics.previousPeriodRevenue / analytics.previousPeriodOrders
+      ? (analytics.previousPeriodRevenue - (analytics.previousPeriodB2bRevenue ?? 0)) /
+        analytics.previousPeriodOrders
       : 0;
 
   // Daily AOV sparkline (revenue ÷ orders per day)
   const aovByDay = useMemo(() => {
     const out: Record<string, number> = {};
     const revenue = analytics?.revenueByDay ?? {};
+    const b2b = analytics?.b2bRevenueByDay ?? {};
     const orders = analytics?.ordersByDay ?? {};
     for (const [day, rev] of Object.entries(revenue)) {
       const o = orders[day] ?? 0;
-      out[day] = o > 0 ? rev / o : 0;
+      out[day] = o > 0 ? (rev - (b2b[day] ?? 0)) / o : 0;
     }
     return out;
   }, [analytics]);
@@ -279,8 +286,8 @@ export default function AdminDashboardPage() {
   );
   const channelTotal = channelSlices.reduce((sum, c) => sum + c.value, 0);
 
-  // Name the in-person channels that actually contributed this period.
-  const inPersonShare = useMemo(() => {
+  // Name the non-online channels (pop-up, walk-in, B2B) that contributed this period.
+  const otherChannelShare = useMemo(() => {
     const parts = SALES_CHANNELS.filter((c) => c.key !== "online")
       .map((c) => ({ ...c, value: analytics?.channelRevenue?.[c.key] ?? 0 }))
       .filter((c) => c.value > 0)
@@ -295,7 +302,7 @@ export default function AdminDashboardPage() {
         <div className="space-y-1">
           <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
           <p className="text-sm text-slate-400">
-            Operations overview — storefront, pop-up and walk-in combined.
+            Operations overview — storefront, pop-up, walk-in and B2B combined.
           </p>
         </div>
 
@@ -343,7 +350,7 @@ export default function AdminDashboardPage() {
           label="Total Sales"
           value={analyticsLoading ? "—" : formatGHS(displayRevenue)}
           badge={brandFilter === "both" ? "All channels" : brandFilter}
-          sub={brandFilter === "both" ? inPersonShare : "all channels"}
+          sub={brandFilter === "both" ? otherChannelShare : "excl. B2B, which has no brand"}
           delta={
             brandFilter === "both" && analytics ? (
               <DeltaBadge current={analytics.totalRevenue} previous={analytics.previousPeriodRevenue} />
@@ -411,7 +418,7 @@ export default function AdminDashboardPage() {
             <h2 className="text-sm font-semibold text-slate-700">Revenue over time (All-time)</h2>
             {brandFilter !== "both" && (
               <p className="mt-0.5 text-xs text-slate-400">
-                Showing {brandFilter} revenue only (all channels)
+                Showing {brandFilter} revenue only (all channels except B2B, which has no brand)
               </p>
             )}
           </div>
@@ -433,7 +440,7 @@ export default function AdminDashboardPage() {
         <div className="space-y-5">
           <ChartCard
             title="Sales by Channel"
-            note="Revenue-generating orders from the online store, pop-up events and walk-in sales at HQ."
+            note="Revenue-generating orders from the online store, pop-up events, walk-in sales at HQ and completed B2B orders."
           >
             <DonutChart
               data={channelSlices}

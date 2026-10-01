@@ -11,6 +11,7 @@ import {
   useSalesBreakdown,
   useSessionsAnalytics,
   useAbandonedCheckouts,
+  netSalesPerOrder,
 } from "@/lib/api/analytics";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { OrderFunnel } from "./OrderFunnel";
@@ -89,9 +90,7 @@ function StorefrontMetricsColumn({ days, label }: { days: string; label: string 
       <Kpi label="Orders" value={breakdown ? String(breakdown.orders) : "—"} />
       <Kpi
         label="Avg. Order Value"
-        value={
-          breakdown && breakdown.orders > 0 ? formatGHS(breakdown.netSales / breakdown.orders) : "—"
-        }
+        value={formatMetric(breakdown ? netSalesPerOrder(breakdown) : null, "currency")}
       />
     </div>
   );
@@ -233,11 +232,7 @@ export function StorefrontView() {
             />
             <Kpi
               label="Avg. Order Value"
-              value={
-                breakdown && breakdown.orders > 0
-                  ? formatGHS(breakdown.netSales / breakdown.orders)
-                  : "—"
-              }
+              value={formatMetric(breakdown ? netSalesPerOrder(breakdown) : null, "currency")}
             />
             <Kpi
               label="Sessions"

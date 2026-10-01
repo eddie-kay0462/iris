@@ -215,6 +215,7 @@ limit in minutes — it sends:
 | 🔥 **Errors** | any 5xx, any non-HTTP `error` line (cron failures, Supabase errors), Caddy 502/503/504, Caddy TLS errors, recommender tracebacks. 4xx are counted for the digest, never alerted. |
 | 🔁 **Repeats** | the same error (grouped across replicas, users and ids) alerts once, then at most one "×N more" line per 10 minutes while it keeps firing |
 | 🔴 **Containers** | crash, OOM kill, failing health check — and ✅ when it recovers. Deploy restarts are recognised and stay silent. |
+| 🌍 **Public reachability** | every minute the bot fetches `https://iris-api.1nri.store/api/health` over the internet, like a customer would. 3 failures in a row → 🔴 *API unreachable*; ✅ when it's back. Catches what container health can't: Caddy left on `:80`, an expired certificate, a firewall or DNS mistake. Can't be muted. |
 | 🚀 **Deploys** | started / complete / ❌ failed, sent by `deploy.sh` |
 | 📊 **Daily digest** | 21:00 Accra: requests per replica, 4xx/5xx, p50/p95 latency, slowest routes, top errors, container restarts, memory, scheduler state |
 
@@ -283,7 +284,8 @@ pytest deploy/telegram-alerts              # rule tests, runs anywhere
 ```
 
 Tuning lives in `.env`: `ALERT_DIGEST_HOUR` (default 21), `ALERT_DEDUP_SECONDS`
-(default 600). What counts as an alert lives in `deploy/telegram-alerts/rules.py`.
+(default 600), `ALERT_PUBLIC_URL` (the URL probed for reachability; `off` to
+disable). What counts as an alert lives in `deploy/telegram-alerts/rules.py`.
 
 If `TELEGRAM_*` is missing the alerter logs a warning and idles rather than
 crash-looping. To rotate the token: BotFather → `/revoke`, update `.env`,
@@ -316,6 +318,13 @@ to the `reverse_proxy` line in the `Caddyfile`. Named services rather than
 `deploy: replicas:` is deliberate — Caddy only active-health-checks static
 upstreams, and against a replica set it resolves the service name once and pins
 one container.
+
+**Never leave `SITE_ADDRESS` set after the first deploy.** `:80` is only for
+testing before DNS points here. `deploy.sh` restarts Caddy at the end, so if
+`SITE_ADDRESS=":80"` is still in your shell, your shell history or `.env`, the
+next deploy quietly switches off HTTPS. Every container still reports healthy,
+but the storefront can no longer reach the API. This happened once. Check with
+`docker inspect iris-caddy --format '{{range .Config.Env}}{{println .}}{{end}}' | grep SITE`.
 
 **Only Caddy publishes ports.** Docker writes its own iptables rules, so a
 `ports:` entry on any other service is reachable from the internet regardless of

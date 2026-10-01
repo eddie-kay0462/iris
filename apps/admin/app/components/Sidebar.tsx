@@ -22,6 +22,7 @@ import {
   ShoppingBasket,
   FileBarChart,
   DoorOpen,
+  Briefcase,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Permission, UserRole } from "@/lib/rbac/permissions";
@@ -41,6 +42,7 @@ const navItems: NavItem[] = [
   { href: "/orders/abandoned", label: "Abandoned Checkouts", icon: ShoppingBasket, permission: "analytics:read" },
   { href: "/popup-sales", label: "Pop-up Sales", icon: ShoppingBag, permission: "popup:read" },
   { href: "/walkin-sales", label: "Walk-in Sales", icon: DoorOpen, permission: "orders:read" },
+  { href: "/b2b", label: "B2B", icon: Briefcase, permission: "b2b:read" },
   { href: "/customers", label: "Customers", icon: Users, permission: "customers:read" },
   { href: "/markets", label: "Markets", icon: Store, permission: "markets:read" },
   { href: "/reviews", label: "Reviews", icon: Star, permission: "reviews:read" },

@@ -25,9 +25,9 @@ export const chart = {
    * adjacent steps of the ink ramp are too close to tell apart in a donut. These
    * stay dark and desaturated so they still read as premium rather than as a
    * default category palette, but they separate by hue as well as by value.
-   * Order matches SALES_CHANNELS: online, pop-up, walk-in.
+   * Order matches SALES_CHANNELS: online, pop-up, walk-in, B2B.
    */
-  channels: ["#0f172a", "#0e7490", "#b45309"],
+  channels: ["#0f172a", "#0e7490", "#b45309", "#6d28d9"],
 } as const;
 
 export type MetricFormat = "currency" | "number" | "percent" | "text";

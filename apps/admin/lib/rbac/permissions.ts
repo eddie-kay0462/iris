@@ -59,6 +59,10 @@ export const PERMISSIONS = {
   // Markets / allies permissions
   "markets:read": "View allies and their stats",
   "markets:manage": "Invite, edit, and deactivate allies",
+
+  // B2B permissions
+  "b2b:read": "View B2B clients, orders, costs and margins",
+  "b2b:manage": "Create and edit B2B clients and orders, and change their status",
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -82,6 +86,7 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     "popup:read",
     "popup:create",
     "popup:update",
+    "b2b:read",
   ],
 
   // Managers can do everything staff can, plus manage products
@@ -106,6 +111,8 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     "popup:manage",
     "markets:read",
     "markets:manage",
+    "b2b:read",
+    "b2b:manage",
   ],
 
   // Admins can do everything
@@ -137,6 +144,8 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     "popup:manage",
     "markets:read",
     "markets:manage",
+    "b2b:read",
+    "b2b:manage",
   ],
 } as const;
 

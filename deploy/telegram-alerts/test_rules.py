@@ -143,3 +143,12 @@ def test_digest_renders():
 
 def test_redaction_keeps_html_intact():
     assert redact("<code>x token=abc123</code>") == "<code>x token=‹redacted›</code>"
+
+
+def test_scheduler_owner_not_overwritten_by_replicas():
+    s = Stats()
+    s.record(parse_json_line("worker", nest("Bootstrap", "Schedulers ENABLED — 5 cron job(s) registered")))
+    s.record(parse_json_line("api3", nest("Bootstrap", "Schedulers DISABLED on this instance (RUN_CRONS != true)")))
+    assert s.scheduler_summary() == "✅ worker owns the crons"
+    s.record(parse_json_line("worker", nest("Bootstrap", "Schedulers DISABLED on this instance (RUN_CRONS != true)")))
+    assert "no container" in s.scheduler_summary()

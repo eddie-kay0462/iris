@@ -33,6 +33,7 @@ import { EmailModule } from './email/email.module';
 import { PromosModule } from './promos/promos.module';
 import { FavouritesModule } from './favourites/favourites.module';
 import { AlliesModule } from './allies/allies.module';
+import { B2bModule } from './b2b/b2b.module';
 
 @Module({
   imports: [
@@ -77,6 +78,7 @@ import { AlliesModule } from './allies/allies.module';
     PromosModule,
     FavouritesModule,
     AlliesModule,
+    B2bModule,
   ],
   providers: [
     // Apply JwtAuthGuard globally — use @Public() to skip

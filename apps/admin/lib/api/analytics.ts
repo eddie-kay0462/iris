@@ -69,7 +69,19 @@ export interface SalesBreakdownTotals {
   shipping: number;
   tax: number;
   totalSales: number;
+  /** Excludes B2B: a bulk order isn't counted as an order. */
   orders: number;
+  /** The B2B part of grossSales and netSales. */
+  b2bSales: number;
+}
+
+/**
+ * Net sales per order. B2B revenue is in netSales but its orders aren't in
+ * `orders`, so it has to come out before dividing or one bulk order inflates
+ * the average.
+ */
+export function netSalesPerOrder(b: SalesBreakdownTotals): number | null {
+  return b.orders > 0 ? (b.netSales - (b.b2bSales ?? 0)) / b.orders : null;
 }
 
 export interface SalesBreakdown extends SalesBreakdownTotals {

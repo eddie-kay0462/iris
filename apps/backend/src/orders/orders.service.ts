@@ -26,6 +26,7 @@ import {
   POPUP_REVENUE_STATUSES,
   round2,
   WALKIN_REVENUE_STATUSES,
+  B2B_REVENUE_STATUSES,
 } from '../analytics/analytics.constants';
 import { fetchAll } from '../analytics/reports/report-context';
 
@@ -1686,6 +1687,33 @@ export class OrdersService {
       walkinOrderCount += 1;
     });
 
+    // ── B2B: completed orders, dated by completion ────────────────────────────
+    // Revenue joins revenueByDay and the total, but a bulk order is not one of
+    // the "orders" the dashboard counts and averages over, so it stays out of
+    // ordersByDay and totalOrders. b2bRevenueByDay lets the client take it back
+    // out when it divides revenue by orders.
+    const b2bRows = (from: string, to: string) =>
+      fetchAll<any>((a, b) =>
+        db
+          .from('b2b_orders')
+          .select('revenue, completed_at')
+          .in('status', B2B_REVENUE_STATUSES)
+          .gte('completed_at', from)
+          .lte('completed_at', to)
+          .range(a, b),
+      );
+
+    const b2bRevenueByDay: Record<string, number> = {};
+    let b2bRevenue = 0;
+    const b2bOrdersData = await b2bRows(fromDate, toDate);
+    b2bOrdersData.forEach((o) => {
+      const day = dayOf(o.completed_at);
+      const amount = Number(o.revenue ?? 0);
+      revenueByDay[day] = (revenueByDay[day] || 0) + amount;
+      b2bRevenueByDay[day] = (b2bRevenueByDay[day] || 0) + amount;
+      b2bRevenue += amount;
+    });
+
     // Previous period comparison
     const fromMs = new Date(fromDate).getTime();
     const toMs = new Date(toDate).getTime();
@@ -1694,7 +1722,7 @@ export class OrdersService {
     // Ends 1ms before `fromDate` so a boundary order isn't in both windows.
     const prevTo = new Date(fromMs - 1).toISOString();
 
-    const [prevOrders, prevPopupOrders, prevWalkinOrders] = await Promise.all([
+    const [prevOrders, prevPopupOrders, prevWalkinOrders, prevB2bOrders] = await Promise.all([
       fetchAll<any>((a, b) =>
         db
           .from('orders')
@@ -1723,14 +1751,22 @@ export class OrdersService {
           .in('status', WALKIN_REVENUE_STATUSES)
           .range(a, b),
       ),
+      b2bRows(prevFrom, prevTo),
     ]);
 
     // Previous period uses the same revenue-status whitelist as the current
     // period so the delta badges compare like for like, across all channels.
     const sumTotals = (rows: any[]) =>
       rows.reduce((sum, o) => sum + Number(o.total ?? 0), 0);
+    const previousPeriodB2bRevenue = prevB2bOrders.reduce(
+      (sum, o) => sum + Number(o.revenue ?? 0),
+      0,
+    );
     const previousPeriodRevenue =
-      sumTotals(prevOrders) + sumTotals(prevPopupOrders) + sumTotals(prevWalkinOrders);
+      sumTotals(prevOrders) +
+      sumTotals(prevPopupOrders) +
+      sumTotals(prevWalkinOrders) +
+      previousPeriodB2bRevenue;
     const previousPeriodOrders =
       prevOrders.length + prevPopupOrders.length + prevWalkinOrders.length;
 
@@ -1895,10 +1931,14 @@ export class OrdersService {
       ordersByDay,
       topProducts: topProductsWithImages,
       statusBreakdown,
+      // Excludes B2B, which is one bulk order rather than a sale to count.
       totalOrders: onlineOrderCount + popupOrderCount + walkinOrderCount,
-      totalRevenue: round2(onlineRevenue + popupRevenue + walkinRevenue),
-      previousPeriodRevenue,
+      // Includes B2B. Subtract channelRevenue.b2b before dividing by totalOrders.
+      totalRevenue: round2(onlineRevenue + popupRevenue + walkinRevenue + b2bRevenue),
+      previousPeriodRevenue: round2(previousPeriodRevenue),
       previousPeriodOrders,
+      previousPeriodB2bRevenue: round2(previousPeriodB2bRevenue),
+      b2bRevenueByDay,
       funnelCounts,
       brandRevenue,
       brandRevenueByDay,
@@ -1910,11 +1950,13 @@ export class OrdersService {
         online: round2(onlineRevenue),
         popup: round2(popupRevenue),
         walkin: round2(walkinRevenue),
+        b2b: round2(b2bRevenue),
       },
       channelOrders: {
         online: onlineOrderCount,
         popup: popupOrderCount,
         walkin: walkinOrderCount,
+        b2b: b2bOrdersData.length,
       },
     };
   }

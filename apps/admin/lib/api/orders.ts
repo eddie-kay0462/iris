@@ -270,17 +270,27 @@ export interface AnalyticsData {
   ordersByDay: Record<string, number>;
   topProducts: AnalyticsTopProduct[];
   statusBreakdown: Record<string, number>;
+  /** Excludes B2B: a bulk order isn't one of the orders counted or averaged. */
   totalOrders: number;
+  /** Includes B2B. Use `orderRevenue()` when dividing by `totalOrders`. */
   totalRevenue: number;
   previousPeriodRevenue: number;
   previousPeriodOrders: number;
+  /** The B2B part of `previousPeriodRevenue`. */
+  previousPeriodB2bRevenue: number;
+  /** The B2B part of `revenueByDay`, by completion date. */
+  b2bRevenueByDay: Record<string, number>;
   funnelCounts: Record<string, number>;
+  /** Item revenue by product vendor. B2B has no brand, so it is never in here. */
   brandRevenue: Record<string, number>;
   brandRevenueByDay: Record<string, Record<string, number>>;
   brandOrderCount: Record<string, number>;
   /** Revenue per sales channel. Sums to `totalRevenue`. */
   channelRevenue: SalesChannelTotals;
-  /** Revenue-generating order count per sales channel. Sums to `totalOrders`. */
+  /**
+   * Revenue-generating order count per sales channel. Online, pop-up and
+   * walk-in sum to `totalOrders`; `b2b` is completed B2B orders, kept apart.
+   */
   channelOrders: SalesChannelTotals;
 }
 
@@ -288,6 +298,7 @@ export interface SalesChannelTotals {
   online: number;
   popup: number;
   walkin: number;
+  b2b: number;
 }
 
 /** Display order and labels for the sales channels, shared by every channel UI. */
@@ -295,7 +306,16 @@ export const SALES_CHANNELS: { key: keyof SalesChannelTotals; label: string }[] 
   { key: "online", label: "Online store" },
   { key: "popup", label: "Pop-up" },
   { key: "walkin", label: "Walk-in" },
+  { key: "b2b", label: "B2B" },
 ];
+
+/**
+ * Revenue from the orders that `totalOrders` counts, i.e. without B2B. Divide
+ * this, not `totalRevenue`, by an order count.
+ */
+export function orderRevenue(a: Pick<AnalyticsData, "totalRevenue" | "channelRevenue">): number {
+  return a.totalRevenue - (a.channelRevenue?.b2b ?? 0);
+}
 
 export interface CustomerStats {
   totalCustomers: number;

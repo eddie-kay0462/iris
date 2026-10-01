@@ -9,6 +9,12 @@ export const POPUP_REVENUE_STATUSES = ['confirmed', 'completed'];
 // can legitimately exceed what the revenue channels add up to.
 export const ALLY_REVENUE_STATUSES = ['completed'];
 export const WALKIN_REVENUE_STATUSES = ['completed'];
+// A B2B order is revenue (and Road to HQ units) only once delivered, and unlike
+// every other channel it is dated by `completed_at`, not `created_at`: an order
+// agreed in March and delivered in June is June revenue. It is one bulk order,
+// so it is left out of order counts and per-order averages, the same way a
+// pop-up's unitemized total is.
+export const B2B_REVENUE_STATUSES = ['completed'];
 
 // Pre-orders count toward the goal as soon as they're placed (paid), not only once
 // fulfilled — so every not-yet-cancelled/refunded status counts. Paired with a

@@ -22,6 +22,16 @@ export class ExportController {
     res.send(csv);
   }
 
+  @Get('b2b-orders')
+  @RequirePermission('b2b:read')
+  async exportB2bOrders(@Query() query: { status?: string }, @Res() res: Response) {
+    const csv = await this.exportService.exportB2bOrders(query);
+    const filename = `b2b-orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  }
+
   @Get('products')
   @RequirePermission('products:read')
   async exportProducts(@Res() res: Response) {

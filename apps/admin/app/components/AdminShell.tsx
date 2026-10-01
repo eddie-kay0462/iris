@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import type { UserRole } from "@/lib/rbac/permissions";
+import { RoleProvider } from "@/lib/rbac/RoleContext";
 
 type AdminShellProps = {
   role: UserRole;
@@ -23,7 +24,9 @@ export function AdminShell({ role, children }: AdminShellProps) {
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header onMenuToggle={() => setMobileOpen((o) => !o)} />
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-6">
+          <RoleProvider role={role}>{children}</RoleProvider>
+        </main>
       </div>
     </div>
   );
