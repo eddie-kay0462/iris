@@ -73,7 +73,13 @@ function AdminLoginForm() {
         }}
       >
         {/* Dark overlay */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/30 to-black/85" />
+        {/* Lighter on the new IRIS photo: just enough at the top and bottom to keep the
+            logo and tagline readable, with the middle left clear. */}
+        <div
+          className={`absolute inset-0 bg-gradient-to-b ${
+            isNew ? "from-black/45 via-black/0 to-black/60" : "from-black/75 via-black/30 to-black/85"
+          }`}
+        />
 
         {/* Top — logo */}
         <div className="relative flex items-center gap-3">
