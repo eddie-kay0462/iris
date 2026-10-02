@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Pagination } from "../../components/Pagination";
 import { Star, Check, Trash2, ShieldCheck } from "lucide-react";
 import {
   useReviews,
@@ -52,7 +53,8 @@ function ReviewRow({
       <td className="px-4 py-3">
         <StarRating rating={review.rating} />
       </td>
-      <td className="px-4 py-3 max-w-xs">
+      <td className="px-4 py-3">
+        <div className="w-[13rem] sm:w-[18rem]">
         {review.title && (
           <p className="text-sm font-medium text-slate-800 truncate">
             {review.title}
@@ -64,16 +66,17 @@ function ReviewRow({
         {!review.title && !review.review_text && (
           <span className="text-xs text-slate-400">No text</span>
         )}
-      </td>
-      <td className="px-4 py-3">
-        <div className="space-y-0.5">
-          <p className="text-sm text-slate-700">{review.name || "Anonymous"}</p>
-          {review.email && (
-            <p className="text-xs text-slate-400">{review.email}</p>
-          )}
         </div>
       </td>
       <td className="px-4 py-3">
+        <div className="space-y-0.5">
+          <p className="max-w-[11rem] truncate text-sm text-slate-700">{review.name || "Anonymous"}</p>
+          {review.email && (
+            <p className="max-w-[11rem] truncate text-xs text-slate-400" title={review.email}>{review.email}</p>
+          )}
+        </div>
+      </td>
+      <td className="hidden px-4 py-3 md:table-cell">
         {review.is_verified_purchase ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
             <ShieldCheck className="h-3 w-3" />
@@ -83,8 +86,8 @@ function ReviewRow({
           <span className="text-xs text-slate-400">Unverified</span>
         )}
       </td>
-      <td className="px-4 py-3">
-        <p className="text-xs text-slate-400">
+      <td className="hidden px-4 py-3 md:table-cell">
+        <p className="whitespace-nowrap text-xs text-slate-400">
           {new Date(review.created_at).toLocaleDateString()}
         </p>
       </td>
@@ -190,8 +193,8 @@ export default function ReviewsPage() {
                   <th className="px-4 py-3">Rating</th>
                   <th className="px-4 py-3">Review</th>
                   <th className="px-4 py-3">Reviewer</th>
-                  <th className="px-4 py-3">Purchase</th>
-                  <th className="px-4 py-3">Date</th>
+                  <th className="hidden px-4 py-3 md:table-cell">Purchase</th>
+                  <th className="hidden px-4 py-3 md:table-cell">Date</th>
                   {canModerate && <th className="px-4 py-3">Actions</th>}
                 </tr>
               </thead>
@@ -212,29 +215,7 @@ export default function ReviewsPage() {
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-slate-500">
-          <span>
-            Page {page} of {totalPages}
-          </span>
-          <div className="flex gap-2">
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="rounded-md border border-slate-200 px-3 py-1.5 disabled:opacity-40 hover:bg-slate-50"
-            >
-              Previous
-            </button>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              className="rounded-md border border-slate-200 px-3 py-1.5 disabled:opacity-40 hover:bg-slate-50"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination page={page} totalPages={totalPages} onPageChange={setPage} framed={false} />
     </section>
   );
 }

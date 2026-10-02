@@ -15,6 +15,8 @@ import {
   toastGroupStatusResult,
   type GroupStatusTarget,
 } from "./preorders/PreorderControls";
+import { useIsNewUi } from "@/lib/ui/UiModeContext";
+import { statusStyle, TONE_CLASSES } from "./v2/StatusPill";
 
 /**
  * Every row in the order lists — online order, walk-in sale, or pre-order group —
@@ -85,6 +87,7 @@ export function StatusSelect({
   errorMessage: string;
 }) {
   const [pending, setPending] = useState(false);
+  const isNew = useIsNewUi();
   const isSettable = options.some((o) => o.value === value);
 
   async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
@@ -109,7 +112,11 @@ export function StatusSelect({
       onClick={(e) => e.stopPropagation()}
       disabled={pending || options.length === 0}
       style={{ minWidth: STATUS_SELECT_MIN_WIDTH }}
-      className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 outline-none focus:border-slate-400 disabled:opacity-50"
+      className={
+        isNew
+          ? `cursor-pointer rounded-full border-0 px-3 py-1 text-xs font-medium outline-none pointer-coarse:py-2 focus:ring-2 focus:ring-[var(--iris-line)] disabled:opacity-50 ${TONE_CLASSES[statusStyle(value).tone]}`
+          : "rounded border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 outline-none focus:border-slate-400 disabled:opacity-50"
+      }
     >
       {!isSettable && (
         <option value={value}>{valueLabel ?? titleCase(value)}</option>

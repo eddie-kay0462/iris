@@ -24,6 +24,8 @@ import { VariantsEditor, type LocalVariantDraft } from "./VariantsEditor";
 import { ImagesEditor } from "./ImagesEditor";
 import { CollectionsPicker } from "./CollectionsPicker";
 import { useAddCollectionProducts } from "@/lib/api/collections";
+import { Modal } from "../v2/Modal";
+import { BEFORE_NAVIGATE_EVENT } from "@/lib/navigationGuard";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -69,8 +71,12 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
   const stagedFiles = useRef<Map<string, File>>(new Map());
   const [localVariants, setLocalVariants] = useState<LocalVariantDraft[]>([]);
 
-  // Ref to skip the nav guard for form-internal navigations (e.g. after create)
-  const bypassNavGuard = useRef(false);
+  // Where the user was heading when the unsaved-changes prompt opened.
+  const [leaveTo, setLeaveTo] = useState<string | null>(null);
+  const [savingToLeave, setSavingToLeave] = useState(false);
+  // Set while saving from the prompt, so a create goes on to that destination
+  // instead of to the new product.
+  const afterSaveHref = useRef<string | null>(null);
 
   // ── Mutations ───────────────────────────────────────────────────────────────
   const createMutation = useCreateProduct();
@@ -133,31 +139,64 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
     return () => window.removeEventListener("beforeunload", handler);
   }, [isDirty]);
 
-  // 2. Next.js client-side navigation (Link clicks, sidebar, etc.)
+  // 2. In-app navigation: link clicks (sidebar, breadcrumbs, "Back to all
+  //    products", notification items…) are caught in the capture phase,
+  //    before Next's <Link> handler runs, and the ⌘/ search announces its
+  //    jumps on BEFORE_NAVIGATE_EVENT. Either way the prompt opens instead.
   useEffect(() => {
     if (!isDirty) return;
-    const originalPush = window.history.pushState.bind(window.history);
-    window.history.pushState = (state, title, url) => {
-      // Skip guard for form-internal navigations (e.g. after successful create)
-      if (bypassNavGuard.current) {
-        bypassNavGuard.current = false;
-        originalPush(state, title, url);
-        return;
-      }
-      // Skip guard if the URL isn't actually changing
-      const newPath = url ? String(url) : "";
-      if (newPath === window.location.pathname + window.location.search) {
-        originalPush(state, title, url);
-        return;
-      }
-      if (window.confirm("You have unsaved changes. Leave without saving?")) {
-        originalPush(state, title, url);
-      }
-    };
+    function onClick(e: MouseEvent) {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a || (a.target && a.target !== "_self") || a.hasAttribute("download")) return;
+      const url = new URL(a.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      if (url.pathname + url.search === window.location.pathname + window.location.search) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setLeaveTo(url.pathname + url.search + url.hash);
+    }
+    function onNavigateRequest(e: Event) {
+      const href = (e as CustomEvent<{ href: string }>).detail?.href;
+      if (!href) return;
+      e.preventDefault();
+      setLeaveTo(href);
+    }
+    document.addEventListener("click", onClick, true);
+    window.addEventListener(BEFORE_NAVIGATE_EVENT, onNavigateRequest);
     return () => {
-      window.history.pushState = originalPush;
+      document.removeEventListener("click", onClick, true);
+      window.removeEventListener(BEFORE_NAVIGATE_EVENT, onNavigateRequest);
     };
   }, [isDirty]);
+
+  function discardAndLeave() {
+    const href = leaveTo;
+    reset(); // back to the saved values, which also clears isDirty
+    setLeaveTo(null);
+    if (href) router.push(href);
+  }
+
+  async function saveAndLeave() {
+    const href = leaveTo;
+    if (!href) return;
+    setSavingToLeave(true);
+    afterSaveHref.current = href;
+    let saved = false;
+    await handleSubmit(
+      async (values) => {
+        saved = await onSubmit(values);
+      },
+      () => {
+        toast.error("Some fields need fixing before this can be saved.", { duration: 6000 });
+      },
+    )();
+    afterSaveHref.current = null;
+    setSavingToLeave(false);
+    setLeaveTo(null);
+    // On failure stay put: the errors are on the form, nothing is lost.
+    if (saved) router.push(href);
+  }
 
   // Watch tags so the chip state stays in sync
   const currentTags = watch("tags") as string[] | undefined;
@@ -175,7 +214,8 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
   }
 
   // ── Submit ──────────────────────────────────────────────────────────────────
-  async function onSubmit(values: ProductFormValues) {
+  /** Returns true when the save went through. */
+  async function onSubmit(values: ProductFormValues): Promise<boolean> {
     const payload = {
       ...values,
       early_access_start: values.early_access_start
@@ -228,16 +268,19 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
           } catch { /* best effort */ }
         }
         toast.success("Product created.");
-        bypassNavGuard.current = true;
-        router.push(`/products/${created.id}`);
+        reset(values); // clear isDirty before navigating away
+        // Saved from the leave prompt: the caller continues to that page.
+        if (!afterSaveHref.current) router.push(`/products/${created.id}`);
       } else if (product) {
         await updateMutation.mutateAsync(payload as Record<string, unknown>);
         reset(values); // clear isDirty so the nav guard doesn't fire after save
         toast.success("Product saved.");
         onRefresh?.();
       }
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong", { duration: 6000 });
+      return false;
     }
   }
 
@@ -517,7 +560,7 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
                       type="button"
                       onClick={() => toggleSuggestedTag(tag)}
                       className={[
-                        "rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
+                        "rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors pointer-coarse:px-3 pointer-coarse:py-2",
                         active
                           ? "border-slate-900 bg-slate-900 text-white"
                           : "border-slate-200 text-slate-500 hover:border-slate-400 hover:text-slate-700",
@@ -689,15 +732,58 @@ export function ProductForm({ mode, product, onRefresh }: ProductFormProps) {
         <button
           type="button"
           onClick={() => {
-            if (isDirty && !window.confirm("You have unsaved changes. Leave without saving?")) return;
-            bypassNavGuard.current = true;
-            router.push("/products");
+            if (isDirty) setLeaveTo("/products");
+            else router.push("/products");
           }}
           className="text-sm text-slate-500 hover:text-slate-700"
         >
           Cancel
         </button>
       </div>
+
+      <Modal
+        open={leaveTo !== null}
+        onClose={() => !savingToLeave && setLeaveTo(null)}
+        title="Unsaved changes"
+        description={
+          mode === "create"
+            ? "This product hasn't been created yet."
+            : "You've changed this product since it was last saved."
+        }
+        size="sm"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={discardAndLeave}
+              disabled={savingToLeave}
+              className="mr-auto inline-flex h-9 items-center rounded-full px-3 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+            >
+              Discard changes
+            </button>
+            <button
+              type="button"
+              onClick={() => setLeaveTo(null)}
+              disabled={savingToLeave}
+              className="inline-flex h-9 items-center rounded-full border border-slate-200 px-4 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-50 disabled:opacity-50"
+            >
+              Keep editing
+            </button>
+            <button
+              type="button"
+              onClick={saveAndLeave}
+              disabled={savingToLeave}
+              className="inline-flex h-9 items-center rounded-full bg-slate-900 px-4 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:opacity-50"
+            >
+              {savingToLeave ? "Saving…" : mode === "create" ? "Create product" : "Save changes"}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600">
+          Save them before you go, discard them, or stay and keep editing.
+        </p>
+      </Modal>
     </form>
   );
 }

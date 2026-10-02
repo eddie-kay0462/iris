@@ -117,7 +117,7 @@ export default function B2bClientPage({ params }: { params: Promise<{ id: string
         </div>
       </header>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 iris-stat-grid">
         <StatsCard
           label="Revenue"
           value={formatGHS(client.stats.revenue)}

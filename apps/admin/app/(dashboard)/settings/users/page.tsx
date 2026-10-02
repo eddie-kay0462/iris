@@ -34,8 +34,8 @@ function InviteUserModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="max-h-[90dvh] overflow-y-auto w-full max-w-md rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <h2 className="text-base font-semibold text-slate-900">Invite team member</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>

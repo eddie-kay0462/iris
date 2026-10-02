@@ -40,7 +40,7 @@ function Kpi({
           {value ?? (metric ? formatMetric(metric.value, metric.format) : "—")}
         </p>
         {metric && metric.previousValue !== null ? (
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <DeltaBadge current={metric.value} previous={metric.previousValue} />
             <span className="text-[11px] text-slate-400">vs previous period</span>
           </div>
@@ -126,13 +126,13 @@ export function B2BView() {
       </div>
 
       {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 iris-stat-grid">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-28 animate-pulse rounded-xl bg-slate-100" />
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 iris-stat-grid">
           <Kpi label="Revenue" metric={metricOf(sales, "revenue")} spark={sparkOf("revenue")} />
           <Kpi label="Gross profit" metric={metricOf(sales, "grossProfit")} spark={sparkOf("grossProfit")} />
           <Kpi label="Gross margin" metric={metricOf(sales, "margin")} />
@@ -161,7 +161,7 @@ export function B2BView() {
           </Link>
         }
       >
-        <ComparisonLineChart series={revenueSeries} previousSeries={revenuePrevSeries} height={280} />
+        <ComparisonLineChart series={revenueSeries} previousSeries={revenuePrevSeries} height={280} glow />
       </ChartCard>
 
       <div className="grid gap-5 lg:grid-cols-5">

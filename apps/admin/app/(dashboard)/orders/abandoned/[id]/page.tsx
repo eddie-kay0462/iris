@@ -56,7 +56,7 @@ export default function AbandonedCheckoutDetailPage({
             </span>
           </header>
 
-          <div className="grid gap-5 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
             {/* Items */}
             <div className="rounded-xl border border-slate-200 bg-white shadow-sm lg:col-span-2">
               <h2 className="border-b border-slate-100 px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -64,10 +64,10 @@ export default function AbandonedCheckoutDetailPage({
               </h2>
               <div className="divide-y divide-slate-100">
                 {data.items.map((item, i) => (
-                  <div key={i} className="flex items-center gap-4 px-5 py-4">
+                  <div key={i} className="flex items-center gap-3 px-4 py-4 sm:gap-4 sm:px-5">
                     {item.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.imageUrl} alt="" className="h-12 w-12 rounded-lg object-cover" />
+                      <img src={item.imageUrl} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
                     ) : (
                       <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-xs text-slate-400">
                         —
@@ -75,11 +75,11 @@ export default function AbandonedCheckoutDetailPage({
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-slate-900">{item.productName}</p>
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-slate-400 [overflow-wrap:anywhere]">
                         {[item.variantTitle, item.sku].filter(Boolean).join(" · ")}
                       </p>
                     </div>
-                    <div className="text-right text-sm">
+                    <div className="shrink-0 whitespace-nowrap text-right text-sm">
                       <p className="tabular-nums text-slate-600">
                         {item.quantity} × {formatGHS(item.unitPrice)}
                       </p>
@@ -116,7 +116,7 @@ export default function AbandonedCheckoutDetailPage({
                     )}
                     {data.customer.email && (
                       <p className="flex items-center gap-2 text-slate-600">
-                        <Mail className="h-4 w-4 text-slate-400" /> {data.customer.email}
+                        <Mail className="h-4 w-4 shrink-0 text-slate-400" /> <span className="min-w-0 break-all">{data.customer.email}</span>
                       </p>
                     )}
                     {data.customer.phone && (

@@ -1,4 +1,8 @@
+"use client";
+
 import { B2B_STATUS_LABELS, type B2bStatus } from "@/lib/api/b2b";
+import { useIsNewUi } from "@/lib/ui/UiModeContext";
+import { StatusPill } from "@/app/components/v2/StatusPill";
 
 const STATUS_COLORS: Record<B2bStatus, string> = {
   draft: "bg-slate-100 text-slate-600",
@@ -9,6 +13,15 @@ const STATUS_COLORS: Record<B2bStatus, string> = {
 };
 
 export function B2bStatusBadge({ status, overdue }: { status: B2bStatus; overdue?: boolean }) {
+  const isNew = useIsNewUi();
+  if (isNew) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <StatusPill status={status} label={B2B_STATUS_LABELS[status]} />
+        {overdue && <StatusPill status="overdue" />}
+      </span>
+    );
+  }
   return (
     <span className="inline-flex items-center gap-1.5">
       <span

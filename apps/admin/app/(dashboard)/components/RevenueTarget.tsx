@@ -20,7 +20,7 @@ export function RevenueTarget({ ytdRevenue, year }: RevenueTargetProps) {
 
   if (target === null || target === undefined) {
     return (
-      <div className="rounded-lg border border-dashed border-slate-300 bg-white p-5 flex items-center justify-between">
+      <div className="rounded-lg border border-dashed border-slate-300 bg-white p-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100">
             <Target className="h-4 w-4 text-slate-500" />
@@ -46,12 +46,12 @@ export function RevenueTarget({ ytdRevenue, year }: RevenueTargetProps) {
 
   // Monochrome ramp: ink deepens as the year progresses toward the target.
   const barColor = overTarget
-    ? "#0f172a"
+    ? "var(--color-slate-900)"
     : pct > 66
-    ? "#1e293b"
+    ? "var(--color-slate-800)"
     : pct > 33
-    ? "#475569"
-    : "#94a3b8";
+    ? "var(--color-slate-600)"
+    : "var(--color-slate-400)";
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-4">
@@ -60,7 +60,7 @@ export function RevenueTarget({ ytdRevenue, year }: RevenueTargetProps) {
         <div className="flex items-center gap-2.5">
           <div
             className="flex h-8 w-8 items-center justify-center rounded-full"
-            style={{ backgroundColor: `${barColor}15` }}
+            style={{ backgroundColor: `color-mix(in srgb, ${barColor} 8%, transparent)` }}
           >
             <Target className="h-4 w-4" style={{ color: barColor }} />
           </div>

@@ -336,7 +336,7 @@ export function PreorderActionsMenu({
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className={`absolute z-20 mt-1 w-56 rounded-lg border border-slate-200 bg-white py-1 shadow-lg ${align === "right" ? "right-0" : "left-0"}`}>
+          <div className={`absolute z-20 mt-1 w-56 max-w-[calc(100vw-2rem)] rounded-lg border border-slate-200 bg-white py-1 shadow-lg ${align === "right" ? "right-0" : "left-0"}`}>
             <p className="px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
               Manage this item
             </p>
@@ -521,9 +521,9 @@ export function PreorderGroupStatusHistory({ orderNumber }: { orderNumber: strin
       <h2 className="mb-3 font-semibold">Status History</h2>
       <div className="space-y-3">
         {history.map((entry) => (
-          <div key={entry.id} className="flex items-start gap-3 border-l-2 border-slate-200 pl-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
+          <div key={entry.id} className="flex flex-col gap-1 border-l-2 border-slate-200 pl-4 sm:flex-row sm:items-start sm:gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
                 {entry.from_status && (
                   <>
                     <PreorderStatusBadge status={entry.from_status} />

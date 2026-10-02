@@ -52,11 +52,11 @@ function MiniSparkline({ orders }: { orders: Order[] }) {
 
 function InfoCard({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
+    <div className="min-w-0 rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex items-center gap-2 text-xs text-slate-500">
         <Icon className="h-3.5 w-3.5" /> {label}
       </div>
-      <div className="mt-1 text-sm font-medium text-slate-900">{value || "—"}</div>
+      <div className="mt-1 text-sm font-medium text-slate-900 [overflow-wrap:anywhere]">{value || "—"}</div>
     </div>
   );
 }
@@ -237,8 +237,8 @@ export default function AdminCustomerDetailPage({
       </Link>
 
       {/* Header */}
-      <header className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-4">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-4">
           <label className="relative cursor-pointer group" title="Change profile photo">
             <Avatar url={avatarUrl} name={name} size={48} />
             <span className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -246,16 +246,16 @@ export default function AdminCustomerDetailPage({
             </span>
             <input ref={avatarInputRef} type="file" accept="image/*" className="sr-only" onChange={handleCustomerAvatarUpload} />
           </label>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-semibold">{name}</h1>
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-semibold sm:text-2xl">{name}</h1>
               {customer.role && (
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${roleBadgeColor[customer.role] ?? "bg-slate-100 text-slate-600"}`}>
                   {customer.role.replace("_", " ")}
                 </span>
               )}
             </div>
-            <p className="text-sm text-slate-500">{customer.email}</p>
+            <p className="text-sm text-slate-500 break-all">{customer.email}</p>
             {customer.tags && customer.tags.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {customer.tags.map((tag) => (
@@ -286,7 +286,7 @@ export default function AdminCustomerDetailPage({
       </header>
 
       {/* Quick info cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 iris-stat-grid">
         <InfoCard icon={Mail} label="Email" value={customer.email} />
         <InfoCard icon={Phone} label="Phone" value={customer.phone_number} />
         <InfoCard icon={Calendar} label="Joined" value={new Date(customer.created_at).toLocaleDateString()} />
@@ -300,10 +300,10 @@ export default function AdminCustomerDetailPage({
       {/* Spend summary */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="flex items-baseline justify-between">
-            <div>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="min-w-0">
               <p className="text-xs text-slate-500">Lifetime Value (All Channels)</p>
-              <p className="mt-1 text-xl font-semibold text-slate-900">
+              <p className="mt-1 text-xl font-semibold text-slate-900 [overflow-wrap:anywhere]">
                 GH₵{(customer.total_spent ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
               <p className="mt-0.5 text-xs text-slate-400">{customer.order_count} total order{customer.order_count !== 1 ? "s" : ""}</p>
@@ -375,7 +375,7 @@ export default function AdminCustomerDetailPage({
       )}
 
       {/* Notification prefs */}
-      <div className="flex gap-3 text-sm text-slate-500">
+      <div className="flex flex-wrap gap-3 text-sm text-slate-500">
         <span className={`rounded-full px-2 py-0.5 text-xs ${customer.email_notifications ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>
           Email notifications {customer.email_notifications ? "on" : "off"}
         </span>

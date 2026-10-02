@@ -1,6 +1,6 @@
 "use client";
 
-import { chart, formatDateLabel, formatMetric, MetricFormat } from "@/lib/charts/theme";
+import { useChartTheme, formatDateLabel, formatMetric, MetricFormat } from "@/lib/charts/theme";
 
 export interface MetricColumn {
   key: string;
@@ -34,6 +34,7 @@ export function MetricDataTable({
   previousTotals?: Record<string, number> | null;
   maxHeight?: number;
 }) {
+  const chart = useChartTheme();
   const firstCol = columns[0];
   const metricCols = columns.slice(1);
 
@@ -85,7 +86,7 @@ export function MetricDataTable({
                     <td
                       key={c.key}
                       className="whitespace-nowrap border-b border-slate-200 px-4 py-2 text-right tabular-nums"
-                      style={{ color: change === "—" ? undefined : negative ? chart.negative : "#0f172a" }}
+                      style={{ color: change === "—" ? undefined : negative ? chart.negative : chart.positive }}
                     >
                       {change}
                     </td>

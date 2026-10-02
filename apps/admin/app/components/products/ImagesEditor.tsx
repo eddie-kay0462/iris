@@ -122,7 +122,7 @@ function ImageCard({
           type="button"
           {...attributes}
           {...listeners}
-          className="absolute left-1 top-1 hidden group-hover:flex rounded bg-black/70 p-1 text-white items-center justify-center cursor-grab active:cursor-grabbing touch-none"
+          className="absolute left-1 top-1 hidden group-hover:flex pointer-coarse:flex rounded bg-black/70 p-1 text-white items-center justify-center cursor-grab active:cursor-grabbing touch-none"
           aria-label="Drag to reorder"
         >
           <DragHandleIcon />
@@ -135,7 +135,7 @@ function ImageCard({
               onDelete();
             }
           }}
-          className="absolute right-1 top-1 hidden group-hover:flex rounded-full bg-red-500 p-1 text-white items-center justify-center"
+          className="absolute right-1 top-1 hidden group-hover:flex pointer-coarse:flex rounded-full bg-red-500 p-1 text-white items-center justify-center"
         >
           <XIcon />
         </button>
@@ -144,7 +144,7 @@ function ImageCard({
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="absolute left-1 bottom-1 hidden group-hover:flex rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white items-center gap-1"
+            className="absolute left-1 bottom-1 hidden group-hover:flex pointer-coarse:flex rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white items-center gap-1"
             style={{ marginBottom: colorTags.length > 0 || availableColors.length > 0 ? "1.25rem" : undefined }}
           >
             {open ? "▲ close" : "▼ colours"}
@@ -447,7 +447,7 @@ export function ImagesEditor({
           onDragEnd={handleDragEnd}
         >
           <SortableContext items={orderedIds} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-4 gap-3 items-start">
+            <div className="grid grid-cols-2 items-start gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {/* Already-saved images */}
               {sorted.map((img) => (
                 <ImageCard
@@ -478,7 +478,7 @@ export function ImagesEditor({
                 <button
                   type="button"
                   onClick={() => removeStagedImage(p.localId, p.previewUrl)}
-                  className="absolute right-1 top-1 hidden rounded-full bg-slate-700/80 p-1 text-white group-hover:flex items-center justify-center"
+                  className="absolute right-1 top-1 hidden rounded-full bg-slate-700/80 p-1 text-white group-hover:flex pointer-coarse:flex items-center justify-center"
                 >
                   <XIcon />
                 </button>

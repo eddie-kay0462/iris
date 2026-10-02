@@ -38,8 +38,8 @@ export function MovementHistory() {
   }
 
   return (
-    <div>
-      <table className="w-full text-sm">
+    <div className="overflow-x-auto">
+      <table className="w-full whitespace-nowrap text-sm">
         <thead className="border-b border-slate-200 text-left text-slate-500">
           <tr>
             <th className="pb-2 font-medium">Date</th>

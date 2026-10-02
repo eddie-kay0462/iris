@@ -64,7 +64,7 @@ export default function MarketsPage() {
 
   return (
     <section className="space-y-6">
-      <header className="flex items-start justify-between">
+      <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold">Markets</h1>
           <p className="text-sm text-slate-500">
@@ -83,7 +83,7 @@ export default function MarketsPage() {
       <CommissionSettingsCard />
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 iris-stat-grid">
         {[
           { label: 'Total Allies', value: allies.length },
           { label: 'Active', value: active },

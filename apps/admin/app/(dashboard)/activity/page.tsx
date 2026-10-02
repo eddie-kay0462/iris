@@ -2,14 +2,20 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, Activity, ShoppingBag, MessageSquare, Shield, ChevronDown, ChevronUp } from 'lucide-react'
-import { fetchActivityFeed, type AdminLogEntry, type SaleEntry, type CommEntry } from './actions'
+import {
+  fetchActivityPage,
+  type ActivityEntry,
+  type ActivityTab,
+  type AdminLogEntry,
+  type SaleEntry,
+  type CommEntry,
+} from './actions'
+import { Pagination } from '../../components/Pagination'
 
-type Tab = 'all' | 'admin' | 'sales' | 'comms'
+type Tab = ActivityTab
+type Entry = ActivityEntry
 
-type Entry =
-  | { kind: 'admin'; time: string; data: AdminLogEntry }
-  | { kind: 'sale'; time: string; data: SaleEntry }
-  | { kind: 'comm'; time: string; data: CommEntry }
+const PAGE_SIZE = 25
 
 function fmt(n: number) {
   return `GH₵ ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -73,6 +79,16 @@ function ChangesDetail({ changes }: { changes: Record<string, unknown> | null })
   )
 }
 
+/** Right-hand time column on wider screens; phones show the time inline instead. */
+function Timestamp({ iso }: { iso: string }) {
+  return (
+    <div className="hidden shrink-0 text-right sm:block">
+      <p className="text-xs text-slate-500">{timeAgo(iso)}</p>
+      <p className="mt-0.5 whitespace-nowrap text-[10px] text-slate-400">{fmtDate(iso)}</p>
+    </div>
+  )
+}
+
 function AdminLogRow({ entry }: { entry: AdminLogEntry }) {
   return (
     <div className="flex gap-3">
@@ -94,8 +110,9 @@ function AdminLogRow({ entry }: { entry: AdminLogEntry }) {
           )}
         </div>
         <ChangesDetail changes={entry.changes} />
-        <p className="text-[10px] text-slate-400 mt-1">{fmtDate(entry.created_at)} · {timeAgo(entry.created_at)}</p>
+        <p className="text-[10px] text-slate-400 mt-1 sm:hidden">{fmtDate(entry.created_at)} · {timeAgo(entry.created_at)}</p>
       </div>
+      <Timestamp iso={entry.created_at} />
     </div>
   )
 }
@@ -123,8 +140,9 @@ function SaleRow({ entry }: { entry: SaleEntry }) {
           <span>Commission <span className="font-semibold text-emerald-700">{fmt(entry.commission_amount)}</span></span>
           <span className="capitalize">{entry.payment_method.replace('_', ' ')}</span>
         </div>
-        <p className="text-[10px] text-slate-400 mt-1">{fmtDate(entry.sale_date)} · {timeAgo(entry.sale_date)}</p>
+        <p className="text-[10px] text-slate-400 mt-1 sm:hidden">{fmtDate(entry.sale_date)} · {timeAgo(entry.sale_date)}</p>
       </div>
+      <Timestamp iso={entry.sale_date} />
     </div>
   )
 }
@@ -148,34 +166,36 @@ function CommRow({ entry }: { entry: CommEntry }) {
         {entry.message && (
           <p className="mt-1 text-xs text-slate-500 line-clamp-1">{entry.message}</p>
         )}
-        <p className="text-[10px] text-slate-400 mt-1">{fmtDate(entry.created_at)} · {timeAgo(entry.created_at)}</p>
+        <p className="text-[10px] text-slate-400 mt-1 sm:hidden">{fmtDate(entry.created_at)} · {timeAgo(entry.created_at)}</p>
       </div>
+      <Timestamp iso={entry.created_at} />
     </div>
   )
 }
 
 export default function ActivityPage() {
   const [tab, setTab] = useState<Tab>('all')
+  const [page, setPage] = useState(1)
   const [entries, setEntries] = useState<Entry[]>([])
+  const [total, setTotal] = useState(0)
+  const [counts, setCounts] = useState({ admin: 0, sales: 0, comms: 0 })
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
 
   const load = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true)
-    const { adminLogs, sales, comms } = await fetchActivityFeed()
-
-    const merged: Entry[] = [
-      ...adminLogs.map((d): Entry => ({ kind: 'admin', time: d.created_at, data: d })),
-      ...sales.map((d): Entry => ({ kind: 'sale', time: d.sale_date, data: d })),
-      ...comms.map((d): Entry => ({ kind: 'comm', time: d.created_at, data: d })),
-    ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-
-    setEntries(merged)
-    setLoading(false)
-    setRefreshing(false)
-    setLastRefreshed(new Date())
-  }, [])
+    try {
+      const result = await fetchActivityPage({ tab, page, pageSize: PAGE_SIZE })
+      setEntries(result.entries)
+      setTotal(result.total)
+      setCounts(result.counts)
+      setLastRefreshed(new Date())
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [tab, page])
 
   useEffect(() => { load() }, [load])
 
@@ -185,29 +205,34 @@ export default function ActivityPage() {
     return () => clearInterval(id)
   }, [load])
 
-  const filtered = entries.filter((e) => {
-    if (tab === 'all') return true
-    if (tab === 'admin') return e.kind === 'admin'
-    if (tab === 'sales') return e.kind === 'sale'
-    if (tab === 'comms') return e.kind === 'comm'
-    return true
-  })
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
-  const counts = {
-    admin: entries.filter(e => e.kind === 'admin').length,
-    sales: entries.filter(e => e.kind === 'sale').length,
-    comms: entries.filter(e => e.kind === 'comm').length,
+  // If the feed shrinks (or a tab has fewer pages), don't strand the view past the end.
+  useEffect(() => {
+    if (!loading && page > totalPages) setPage(totalPages)
+  }, [loading, page, totalPages])
+
+  function changeTab(next: Tab) {
+    if (next === tab) return
+    setTab(next)
+    setPage(1)
+    setLoading(true)
+  }
+
+  function changePage(next: number) {
+    setPage(next)
+    setLoading(true)
   }
 
   const tabs: { id: Tab; label: string; count: number; icon: React.ReactNode }[] = [
-    { id: 'all', label: 'All Activity', count: entries.length, icon: <Activity className="w-3.5 h-3.5" /> },
+    { id: 'all', label: 'All Activity', count: counts.admin + counts.sales + counts.comms, icon: <Activity className="w-3.5 h-3.5" /> },
     { id: 'admin', label: 'Admin Actions', count: counts.admin, icon: <Shield className="w-3.5 h-3.5" /> },
     { id: 'sales', label: 'Sales', count: counts.sales, icon: <ShoppingBag className="w-3.5 h-3.5" /> },
     { id: 'comms', label: 'Communications', count: counts.comms, icon: <MessageSquare className="w-3.5 h-3.5" /> },
   ]
 
   return (
-    <section className="space-y-6 max-w-3xl">
+    <section className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -238,7 +263,7 @@ export default function ActivityPage() {
         {tabs.map((t) => (
           <button
             key={t.id}
-            onClick={() => setTab(t.id)}
+            onClick={() => changeTab(t.id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
               tab === t.id
                 ? 'bg-slate-900 text-white'
@@ -258,16 +283,19 @@ export default function ActivityPage() {
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm divide-y divide-slate-100">
         {loading ? (
           <div className="p-8 text-center text-sm text-slate-400">Loading activity…</div>
-        ) : filtered.length === 0 ? (
+        ) : entries.length === 0 ? (
           <div className="p-8 text-center text-sm text-slate-400">No activity yet</div>
         ) : (
-          filtered.map((entry) => (
+          entries.map((entry) => (
             <div key={`${entry.kind}-${entry.data.id}`} className="px-5 py-4">
               {entry.kind === 'admin' && <AdminLogRow entry={entry.data} />}
               {entry.kind === 'sale' && <SaleRow entry={entry.data} />}
               {entry.kind === 'comm' && <CommRow entry={entry.data} />}
             </div>
           ))
+        )}
+        {total > PAGE_SIZE && (
+          <Pagination page={page} totalPages={totalPages} onPageChange={changePage} />
         )}
       </div>
     </section>

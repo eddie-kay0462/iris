@@ -1,7 +1,7 @@
 "use client";
 
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
-import { chart, formatMetric, MetricFormat } from "@/lib/charts/theme";
+import { useChartTheme, formatMetric, MetricFormat } from "@/lib/charts/theme";
 
 export interface DonutSlice {
   name: string;
@@ -25,13 +25,17 @@ export function DonutChart({
   /** Overrides the default ink ramp — use when slices must be told apart. */
   colors?: readonly string[];
 }) {
+  const chart = useChartTheme();
   const palette = colors?.length ? colors : chart.donut;
   const total = data.reduce((s, d) => s + d.value, 0);
   const hasData = total > 0;
 
   return (
-    <div className="flex items-center gap-6">
-      <div style={{ height, width: height }} className="relative shrink-0">
+    // The card is the container, so this reacts to the card's width (a narrow
+    // column at 1280 with both panels open, or a phone), not the window's.
+    <div className="@container">
+    <div className="flex flex-col items-center gap-4 @[24rem]:flex-row @[24rem]:gap-6">
+      <div style={{ height, width: height, maxWidth: "100%" }} className="relative shrink-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
@@ -45,7 +49,7 @@ export function DonutChart({
               isAnimationActive={false}
             >
               {(hasData ? data : [{ name: "No data", value: 1 }]).map((_, i) => (
-                <Cell key={i} fill={hasData ? palette[i % palette.length] : "#f1f5f9"} />
+                <Cell key={i} fill={hasData ? palette[i % palette.length] : chart.grid} />
               ))}
             </Pie>
             {hasData && (
@@ -53,6 +57,7 @@ export function DonutChart({
                 contentStyle={{
                   borderRadius: 10,
                   border: `1px solid ${chart.grid}`,
+                  background: chart.surface,
                   boxShadow: "0 4px 12px rgba(15,23,42,0.08)",
                   fontSize: 12,
                 }}
@@ -72,7 +77,7 @@ export function DonutChart({
         </div>
       </div>
 
-      <div className="min-w-0 flex-1 space-y-2">
+      <div className="w-full min-w-0 flex-1 space-y-2">
         {data.map((d, i) => {
           const pct = total > 0 ? (d.value / total) * 100 : 0;
           return (
@@ -91,6 +96,7 @@ export function DonutChart({
         })}
         {!hasData && <p className="text-xs text-slate-400">No data for this date range</p>}
       </div>
+    </div>
     </div>
   );
 }

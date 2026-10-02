@@ -44,7 +44,7 @@ export function HBarChart({
           {r.leading}
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline justify-between gap-2">
-              <span className="truncate text-sm text-slate-700">{r.label}</span>
+              <span className="min-w-0 truncate text-sm text-slate-700" title={r.label}>{r.label}</span>
               <span className="flex items-center gap-2 whitespace-nowrap">
                 {r.trailing}
                 <span className="text-sm font-medium tabular-nums text-slate-900">

@@ -1,6 +1,7 @@
 'use client'
 
 import { use, useEffect, useState } from 'react'
+import { Pagination } from "../../../components/Pagination";
 import Link from 'next/link'
 import { ArrowLeft, LogOut, Pencil, Plus, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -114,17 +115,17 @@ export default function AllyDetailPage({ params }: { params: Promise<{ id: strin
 
       {/* Header */}
       <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 items-center gap-4">
           <Avatar url={ally.avatar_url} name={ally.full_name} size={48} />
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-semibold text-slate-900">{ally.full_name}</h1>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">{ally.full_name}</h1>
               <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${ally.is_active ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-500'}`}>
                 {ally.is_active ? 'Active' : 'Inactive'}
               </span>
               <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">{ally.brand}</span>
             </div>
-            <p className="mt-0.5 text-sm text-slate-500">
+            <p className="mt-0.5 text-sm text-slate-500 [overflow-wrap:anywhere]">
               {ally.email} · Joined {new Date(ally.joined_at).toLocaleDateString()}
             </p>
           </div>
@@ -153,7 +154,7 @@ export default function AllyDetailPage({ params }: { params: Promise<{ id: strin
       </header>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 iris-stat-grid">
         {stats.map((s) => (
           <div key={s.label} className="rounded-xl border border-slate-200 bg-white p-4">
             <p className="text-xs uppercase tracking-wide text-slate-400">{s.label}</p>
@@ -228,29 +229,13 @@ export default function AllyDetailPage({ params }: { params: Promise<{ id: strin
                 </tbody>
               </table>
             </div>
-            {salesQuery.data && salesQuery.data.total > salesQuery.data.limit && (
-              <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-sm text-slate-500">
-                <span>
-                  Page {salesQuery.data.page} of {Math.ceil(salesQuery.data.total / salesQuery.data.limit)} ·{' '}
-                  {salesQuery.data.total} sales
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    disabled={salesPage <= 1}
-                    onClick={() => setSalesPage((p) => Math.max(1, p - 1))}
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 font-medium transition hover:border-slate-300 disabled:opacity-40"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    disabled={salesPage >= Math.ceil(salesQuery.data.total / salesQuery.data.limit)}
-                    onClick={() => setSalesPage((p) => p + 1)}
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 font-medium transition hover:border-slate-300 disabled:opacity-40"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
+            {salesQuery.data && (
+              <Pagination
+                page={salesPage}
+                totalPages={Math.ceil(salesQuery.data.total / salesQuery.data.limit)}
+                onPageChange={setSalesPage}
+                summary={`${salesQuery.data.total} sales`}
+              />
             )}
           </div>
         </div>

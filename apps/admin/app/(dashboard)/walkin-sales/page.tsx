@@ -265,7 +265,7 @@ export default function WalkinSalesPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 iris-stat-grid">
         <StatsCard label="Today's Revenue" value={GHS(stats?.today_revenue ?? 0)} icon={Wallet} color="text-green-700" />
         <StatsCard label="Orders Today" value={stats?.orders_today ?? 0} icon={ShoppingBag} />
         <StatsCard label="Total Revenue" value={GHS(stats?.total_revenue ?? 0)} icon={Wallet} />
@@ -629,23 +629,23 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
         onCancel={() => { setChargeOrder(null); onClose(); }}
       />
     )}
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
+      <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-xl sm:max-h-[92dvh]">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
           <h2 className="text-lg font-semibold text-slate-900">New Walk-in Sale</h2>
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 text-sm text-slate-600">
               <input type="checkbox" checked={isPreorderMode} onChange={(e) => setIsPreorderMode(e.target.checked)} />
               Pre-order (out of stock)
             </label>
-            <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+            <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-slate-400 hover:bg-slate-100 pointer-coarse:p-2"><X className="h-5 w-5" /></button>
           </div>
         </div>
 
-        <div className="grid flex-1 grid-cols-1 gap-0 overflow-hidden md:grid-cols-5">
+        <div className="grid flex-1 grid-cols-1 gap-0 overflow-y-auto md:grid-cols-5 md:overflow-hidden">
           {/* Left: products */}
-          <div className="col-span-3 overflow-y-auto border-r border-slate-200 p-5">
+          <div className="border-b border-slate-200 p-4 sm:p-5 md:col-span-3 md:overflow-y-auto md:border-b-0 md:border-r">
             <div className="relative">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
               <input
@@ -694,7 +694,7 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* Right: cart + customer + payment */}
-          <div className="col-span-2 flex flex-col overflow-y-auto p-5">
+          <div className="flex flex-col p-4 sm:p-5 md:col-span-2 md:overflow-y-auto">
             {/* Customer capture */}
             <section className="mb-4">
               <h3 className="mb-2 text-sm font-semibold text-slate-700">Customer</h3>
@@ -756,16 +756,16 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
                 <div className="space-y-2">
                   {items.map((i) => (
                     <div key={i._localId} className="flex items-center gap-2 rounded-md border border-slate-200 p-2">
-                      <div className="flex-1 text-sm">
+                      <div className="min-w-0 flex-1 text-sm">
                         <div className="font-medium">{i.product_name}</div>
                         <div className="text-xs text-slate-500">{i.variant_title} · {GHS(i.unit_price)}</div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button onClick={() => updateQty(i._localId, -1)} className="rounded border border-slate-300 p-1 hover:bg-slate-50"><Minus className="h-3 w-3" /></button>
+                        <button onClick={() => updateQty(i._localId, -1)} aria-label="Decrease quantity" className="rounded border border-slate-300 p-1 hover:bg-slate-50 pointer-coarse:p-2.5"><Minus className="h-3 w-3" /></button>
                         <span className="w-6 text-center text-sm">{i.quantity}</span>
-                        <button onClick={() => updateQty(i._localId, 1)} className="rounded border border-slate-300 p-1 hover:bg-slate-50"><Plus className="h-3 w-3" /></button>
+                        <button onClick={() => updateQty(i._localId, 1)} aria-label="Increase quantity" className="rounded border border-slate-300 p-1 hover:bg-slate-50 pointer-coarse:p-2.5"><Plus className="h-3 w-3" /></button>
                       </div>
-                      <button onClick={() => removeItem(i._localId)} className="text-slate-400 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
+                      <button onClick={() => removeItem(i._localId)} aria-label="Remove item" className="text-slate-400 hover:text-red-500 pointer-coarse:p-2.5"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   ))}
                 </div>
@@ -1013,7 +1013,7 @@ function OrderDetailModal({ order, onClose }: { order: WalkinOrder; onClose: () 
       <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">{order.order_number}</h2>
-          <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-slate-400 hover:bg-slate-100 pointer-coarse:p-2"><X className="h-5 w-5" /></button>
         </div>
         <div className="mb-3 space-y-1 text-sm">
           <div className="flex justify-between"><span className="text-slate-500">Customer</span><span>{order.customer_name || "Walk-in"}</span></div>

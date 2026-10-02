@@ -81,7 +81,7 @@ export function CommissionSettingsCard() {
           <select
             value={form.period}
             onChange={(e) => setForm((f) => ({ ...f, period: e.target.value as 'monthly' | 'all_time' }))}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+            className="w-full min-w-0 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
           >
             <option value="monthly">Monthly (resets each month)</option>
             <option value="all_time">All-time (never resets)</option>

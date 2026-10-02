@@ -8,7 +8,7 @@ import { ChartCard } from "@/app/components/charts/ChartCard";
 import { DualLineChart } from "@/app/components/charts/ComparisonLineChart";
 import { DonutChart } from "@/app/components/charts/DonutChart";
 import { DeltaBadge } from "@/app/components/DeltaBadge";
-import { chart, formatGHSShort } from "@/lib/charts/theme";
+import { useChartTheme, formatGHSShort } from "@/lib/charts/theme";
 import { ChevronDown } from "lucide-react";
 
 type CompareMode =
@@ -118,6 +118,7 @@ function MetricRow({
 
 /** Channel split for the period: donut + per-channel sales over time. */
 function ChannelOverview({ days }: { days: string }) {
+  const chart = useChartTheme();
   const range = useDateRange(parseInt(days));
   const { data: report } = useReport("sales-by-channel", range);
 
@@ -292,6 +293,7 @@ function PopupColumn({
 
 /** Period-scoped walk-in totals — same three metrics as StorefrontColumn. */
 function WalkinColumn({ days, note }: { days: string; note?: string }) {
+  const chart = useChartTheme();
   const range = useDateRange(parseInt(days));
   const { data, isLoading, error } = useReport("walkin-sales-over-time", range);
   const totals = data?.table.totals;

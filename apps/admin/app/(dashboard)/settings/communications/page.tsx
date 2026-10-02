@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Pagination } from "../../../components/Pagination";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle, XCircle, Send, PhoneCall, RefreshCw } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
@@ -640,25 +641,14 @@ export default function CommunicationsSettingsPage() {
             </div>
 
             {/* Pagination */}
-            {previewData && previewData.totalPages > 1 && (
-              <div className="flex items-center gap-2 px-6 py-3 border-t border-slate-100 shrink-0">
-                <button
-                  onClick={() => fetchPreviewPage(previewPage - 1)}
-                  disabled={previewPage === 1 || previewLoading}
-                  className="rounded border border-slate-200 px-3 py-1 text-xs hover:bg-slate-50 disabled:opacity-40"
-                >
-                  Previous
-                </button>
-                <span className="text-xs text-slate-400">
-                  Page {previewPage} of {previewData.totalPages}
-                </span>
-                <button
-                  onClick={() => fetchPreviewPage(previewPage + 1)}
-                  disabled={previewPage === previewData.totalPages || previewLoading}
-                  className="rounded border border-slate-200 px-3 py-1 text-xs hover:bg-slate-50 disabled:opacity-40"
-                >
-                  Next
-                </button>
+            {previewData && (
+              <div className="shrink-0">
+                <Pagination
+                  page={previewPage}
+                  totalPages={previewData.totalPages}
+                  onPageChange={fetchPreviewPage}
+                  disabled={previewLoading}
+                />
               </div>
             )}
 
@@ -768,27 +758,9 @@ export default function CommunicationsSettingsPage() {
                 </tbody>
               </table>
             </div>
-            {logs.totalPages > 1 && (
-              <div className="flex items-center gap-2 pt-2">
-                <button
-                  onClick={() => setLogsPage((p) => Math.max(1, p - 1))}
-                  disabled={logsPage === 1}
-                  className="rounded border border-slate-200 px-3 py-1 text-xs hover:bg-slate-50 disabled:opacity-40"
-                >
-                  Previous
-                </button>
-                <span className="text-xs text-slate-400">
-                  Page {logsPage} of {logs.totalPages}
-                </span>
-                <button
-                  onClick={() => setLogsPage((p) => Math.min(logs.totalPages, p + 1))}
-                  disabled={logsPage === logs.totalPages}
-                  className="rounded border border-slate-200 px-3 py-1 text-xs hover:bg-slate-50 disabled:opacity-40"
-                >
-                  Next
-                </button>
-              </div>
-            )}
+            <div className="pt-2">
+              <Pagination page={logsPage} totalPages={logs.totalPages} onPageChange={setLogsPage} framed={false} />
+            </div>
           </>
         )}
       </div>

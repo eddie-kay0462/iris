@@ -1455,6 +1455,23 @@ function NewOrderModal({
   const pendingAction = useRef<"submit" | "hold" | null>(null);
   const discountConfirmed = useRef(false);
 
+  // Phones stack the till (products, then cart). While the cart is scrolled
+  // out of view, a checkout bar shows the running total and jumps to it.
+  const tillBodyRef = useRef<HTMLDivElement>(null);
+  const cartColumnRef = useRef<HTMLDivElement>(null);
+  const [cartInView, setCartInView] = useState(true);
+  useEffect(() => {
+    const root = tillBodyRef.current;
+    const cart = cartColumnRef.current;
+    if (!root || !cart) return;
+    const io = new IntersectionObserver(([entry]) => setCartInView(entry.isIntersecting), {
+      root,
+      threshold: 0,
+    });
+    io.observe(cart);
+    return () => io.disconnect();
+  }, []);
+
   // ── Delivery fee state (pre-order mode only, opt-in) ─────────────────────────
   const { data: shippingOptions } = useShippingOptions();
   const standardRate = shippingOptions?.find((o) => o.id === "standard")?.price ?? 0;
@@ -1814,7 +1831,7 @@ function NewOrderModal({
     <>
       {/* ── Backdrop ────────────────────────────────────────────────────────── */}
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
         // Ignored while a sale is going through: a stray click outside used to
         // dismiss the modal mid-request, leaving staff unsure whether it saved.
         onClick={(e) => {
@@ -1823,13 +1840,10 @@ function NewOrderModal({
         }}
       >
         {/* ── Modal shell ─────────────────────────────────────────────────── */}
-        <div
-          className="flex flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
-          style={{ width: "min(1100px, 100vw - 32px)", height: "min(860px, calc(100vh - 48px))" }}
-        >
+        <div className="flex h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-xl bg-white shadow-2xl sm:h-[min(860px,calc(100dvh-48px))] sm:w-[min(1100px,calc(100vw-32px))]">
           {/* Header */}
-          <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-200 px-6 py-4">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 sm:px-6 sm:py-4">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-4">
               <h2 className="text-base font-semibold text-slate-900">
                 {isPreorderMode ? "New Pop-up Pre-order" : "New Pop-up Order"}
               </h2>
@@ -1856,17 +1870,18 @@ function NewOrderModal({
             </div>
             <button
               onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Close"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Body */}
-          <div className="flex flex-1 overflow-hidden">
+          {/* Body: one scrolling column on phones, two panes from md up. */}
+          <div ref={tillBodyRef} className="flex flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
 
             {/* ── LEFT: Product Catalog ─────────────────────────────────── */}
-            <div className="flex flex-col overflow-hidden border-r border-slate-200" style={{ width: "55%" }}>
+            <div className="flex w-full flex-col border-b border-slate-200 md:w-[55%] md:overflow-hidden md:border-b-0 md:border-r">
               {/* Search bar */}
               <div className="flex-shrink-0 p-4 pb-3">
                 <div className="relative">
@@ -1882,7 +1897,7 @@ function NewOrderModal({
               </div>
 
               {/* Product results */}
-              <div className="flex-1 overflow-y-auto px-4 pb-4">
+              <div className="px-4 pb-4 md:flex-1 md:overflow-y-auto">
                 {!productSearch.trim() ? (
                   <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
                     <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
@@ -2017,14 +2032,14 @@ function NewOrderModal({
                                         <div className="flex items-center justify-between rounded border border-slate-700">
                                           <button
                                             onClick={(e) => { e.stopPropagation(); updateQty(lineItem._localId, -1); }}
-                                            className="flex h-6 w-6 items-center justify-center text-slate-300 hover:text-white"
+                                            className="flex h-6 w-6 items-center justify-center text-slate-300 hover:text-white pointer-coarse:h-9 pointer-coarse:w-9"
                                           >
                                             <Minus className="h-2.5 w-2.5" />
                                           </button>
                                           <span className="text-xs font-semibold text-white">{lineItem.quantity}</span>
                                           <button
                                             onClick={(e) => { e.stopPropagation(); updateQty(lineItem._localId, 1); }}
-                                            className="flex h-6 w-6 items-center justify-center text-slate-300 hover:text-white"
+                                            className="flex h-6 w-6 items-center justify-center text-slate-300 hover:text-white pointer-coarse:h-9 pointer-coarse:w-9"
                                           >
                                             <Plus className="h-2.5 w-2.5" />
                                           </button>
@@ -2053,8 +2068,8 @@ function NewOrderModal({
             </div>
 
             {/* ── RIGHT: Order Details ──────────────────────────────────── */}
-            <div className="flex flex-col overflow-hidden" style={{ width: "45%" }}>
-              <div className="flex-1 divide-y divide-slate-100 overflow-y-auto">
+            <div ref={cartColumnRef} className="flex w-full flex-col md:w-[45%] md:overflow-hidden">
+              <div className="divide-y divide-slate-100 md:flex-1 md:overflow-y-auto">
 
                 {/* CART */}
                 <section className="p-4">
@@ -2080,14 +2095,14 @@ function NewOrderModal({
                           <div className="flex flex-shrink-0 items-center rounded border border-slate-200 bg-white">
                             <button
                               onClick={() => updateQty(item._localId, -1)}
-                              className="flex h-6 w-6 items-center justify-center text-slate-500 hover:text-slate-900"
+                              className="flex h-6 w-6 items-center justify-center text-slate-500 hover:text-slate-900 pointer-coarse:h-9 pointer-coarse:w-9"
                             >
                               <Minus className="h-2.5 w-2.5" />
                             </button>
                             <span className="w-5 text-center text-xs font-medium text-slate-800">{item.quantity}</span>
                             <button
                               onClick={() => updateQty(item._localId, 1)}
-                              className="flex h-6 w-6 items-center justify-center text-slate-500 hover:text-slate-900"
+                              className="flex h-6 w-6 items-center justify-center text-slate-500 hover:text-slate-900 pointer-coarse:h-9 pointer-coarse:w-9"
                             >
                               <Plus className="h-2.5 w-2.5" />
                             </button>
@@ -2627,7 +2642,7 @@ function NewOrderModal({
                               {splits.length > 1 && (
                                 <button
                                   onClick={() => removeSplit(payment.id)}
-                                  className="flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-500"
+                                  className="flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-500 pointer-coarse:h-9 pointer-coarse:w-9"
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </button>
@@ -2841,13 +2856,32 @@ function NewOrderModal({
               </div>
             </div>
           </div>
+
+          {/* Phone checkout bar: running total + a jump to the cart. Hidden
+              once the cart (and its real submit button) is on screen. */}
+          {items.length > 0 && !cartInView && (
+            <button
+              type="button"
+              onClick={() => cartColumnRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              className="flex flex-shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-slate-900 px-4 py-3 text-sm text-white md:hidden"
+            >
+              <span className="font-medium">
+                {items.reduce((n, i) => n + i.quantity, 0)} item{items.reduce((n, i) => n + i.quantity, 0) === 1 ? "" : "s"}
+                {" · "}
+                {formatCurrency(total)}
+              </span>
+              <span className="flex items-center gap-1 font-semibold">
+                Checkout <ChevronDown className="h-4 w-4" />
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* ── Hold Sub-Modal ────────────────────────────────────────────────── */}
       {showHold && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
           onClick={(e) => e.target === e.currentTarget && setShowHold(false)}
         >
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
@@ -2911,7 +2945,7 @@ function NewOrderModal({
 
       {/* ── High-Discount Confirmation Modal ──────────────────────────── */}
       {showDiscountWarning && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
             <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
               <AlertCircle className="h-5 w-5 text-amber-600" />
@@ -3030,7 +3064,7 @@ function NewEventModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+      <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <h2 className="text-base font-semibold text-slate-900">New Pop-up Event</h2>
           <button
@@ -3190,7 +3224,7 @@ function EditEventModal({ event, onClose }: { event: PopupEvent; onClose: () => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+      <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <h2 className="text-base font-semibold text-slate-900">Edit Event</h2>
           <button
@@ -3375,7 +3409,7 @@ function RecordTotalsModal({ event, onClose }: { event: PopupEvent; onClose: () 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+      <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <h2 className="text-base font-semibold text-slate-900">
             {existing ? "Edit Unitemized Totals" : "Record Unitemized Totals"}
@@ -3605,7 +3639,7 @@ function UnstructuredEventOverview({
             <div className="[container-type:inline-size]">
               <p className="text-sm font-medium text-slate-500">Revenue</p>
               <p
-                className={`${blockFigures.className} mt-3 whitespace-nowrap leading-none tabular-nums text-black`}
+                className={`${blockFigures.className} mt-3 whitespace-nowrap leading-none tabular-nums text-black dark:text-[#fff]`}
                 style={{ fontSize: "min(10rem, 17.5cqw, 14.5vh)" }}
               >
                 {aggregate
@@ -3619,7 +3653,7 @@ function UnstructuredEventOverview({
             <div className="[container-type:inline-size]">
               <p className="text-sm font-medium text-slate-500">Units sold</p>
               <p
-                className={`${blockFigures.className} mt-3 whitespace-nowrap leading-none tabular-nums text-black`}
+                className={`${blockFigures.className} mt-3 whitespace-nowrap leading-none tabular-nums text-black dark:text-[#fff]`}
                 style={{ fontSize: "min(10rem, 17.5cqw, 14.5vh)" }}
               >
                 {aggregate ? aggregate.units.toLocaleString() : "—"}
@@ -3896,12 +3930,12 @@ function OrderTable({
           <tr className="border-b border-slate-100 text-xs font-medium uppercase tracking-wide text-slate-400">
             <th className="px-5 py-3">Order #</th>
             <th className="px-5 py-3">Customer</th>
-            <th className="px-5 py-3">Served by</th>
+            <th className="hidden lg:table-cell px-5 py-3">Served by</th>
             <th className="px-5 py-3">Items</th>
             <th className="px-5 py-3">Total</th>
-            <th className="px-5 py-3">Payment Method</th>
+            <th className="hidden lg:table-cell px-5 py-3">Payment Method</th>
             <th className="px-5 py-3">Status</th>
-            <th className="px-5 py-3">Time</th>
+            <th className="hidden lg:table-cell px-5 py-3">Time</th>
             <th className="px-5 py-3">Actions</th>
           </tr>
         </thead>
@@ -3947,7 +3981,7 @@ function OrderTable({
                     </p>
                   )}
                 </td>
-                <td className="px-5 py-4">
+                <td className="hidden lg:table-cell px-5 py-4">
                   <div className="flex items-center gap-2">
                     <span
                       className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold text-white ${avatarColor(staffName)}`}
@@ -3967,7 +4001,7 @@ function OrderTable({
                 <td className="px-5 py-4 text-sm font-medium text-slate-800">
                   {formatCurrency(Number(order.total))}
                 </td>
-                <td className="px-5 py-4 text-sm text-slate-600">
+                <td className="hidden lg:table-cell px-5 py-4 text-sm text-slate-600">
                   {order.payment_method
                     ? PAYMENT_LABELS[order.payment_method]
                     : <span className="text-slate-400">—</span>}
@@ -3996,7 +4030,7 @@ function OrderTable({
                     </p>
                   )}
                 </td>
-                <td className="px-5 py-4 text-sm text-slate-400">
+                <td className="hidden lg:table-cell px-5 py-4 text-sm text-slate-400">
                   {timeAgo(order.created_at)}
                 </td>
                 <td className="px-5 py-4">
@@ -4427,7 +4461,7 @@ export default function PopupSalesPage() {
     return (
       <section className="space-y-6">
         <div className="h-8 w-48 animate-pulse rounded bg-slate-100" />
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-4 gap-4 iris-stat-grid">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="h-24 animate-pulse rounded-lg bg-slate-100" />
           ))}
@@ -4463,8 +4497,8 @@ export default function PopupSalesPage() {
     <>
       <section className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
             <button
               onClick={() => selectEvent(null)}
               className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
@@ -4472,7 +4506,7 @@ export default function PopupSalesPage() {
               <ArrowLeft className="h-4 w-4" />
               Events
             </button>
-            <h1 className="text-xl font-semibold text-slate-900">
+            <h1 className="min-w-0 text-lg font-semibold text-slate-900 sm:text-xl">
               {selectedEvent?.name ?? "Pop-up Sales"}
             </h1>
             {selectedEvent && (
@@ -4504,7 +4538,7 @@ export default function PopupSalesPage() {
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 iris-stat-grid">
           <div className="rounded-lg border border-slate-200 bg-white p-5">
             <div className="flex items-center justify-between">
               <p className="text-sm text-slate-500">Session Revenue</p>
@@ -4546,12 +4580,12 @@ export default function PopupSalesPage() {
         {/* Tabs + Table */}
         <div className="rounded-xl border border-slate-200 bg-white">
           {/* Tab bar */}
-          <div className="flex items-center gap-1 border-b border-slate-100 px-4 pt-3">
+          <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-100 px-4 pt-3">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${activeTab === tab.id
+                className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors ${activeTab === tab.id
                   ? "border-b-2 border-slate-900 text-slate-900"
                   : "text-slate-500 hover:text-slate-700"
                   }`}

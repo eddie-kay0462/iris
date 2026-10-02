@@ -153,7 +153,7 @@ export default function DiscountPanel({ channel, items, onChange }: Props) {
       )}
 
       {/* Manual staff override */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <select
           value={manualType}
           onChange={(e) => setManualType(e.target.value as "none" | ValueType)}
@@ -177,7 +177,7 @@ export default function DiscountPanel({ channel, items, onChange }: Props) {
               value={manualReason}
               onChange={(e) => setManualReason(e.target.value)}
               placeholder="Reason"
-              className={`${inputCls} flex-1`}
+              className={`${inputCls} min-w-0 basis-full sm:basis-auto sm:flex-1`}
             />
           </>
         )}
