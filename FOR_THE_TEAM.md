@@ -6423,3 +6423,65 @@ A B2B order counts as revenue but **not** as an "order" in order counts or avera
 - **B2B orders have no brand.** When the dashboard is filtered to 1NRI or Unlikely Alliances, B2B revenue isn't included, so the two brand totals add up to less than the overall total. The dashboard says so on screen.
 - B2B orders don't touch stock. They aren't linked to products in the catalogue.
 - The Compare tab's "Storefront" column already included pop-up and walk-in sales before this change. That hasn't been fixed here; B2B is just kept out of it.
+
+---
+
+## The new IRIS admin design (October 2026)
+
+The admin has a fresh look, based on a professional dashboard design kit in Figma. It's **opt-in**. After you sign in, a pop-up asks whether you want to try "the new IRIS". Your answer is remembered and the page reloads in that design. You can switch back and forth any time from the account menu at the top right ("Switch to classic") or from the classic header ("Try the new IRIS"). Both designs show the same data. Nothing about how orders, products or anything else work has changed, only how it looks and feels. The pages are deliberately the same pages in the same places, so it should feel familiar, just cleaner.
+
+What's new in the new IRIS:
+
+- **Light, dark and "match my system" themes.** "Match my system" is the default and follows your computer's setting, so the admin goes dark when your laptop does. Switch with the sun/moon button in the header or on the Account page.
+- **A new sidebar.** Pages are grouped (Overview, Sales, Catalogue, Relationships, Configuration). It collapses to a slim strip of icons with a smooth animation, and the 1NRI wreath logo sits at the bottom. Communications now sits under Customers.
+- **A notification panel** on the right with new orders, reviews waiting for approval, abandoned checkouts, low stock, recent team activity and new customers. It can be hidden.
+- **Quick page search:** press ⌘/ (or Ctrl+/) to jump to any page by typing its name.
+- **An Account page and profile pop-up.** Click your name at the top of the sidebar to see your role and when your session ends, and to reach Account settings. There you can edit your name, phone number and photo, pick a theme, and see exactly what your role is allowed to do.
+- **A new login page** with the 1NRI logo and a new photo (the classic login page is unchanged).
+- **Works on phones and iPads.** Every page was checked at phone, tablet and desktop sizes. Wide tables hide less important columns on small screens and scroll sideways instead of spilling off the page. On a phone the pop-up till stacks the products above the cart, with a checkout bar stuck to the bottom of the screen.
+- **Softer revenue charts.** The main revenue chart on the dashboard and the headline sales charts on Analytics have a gentle shaded haze under the line, as in the design.
+
+A few improvements apply to **both** designs:
+
+- **Activity log** has pages, and you can type a page number to jump straight to it. Very old pages used to come up empty; that's fixed.
+- **Pop-up analytics → Customer Data Capture** shows 20 contacts per page instead of one huge list. "Download PDF" still includes every contact.
+- **Unsaved changes on a product.** If you've edited a product and try to leave the page without saving, you're asked whether to **Discard changes**, **Keep editing** or **Save changes**. Previously it was a plain browser "OK / Cancel" box. Closing or refreshing the browser tab still shows the browser's own warning.
+- Lists across the admin share the new "Page [ 3 ] of 12" control, so you can type the page you want.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/admin/lib/ui/` | New. Remembers which design (new or classic) and which theme (light, dark, system) you chose, and applies it before the page appears so it doesn't flash. |
+| `apps/admin/app/layout.tsx`, `apps/admin/app/globals.css` | Load the chosen design and theme; the new look's colours, dark mode, and phone-size fixes (e.g. iPhones no longer zoom into text boxes). |
+| `apps/admin/app/components/NewIrisModal.tsx`, `apps/admin/app/(auth)/login/page.tsx` | The "try the new IRIS?" pop-up after login; the new login page logo and photo. |
+| `apps/admin/public/brand/`, `apps/admin/public/login-bg-iris.jpg` | New. The 1NRI logo and wreath images, and the new login photo (shrunk from 10MB to about half a megabyte). |
+| `apps/admin/app/components/v2/` | New. The new design's frame: sidebar, header, notification panel, page search, the shared pop-up window, and the profile pop-up. |
+| `apps/admin/app/components/nav.ts`, `Sidebar.tsx`, `Header.tsx`, `AdminShell.tsx` | One shared list of pages for both designs (with Communications added); the classic header gets a "Try the new IRIS" link and your name links to your account. |
+| `apps/admin/app/(dashboard)/account/`, `apps/admin/lib/hooks/useAdminProfile.ts`, `apps/admin/lib/auth/sessionExpiry.ts`, `apps/admin/lib/rbac/permissions.ts` | New Account page; loading and saving your profile; when your session ends; plain-English names for roles and permissions. |
+| `apps/admin/app/components/ThemedToaster.tsx` | The little pop-up messages follow the light or dark theme. |
+| `apps/admin/app/components/DataTable.tsx`, `Pagination.tsx`, `StatsCard.tsx`, `StatusBadge.tsx`, `StatusSelects.tsx`, `DeltaBadge.tsx`, `SearchInput.tsx`, `DiscountPanel.tsx` | Shared building blocks restyled for the new look; tables can hide columns on small screens; page numbers can be typed. |
+| `apps/admin/app/components/charts/`, `apps/admin/lib/charts/theme.ts` | Charts use the new colours (including dark mode), fit narrow screens, and the main revenue charts get the soft haze. |
+| `apps/admin/app/components/products/`, `inventory/`, `preorders/` | Product editing works on phones; the new Discard / Keep editing / Save prompt. |
+| `apps/admin/lib/navigationGuard.ts` | New. Lets the product page catch a page-search jump when there are unsaved changes. |
+| `apps/admin/app/(dashboard)/activity/` | Activity log paging and the fix for empty old pages. |
+| `apps/admin/app/(dashboard)/analytics/` | New look on every tab; customer capture paging; the revenue chart haze. |
+| `apps/admin/app/(dashboard)/` (dashboard, orders, customers, products, payments, reviews, pop-up sales, walk-in sales, B2B, markets, settings) | Each page restyled in place and made to fit phone and tablet screens. The Orders page no longer shows the "Refunded" card, to give the others room. |
+
+> **Heads-up:** nothing needs running. There's no database change and no new setting. Everyone starts on the classic design. The pop-up appears each time you sign in, with your last choice already highlighted. If anything looks off in the new IRIS, switching to classic is always one click away. Please tell us which page and what you saw.
+
+### How to test
+
+1. Sign out and back in. Choose **Yes** on the "new IRIS" pop-up and check the page reloads in the new design.
+2. Click the sun/moon icon in the header to cycle System → Light → Dark.
+3. Collapse and expand the sidebar with the button at the top left. Hide and show the notification panel with the button at the top right.
+4. Press **⌘/** (or Ctrl+/), type "Customers" and press Enter.
+5. Click your name at the top of the sidebar, then **Account settings**. Change your phone number and save.
+6. Open any product, change its title, then click **Orders** in the sidebar. You should get the Discard / Keep editing / Save prompt. Try each button.
+7. Open the admin on your phone. Check that the lists, the dashboard and the pop-up till fit the screen.
+8. Use the account menu's **Switch to classic** and check the old design comes straight back.
+
+### Worth knowing
+
+- **Most of the new design is cosmetic,** so it was checked mainly with automated screenshots and layout checks at six screen sizes, against made-up test data. It hasn't had much real-world use yet, so expect a few rough edges, especially in dark mode.
+- If a page looks broken right after an update (e.g. a pop-up with a see-through background), do a hard refresh (⌘⇧R). The browser was probably holding on to old styling.
