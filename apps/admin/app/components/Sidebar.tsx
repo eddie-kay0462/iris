@@ -3,56 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import {
-  LayoutDashboard,
-  Package,
-  ShoppingCart,
-  Users,
-  BarChart3,
-  Settings,
-  MessageSquare,
-  PanelLeftOpen,
-  PanelLeftClose,
-  X,
-  Star,
-  ShoppingBag,
-  Store,
-  Sliders,
-  Activity,
-  ShoppingBasket,
-  FileBarChart,
-  DoorOpen,
-  Briefcase,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import type { Permission, UserRole } from "@/lib/rbac/permissions";
+import { PanelLeftOpen, PanelLeftClose, X } from "lucide-react";
+import type { UserRole } from "@/lib/rbac/permissions";
 import { roleHasPermission } from "@/lib/rbac/permissions";
-
-type NavItem = {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  permission?: Permission;
-};
-
-const navItems: NavItem[] = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/products", label: "Products", icon: Package, permission: "products:read" },
-  { href: "/orders", label: "Orders", icon: ShoppingCart, permission: "orders:read" },
-  { href: "/orders/abandoned", label: "Abandoned Checkouts", icon: ShoppingBasket, permission: "analytics:read" },
-  { href: "/popup-sales", label: "Pop-up Sales", icon: ShoppingBag, permission: "popup:read" },
-  { href: "/walkin-sales", label: "Walk-in Sales", icon: DoorOpen, permission: "orders:read" },
-  { href: "/b2b", label: "B2B", icon: Briefcase, permission: "b2b:read" },
-  { href: "/customers", label: "Customers", icon: Users, permission: "customers:read" },
-  { href: "/markets", label: "Markets", icon: Store, permission: "markets:read" },
-  { href: "/reviews", label: "Reviews", icon: Star, permission: "reviews:read" },
-  { href: "/analytics", label: "Analytics", icon: BarChart3, permission: "analytics:read" },
-  { href: "/analytics/reports", label: "Reports", icon: FileBarChart, permission: "analytics:read" },
-  { href: "/activity", label: "Activity", icon: Activity, permission: "settings:read" },
-  { href: "/settings", label: "Settings", icon: Settings, permission: "settings:read" },
-  { href: "/settings/general", label: "General", icon: Sliders, permission: "settings:read" },
-  { href: "/settings/communications", label: "Communications", icon: MessageSquare, permission: "settings:read" },
-];
+import { navItems } from "./nav";
 
 type SidebarProps = {
   role?: UserRole;

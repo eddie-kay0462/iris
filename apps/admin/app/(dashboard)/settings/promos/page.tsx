@@ -651,9 +651,9 @@ export default function PromosSettingsPage() {
                   <th className="px-5 py-3 text-left">Code / name</th>
                   <th className="px-5 py-3 text-left">Type</th>
                   <th className="px-5 py-3 text-left">Value</th>
-                  <th className="px-5 py-3 text-left">Channels</th>
+                  <th className="hidden lg:table-cell px-5 py-3 text-left">Channels</th>
                   <th className="px-5 py-3 text-left">Status</th>
-                  <th className="px-5 py-3 text-left">Uses</th>
+                  <th className="hidden lg:table-cell px-5 py-3 text-left">Uses</th>
                   <th className="px-5 py-3 text-left">Expires</th>
                   <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
@@ -675,13 +675,13 @@ export default function PromosSettingsPage() {
                     </td>
                     <td className="px-5 py-3 text-slate-600">{DISCOUNT_TYPE_LABELS[promo.discount_type]}</td>
                     <td className="px-5 py-3 text-slate-600">{valueLabel(promo)}</td>
-                    <td className="px-5 py-3 text-xs text-slate-500">
+                    <td className="hidden lg:table-cell px-5 py-3 text-xs text-slate-500">
                       {(promo.channels ?? ALL_CHANNELS).length === 3
                         ? "All"
                         : (promo.channels ?? []).map((c) => CHANNEL_LABELS[c].split(" ")[0]).join(", ")}
                     </td>
                     <td className="px-5 py-3">{statusBadge(promo)}</td>
-                    <td className="px-5 py-3 text-slate-600">
+                    <td className="hidden lg:table-cell px-5 py-3 text-slate-600">
                       {promo.used_count}{promo.max_uses !== null ? ` / ${promo.max_uses}` : ""}
                     </td>
                     <td className="px-5 py-3 text-slate-600">

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { apiClient, setToken } from "@/lib/api/client";
 import { toast } from "sonner";
+import { PROMPT_COOKIE, useIsNewUi, writeCookie } from "@/lib/ui/UiModeContext";
 
 /**
  * Admin Login Page
@@ -14,6 +15,7 @@ import { toast } from "sonner";
  */
 function AdminLoginForm() {
   const router = useRouter();
+  const isNew = useIsNewUi();
   const searchParams = useSearchParams();
 
   const [email, setEmail] = useState("");
@@ -44,6 +46,8 @@ function AdminLoginForm() {
       );
 
       setToken(data.access_token);
+      // Ask "classic or new IRIS?" once this session is in.
+      writeCookie(PROMPT_COOKIE, "1", null);
       toast.success("Signed in.");
       router.push(redirectTo);
       router.refresh();
@@ -55,23 +59,37 @@ function AdminLoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className={`flex min-h-screen ${isNew ? "bg-[var(--iris-bg)] lg:p-4" : ""}`}>
       {/* Left panel — editorial image */}
       <div
-        className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative"
+        className={`hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative ${
+          isNew ? "overflow-hidden rounded-3xl" : ""
+        }`}
         style={{
-          backgroundImage: "url('/login-bg.jpeg')",
+          backgroundImage: isNew ? "url('/login-bg-iris.jpg')" : "url('/login-bg.jpeg')",
           backgroundSize: "cover",
-          backgroundPosition: "center top",
+          // The new IRIS photo is a full-length portrait; keep the face in frame.
+          backgroundPosition: isNew ? "center 20%" : "center top",
         }}
       >
         {/* Dark overlay */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/30 to-black/85" />
+        {/* Lighter on the new IRIS photo: just enough at the top and bottom to keep the
+            logo and tagline readable, with the middle left clear. */}
+        <div
+          className={`absolute inset-0 bg-gradient-to-b ${
+            isNew ? "from-black/45 via-black/0 to-black/60" : "from-black/75 via-black/30 to-black/85"
+          }`}
+        />
 
         {/* Top — logo */}
         <div className="relative flex items-center gap-3">
-          <span className="text-white text-3xl font-black tracking-tighter">1NRI</span>
-          <span className="text-white/40 text-xs font-medium uppercase tracking-[0.2em] mt-1">WorldWide</span>
+          {isNew ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src="/brand/1nri-wordmark-white.png" alt="1NRI" className="h-7 w-auto" />
+          ) : (
+            <span className="text-white text-3xl font-black tracking-tighter">1NRI</span>
+          )}
+          <span className="text-white/40 text-xs font-medium uppercase tracking-[0.2em] mt-1">WorldWide LTD.</span>
         </div>
 
         {/* Bottom — tagline */}
@@ -81,17 +99,30 @@ function AdminLoginForm() {
             Operations Portal
           </p>
           <p className="text-white/40 text-xs tracking-wide">
-            Authorised personnel only &mdash; All activity is monitored.
+            Authorised personnel only, All activity is monitored.
           </p>
         </div>
       </div>
 
       {/* Right panel — form */}
-      <div className="flex w-full lg:w-1/2 flex-col items-center justify-center bg-white px-8 py-12">
+      <div
+        className={`flex w-full lg:w-1/2 flex-col items-center justify-center px-8 py-12 ${
+          isNew ? "bg-[var(--iris-bg)]" : "bg-white"
+        }`}
+      >
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
-          <div className="mb-10 lg:hidden">
-            <span className="text-slate-900 text-2xl font-bold tracking-tight">1NRI</span>
+          <div className={`mb-10 lg:hidden ${isNew ? "flex items-center" : ""}`}>
+            {isNew ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/brand/1nri-wordmark-black.png" alt="1NRI" className="h-6 w-auto dark:hidden" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/brand/1nri-wordmark-white.png" alt="1NRI" className="hidden h-6 w-auto dark:block" />
+              </>
+            ) : (
+              <span className="text-slate-900 text-2xl font-bold tracking-tight">1NRI</span>
+            )}
             <span className="ml-2 text-slate-400 text-sm font-medium uppercase tracking-widest">Operations</span>
           </div>
 
@@ -144,7 +175,7 @@ function AdminLoginForm() {
             </div>
 
             <button
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className={`flex w-full items-center justify-center gap-2 ${isNew ? "rounded-full" : "rounded-lg"} bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50`}
               type="submit"
               disabled={isLoading}
             >

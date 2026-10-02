@@ -120,7 +120,7 @@ export function AllyActivityPanel({ allyId }: { allyId: string }) {
   return (
     <div className="space-y-6">
       {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 iris-stat-grid">
         <div className="rounded-lg border border-slate-200 p-4">
           <div className="flex items-center gap-2 mb-2">
             <Clock className="h-3.5 w-3.5 text-slate-400" />

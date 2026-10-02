@@ -16,7 +16,9 @@ import { Sparkline } from "@/app/components/charts/Sparkline";
 import { DonutChart } from "@/app/components/charts/DonutChart";
 import { ChartCard } from "@/app/components/charts/ChartCard";
 import { DeltaBadge } from "@/app/components/DeltaBadge";
-import { chart, formatGHS, formatGHSShort, formatMetric } from "@/lib/charts/theme";
+import { useChartTheme, formatGHS, formatGHSShort, formatMetric } from "@/lib/charts/theme";
+import { useIsNewUi } from "@/lib/ui/UiModeContext";
+import { StatusPill } from "@/app/components/v2/StatusPill";
 
 // ─── Filter Types ──────────────────────────────────────────────────────────────
 
@@ -53,6 +55,26 @@ function KpiCard({
   badge?: string;
   spark?: Record<string, number>;
 }) {
+  const isNew = useIsNewUi();
+  if (isNew) {
+    return (
+      <div className="flex min-w-0 flex-col gap-2 rounded-2xl border border-[var(--iris-line)] bg-white p-4 shadow-sm sm:p-6">
+        <div className="flex items-center justify-between gap-2">
+          <p className="truncate text-xs leading-[18px] text-slate-900">{label}</p>
+          {/* "All channels" is the default; only call out narrower scopes. */}
+          {badge && badge !== "All channels" && (
+            <span className="shrink-0 truncate text-[11px] text-[var(--iris-muted)]">{badge}</span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <p className="text-2xl font-semibold leading-9 tabular-nums text-slate-900 [overflow-wrap:anywhere]">{value}</p>
+          {delta}
+        </div>
+        {sub && <p className="text-xs leading-[18px] text-[var(--iris-muted)]">{sub}</p>}
+        {spark && <Sparkline data={spark} height={28} />}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center gap-2">
@@ -134,9 +156,11 @@ function BrandSplit({
   brandRevenue: Record<string, number>;
   activeBrand: BrandFilter;
 }) {
+  const chart = useChartTheme();
+  const isNew = useIsNewUi();
   const brands = [
-    { name: "1NRI", color: "#0f172a", bg: "#f8fafc" },
-    { name: "Unlikely Alliances", color: "#475569", bg: "#f8fafc" },
+    { name: "1NRI", color: chart.primary, bg: isNew ? "transparent" : "#f8fafc" },
+    { name: "Unlikely Alliances", color: isNew ? chart.secondary : "#475569", bg: isNew ? "transparent" : "#f8fafc" },
   ];
 
   const total = Object.values(brandRevenue).reduce((s, v) => s + v, 0) || 1;
@@ -146,7 +170,7 @@ function BrandSplit({
       title="Sales by Brand"
       note="Product sales across all channels, attributed by product vendor. Excludes shipping, tax and fees, so this won't match Total Sales exactly."
     >
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr))]">
         {brands.map((b) => {
           const rev = brandRevenue[b.name] ?? 0;
           const pct = (rev / total) * 100;
@@ -187,6 +211,9 @@ function BrandSplit({
 export default function AdminDashboardPage() {
   const [range, setRange] = useState<TimeRange>("30");
   const [brandFilter, setBrandFilter] = useState<BrandFilter>("both");
+  const [chartMetric, setChartMetric] = useState<"revenue" | "orders">("revenue");
+  const isNew = useIsNewUi();
+  const chart = useChartTheme();
 
   const { data: adminStats } = useAdminStats();
   const dateRange = useDateRange(parseInt(range));
@@ -219,12 +246,18 @@ export default function AdminDashboardPage() {
     return allTimeAnalytics?.brandRevenueByDay?.[brandFilter] ?? {};
   }, [allTimeAnalytics, brandFilter]);
 
+  // The new IRIS chart card has a Revenue | Orders switch (kit-style tabs);
+  // orders are only split per brand server-side for revenue, so the orders
+  // view always shows every brand.
+  const chartByDay =
+    isNew && chartMetric === "orders" ? allTimeAnalytics?.ordersByDay ?? {} : displayRevenueByDay;
+
   const allTimeSeries = useMemo(
     () =>
-      Object.entries(displayRevenueByDay)
+      Object.entries(chartByDay)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, value]) => ({ date, value })),
-    [displayRevenueByDay],
+    [chartByDay],
   );
 
   const displayRevenue = useMemo(() => {
@@ -299,25 +332,42 @@ export default function AdminDashboardPage() {
     <section className="space-y-6">
       {/* Header */}
       <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-          <p className="text-sm text-slate-400">
-            Operations overview — storefront, pop-up, walk-in and B2B combined.
-          </p>
-        </div>
+        {isNew ? (
+          <div className="space-y-0.5">
+            <h1 className="text-sm font-semibold text-slate-900">Overview</h1>
+            <p className="text-xs text-[var(--iris-muted)]">
+              Storefront, pop-up, walk-in and B2B combined.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+            <p className="text-sm text-slate-400">
+              Operations overview — storefront, pop-up, walk-in and B2B combined.
+            </p>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Brand filter */}
-          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+          <div className={isNew ? "flex items-center gap-1" : "flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1"}>
             {BRAND_FILTERS.map((b) => (
               <button
                 key={b.value}
                 onClick={() => setBrandFilter(b.value)}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-all ${
-                  brandFilter === b.value
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={
+                  isNew
+                    ? `flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-sm transition-colors ${
+                        brandFilter === b.value
+                          ? "bg-[var(--iris-hover)] text-slate-900"
+                          : "text-[var(--iris-muted)] hover:text-slate-900"
+                      }`
+                    : `flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-all ${
+                        brandFilter === b.value
+                          ? "bg-white text-slate-900 shadow-sm"
+                          : "text-slate-500 hover:text-slate-800"
+                      }`
+                }
               >
                 {b.value !== "both" && <Store className="h-3 w-3" />}
                 {b.label}
@@ -325,17 +375,27 @@ export default function AdminDashboardPage() {
             ))}
           </div>
 
+          {isNew && <span className="mx-1 hidden h-4 w-px bg-[var(--iris-line)] sm:block" />}
+
           {/* Timeframe */}
-          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+          <div className={isNew ? "flex items-center gap-1" : "flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1"}>
             {TIME_RANGES.map((r) => (
               <button
                 key={r.value}
                 onClick={() => setRange(r.value)}
-                className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition-all ${
-                  range === r.value
-                    ? "bg-slate-900 text-white shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={
+                  isNew
+                    ? `rounded-lg px-2.5 py-1 text-sm transition-colors ${
+                        range === r.value
+                          ? "bg-slate-900 text-white"
+                          : "text-[var(--iris-muted)] hover:text-slate-900"
+                      }`
+                    : `rounded-lg px-3.5 py-1.5 text-sm font-semibold transition-all ${
+                        range === r.value
+                          ? "bg-slate-900 text-white shadow-sm"
+                          : "text-slate-500 hover:text-slate-800"
+                      }`
+                }
               >
                 {r.label}
               </button>
@@ -345,7 +405,7 @@ export default function AdminDashboardPage() {
       </header>
 
       {/* ── KPI Strip ─────────────────────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className={`grid gap-4 sm:grid-cols-2 iris-stat-grid ${isNew ? "lg:grid-cols-3 2xl:grid-cols-5" : "xl:grid-cols-5"}`}>
         <KpiCard
           label="Total Sales"
           value={analyticsLoading ? "—" : formatGHS(displayRevenue)}
@@ -412,6 +472,49 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* ── Revenue Chart ─────────────────────────────────────────────────── */}
+      {isNew ? (
+        <div className="rounded-2xl border border-[var(--iris-line)] bg-white p-4 shadow-sm sm:p-6">
+          <div className="mb-4 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-4 text-sm">
+              {(["revenue", "orders"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setChartMetric(m)}
+                  className={
+                    chartMetric === m
+                      ? "font-semibold text-slate-900"
+                      : "text-[var(--iris-muted)] hover:text-slate-900"
+                  }
+                >
+                  {m === "revenue" ? "Revenue" : "Orders"}
+                </button>
+              ))}
+            </div>
+            <span className="h-5 w-px bg-[var(--iris-line)]" />
+            <span className="flex items-center gap-1.5 text-xs text-slate-900">
+              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: chart.primary }} />
+              All time
+              {brandFilter !== "both" && chartMetric === "revenue" ? ` · ${brandFilter}` : ""}
+            </span>
+            {allTimeAnalytics && (
+              <span className="ml-auto text-xs text-[var(--iris-muted)]">
+                {allTimeSeries.length} days with data
+              </span>
+            )}
+          </div>
+          {allTimeLoading ? (
+            <div className="h-[240px] animate-pulse rounded-xl bg-[var(--iris-hover)] sm:h-[340px]" />
+          ) : (
+            <ComparisonLineChart
+              series={allTimeSeries}
+              height={340}
+              showBrush
+              glow
+              format={chartMetric === "orders" ? "number" : "currency"}
+            />
+          )}
+        </div>
+      ) : (
       <div className="-mx-6 rounded-none border-x-0 border-y border-slate-200 bg-white px-6 py-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -433,6 +536,7 @@ export default function AdminDashboardPage() {
           <ComparisonLineChart series={allTimeSeries} height={380} showBrush format="currency" />
         )}
       </div>
+      )}
 
       {/* ── Sales breakdown + channel split ───────────────────────────────── */}
       <div className="grid gap-5 lg:grid-cols-2">
@@ -466,7 +570,7 @@ export default function AdminDashboardPage() {
                 : "Storefront tracking starts with the first visitor session."
             }
           >
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(100%,7rem),1fr))]">
               {[
                 { label: "Sessions", value: sessions?.funnel.sessions ?? 0 },
                 { label: "Added to cart", value: sessions?.funnel.addedToCart ?? 0 },
@@ -502,20 +606,42 @@ export default function AdminDashboardPage() {
       {/* ── Secondary metrics ─────────────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {adminStats?.ordersByStatus && (
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
-            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <div
+            className={
+              isNew
+                ? "rounded-2xl border border-[var(--iris-line)] bg-white p-4 shadow-sm sm:p-6 xl:col-span-2"
+                : "rounded-xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2"
+            }
+          >
+            <h2
+              className={
+                isNew
+                  ? "mb-4 text-sm font-semibold text-slate-900"
+                  : "mb-4 text-xs font-semibold uppercase tracking-wide text-slate-500"
+              }
+            >
               Online Orders by Status
             </h2>
             <div className="flex flex-wrap gap-3">
               {Object.entries(adminStats.ordersByStatus).map(([status, count]) => (
                 <div
                   key={status}
-                  className="flex min-w-[80px] flex-col items-center rounded-lg border border-slate-100 px-4 py-3"
+                  className={
+                    isNew
+                      ? "flex min-w-[96px] flex-col items-center rounded-xl border border-[var(--iris-line)] px-4 py-3"
+                      : "flex min-w-[80px] flex-col items-center rounded-lg border border-slate-100 px-4 py-3"
+                  }
                 >
-                  <p className="text-xl font-bold text-slate-900">{count}</p>
-                  <p className="mt-0.5 text-center text-[10px] uppercase tracking-wide text-slate-400">
-                    {status.replace(/_/g, " ")}
-                  </p>
+                  <p className={isNew ? "text-2xl font-semibold text-slate-900" : "text-xl font-bold text-slate-900"}>{count}</p>
+                  {isNew ? (
+                    <span className="mt-1.5">
+                      <StatusPill status={status} />
+                    </span>
+                  ) : (
+                    <p className="mt-0.5 text-center text-[10px] uppercase tracking-wide text-slate-400">
+                      {status.replace(/_/g, " ")}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

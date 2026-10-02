@@ -18,10 +18,19 @@ const PAYMENT_STATUSES = ["", "paid", "pending", "refunded"];
 
 const columns: Column<PaymentTransaction>[] = [
   { key: "order_number", header: "Order" },
-  { key: "email", header: "Customer" },
+  {
+    key: "email",
+    header: "Customer",
+    render: (row) => (
+      <span className="block max-w-[11rem] truncate sm:max-w-[16rem]" title={row.email}>
+        {row.email}
+      </span>
+    ),
+  },
   {
     key: "payment_provider",
     header: "Provider",
+    hideBelow: "lg",
     render: (row) => (
       <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
         {row.payment_provider || "—"}
@@ -31,6 +40,7 @@ const columns: Column<PaymentTransaction>[] = [
   {
     key: "payment_reference",
     header: "Reference",
+    hideBelow: "lg",
     render: (row) => (
       <span className="font-mono text-xs text-slate-600">
         {row.payment_reference
@@ -55,6 +65,7 @@ const columns: Column<PaymentTransaction>[] = [
   {
     key: "created_at",
     header: "Date",
+    hideBelow: "md",
     render: (row) => new Date(row.created_at).toLocaleDateString(),
   },
 ];
@@ -82,7 +93,7 @@ export default function AdminPaymentsPage() {
       </header>
 
       {stats && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 iris-stat-grid">
           <StatsCard
             label="Total Collected"
             value={fmt(stats.totalCollected)}

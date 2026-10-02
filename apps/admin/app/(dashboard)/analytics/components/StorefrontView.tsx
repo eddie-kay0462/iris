@@ -67,7 +67,7 @@ function Kpi({
       <div>
         <p className="text-xl font-bold leading-none tabular-nums text-slate-900">{value}</p>
         {(delta || sub) && (
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
             {delta}
             {sub && <span className="text-[11px] text-slate-400">{sub}</span>}
           </div>
@@ -209,7 +209,7 @@ export function StorefrontView() {
       ) : (
         <>
           {/* ── KPI strip ──────────────────────────────────────────────── */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 iris-stat-grid">
             <Kpi
               label="Net Sales"
               value={breakdown ? formatGHS(breakdown.netSales) : "—"}
@@ -293,7 +293,7 @@ export function StorefrontView() {
               </Link>
             }
           >
-            <ComparisonLineChart series={salesSeries} previousSeries={salesPrevSeries} height={300} />
+            <ComparisonLineChart series={salesSeries} previousSeries={salesPrevSeries} height={300} glow />
           </ChartCard>
 
           {/* ── Breakdown + AOV ────────────────────────────────────────── */}

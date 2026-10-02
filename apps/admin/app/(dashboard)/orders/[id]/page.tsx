@@ -139,6 +139,7 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
                 fulfill, refund, or notify the customer.
               </p>
             )}
+            <div className="-mx-4 overflow-x-auto px-4">
             <table className="w-full text-sm">
               <thead className="text-left text-slate-500">
                 <tr>
@@ -162,10 +163,10 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
                       )}
                     </td>
                     <td className="py-2">{item.quantity}</td>
-                    <td className="py-2 text-right">
+                    <td className="whitespace-nowrap py-2 pl-3 text-right">
                       GH₵{Number(item.unit_price).toLocaleString()}
                     </td>
-                    <td className="py-2 text-right">
+                    <td className="whitespace-nowrap py-2 pl-3 text-right">
                       GH₵{Number(item.total_price).toLocaleString()}
                     </td>
                     {preorders.length > 0 && <td className="pl-4" />}
@@ -184,10 +185,10 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
                       </div>
                     </td>
                     <td className="py-2">{pre.quantity}</td>
-                    <td className="py-2 text-right">
+                    <td className="whitespace-nowrap py-2 pl-3 text-right">
                       GH₵{Number(pre.unit_price).toLocaleString()}
                     </td>
-                    <td className="py-2 text-right">
+                    <td className="whitespace-nowrap py-2 pl-3 text-right">
                       GH₵{(Number(pre.unit_price) * pre.quantity).toLocaleString()}
                     </td>
                     <td className="py-2 pl-4 text-right">
@@ -206,13 +207,14 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
                   <td colSpan={3} className="py-2 text-right">
                     Total
                   </td>
-                  <td className="py-2 text-right">
+                  <td className="whitespace-nowrap py-2 pl-3 text-right">
                     GH₵{Number(order.total).toLocaleString()}
                   </td>
                   {preorders.length > 0 && <td className="pl-4" />}
                 </tr>
               </tfoot>
             </table>
+            </div>
           </div>
 
           {/* Status update — only for real orders (popup groups have no orders row) */}
@@ -288,10 +290,10 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
                 {timeline.map((entry: OrderStatusHistory) => (
                   <div
                     key={entry.id}
-                    className="flex items-start gap-3 border-l-2 border-slate-200 pl-4"
+                    className="flex flex-col gap-1 border-l-2 border-slate-200 pl-4 sm:flex-row sm:items-start sm:gap-3"
                   >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
                         {entry.from_status && (
                           <>
                             <StatusBadge status={entry.from_status} />
@@ -357,12 +359,12 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
             {order.customer_name && (
               <p className="text-sm font-medium">{order.customer_name}</p>
             )}
-            {order.email && <p className="text-sm">{order.email}</p>}
+            {order.email && <p className="text-sm break-all">{order.email}</p>}
             {isPopup && preorders[0]?.customer_phone && (
               <p className="text-sm text-slate-600">{preorders[0].customer_phone}</p>
             )}
             {order.payment_reference && (
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-slate-400 break-all">
                 Ref: {order.payment_reference}
               </p>
             )}

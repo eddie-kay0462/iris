@@ -23,7 +23,7 @@ export default function AdminAnalyticsPage() {
   const [sourceTab, setSourceTab] = useState<SourceTab>("storefront");
 
   return (
-    <section className="space-y-6">
+    <section className="iris-analytics space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold">Analytics</h1>
@@ -39,12 +39,12 @@ export default function AdminAnalyticsPage() {
       </header>
 
       {/* Source tab selector */}
-      <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 w-fit">
+      <div className="flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-1">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setSourceTab(tab.id)}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-all ${
+            className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-all sm:px-4 ${
               sourceTab === tab.id
                 ? "bg-white text-slate-900 shadow-sm"
                 : "text-slate-500 hover:text-slate-700"

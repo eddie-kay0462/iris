@@ -178,3 +178,39 @@ export const ADMIN_ROLES: readonly UserRole[] = ["admin", "manager", "staff"];
 export function canAccessAdmin(role: UserRole): boolean {
   return ADMIN_ROLES.includes(role);
 }
+
+/** Admin-panel roles, strongest first. */
+export const ROLE_ORDER: readonly UserRole[] = ["admin", "manager", "staff"];
+
+export const ROLE_LABELS: Record<UserRole, string> = {
+  admin: "Admin",
+  manager: "Manager",
+  staff: "Staff",
+  public: "Customer",
+};
+
+/** One-line summaries of what each tier covers, written from ROLE_PERMISSIONS. */
+export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
+  admin:
+    "Full control: settings, team members and roles, products (including deletion), refunds, analytics, markets and B2B.",
+  manager:
+    "Runs the shop day to day: products, orders and refunds, customers, inventory, analytics, reviews, pop-ups, markets and B2B. No system settings or team management.",
+  staff:
+    "Operational access: views products and inventory, processes orders and pop-up sales, and reads customers, reviews and B2B. No refunds, pricing changes or settings.",
+  public: "No admin access.",
+};
+
+/** Readable names for the permission areas ("popup" → "Pop-up sales"). */
+export const PERMISSION_AREA_LABELS: Record<string, string> = {
+  products: "Products",
+  orders: "Orders",
+  customers: "Customers",
+  inventory: "Inventory",
+  analytics: "Analytics",
+  settings: "Settings",
+  users: "Team members",
+  reviews: "Reviews",
+  popup: "Pop-up sales",
+  markets: "Markets",
+  b2b: "B2B",
+};

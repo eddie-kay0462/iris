@@ -1,19 +1,20 @@
 "use client";
 
 import { Line, LineChart, ResponsiveContainer, YAxis } from "recharts";
-import { chart } from "@/lib/charts/theme";
+import { useChartTheme } from "@/lib/charts/theme";
 
 /** Tiny axis-less trend line for KPI cards. */
 export function Sparkline({
   data,
   height = 32,
-  color = chart.primary,
+  color,
 }: {
   /** date → value map or pre-built array */
   data: Record<string, number> | { value: number }[];
   height?: number;
   color?: string;
 }) {
+  const chart = useChartTheme();
   const rows = Array.isArray(data)
     ? data
     : Object.entries(data)
@@ -32,7 +33,7 @@ export function Sparkline({
           <Line
             type="monotone"
             dataKey="value"
-            stroke={color}
+            stroke={color ?? chart.primary}
             strokeWidth={1.5}
             dot={false}
             isAnimationActive={false}

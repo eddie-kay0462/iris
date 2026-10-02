@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { Pagination } from "@/app/components/Pagination";
 import {
   usePopupEvents,
   usePopupAnalytics,
@@ -344,6 +345,8 @@ function StatusBreakdown({ data }: { data: Record<string, number> }) {
 
 // ─── Analytics Body ───────────────────────────────────────────────────────────
 
+const CAPTURE_PAGE_SIZE = 20;
+
 function AnalyticsBody({ data }: { data: PopupAnalytics }) {
   const {
     totalRevenue,
@@ -364,6 +367,13 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
     statusBreakdown,
     customerCapture,
   } = data;
+
+  // Customer capture can run to hundreds of contacts; show it a page at a time.
+  const [capturePage, setCapturePage] = useState(1);
+  useEffect(() => setCapturePage(1), [customerCapture]); // new event → back to page 1
+  const captureTotalPages = Math.max(1, Math.ceil(customerCapture.length / CAPTURE_PAGE_SIZE));
+  const captureStart = (Math.min(capturePage, captureTotalPages) - 1) * CAPTURE_PAGE_SIZE;
+  const captureShown = Math.min(CAPTURE_PAGE_SIZE, customerCapture.length - captureStart);
 
   const totalDiscountRevenue =
     discountImpact.discountedRevenue + discountImpact.fullPriceRevenue || 1;
@@ -491,14 +501,14 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
           <SectionCard title="Revenue Over Time (by Hour)">
             <MiniBarChart
               data={revenueByHour}
-              color="#0f172a"
+              color="var(--color-slate-900)"
               formatValue={(v) => `GH₵${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
             />
           </SectionCard>
           <SectionCard title="Orders Over Time (by Hour)">
             <MiniBarChart
               data={ordersByHour}
-              color="#475569"
+              color="var(--color-slate-600)"
               formatValue={(v) => String(v)}
             />
           </SectionCard>
@@ -518,7 +528,7 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
               items={productPerformance}
               valueKey="revenue"
               labelKey="name"
-              color="#0f172a"
+              color="var(--color-slate-900)"
               formatValue={(v) => `GH₵${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
             />
           </SectionCard>
@@ -533,7 +543,7 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
               items={productPerformance}
               valueKey="unitsSold"
               labelKey="name"
-              color="#475569"
+              color="var(--color-slate-600)"
               formatValue={(v) => `${v} units`}
             />
           </SectionCard>
@@ -614,8 +624,15 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
+                {/* Every contact is rendered so "Download PDF" (window.print) still
+                    lists them all; on screen only the current page shows. */}
                 {customerCapture.map((c, i) => (
-                  <tr key={i} className="hover:bg-slate-50">
+                  <tr
+                    key={i}
+                    className={`hover:bg-slate-50 ${
+                      i >= captureStart && i < captureStart + CAPTURE_PAGE_SIZE ? "" : "hidden print:table-row"
+                    }`}
+                  >
                     <td className="py-2.5 font-medium text-slate-800">
                       {c.name || <span className="text-slate-300">—</span>}
                     </td>
@@ -633,6 +650,17 @@ function AnalyticsBody({ data }: { data: PopupAnalytics }) {
               </tbody>
             </table>
           </div>
+          {captureTotalPages > 1 && (
+            <div className="no-print mt-2 border-t border-slate-100 pt-3">
+              <Pagination
+                page={Math.min(capturePage, captureTotalPages)}
+                totalPages={captureTotalPages}
+                onPageChange={setCapturePage}
+                summary={`${captureStart + 1}–${captureStart + captureShown} of ${customerCapture.length} contacts`}
+                framed={false}
+              />
+            </div>
+          )}
         </SectionCard>
       )}
     </div>
@@ -692,12 +720,12 @@ export function PopupsView() {
             <p className="text-sm text-slate-400">IR:IS Pop-up Analytics Beta</p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="relative">
+          <div className="flex max-w-full flex-wrap items-center gap-3">
+            <div className="relative min-w-0 max-w-full">
               <select
                 value={selectedId ?? ""}
                 onChange={(e) => setSelectedId(e.target.value || null)}
-                className="appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-8 py-2 text-sm text-slate-800 shadow-sm focus:border-slate-400 focus:outline-none"
+                className="w-full max-w-full appearance-none truncate rounded-lg border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm text-slate-800 shadow-sm focus:border-slate-400 focus:outline-none sm:max-w-xs"
                 disabled={eventsLoading}
               >
                 {eventsLoading ? (

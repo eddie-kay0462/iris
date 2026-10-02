@@ -162,7 +162,7 @@ export default function B2bPage() {
       </header>
 
       {/* ── KPIs ──────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 iris-stat-grid">
         <StatsCard
           label="B2B revenue"
           icon={CircleDollarSign}
@@ -241,7 +241,7 @@ export default function B2bPage() {
       {/* ── Orders ────────────────────────────────────────────────────────── */}
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
-          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+          <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-1">
             {ORDER_FILTERS.map((f) => (
               <button
                 key={f.value}
@@ -249,7 +249,7 @@ export default function B2bPage() {
                   setOrderFilter(f.value);
                   setPage(1);
                 }}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all ${
+                className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-all ${
                   orderFilter === f.value ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 }`}
               >
@@ -286,9 +286,9 @@ export default function B2bPage() {
                 {["Order", "Client", "Status", "Units", "Value", "Margin", "Delivery"].map((h) => (
                   <th
                     key={h}
-                    className={`px-6 py-3 text-xs font-medium uppercase tracking-wide text-slate-400 ${
+                    className={`whitespace-nowrap px-6 py-3 text-xs font-medium uppercase tracking-wide text-slate-400 ${
                       ["Units", "Value", "Margin"].includes(h) ? "text-right" : "text-left"
-                    }`}
+                    } ${["Margin", "Delivery"].includes(h) ? "hidden lg:table-cell" : ""}`}
                   >
                     {h}
                   </th>
@@ -328,17 +328,17 @@ export default function B2bPage() {
                     <td className="px-6 py-4 text-right text-sm tabular-nums text-slate-600">
                       {o.units.toLocaleString()}
                     </td>
-                    <td className="px-6 py-4 text-right text-sm font-medium tabular-nums text-slate-900">
+                    <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium tabular-nums text-slate-900">
                       {formatGHS(o.revenue)}
                     </td>
                     <td
-                      className={`px-6 py-4 text-right text-sm tabular-nums ${
+                      className={`hidden px-6 py-4 text-right text-sm tabular-nums lg:table-cell ${
                         o.margin_pct != null && o.margin_pct < 0 ? "text-rose-700" : "text-slate-600"
                       }`}
                     >
                       {o.margin_pct == null ? "—" : `${o.margin_pct}%`}
                     </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-sm">{dueCell(o)}</td>
+                    <td className="hidden whitespace-nowrap px-6 py-4 text-sm lg:table-cell">{dueCell(o)}</td>
                   </tr>
                 ))
               )}

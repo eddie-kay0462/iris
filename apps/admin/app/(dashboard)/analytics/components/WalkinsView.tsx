@@ -35,7 +35,7 @@ function Kpi({
           {metric ? formatMetric(metric.value, metric.format) : "—"}
         </p>
         {metric && metric.previousValue !== null && (
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <DeltaBadge current={metric.value} previous={metric.previousValue} />
             <span className="text-[11px] text-slate-400">vs previous period</span>
           </div>
@@ -145,13 +145,13 @@ export function WalkinsView() {
       </div>
 
       {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 iris-stat-grid">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-28 animate-pulse rounded-xl bg-slate-100" />
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 iris-stat-grid">
           <Kpi label="Net Sales" metric={metricOf(sales, "netSales")} spark={sparkOf("netSales")} />
           <Kpi label="Orders" metric={metricOf(sales, "orders")} spark={sparkOf("orders")} />
           <Kpi label="Avg. Order Value" metric={metricOf(sales, "aov")} spark={sparkOf("aov")} />
@@ -183,6 +183,7 @@ export function WalkinsView() {
           series={netSalesSeries}
           previousSeries={netSalesPrevSeries}
           height={280}
+          glow
         />
       </ChartCard>
 

@@ -704,7 +704,7 @@ export function VariantsEditor({
                   confirmAddColor(pendingColor);
                 }
               }}
-              className="w-40 rounded border border-slate-200 px-2 py-1 text-sm"
+              className="min-w-0 flex-1 rounded border border-slate-200 px-2 py-1 text-sm sm:w-40 sm:flex-none"
             />
             <button
               type="button"

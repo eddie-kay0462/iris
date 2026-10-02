@@ -1,3 +1,8 @@
+"use client";
+
+import { useIsNewUi } from "@/lib/ui/UiModeContext";
+import { StatusPill } from "./v2/StatusPill";
+
 const statusColors: Record<string, string> = {
   // Product statuses
   active: "bg-green-100 text-green-800",
@@ -14,6 +19,8 @@ const statusColors: Record<string, string> = {
 };
 
 export function StatusBadge({ status }: { status: string }) {
+  const isNew = useIsNewUi();
+  if (isNew) return <StatusPill status={status} />;
   const color = statusColors[status] || "bg-gray-100 text-gray-600";
   return (
     <span

@@ -7,20 +7,36 @@ import { DataTable, type Column } from "../../components/DataTable";
 import { SearchInput } from "../../components/SearchInput";
 import { Pagination } from "../../components/Pagination";
 import { StatsCard } from "../../components/StatsCard";
+import { Avatar } from "../../components/Avatar";
 import { Users, UserPlus, ShoppingCart, Crown } from "lucide-react";
+import { useIsNewUi } from "@/lib/ui/UiModeContext";
+import { TabsUnderline } from "../../components/v2/primitives";
 
 type Segment = "all" | "new" | "returning";
 
-const columns: Column<AdminCustomer>[] = [
+function buildColumns(isNew: boolean): Column<AdminCustomer>[] {
+  return [
   {
     key: "name",
     header: "Customer",
     render: (row) => {
       const name = [row.first_name, row.last_name].filter(Boolean).join(" ");
+      if (isNew) {
+        // Kit row: avatar, bold name, grey secondary line.
+        return (
+          <div className="flex items-center gap-3">
+            <Avatar name={name || row.email} size={32} />
+            <div className="min-w-0 max-w-[11rem] sm:max-w-[14rem]">
+              <p className="truncate font-semibold text-slate-900" title={name || undefined}>{name || "—"}</p>
+              <p className="truncate text-[var(--iris-muted)]" title={row.email}>{row.email}</p>
+            </div>
+          </div>
+        );
+      }
       return (
-        <div>
-          <p className="font-medium text-slate-900">{name || "—"}</p>
-          <p className="text-xs text-slate-500">{row.email}</p>
+        <div className="max-w-[16rem]">
+          <p className="truncate font-medium text-slate-900" title={name || undefined}>{name || "—"}</p>
+          <p className="truncate text-xs text-slate-500" title={row.email}>{row.email}</p>
         </div>
       );
     },
@@ -39,6 +55,7 @@ const columns: Column<AdminCustomer>[] = [
   {
     key: "last_order_date",
     header: "Last Order",
+    hideBelow: "md",
     render: (row) =>
       row.last_order_date
         ? new Date(row.last_order_date).toLocaleDateString()
@@ -47,23 +64,28 @@ const columns: Column<AdminCustomer>[] = [
   {
     key: "created_at",
     header: "Joined",
+    hideBelow: isNew ? "xl" : "lg",
     render: (row) => new Date(row.created_at).toLocaleDateString(),
   },
   {
     key: "last_login_at",
     header: "Last Seen",
+    hideBelow: isNew ? "xl" : "lg",
     render: (row) =>
       row.last_login_at
         ? new Date(row.last_login_at).toLocaleDateString()
         : "—",
   },
-];
+  ];
+}
 
 export default function AdminCustomersPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [segment, setSegment] = useState<Segment>("all");
+  const isNew = useIsNewUi();
+  const columns = buildColumns(isNew);
 
   const segmentFilters =
     segment === "new"
@@ -83,15 +105,32 @@ export default function AdminCustomersPage() {
 
   return (
     <section className="space-y-6">
+      {isNew && (
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <TabsUnderline
+            tabs={segments.map((s) => ({ value: s.key, label: s.key === "all" ? "All Customers" : s.label }))}
+            value={segment}
+            onChange={(v) => {
+              setSegment(v);
+              setPage(1);
+            }}
+          />
+          <p className="pb-1.5 text-xs text-[var(--iris-muted)]">
+            {data ? `${data.total} registered customer${data.total !== 1 ? "s" : ""}` : ""}
+          </p>
+        </header>
+      )}
+      {!isNew && (
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Customers</h1>
         <p className="text-sm text-slate-500">
           {data ? `${data.total} registered customer${data.total !== 1 ? "s" : ""}` : "Manage customer profiles and engagement history."}
         </p>
       </header>
+      )}
 
       {/* Stats cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 iris-stat-grid">
         <StatsCard
           label="Total Customers"
           value={String(stats?.totalCustomers ?? "—")}
@@ -125,6 +164,7 @@ export default function AdminCustomersPage() {
 
       {/* Segment filter + search */}
       <div className="flex flex-wrap items-center gap-3">
+        {!isNew && (
         <div className="flex rounded-lg border border-slate-200 overflow-hidden">
           {segments.map((s) => (
             <button
@@ -143,7 +183,8 @@ export default function AdminCustomersPage() {
             </button>
           ))}
         </div>
-        <div className="flex-1 min-w-[200px]">
+        )}
+        <div className={isNew ? "w-full sm:w-80" : "flex-1 min-w-[200px]"}>
           <SearchInput
             value={search}
             onChange={(v) => {

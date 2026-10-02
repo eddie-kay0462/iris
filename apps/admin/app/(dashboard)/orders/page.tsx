@@ -8,8 +8,10 @@ import { DataTable, type Column } from "../../components/DataTable";
 import { SearchInput } from "../../components/SearchInput";
 import { Pagination } from "../../components/Pagination";
 import { StatsCard } from "../../components/StatsCard";
-import { Download, DollarSign, Clock, RotateCcw, CreditCard, Package } from "lucide-react";
+import { Download, DollarSign, Clock, CreditCard, Package } from "lucide-react";
 import { getToken } from "@/lib/api/client";
+import { useIsNewUi } from "@/lib/ui/UiModeContext";
+import { InfoBanner, OutlinePill, TabsUnderline } from "../../components/v2/primitives";
 import {
   PreorderStatusBadge,
   PreorderSourceBadge,
@@ -33,6 +35,7 @@ export default function AdminOrdersPage() {
   const [status, setStatus] = useState("");
   const [preordersOnly, setPreordersOnly] = useState(false);
   const [page, setPage] = useState(1);
+  const isNew = useIsNewUi();
 
   const { data, isLoading } = useAdminOrders({
     search,
@@ -45,10 +48,26 @@ export default function AdminOrdersPage() {
   const columns: Column<Order>[] = [
     {
       key: "order_number",
-      header: "Order",
+      header: isNew ? "Customer" : "Order",
       render: (row) => (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {isNew ? (
+            <div className="min-w-0">
+              <p className="max-w-[12rem] truncate font-semibold text-slate-900 sm:max-w-[16rem]" title={row.customer_name || row.email || undefined}>
+                {row.customer_name || row.email || "Guest"}
+              </p>
+              <p className="whitespace-nowrap text-[var(--iris-muted)]">
+                #{row.order_number}
+                {/* The Date column hides on phones; keep the date with the order. */}
+                <span className="md:hidden">
+                  {" · "}
+                  {new Date(row.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                </span>
+              </p>
+            </div>
+          ) : (
           <span className="font-medium">{row.order_number}</span>
+          )}
           {row.is_walkin ? (
             <span className="inline-flex items-center rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-700">
               Walk-in
@@ -70,11 +89,16 @@ export default function AdminOrdersPage() {
         </div>
       ),
     },
-    {
-      key: "email",
-      header: "Customer",
-      render: (row) => row.email || row.customer_name || "—",
-    },
+    // New IRIS folds the customer into the first column (name over #number).
+    ...(isNew
+      ? []
+      : [
+          {
+            key: "email",
+            header: "Customer",
+            render: (row: Order) => row.email || row.customer_name || "—",
+          },
+        ]),
     {
       key: "status",
       header: "Status",
@@ -117,12 +141,81 @@ export default function AdminOrdersPage() {
     {
       key: "created_at",
       header: "Date",
-      render: (row) => new Date(row.created_at).toLocaleDateString(),
+      hideBelow: isNew ? "md" : undefined,
+      render: (row) =>
+        isNew ? (
+          <span className="text-[var(--iris-muted)]">
+            {new Date(row.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+          </span>
+        ) : (
+          new Date(row.created_at).toLocaleDateString()
+        ),
     },
   ];
 
+  function exportCsv() {
+    const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    const url = `${base}/export/orders${params.toString() ? `?${params}` : ""}`;
+    fetch(url, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then((r) => r.blob())
+      .then((blob) => {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+      });
+  }
+
+  const preorderToggle = (
+    <button
+      type="button"
+      onClick={() => {
+        setPreordersOnly((v) => !v);
+        setPage(1);
+      }}
+      className={
+        isNew
+          ? `inline-flex h-9 items-center gap-2 rounded-full border px-4 text-xs font-medium transition-colors ${
+              preordersOnly
+                ? "border-transparent bg-[var(--iris-violet-bg)] text-[var(--iris-violet-fg)]"
+                : "border-[var(--iris-line)] text-slate-900 hover:bg-[var(--iris-hover)]"
+            }`
+          : `flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+              preordersOnly
+                ? "border-purple-300 bg-purple-50 text-purple-700"
+                : "border-slate-200 text-slate-700 hover:bg-slate-50"
+            }`
+      }
+    >
+      <Package className="h-4 w-4" strokeWidth={isNew ? 1.5 : 2} />
+      Pre-orders
+    </button>
+  );
+
   return (
     <section className="space-y-6">
+      {isNew && (
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <TabsUnderline
+            tabs={[
+              { value: "", label: "All Orders" },
+              ...ORDER_STATUSES.map((s) => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) })),
+            ]}
+            value={status}
+            onChange={(v) => {
+              setStatus(v);
+              setPage(1);
+            }}
+          />
+          <div className="flex items-center gap-2">
+            {preorderToggle}
+            <OutlinePill icon={Download} onClick={exportCsv}>Export</OutlinePill>
+          </div>
+        </header>
+      )}
+      {!isNew && (
       <header className="flex items-start justify-between">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold">Orders</h1>
@@ -131,29 +224,17 @@ export default function AdminOrdersPage() {
           </p>
         </div>
         <button
-          onClick={() => {
-            const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
-            const params = new URLSearchParams();
-            if (status) params.set("status", status);
-            const url = `${base}/export/orders${params.toString() ? `?${params}` : ""}`;
-            fetch(url, { headers: { Authorization: `Bearer ${getToken()}` } })
-              .then((r) => r.blob())
-              .then((blob) => {
-                const link = document.createElement("a");
-                link.href = URL.createObjectURL(blob);
-                link.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
-                link.click();
-              });
-          }}
+          onClick={exportCsv}
           className="flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
           <Download className="h-4 w-4" />
           Export CSV
         </button>
       </header>
+      )}
 
       {payStats && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 iris-stat-grid">
           <StatsCard
             label="Total Collected"
             value={fmt(payStats.totalCollected)}
@@ -173,11 +254,6 @@ export default function AdminOrdersPage() {
             helperText="Awaiting fulfillment"
           />
           <StatsCard
-            label="Refunded"
-            value={fmt(payStats.totalRefunded)}
-            icon={RotateCcw}
-          />
-          <StatsCard
             label="Transactions"
             value={String(payStats.transactionCount)}
             icon={CreditCard}
@@ -186,8 +262,15 @@ export default function AdminOrdersPage() {
         </div>
       )}
 
+      {isNew && (
+        <InfoBanner storageKey="orders">
+          Unpaid checkouts stay off this list until payment lands. Change a status straight from its pill, or
+          open an order for items, delivery and history.
+        </InfoBanner>
+      )}
+
       <div className="flex flex-col gap-3 sm:flex-row">
-        <div className="flex-1">
+        <div className={isNew ? "sm:w-80" : "flex-1"}>
           <SearchInput
             value={search}
             onChange={(v) => {
@@ -197,6 +280,7 @@ export default function AdminOrdersPage() {
             placeholder="Search by order # or email..."
           />
         </div>
+        {!isNew && (
         <select
           value={status}
           onChange={(e) => {
@@ -212,21 +296,8 @@ export default function AdminOrdersPage() {
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          onClick={() => {
-            setPreordersOnly((v) => !v);
-            setPage(1);
-          }}
-          className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-            preordersOnly
-              ? "border-purple-300 bg-purple-50 text-purple-700"
-              : "border-slate-200 text-slate-700 hover:bg-slate-50"
-          }`}
-        >
-          <Package className="h-4 w-4" />
-          Pre-orders
-        </button>
+        )}
+        {!isNew && preorderToggle}
       </div>
 
       <DataTable

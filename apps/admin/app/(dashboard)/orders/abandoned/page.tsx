@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Pagination } from "../../../components/Pagination";
 import Link from "next/link";
 import { Search, ShoppingBasket } from "lucide-react";
 import { useAbandonedCheckouts } from "@/lib/api/analytics";
@@ -85,7 +86,7 @@ export default function AbandonedCheckoutsPage() {
       </form>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         {isLoading ? (
           <div className="space-y-2 p-6">
             {[1, 2, 3, 4].map((i) => (
@@ -114,7 +115,7 @@ export default function AbandonedCheckoutsPage() {
                     key={h}
                     className={`whitespace-nowrap border-b border-slate-200 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 ${
                       i >= 2 && i <= 3 ? "text-right" : "text-left"
-                    }`}
+                    } ${h === "Items" ? "hidden sm:table-cell" : ""}`}
                   >
                     {h}
                   </th>
@@ -124,7 +125,7 @@ export default function AbandonedCheckoutsPage() {
             <tbody>
               {data.checkouts.map((c) => (
                 <tr key={c.id} className="group cursor-pointer hover:bg-slate-50">
-                  <td className="border-b border-slate-100 px-4 py-3 text-slate-600">
+                  <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-600">
                     <Link href={`/orders/abandoned/${c.id}`} className="block">
                       {new Date(c.date).toLocaleDateString(undefined, {
                         month: "short",
@@ -140,17 +141,17 @@ export default function AbandonedCheckoutsPage() {
                   </td>
                   <td className="border-b border-slate-100 px-4 py-3">
                     <Link href={`/orders/abandoned/${c.id}`} className="block">
-                      <p className="font-medium text-slate-900 group-hover:underline">
+                      <p className="max-w-[12rem] truncate font-medium text-slate-900 group-hover:underline sm:max-w-[18rem]">
                         {c.customer.name || c.customer.email || "No contact info captured"}
                       </p>
-                      <p className="text-xs text-slate-400">
+                      <p className="max-w-[12rem] truncate text-xs text-slate-400 sm:max-w-[18rem]">
                         {[c.customer.email, c.customer.phone].filter(Boolean).join(" · ")}
                       </p>
                     </Link>
                   </td>
-                  <td className="border-b border-slate-100 px-4 py-3 text-right">
-                    <Link href={`/orders/abandoned/${c.id}`} className="flex items-center justify-end gap-2">
-                      <span className="flex -space-x-2">
+                  <td className="hidden border-b border-slate-100 px-4 py-3 text-right sm:table-cell">
+                    <Link href={`/orders/abandoned/${c.id}`} className="flex items-center justify-end gap-2 whitespace-nowrap">
+                      <span className="flex shrink-0 -space-x-2">
                         {c.itemThumbnails.map((src, i) => (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -164,7 +165,7 @@ export default function AbandonedCheckoutsPage() {
                       <span className="tabular-nums text-slate-600">{c.itemCount}</span>
                     </Link>
                   </td>
-                  <td className="border-b border-slate-100 px-4 py-3 text-right tabular-nums font-medium text-slate-900">
+                  <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-right tabular-nums font-medium text-slate-900">
                     <Link href={`/orders/abandoned/${c.id}`} className="block">
                       {formatGHS(c.subtotal)}
                     </Link>
@@ -191,28 +192,14 @@ export default function AbandonedCheckoutsPage() {
       </div>
 
       {/* Pagination */}
-      {data && data.total > data.limit && (
-        <div className="flex items-center justify-between text-sm text-slate-500">
-          <span>
-            Page {data.page} of {totalPages} · {data.total} checkouts
-          </span>
-          <div className="flex gap-2">
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 font-medium transition hover:border-slate-300 disabled:opacity-40"
-            >
-              Previous
-            </button>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 font-medium transition hover:border-slate-300 disabled:opacity-40"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+      {data && (
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          summary={`${data.total} checkouts`}
+          framed={false}
+        />
       )}
     </section>
   );

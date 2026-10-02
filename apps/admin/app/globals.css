@@ -7,8 +7,269 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Lets `dark:` utilities target the new-IRIS dark theme. */
+@custom-variant dark (&:where([data-ui="new"][data-theme="dark"], [data-ui="new"][data-theme="dark"] *));
+
 body {
   background-color: #ffffff;
   color: #171717;
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* iOS Safari zooms the page into any field under 16px when it's focused, and
+   doesn't zoom back out. Phones get 16px fields; larger screens keep the
+   compact sizes the pages set. Both interfaces. */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* ─── New IRIS ─────────────────────────────────────────────────────────────
+ * The redesign (Figma "Dashboard UI Kit") is a skin over the same markup.
+ * Tailwind v4 utilities read colours and radii from CSS variables, so
+ * remapping the slate ramp (which nearly every page is written in) onto the
+ * kit's ink-based neutrals restyles the whole app at once. Everything here is
+ * scoped to [data-ui="new"]; classic mode is untouched.
+ */
+html[data-ui="new"] {
+  /* Kit tokens */
+  --iris-ink: #1c1c1c;
+  --iris-bg: #ffffff;
+  --iris-surface: #f9f9fa;
+  --iris-muted: rgba(28, 28, 28, 0.4);
+  --iris-faint: rgba(28, 28, 28, 0.2);
+  --iris-line: rgba(28, 28, 28, 0.1);
+  --iris-hover: rgba(28, 28, 28, 0.05);
+  --iris-card-shadow: 6px 6px 25px rgba(0, 0, 0, 0.05);
+  --iris-accent: #a8c5da;
+
+  --iris-pending-bg: #fdf3e1;
+  --iris-pending-fg: #d9922b;
+  --iris-success-bg: #ebf6e7;
+  --iris-success-fg: #5aa848;
+  --iris-danger-bg: #fbe8e8;
+  --iris-danger-fg: #d9534f;
+  --iris-info-bg: #e8f1f8;
+  --iris-info-fg: #4a7fa8;
+  --iris-violet-bg: #efeefc;
+  --iris-violet-fg: #6f6bd8;
+  --iris-neutral-bg: #f4f4f4;
+  --iris-neutral-fg: rgba(28, 28, 28, 0.55);
+
+  /* Neutral ramp. 400 matches the kit's 40% ink; 500+ are darkened a touch
+     from the kit so body copy keeps AA contrast. */
+  --color-slate-50: #f9f9fa;
+  --color-slate-100: #f4f4f4;
+  --color-slate-200: #e8e8e8;
+  --color-slate-300: #d2d2d2;
+  --color-slate-400: #a4a4a4;
+  --color-slate-500: #737373;
+  --color-slate-600: #5c5c5c;
+  --color-slate-700: #3f3f3f;
+  --color-slate-800: #2a2a2a;
+  --color-slate-900: #1c1c1c;
+  --color-slate-950: #111111;
+
+  --color-gray-50: var(--color-slate-50);
+  --color-gray-100: var(--color-slate-100);
+  --color-gray-200: var(--color-slate-200);
+  --color-gray-300: var(--color-slate-300);
+  --color-gray-400: var(--color-slate-400);
+  --color-gray-500: var(--color-slate-500);
+  --color-gray-600: var(--color-slate-600);
+  --color-gray-700: var(--color-slate-700);
+  --color-gray-800: var(--color-slate-800);
+  --color-gray-900: var(--color-slate-900);
+  --color-neutral-50: var(--color-slate-50);
+  --color-neutral-100: var(--color-slate-100);
+  --color-neutral-200: var(--color-slate-200);
+  --color-neutral-300: var(--color-slate-300);
+  --color-neutral-400: var(--color-slate-400);
+  --color-neutral-500: var(--color-slate-500);
+  --color-neutral-600: var(--color-slate-600);
+  --color-neutral-700: var(--color-slate-700);
+  --color-neutral-800: var(--color-slate-800);
+  --color-neutral-900: var(--color-slate-900);
+  --color-zinc-100: var(--color-slate-100);
+  --color-zinc-200: var(--color-slate-200);
+  --color-zinc-500: var(--color-slate-500);
+  --color-zinc-900: var(--color-slate-900);
+
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+}
+
+html[data-ui="new"] body {
+  background-color: var(--iris-bg);
+  color: var(--iris-ink);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "ss01" 1, "cv01" 1, "cv11" 1;
+}
+
+/* Shadows are compiled inline (not via variables), so swap them per class. */
+html[data-ui="new"] .shadow-sm,
+html[data-ui="new"] .shadow {
+  --tw-shadow: var(--iris-card-shadow);
+}
+html[data-ui="new"] .shadow-md,
+html[data-ui="new"] .shadow-lg {
+  --tw-shadow: 6px 6px 40px rgba(0, 0, 0, 0.08);
+}
+html[data-ui="new"] .shadow-xl {
+  --tw-shadow: 0 24px 64px rgba(0, 0, 0, 0.14);
+}
+
+/* Stat-card rows size to the width they actually get, not the viewport. With
+   the sidebar and notification bar both open the page is ~500px narrower than
+   the window, so viewport breakpoints (lg:grid-cols-5…) cram five cards into
+   ~180px each and the figures spill out. auto-fit drops a column instead,
+   whenever a card would fall below 14rem — room for "GH₵9,900.00" at 24px.
+   Unlayered, so it outranks the grid-cols utilities on the same element. */
+html[data-ui="new"] .iris-stat-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+}
+
+/* Each card is a size container, so its figure scales with the card's own
+   width (cqi = 1% of the card's content box): 22px at most, shrinking in
+   narrow cards (down to 16px) rather than spilling over the edge. */
+html[data-ui="new"] .iris-stat-grid > * {
+  container-type: inline-size;
+  min-width: 0;
+}
+/* Analytics: with the full sidebar and the notification bar both open, stat
+   rows hold at most four cards a line. Each track is at least a quarter of
+   the row (less a gap allowance), so a fifth can never fit; auto-fit still
+   drops to three or fewer when the row is narrower than four 14rem cards.
+   The bar only sits in the layout at xl+ (below that it's a drawer), and the
+   sidebar only at md+, hence the media query. */
+@media (min-width: 1280px) {
+  html[data-ui="new"] .iris-shell[data-sidebar="open"][data-panel="open"] .iris-analytics .iris-stat-grid {
+    grid-template-columns: repeat(auto-fit, minmax(max(min(100%, 14rem), calc((100% - 3rem) / 4)), 1fr));
+  }
+}
+
+html[data-ui="new"] .iris-stat-grid :is(.text-2xl, .text-xl) {
+  font-size: clamp(1rem, 11cqi, 1.375rem);
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+
+html[data-ui="new"] ::selection {
+  background: var(--iris-accent);
+  color: var(--iris-ink);
+}
+
+/* ─── New IRIS · dark ──────────────────────────────────────────────────────
+ * The ramp is inverted, and white (cards, inputs) becomes the dark surface.
+ * Pairs like `bg-slate-900 text-white` invert together, so they keep their
+ * contrast without per-page changes.
+ */
+html[data-ui="new"][data-theme="dark"] {
+  --iris-ink: #f4f4f4;
+  --iris-bg: #141414;
+  --iris-surface: #1c1c1c;
+  --iris-muted: rgba(255, 255, 255, 0.45);
+  --iris-faint: rgba(255, 255, 255, 0.2);
+  --iris-line: rgba(255, 255, 255, 0.1);
+  --iris-hover: rgba(255, 255, 255, 0.06);
+  --iris-card-shadow: 0 0 0 transparent;
+  --iris-accent: #6f93ad;
+
+  --iris-pending-bg: rgba(255, 197, 85, 0.12);
+  --iris-pending-fg: #f2c46b;
+  --iris-success-bg: rgba(122, 200, 106, 0.12);
+  --iris-success-fg: #8fd67f;
+  --iris-danger-bg: rgba(255, 116, 116, 0.12);
+  --iris-danger-fg: #ff8a8a;
+  --iris-info-bg: rgba(168, 197, 218, 0.14);
+  --iris-info-fg: #a8c5da;
+  --iris-violet-bg: rgba(149, 164, 252, 0.14);
+  --iris-violet-fg: #b1baff;
+  --iris-neutral-bg: rgba(255, 255, 255, 0.06);
+  --iris-neutral-fg: rgba(255, 255, 255, 0.6);
+
+  --color-white: #1c1c1c;
+
+  --color-slate-50: #212121;
+  --color-slate-100: #2a2a2a;
+  --color-slate-200: #333333;
+  --color-slate-300: #474747;
+  --color-slate-400: #7a7a7a;
+  --color-slate-500: #9b9b9b;
+  --color-slate-600: #b4b4b4;
+  --color-slate-700: #cecece;
+  --color-slate-800: #e2e2e2;
+  --color-slate-900: #f4f4f4;
+  --color-slate-950: #ffffff;
+
+  /* Status tints: deep translucent fills with light text. */
+  --color-green-50: rgba(122, 200, 106, 0.1);
+  --color-green-100: rgba(122, 200, 106, 0.16);
+  --color-green-200: rgba(122, 200, 106, 0.3);
+  --color-green-600: #8fd67f;
+  --color-green-700: #8fd67f;
+  --color-green-800: #a6e098;
+  --color-emerald-50: rgba(110, 214, 170, 0.1);
+  --color-emerald-100: rgba(110, 214, 170, 0.16);
+  --color-emerald-200: rgba(110, 214, 170, 0.3);
+  --color-emerald-500: #7fdcb4;
+  --color-emerald-600: #7fdcb4;
+  --color-emerald-700: #95e3c1;
+  --color-red-50: rgba(255, 116, 116, 0.1);
+  --color-red-100: rgba(255, 116, 116, 0.16);
+  --color-red-200: rgba(255, 116, 116, 0.3);
+  --color-red-400: #ff9d9d;
+  --color-red-500: #ff8a8a;
+  --color-red-600: #ff8a8a;
+  --color-red-700: #ffa3a3;
+  --color-red-800: #ffb5b5;
+  --color-rose-50: rgba(255, 120, 150, 0.1);
+  --color-rose-100: rgba(255, 120, 150, 0.16);
+  --color-rose-200: rgba(255, 120, 150, 0.3);
+  --color-rose-700: #ff9fb4;
+  --color-rose-800: #ffb3c4;
+  --color-amber-50: rgba(255, 197, 85, 0.1);
+  --color-amber-100: rgba(255, 197, 85, 0.16);
+  --color-amber-200: rgba(255, 197, 85, 0.3);
+  --color-amber-600: #f2c46b;
+  --color-amber-700: #f2c46b;
+  --color-amber-800: #f6d38f;
+  --color-yellow-50: rgba(255, 210, 90, 0.1);
+  --color-yellow-100: rgba(255, 210, 90, 0.16);
+  --color-yellow-800: #f6d98f;
+  --color-blue-50: rgba(168, 197, 218, 0.1);
+  --color-blue-100: rgba(168, 197, 218, 0.16);
+  --color-blue-200: rgba(168, 197, 218, 0.3);
+  --color-blue-700: #a8c5da;
+  --color-blue-800: #bdd5e6;
+  --color-indigo-100: rgba(149, 164, 252, 0.16);
+  --color-indigo-800: #b9c2ff;
+  --color-purple-100: rgba(198, 199, 248, 0.16);
+  --color-purple-700: #c6c7f8;
+  --color-purple-800: #d6d7fb;
+  --color-orange-50: rgba(255, 170, 100, 0.1);
+  --color-orange-100: rgba(255, 170, 100, 0.16);
+  --color-orange-700: #ffbf8a;
+  --color-teal-50: rgba(94, 214, 200, 0.1);
+  --color-teal-100: rgba(94, 214, 200, 0.16);
+  --color-teal-700: #8fe3d8;
+  --color-purple-50: rgba(198, 199, 248, 0.1);
+  --color-purple-300: rgba(198, 199, 248, 0.4);
+}
+
+html[data-ui="new"][data-theme="dark"] .shadow-sm,
+html[data-ui="new"][data-theme="dark"] .shadow {
+  --tw-shadow: 0 0 0 transparent;
+}
+
+/* Native form controls (date pickers, selects) follow the theme. */
+html[data-ui="new"][data-theme="dark"] input,
+html[data-ui="new"][data-theme="dark"] select,
+html[data-ui="new"][data-theme="dark"] textarea {
+  color-scheme: dark;
 }

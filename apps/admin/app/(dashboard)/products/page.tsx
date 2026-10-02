@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, ChevronDown, Download, MoreHorizontal, Loader2 } from "lucide-react";
+import { ChevronRight, ChevronDown, Download, MoreHorizontal, Loader2, ListFilter, History, Plus, SquarePen } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -13,6 +13,16 @@ import { SearchInput } from "../../components/SearchInput";
 import { StatsCard } from "../../components/StatsCard";
 import { AdjustStockModal } from "../../components/inventory/AdjustStockModal";
 import { MovementHistory } from "../../components/inventory/MovementHistory";
+import { useIsNewUi } from "@/lib/ui/UiModeContext";
+import {
+  IconAction,
+  IconActionGroup,
+  InfoBanner,
+  OutlinePill,
+  PrimaryPill,
+  TabsUnderline,
+  ToolbarIcon,
+} from "../../components/v2/primitives";
 import {
   useAdminProducts,
   useSetProductStatus,
@@ -30,6 +40,7 @@ const STATUS_ACTIONS: { value: ProductStatus; label: string; hint: string }[] = 
 
 /** Per-row menu to quickly move a product between draft / active / archived. */
 function RowStatusMenu({ product }: { product: Product }) {
+  const isNew = useIsNewUi();
   const [open, setOpen] = useState(false);
   const setStatus = useSetProductStatus();
 
@@ -52,14 +63,18 @@ function RowStatusMenu({ product }: { product: Product }) {
         onClick={() => setOpen((v) => !v)}
         disabled={setStatus.isPending}
         aria-label="Change status"
-        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+        className={
+          isNew
+            ? "inline-flex h-7 w-8 items-center justify-center rounded-r-full text-slate-900 hover:bg-[var(--iris-hover)] disabled:opacity-50"
+            : "inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+        }
       >
         {setStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg">
+          <div className={`absolute right-0 z-20 mt-1 w-48 overflow-hidden border border-slate-200 bg-white shadow-lg ${isNew ? "rounded-xl" : "rounded-md"}`}>
             <p className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-400">Set status</p>
             {STATUS_ACTIONS.map((s) => (
               <button
@@ -130,6 +145,8 @@ export default function AdminProductsPage() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [adjustItem, setAdjustItem] = useState<InventoryItem | null>(null);
   const [showMovements, setShowMovements] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
+  const isNew = useIsNewUi();
 
   const statusParam = statusTab === "all" ? undefined : statusTab;
 
@@ -170,20 +187,64 @@ export default function AdminProductsPage() {
 
   const COL_COUNT = 7; // chevron | product | sku | status | price | stock | actions
 
+  const skuCell = isNew ? "hidden xl:table-cell" : "";
   const tableColGroup = (
     <colgroup>
       <col style={{ width: 40 }} />
       <col />
-      <col style={{ width: 150 }} />
+      <col style={{ width: 150 }} className={isNew ? "hidden xl:table-column" : ""} />
       <col style={{ width: 110 }} />
       <col style={{ width: 120 }} />
       <col style={{ width: 90 }} />
-      <col style={{ width: 90 }} />
+      <col style={{ width: isNew ? 96 : 90 }} />
     </colgroup>
   );
 
+  function exportCsv() {
+    const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api"}/export/products`;
+    fetch(url, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then((r) => r.blob())
+      .then((blob) => {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `products-${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+      });
+  }
+
+  const STATUS_TABS = [
+    { value: "all" as const, label: "All Products" },
+    { value: "active" as const, label: "Active" },
+    { value: "draft" as const, label: "Draft" },
+    { value: "archived" as const, label: "Archived" },
+  ];
+
+  // New IRIS: kit table cells — roomier, hairline rows, no header fill.
+  const td = isNew ? "px-4 py-4" : "px-4 py-3";
+  const rowBorder = isNew ? "border-[var(--iris-line)]" : "border-slate-200";
+
   return (
     <section className="space-y-6">
+      {isNew && (
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <TabsUnderline
+            tabs={STATUS_TABS}
+            value={statusTab}
+            onChange={(t) => {
+              setStatusTab(t);
+              setPage(1);
+            }}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <ToolbarIcon icon={ListFilter} label="Filters" onClick={() => setShowFilters((v) => !v)} active={showFilters} />
+            <ToolbarIcon icon={History} label="Stock movement history" onClick={() => setShowMovements((v) => !v)} active={showMovements} />
+            <span className="mx-1 h-5 w-px bg-[var(--iris-line)]" />
+            <OutlinePill icon={Download} onClick={exportCsv}>Export</OutlinePill>
+            <PrimaryPill icon={Plus} href="/products/new">Add Product</PrimaryPill>
+          </div>
+        </header>
+      )}
+      {!isNew && (
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Products</h1>
@@ -193,17 +254,7 @@ export default function AdminProductsPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => {
-              const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api"}/export/products`;
-              fetch(url, { headers: { Authorization: `Bearer ${getToken()}` } })
-                .then((r) => r.blob())
-                .then((blob) => {
-                  const link = document.createElement("a");
-                  link.href = URL.createObjectURL(blob);
-                  link.download = `products-${new Date().toISOString().slice(0, 10)}.csv`;
-                  link.click();
-                });
-            }}
+            onClick={exportCsv}
             className="flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             <Download className="h-4 w-4" />
@@ -217,9 +268,10 @@ export default function AdminProductsPage() {
           </Link>
         </div>
       </header>
+      )}
 
       {/* Inventory stat cards */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 iris-stat-grid">
         {statsLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-20 animate-pulse rounded-lg bg-slate-100" />
@@ -245,9 +297,17 @@ export default function AdminProductsPage() {
         )}
       </div>
 
+      {isNew && (
+        <InfoBanner storageKey="products">
+          Products can be added manually or exported to a spreadsheet. Expand a row to see its variants and
+          adjust stock, or use the ••• menu to move a product between Active, Draft and Archived.
+        </InfoBanner>
+      )}
+
       {/* Search + brand switch + gender filter */}
+      {(!isNew || showFilters) && (
       <div className="flex flex-wrap items-center gap-3">
-        <div className="w-64">
+        <div className="w-full sm:w-64">
           <SearchInput
             value={search}
             onChange={(v) => {
@@ -321,15 +381,19 @@ export default function AdminProductsPage() {
           </select>
         )}
 
+        {!isNew && (
         <button
           onClick={() => setShowMovements(!showMovements)}
           className="ml-auto text-sm text-slate-600 hover:text-slate-900"
         >
           {showMovements ? "Hide" : "Show"} movement history
         </button>
+        )}
       </div>
+      )}
 
       {/* Status tab bar */}
+      {!isNew && (
       <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 w-fit">
         {(["all", "active", "draft", "archived"] as const).map((tab) => (
           <button
@@ -345,20 +409,21 @@ export default function AdminProductsPage() {
           </button>
         ))}
       </div>
+      )}
 
       {/* Products accordion table */}
-      <div className="overflow-hidden rounded-lg border border-slate-200">
-        <table className="w-full border-collapse text-sm" style={{ tableLayout: "fixed" }}>
+      <div className={isNew ? "overflow-x-auto rounded-2xl border border-[var(--iris-line)] bg-white shadow-sm" : "overflow-hidden rounded-lg border border-slate-200"}>
+        <table className={`w-full border-collapse text-sm ${isNew ? "min-w-[520px] xl:min-w-[720px]" : ""}`} style={{ tableLayout: "fixed" }}>
           {tableColGroup}
-          <thead className="bg-slate-100 text-left text-slate-600">
+          <thead className={isNew ? "text-left text-slate-900" : "bg-slate-100 text-left text-slate-600"}>
             <tr>
-              <th className="w-8 px-3 py-3" />
-              <th className="px-4 py-3 font-medium">Product</th>
-              <th className="px-4 py-3 font-medium">SKU</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Price</th>
-              <th className="px-4 py-3 font-medium">Stock</th>
-              <th className="px-4 py-3 text-right font-medium">Actions</th>
+              <th className={isNew ? "w-8 px-3 py-5" : "w-8 px-3 py-3"} />
+              <th className={isNew ? "px-4 py-5 font-semibold" : "px-4 py-3 font-medium"}>{isNew ? "Name" : "Product"}</th>
+              <th className={isNew ? `px-4 py-5 font-semibold ${skuCell}` : "px-4 py-3 font-medium"}>SKU</th>
+              <th className={isNew ? "px-4 py-5 font-semibold" : "px-4 py-3 font-medium"}>Status</th>
+              <th className={isNew ? "px-4 py-5 font-semibold" : "px-4 py-3 font-medium"}>Price</th>
+              <th className={isNew ? "px-4 py-5 font-semibold" : "px-4 py-3 font-medium"}>Stock</th>
+              <th className={isNew ? "px-4 py-5 text-right font-semibold" : "px-4 py-3 text-right font-medium"}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -395,9 +460,9 @@ export default function AdminProductsPage() {
                     {/* Product row */}
                     <tr
                       key={product.id}
-                      className="border-t border-slate-200 hover:bg-slate-50"
+                      className={`border-t ${rowBorder} ${isNew ? "hover:bg-[var(--iris-hover)]" : "hover:bg-slate-50"}`}
                     >
-                      <td className="px-3 py-3">
+                      <td className={isNew ? "px-3 py-4" : "px-3 py-3"}>
                         <button
                           onClick={() => toggleExpanded(product.id)}
                           className="rounded p-0.5 text-slate-400 hover:text-slate-700"
@@ -413,7 +478,7 @@ export default function AdminProductsPage() {
                         </button>
                       </td>
                       <td
-                        className="cursor-pointer px-4 py-3"
+                        className={`cursor-pointer ${td}`}
                         onClick={() => router.push(`/products/${product.id}`)}
                       >
                         <div className="flex items-center gap-3">
@@ -421,13 +486,21 @@ export default function AdminProductsPage() {
                             <img
                               src={product.product_images[0].src}
                               alt={product.title}
-                              className="h-10 w-10 rounded object-cover"
+                              className={`h-10 w-10 object-cover ${isNew ? "rounded-lg" : "rounded"}`}
                             />
                           ) : (
                             <div className="flex h-10 w-10 items-center justify-center rounded bg-slate-100 text-xs text-slate-400">
                               No img
                             </div>
                           )}
+                          {isNew ? (
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-slate-900">{product.title}</p>
+                              <p className="truncate text-[var(--iris-muted)]">
+                                {product.product_type || product.vendor || "—"}
+                              </p>
+                            </div>
+                          ) : (
                           <div>
                             <span className="font-medium">{product.title}</span>
                             {product.product_type && (
@@ -436,22 +509,23 @@ export default function AdminProductsPage() {
                               </span>
                             )}
                           </div>
+                          )}
                         </div>
                       </td>
                       <td
-                        className="cursor-pointer px-4 py-3 text-slate-600"
+                        className={`cursor-pointer ${td} ${isNew ? `truncate text-[var(--iris-muted)] ${skuCell}` : "text-slate-600"}`}
                         onClick={() => router.push(`/products/${product.id}`)}
                       >
                         {product.product_variants?.[0]?.sku || "—"}
                       </td>
                       <td
-                        className="cursor-pointer px-4 py-3"
+                        className={`cursor-pointer ${td}`}
                         onClick={() => router.push(`/products/${product.id}`)}
                       >
                         <StatusBadge status={product.status} />
                       </td>
                       <td
-                        className="cursor-pointer px-4 py-3"
+                        className={`cursor-pointer ${td}`}
                         onClick={() => router.push(`/products/${product.id}`)}
                       >
                         {product.base_price != null
@@ -459,7 +533,7 @@ export default function AdminProductsPage() {
                           : "—"}
                       </td>
                       <td
-                        className="cursor-pointer px-4 py-3"
+                        className={`cursor-pointer ${td}`}
                         onClick={() => router.push(`/products/${product.id}`)}
                       >
                         <span
@@ -468,8 +542,15 @@ export default function AdminProductsPage() {
                           {totalStock}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        <RowStatusMenu product={product} />
+                      <td className={`${td} text-right`}>
+                        {isNew ? (
+                          <IconActionGroup>
+                            <IconAction icon={SquarePen} label="Edit product" href={`/products/${product.id}`} />
+                            <RowStatusMenu product={product} />
+                          </IconActionGroup>
+                        ) : (
+                          <RowStatusMenu product={product} />
+                        )}
                       </td>
                     </tr>
 
@@ -493,13 +574,13 @@ export default function AdminProductsPage() {
                                     product.product_variants.map((variant) => (
                                       <tr
                                         key={variant.id}
-                                        className="border-t border-slate-100 bg-slate-50"
+                                        className={isNew ? "border-t border-[var(--iris-line)] bg-[var(--iris-surface)]" : "border-t border-slate-100 bg-slate-50"}
                                       >
                                         <td className="px-3 py-2" />
-                                        <td className="py-2 pl-[68px] pr-4 text-slate-500">
+                                        <td className={`py-2 pr-4 text-slate-500 ${isNew ? "pl-6 sm:pl-[68px]" : "pl-[68px]"}`}>
                                           {variantLabel(variant)}
                                         </td>
-                                        <td className="px-4 py-2 text-slate-500">
+                                        <td className={`px-4 py-2 text-slate-500 ${skuCell}`}>
                                           {variant.sku || "—"}
                                         </td>
                                         <td className="px-4 py-2" />
@@ -518,7 +599,7 @@ export default function AdminProductsPage() {
                                             onClick={() =>
                                               setAdjustItem(toInventoryItem(variant, product))
                                             }
-                                            className="text-xs text-blue-600 hover:text-blue-800"
+                                            className={isNew ? "rounded-full border border-[var(--iris-line)] px-2.5 py-1 text-xs text-slate-900 hover:bg-[var(--iris-hover)]" : "text-xs text-blue-600 hover:text-blue-800"}
                                           >
                                             Adjust
                                           </button>
@@ -561,8 +642,8 @@ export default function AdminProductsPage() {
 
       {/* Movement history */}
       {showMovements && (
-        <div className="rounded-lg border border-slate-200 p-4">
-          <h3 className="mb-3 text-sm font-medium text-slate-700">
+        <div className={isNew ? "rounded-2xl border border-[var(--iris-line)] p-6" : "rounded-lg border border-slate-200 p-4"}>
+          <h3 className={isNew ? "mb-3 text-sm font-semibold text-slate-900" : "mb-3 text-sm font-medium text-slate-700"}>
             Recent Stock Movements
           </h3>
           <MovementHistory />
