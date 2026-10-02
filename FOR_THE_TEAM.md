@@ -6448,6 +6448,15 @@ A few improvements apply to **both** designs:
 - **Unsaved changes on a product.** If you've edited a product and try to leave the page without saving, you're asked whether to **Discard changes**, **Keep editing** or **Save changes**. Previously it was a plain browser "OK / Cancel" box. Closing or refreshing the browser tab still shows the browser's own warning.
 - Lists across the admin share the new "Page [ 3 ] of 12" control, so you can type the page you want.
 
+Smaller things in this round:
+
+- **Stat cards fit.** With both the sidebar and the notification panel open, the number cards at the top of pages shrink their figures instead of spilling over. On Analytics they cap at four per row when both panels are open.
+- **The Activity and Account pages** use the full width of the screen instead of a narrow column.
+- **Dark mode:** an unstructured pop-up's figures are white, so they're readable.
+- **The Communications page** uses the same page control as everything else.
+- **Login page** now reads "1NRI WorldWide LTD." under the logo, on both designs.
+- **Clean-up:** the activity-log entries left behind by testing the B2B orders were deleted from the live database (5 entries; a backup was taken first). No real activity was touched.
+
 ### Files changed
 
 | File | What changed |
@@ -6485,3 +6494,34 @@ A few improvements apply to **both** designs:
 
 - **Most of the new design is cosmetic,** so it was checked mainly with automated screenshots and layout checks at six screen sizes, against made-up test data. It hasn't had much real-world use yet, so expect a few rough edges, especially in dark mode.
 - If a page looks broken right after an update (e.g. a pop-up with a see-through background), do a hard refresh (⌘⇧R). The browser was probably holding on to old styling.
+
+---
+
+## Volume discounts + "add one more to save" nudge (September 2026, logged late)
+
+*This went live on 2 September but was never written up here, so here it is.*
+
+There's a new kind of discount: **volume discounts**, i.e. "buy more, save more". The discount level depends only on how many items are in the basket. Three of the same T-shirt counts as three, and unlike bundle deals no "anchor" product is needed. You set it up in **Settings → Promos** as **Volume discount (item count)**, with levels like "3 items → 10% off, 5 items → 15% off".
+
+Each volume discount can either **apply on its own** at checkout or **wait for a code** the customer types in. You can also limit which products **count** toward the item total, e.g. only tees. The discount still comes off the whole basket.
+
+On the shop, the cart drawer and the cart page now show a small nudge above the subtotal, like **"Add 1 more item to save 15%"**. It points at the next level the customer hasn't reached yet and disappears once they're at the top level. This closes the "still no cart nudge" gap mentioned in the Bundle Deals entry above. The nudge is only a message: the actual discount is always worked out at checkout, so it can't give away the wrong amount.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `supabase/migrations/20260902000000_promo_volume_enum.sql`, `20260902000001_promo_volume_rules.sql` | Adds "volume" as a discount type, and the rules that keep its levels sensible. These are two separate files on purpose: the database needs the first one saved before the second can use it. |
+| `apps/backend/src/promos/discount-engine.rules.ts`, `discount-engine.service.ts`, `discount-engine.rules.spec.ts` | The checkout maths for volume discounts, with automated tests. |
+| `apps/backend/src/promos/promos.service.ts`, `promos.controller.ts`, `dto/create-promo.dto.ts` | Saving volume discounts, and a public list of active volume offers that the shop uses for the nudge. |
+| `apps/admin/app/(dashboard)/settings/promos/page.tsx`, `redemptions/page.tsx`, `apps/admin/lib/api/promos.ts`, `apps/admin/lib/hooks/useChannelDiscount.ts` | The admin form for creating volume discounts and their levels. |
+| `apps/frontend/app/(shop)/components/VolumeNudge.tsx`, `apps/frontend/lib/bundles/volume-nudge.ts` (+ tests), `apps/frontend/lib/api/promos.ts` | New. The "add 1 more item" message and the maths behind it. |
+| `apps/frontend/app/(shop)/cart/page.tsx`, `components/CartDrawer.tsx`, `checkout/CheckoutClient.tsx` | Show the nudge in the cart; checkout understands the new discount type. |
+
+> **Heads-up:** the two database files above must have been run, in order, for volume discounts to save. If creating one in the admin fails, check they've been applied.
+
+### How to test
+
+1. In **Settings → Promos**, create a **Volume discount (item count)** set to apply on its own, with two levels (e.g. 2 items → 10%, 4 items → 20%).
+2. On the shop, add one item to the cart. You should see "Add 1 more item to save 10%".
+3. Add another item, then go to checkout and check the 10% comes off.
