@@ -83,7 +83,7 @@ function AdminLoginForm() {
           ) : (
             <span className="text-white text-3xl font-black tracking-tighter">1NRI</span>
           )}
-          <span className="text-white/40 text-xs font-medium uppercase tracking-[0.2em] mt-1">WorldWide</span>
+          <span className="text-white/40 text-xs font-medium uppercase tracking-[0.2em] mt-1">WorldWide LTD.</span>
         </div>
 
         {/* Bottom — tagline */}
