@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { splitPageWindow } from './product-ordering';
+import { splitPageWindow, restFetchRange, sliceRest } from './product-ordering';
 
 /**
  * The catalog is served as [anchors..., everything else...]. These cases walk a
@@ -71,5 +71,38 @@ describe('splitPageWindow', () => {
     expect(new Set(seen).size).toBe(80);
     // The anchors lead, then the tail runs unbroken from its own index 0.
     expect(seen.slice(0, 4)).toEqual(['A0', 'A1', 'A2', 'B0']);
+  });
+});
+
+describe('restFetchRange / sliceRest', () => {
+  // Stand-in for the non-anchor block: tail row i is just `B${i}`.
+  const tail = Array.from({ length: 200 }, (_, i) => `B${i}`);
+  const fetch = (r: { from: number; to: number }) => tail.slice(r.from, r.to + 1);
+
+  it('serves exactly the rows a sequential fetch would, for every anchor total', () => {
+    const limit = 16;
+    const maxAnchors = 5;
+
+    for (let p = 1; p <= 6; p++) {
+      const from = (p - 1) * limit;
+      const to = p * limit - 1;
+      const range = restFetchRange(from, to, maxAnchors);
+
+      for (let anchorTotal = 0; anchorTotal <= maxAnchors; anchorTotal++) {
+        const w = splitPageWindow(from, to, anchorTotal);
+        const expected = w.rest ? fetch(w.rest) : [];
+        expect(sliceRest(fetch(range), range.from, w.rest)).toEqual(expected);
+      }
+    }
+  });
+
+  it('returns nothing when the page sits inside the anchor block', () => {
+    const range = restFetchRange(0, 15, 20);
+    const w = splitPageWindow(0, 15, 20);
+    expect(sliceRest(fetch(range), range.from, w.rest)).toEqual([]);
+  });
+
+  it('never asks for a negative index', () => {
+    expect(restFetchRange(0, 15, 24).from).toBe(0);
   });
 });

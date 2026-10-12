@@ -40,3 +40,30 @@ export function splitPageWindow(
     },
   };
 }
+
+/**
+ * The tail range to fetch *before* the anchor count is known, so the anchor and
+ * tail queries can run in parallel.
+ *
+ * Filters can hide anchors, so the real anchor total is anywhere from 0 to
+ * `maxAnchors`, and `splitPageWindow`'s tail range shifts with it. This range
+ * covers every possibility: at most `maxAnchors` extra rows, in exchange for a
+ * database round trip. Cut the real window out with `sliceRest`.
+ */
+export function restFetchRange(
+  from: number,
+  to: number,
+  maxAnchors: number,
+): { from: number; to: number } {
+  return { from: Math.max(0, from - maxAnchors), to };
+}
+
+/** Cut `window.rest` out of rows fetched over `restFetchRange`. */
+export function sliceRest<T>(
+  fetched: T[],
+  fetchedFrom: number,
+  rest: PageWindow['rest'],
+): T[] {
+  if (!rest) return [];
+  return fetched.slice(rest.from - fetchedFrom, rest.to - fetchedFrom + 1);
+}
