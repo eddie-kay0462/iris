@@ -95,6 +95,10 @@ REV="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 notify "🚀 Iris deploy started — ${BRANCH} @ ${REV}: $(git log -1 --pretty=%s 2>/dev/null | cut -c1-120)"
 
+# Caddy's `edge` network is external (shared with the Tokota stack), so compose
+# won't create it and refuses to start without it.
+docker network inspect edge >/dev/null 2>&1 || docker network create edge >/dev/null
+
 # api1..api3 and worker all share one build context and one image tag
 # (iris-backend:local), so building a single service builds the image the rest
 # will run. Building all four would repeat identical work.
