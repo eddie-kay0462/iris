@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { describeError } from '../common/utils/describe-error';
 import { OrdersService } from './orders.service';
 
 /**
@@ -28,7 +29,7 @@ export class OrdersReconciliationCron {
         );
       }
     } catch (err: any) {
-      this.logger.error(`Pending-order reconciliation failed: ${err.message}`);
+      this.logger.error(`Pending-order reconciliation failed: ${describeError(err)}`);
     } finally {
       this.running = false;
     }

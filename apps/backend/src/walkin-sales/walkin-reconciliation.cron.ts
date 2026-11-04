@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { describeError } from '../common/utils/describe-error';
 import { WalkinSalesService } from './walkin-sales.service';
 
 /**
@@ -29,7 +30,7 @@ export class WalkinReconciliationCron {
       }
     } catch (err: any) {
       this.logger.error(
-        `Walk-in payment reconciliation failed: ${err.message}`,
+        `Walk-in payment reconciliation failed: ${describeError(err)}`,
       );
     } finally {
       this.running = false;

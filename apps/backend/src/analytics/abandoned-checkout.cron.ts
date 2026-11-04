@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { describeError } from '../common/utils/describe-error';
 import { AnalyticsService } from './analytics.service';
 
 /**
@@ -27,7 +28,7 @@ export class AbandonedCheckoutCron {
         );
       }
     } catch (err: any) {
-      this.logger.error(`Abandoned-checkout recovery failed: ${err.message}`);
+      this.logger.error(`Abandoned-checkout recovery failed: ${describeError(err)}`);
     } finally {
       this.running = false;
     }
