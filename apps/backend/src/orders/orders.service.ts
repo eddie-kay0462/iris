@@ -29,6 +29,7 @@ import {
   B2B_REVENUE_STATUSES,
 } from '../analytics/analytics.constants';
 import { fetchAll, fetchAllIn } from '../analytics/reports/report-context';
+import { paystackCoversOrder, type PaystackTransaction } from './paystack-check';
 
 // Payment processing fee charged on top of the order amount. Kept in sync with the
 // frontend checkout display (apps/frontend/app/(shop)/checkout/CheckoutClient.tsx) so
@@ -2189,16 +2190,28 @@ export class OrdersService {
   }
 
   /**
-   * Mark an order as paid by its payment_reference.
-   * Idempotent: safe to call multiple times (frontend success callback +
-   * Paystack webhook). Deducts inventory exactly once on the first transition
-   * to paid.
+   * Mark an order as paid by its payment_reference — but only once Paystack
+   * confirms a successful GHS charge covering the order total.
+   *
+   * Every route to "paid" comes through here: the public storefront callback
+   * (POST /orders/confirm-payment), the Paystack webhook and the reconciler.
+   * The callback is unauthenticated and the reference is visible to the
+   * shopper, and the inline popup's amount is set in the browser, so the
+   * reference alone proves nothing. Returns null when the payment can't be
+   * confirmed; the webhook or the reconciler confirms it later if it lands.
+   *
+   * `verified` lets a caller that has already fetched the transaction from
+   * Paystack (the reconciler) skip a second lookup.
+   *
+   * Idempotent: safe to call multiple times. The flip to paid is a guarded
+   * update, so when the callback and the webhook race only the winner deducts
+   * inventory and sends receipts.
    */
-  async confirmPayment(paymentReference: string) {
+  async confirmPayment(paymentReference: string, verified?: PaystackTransaction) {
     const db = this.supabase.getAdminClient();
     const { data: order, error } = await db
       .from('orders')
-      .select('id, payment_status, order_number, user_id, applied_promo_code_id, order_items(*)')
+      .select('id, payment_status, order_number, user_id, total, applied_promo_code_id, order_items(*)')
       .eq('payment_reference', paymentReference)
       .maybeSingle();
 
@@ -2207,15 +2220,36 @@ export class OrdersService {
       return this.findOne(order.id); // Already confirmed
     }
 
-    // Flip to paid then immediately to processing
-    const { error: updateError } = await db
+    if (!(await this.paymentCovers(paymentReference, order, verified))) {
+      return null;
+    }
+
+    // Flip to paid then immediately to processing. Guarded on the order not
+    // being paid yet: if a concurrent confirmation won, it already ran (or is
+    // running) the inventory, receipts and promo steps below.
+    const { data: flipped, error: updateError } = await db
       .from('orders')
       .update({
         payment_status: 'paid',
         status: 'paid',
         updated_at: new Date().toISOString(),
       })
-      .eq('id', order.id);
+      .eq('id', order.id)
+      .neq('payment_status', 'paid')
+      .select('id');
+
+    if (updateError) {
+      // Don't deduct stock or send receipts for an order we failed to mark
+      // paid. It stays pending, so the reconciler retries it.
+      console.error(
+        `confirmPayment: failed to mark ${order.order_number} paid:`,
+        updateError.message ?? updateError,
+      );
+      return null;
+    }
+    if (!flipped || flipped.length === 0) {
+      return this.findOne(order.id); // Lost the race — already confirmed
+    }
 
     // Log payment confirmation then advance to processing
     await db.from('order_status_history').insert([
@@ -2372,13 +2406,13 @@ export class OrdersService {
 
   /**
    * Ask Paystack whether a reference was actually charged. Returns the
-   * transaction status string ('success' | 'failed' | 'abandoned' | ...), or
-   * null if the lookup itself failed (network/HTTP error) so the caller can
-   * safely skip and retry on the next tick.
+   * transaction's status, amount (pesewas) and currency, or null if the lookup
+   * itself failed (network/HTTP error) so the caller can safely skip and retry
+   * on the next tick.
    */
   private async verifyPaystackTransaction(
     reference: string,
-  ): Promise<string | null> {
+  ): Promise<PaystackTransaction | null> {
     if (!this.paystackSecretKey) return null;
     try {
       const response = await fetch(
@@ -2387,10 +2421,56 @@ export class OrdersService {
       );
       if (!response.ok) return null;
       const result = (await response.json()) as any;
-      return result?.data?.status ?? null;
+      const data = result?.data;
+      if (!data) return null;
+      return {
+        status: data.status ?? null,
+        amount: typeof data.amount === 'number' ? data.amount : null,
+        currency: data.currency ?? null,
+      };
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Whether Paystack confirms a charge that pays for this order (see
+   * paystackCoversOrder). Uses `verified` when the caller already has the
+   * transaction, otherwise asks Paystack.
+   *
+   * Without a Paystack key the check can't run. That's allowed only outside
+   * production, so local checkout still works; in production it fails closed.
+   */
+  private async paymentCovers(
+    reference: string,
+    order: { order_number: string; total: number | string },
+    verified?: PaystackTransaction,
+  ): Promise<boolean> {
+    if (!verified && !this.paystackSecretKey) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(
+          `confirmPayment: PAYSTACK_SECRET_KEY not set — skipping payment verification for ${order.order_number} (non-production only)`,
+        );
+        return true;
+      }
+      console.error(
+        `confirmPayment: PAYSTACK_SECRET_KEY not set — refusing to confirm ${order.order_number} without verification`,
+      );
+      return false;
+    }
+
+    const tx = verified ?? (await this.verifyPaystackTransaction(reference));
+    if (paystackCoversOrder(tx, order.total)) return true;
+
+    if (tx?.status === 'success') {
+      // A real charge that doesn't pay for the order: an edited popup amount or
+      // the wrong currency. Worth a human look, so it's logged as an error.
+      console.error(
+        `confirmPayment: charge for ${order.order_number} (ref ${reference}) does not cover the order — ` +
+          `charged ${tx.amount} ${tx.currency}, order total ${order.total} GHS. Not marking paid.`,
+      );
+    }
+    return false;
   }
 
   /**
@@ -2429,13 +2509,17 @@ export class OrdersService {
 
     for (const order of rows) {
       try {
-        const status = await this.verifyPaystackTransaction(order.payment_reference);
-        if (status === null) continue; // lookup failed — retry next tick
+        const tx = await this.verifyPaystackTransaction(order.payment_reference);
+        if (tx === null) continue; // lookup failed — retry next tick
 
-        if (status === 'success') {
+        if (tx.status === 'success') {
           // Idempotent: deducts inventory, sends receipts, flips to paid/processing.
-          await this.confirmPayment(order.payment_reference);
-          recovered += 1;
+          // Returns null when the charge doesn't cover the order (underpaid or
+          // wrong currency); that's logged there and the order stays pending,
+          // so it eventually ages out like any unpaid attempt.
+          if (await this.confirmPayment(order.payment_reference, tx)) {
+            recovered += 1;
+          }
           continue;
         }
 
