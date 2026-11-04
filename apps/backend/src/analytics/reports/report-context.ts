@@ -1,4 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
+import { describeError } from '../../common/utils/describe-error';
 import {
   Granularity,
   ONLINE_REVENUE_STATUSES,
@@ -154,7 +155,7 @@ export async function fetchAll<T>(
   for (let page = 0; page < 100; page++) {
     const { data, error } = await build(page * PAGE, page * PAGE + PAGE - 1);
     if (error) {
-      throw new Error(`analytics query failed: ${error.message ?? String(error)}`);
+      throw new Error(`analytics query failed: ${describeError(error)}`);
     }
     if (!data || data.length === 0) break;
     all.push(...data);

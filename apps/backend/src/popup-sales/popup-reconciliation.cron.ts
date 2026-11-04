@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { describeError } from '../common/utils/describe-error';
 import { PopupSalesService } from './popup-sales.service';
 
 /**
@@ -29,7 +30,7 @@ export class PopupReconciliationCron {
         );
       }
     } catch (err: any) {
-      this.logger.error(`Pop-up payment reconciliation failed: ${err.message}`);
+      this.logger.error(`Pop-up payment reconciliation failed: ${describeError(err)}`);
     } finally {
       this.running = false;
     }

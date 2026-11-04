@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { describeError } from '../common/utils/describe-error';
 import { PopupCollectionsService } from './popup-collections.service';
 
 /** Ghana is UTC+0 year-round, so the UTC hour is the local hour. */
@@ -32,7 +33,7 @@ export class PopupPickupReminderCron {
         this.logger.log(`Pop-up collection reminders sent: ${sent}`);
       }
     } catch (err: any) {
-      this.logger.error(`Pop-up collection reminders failed: ${err.message}`);
+      this.logger.error(`Pop-up collection reminders failed: ${describeError(err)}`);
     } finally {
       this.running = false;
     }
