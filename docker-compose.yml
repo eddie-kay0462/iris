@@ -60,7 +60,9 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on: [api1, api2, api3]
-    networks: [iris]
+    # edge is shared with the Gold Coast Tokota stack (see the Caddyfile). Only
+    # Caddy joins it on this side, so Tokota can't see the iris network.
+    networks: [iris, edge]
     restart: unless-stopped
     logging: *json-logs
 
@@ -181,6 +183,10 @@ networks:
   ops:
     driver: bridge
     internal: true
+  # Created once on the box (deploy.sh does it if missing) and shared with the
+  # Tokota compose project, whose nginx joins it as `tokota-api`.
+  edge:
+    external: true
 
 volumes:
   caddy_data:

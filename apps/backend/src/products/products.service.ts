@@ -13,7 +13,8 @@ import { QueryProductsDto } from './dto/query-products.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
 import { DiscountEngineService } from '../promos/discount-engine.service';
-import { splitPageWindow } from './product-ordering';
+import { splitPageWindow, restFetchRange, sliceRest } from './product-ordering';
+import { TtlCache } from './ttl-cache';
 
 /**
  * The anchor block is fetched in full on every catalog request, so it has to
@@ -21,9 +22,41 @@ import { splitPageWindow } from './product-ordering';
  */
 const MAX_HOISTED_ANCHORS = 24;
 
+/**
+ * How long a public catalog page is served from memory. Short, because each
+ * replica caches on its own and only expiry clears it. Stock shown on a card
+ * can lag by this much, which is fine because checkout re-checks inventory.
+ */
+const CATALOG_TTL_MS = 30_000;
+
+/**
+ * Product columns the storefront's catalog cards read. Long text the grid
+ * never shows (description, SEO copy) stays on the detail endpoint.
+ */
+const CATALOG_PRODUCT_COLUMNS = [
+  'id',
+  'handle',
+  'title',
+  'base_price',
+  'status',
+  'gender',
+  'product_type',
+  'category',
+  'tags',
+  'is_new_arrival',
+  'is_best_seller',
+  'is_featured',
+  'early_access_start',
+  'public_release_date',
+  'created_at',
+  'updated_at',
+].join(', ');
+
 @Injectable()
 export class ProductsService {
   private supabaseUrl: string;
+  private catalogCache = new TtlCache<any>(CATALOG_TTL_MS, 500);
+  private anchorCache = new TtlCache<string[]>(CATALOG_TTL_MS, 1);
 
   constructor(
     private supabase: SupabaseService,
@@ -88,6 +121,16 @@ export class ProductsService {
   }
 
   async findPublic(query: QueryProductsDto) {
+    // Every shopper on the default view asks for the same page, so most
+    // requests never touch the database.
+    const key = JSON.stringify([
+      query.search, query.gender, query.category, query.product_type,
+      query.sort_by, query.sort_order, query.page, query.limit,
+    ]);
+    return this.catalogCache.get(key, () => this.loadPublicPage(query));
+  }
+
+  private async loadPublicPage(query: QueryProductsDto) {
     const page = parseInt(query.page || '1', 10);
     const limit = parseInt(query.limit || '20', 10);
     const from = (page - 1) * limit;
@@ -108,55 +151,47 @@ export class ProductsService {
     // The list is conceptually [anchors..., everything else...], both in the
     // requested order. Slice the page window across that seam so pagination and
     // the total stay honest — an anchor must never appear on two pages.
-    const { data: anchors, count: anchorCount } = await this.queryPublicPage(
-      query,
-      0,
-      Math.max(anchorIds.length - 1, 0),
-      { onlyIds: anchorIds },
-    );
+    //
+    // The tail's window depends on how many anchors survive the filters, which
+    // isn't known until the anchor query returns. Rather than wait for it,
+    // fetch a tail range wide enough for any anchor count and cut it down after.
+    const restRange = restFetchRange(from, to, anchorIds.length);
+    const [
+      { data: anchors, count: anchorCount },
+      { data: restRows, count: restCount },
+    ] = await Promise.all([
+      this.queryPublicPage(query, 0, anchorIds.length - 1, { onlyIds: anchorIds }),
+      this.queryPublicPage(query, restRange.from, restRange.to, {
+        excludeIds: anchorIds,
+      }),
+    ]);
 
     const anchorTotal = anchorCount ?? anchors.length;
     const window = splitPageWindow(from, to, anchorTotal);
     const anchorSlice = anchors.slice(window.anchors[0], window.anchors[1]);
-
-    let rest: any[] = [];
-    let restTotal = 0;
-
-    if (window.rest) {
-      const { data, count } = await this.queryPublicPage(
-        query,
-        window.rest.from,
-        window.rest.to,
-        { excludeIds: anchorIds },
-      );
-      rest = data;
-      restTotal = count ?? 0;
-    } else {
-      // Window ends inside the anchor block, but the total still has to count
-      // the tail or the grid would stop fetching after the anchors.
-      const { count } = await this.queryPublicPage(query, 0, 0, {
-        excludeIds: anchorIds,
-      });
-      restTotal = count ?? 0;
-    }
+    const rest = sliceRest(restRows, restRange.from, window.rest);
 
     return this.paginate(
       [...anchorSlice, ...rest],
-      anchorTotal + restTotal,
+      anchorTotal + (restCount ?? 0),
       page,
       limit,
     );
   }
 
   /** Product ids that anchor an active, advertisable bundle rule. */
-  private async bundleAnchorIds(): Promise<string[]> {
-    try {
-      const offers = await this.discountEngine.listActiveBundles('online');
-      return [...new Set(offers.map((o) => o.anchorProductId))].slice(0, MAX_HOISTED_ANCHORS);
-    } catch {
-      // Merchandising is a nice-to-have; the catalog must still render.
-      return [];
-    }
+  private bundleAnchorIds(): Promise<string[]> {
+    // Shared by every filter and page, so cached on its own: a cold catalog
+    // key still skips the promo lookup.
+    return this.anchorCache.get('online', async () => {
+      try {
+        const offers = await this.discountEngine.listActiveBundles('online');
+        return [...new Set(offers.map((o) => o.anchorProductId))].slice(0, MAX_HOISTED_ANCHORS);
+      } catch {
+        // Merchandising is a nice-to-have; the catalog must still render.
+        return [];
+      }
+    });
   }
 
   private async queryPublicPage(
@@ -169,7 +204,10 @@ export class ProductsService {
 
     let q = db
       .from('products')
-      .select('*, product_variants(*), product_images(*)', { count: 'exact' })
+      .select(
+        `${CATALOG_PRODUCT_COLUMNS}, product_variants(*), product_images(*)`,
+        { count: 'exact' },
+      )
       .eq('status', 'active')
       .is('deleted_at', null);
 

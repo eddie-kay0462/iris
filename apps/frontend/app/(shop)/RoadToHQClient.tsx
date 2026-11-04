@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { prefetchImage } from "@/hooks/useImagePrefetch";
+// Static import: Next fingerprints the file (immutable cache), knows its
+// intrinsic size, and generates a tiny blur placeholder inlined in the HTML,
+// so the hero shows instantly as a blur instead of a blank dark box.
+import heroImage from "@/public/homepage/7.jpg";
 import { Caveat } from "next/font/google";
 import {
   motion,
@@ -91,11 +96,18 @@ const MILESTONES = [
   },
 ];
 
-/* ── Image prefetch ── */
-function prefetchImage(src: string) {
-  if (typeof window === "undefined") return;
-  const img = new window.Image();
-  img.src = src;
+/* ── Image prefetch ──
+   Milestone images render through next/image with
+   sizes="(max-width: 768px) 100vw, 50vw" at the default quality (75), so we
+   warm the same optimised URL the browser will pick from the srcset — never
+   the raw Supabase original, which is multi-MB and served no-cache. */
+const DEVICE_SIZES = [640, 750, 828, 1080, 1200, 1920, 2048, 3840];
+const MILESTONE_IMAGE_QUALITY = 75;
+
+function milestonePrefetchWidth(): number {
+  const vw = window.innerWidth;
+  const target = (vw <= 768 ? vw : vw / 2) * (window.devicePixelRatio || 1);
+  return DEVICE_SIZES.find((s) => s >= target) ?? DEVICE_SIZES[DEVICE_SIZES.length - 1];
 }
 
 /* ── Smooth scroll ──
@@ -224,6 +236,7 @@ export default function RoadToHQPage({
   const [active, setActive] = useState(0);
   const [displayUnits, setDisplayUnits] = useState(0);
   const [daysLeft, setDaysLeft] = useState(0);
+  const [heroLoaded, setHeroLoaded] = useState(false);
   const activeRef = useRef(0);
 
   /* Parallax refs */
@@ -247,8 +260,11 @@ export default function RoadToHQPage({
   useEffect(() => { activeRef.current = active; }, [active]);
 
   // Warm the browser cache for all milestone images so switching between
-  // them feels instant. Deferred so it doesn't compete with the hero image.
+  // them feels instant. Gated on the hero having loaded: "idle" only means the
+  // main thread is free, not the network, so on a slow phone connection an
+  // idle-only trigger had these downloads racing the hero for bandwidth.
   useEffect(() => {
+    if (!heroLoaded) return;
     const ric = typeof window.requestIdleCallback === "function"
       ? window.requestIdleCallback
       : (cb: () => void) => setTimeout(cb, 300);
@@ -257,11 +273,12 @@ export default function RoadToHQPage({
       : clearTimeout;
 
     const handle = ric(() => {
-      MILESTONES.forEach((ms) => prefetchImage(ms.image));
+      const w = milestonePrefetchWidth();
+      MILESTONES.forEach((ms) => prefetchImage(ms.image, w, MILESTONE_IMAGE_QUALITY));
     });
 
     return () => cic(handle as never);
-  }, []);
+  }, [heroLoaded]);
 
   useEffect(() => {
     const target = new Date(DEADLINE + "T00:00:00");
@@ -360,23 +377,18 @@ export default function RoadToHQPage({
       <section id="rthq-hero" ref={heroRef} className="relative h-screen min-h-[720px] overflow-hidden bg-neutral-900">
         {/* Parallax image */}
         <motion.div className="absolute inset-0 will-change-transform" style={{ y: heroImageY }}>
+          {/* One element, responsive crop. q75 is plenty under the dark
+              gradient + overlay, and noticeably smaller than q85 on phones. */}
           <Image
-            src="/homepage/7.jpg"
+            src={heroImage}
             alt="1NRI model wearing streetwear in Accra, Ghana"
             fill
             sizes="100vw"
-            quality={85}
-            className="hidden sm:block object-cover object-[center_5%] scale-110"
+            quality={75}
+            placeholder="blur"
+            className="object-cover object-[50%_25%] sm:object-[center_5%] scale-110"
             priority
-          />
-          <Image
-            src="/homepage/7.jpg"
-            alt="1NRI model wearing streetwear in Accra, Ghana"
-            fill
-            sizes="100vw"
-            quality={85}
-            className="block sm:hidden object-cover object-[50%_25%] scale-110"
-            priority
+            onLoad={() => setHeroLoaded(true)}
           />
         </motion.div>
         <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/30 to-black/70" />

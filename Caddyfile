@@ -45,3 +45,15 @@
 		}
 	}
 }
+
+# Gold Coast Tokota API. It shares this box as its own compose project
+# (/opt/tokota/backend); its nginx joins the shared `edge` network as
+# `tokota-api`. Its deploy runbook lives in the tokota repo
+# (docs/deploy/contabo.md).
+#
+# No `log` block on purpose: its access lines stay out of this stdout, so the
+# IRIS Telegram alerts don't page on Tokota's 502s. nginx keeps its own logs.
+api.goldcoasttokota.store {
+	encode zstd gzip
+	reverse_proxy tokota-api:80
+}
