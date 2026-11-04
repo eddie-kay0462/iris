@@ -164,6 +164,29 @@ export async function fetchAll<T>(
 }
 
 /**
+ * `fetchAll` for a filter over a long list of values. PostgREST encodes
+ * `.in()` values into the URL, and a few hundred UUIDs or emails push it past
+ * the gateway's URL limit, which comes back as a bare `400 Bad Request`. The
+ * list is split into chunks, each chunk is paged via `fetchAll`, and the rows
+ * are concatenated. Callers dedupe if chunks can return overlapping rows.
+ */
+export async function fetchAllIn<T>(
+  values: readonly string[],
+  build: (chunk: string[], fromRow: number, toRow: number) => PromiseLike<{ data: T[] | null; error: any }>,
+  chunkSize = 150,
+): Promise<T[]> {
+  const unique = Array.from(new Set(values));
+  const chunks: string[][] = [];
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    chunks.push(unique.slice(i, i + chunkSize));
+  }
+  const results = await Promise.all(
+    chunks.map((chunk) => fetchAll<T>((a, b) => build(chunk, a, b))),
+  );
+  return results.flat();
+}
+
+/**
  * Shared, lazily-cached data loaders for one report request. Every report
  * builder pulls from these so each underlying table is read at most once
  * per window regardless of how many metrics a report combines.

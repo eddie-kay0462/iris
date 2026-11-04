@@ -28,7 +28,7 @@ import {
   WALKIN_REVENUE_STATUSES,
   B2B_REVENUE_STATUSES,
 } from '../analytics/analytics.constants';
-import { fetchAll } from '../analytics/reports/report-context';
+import { fetchAll, fetchAllIn } from '../analytics/reports/report-context';
 
 // Payment processing fee charged on top of the order amount. Kept in sync with the
 // frontend checkout display (apps/frontend/app/(shop)/checkout/CheckoutClient.tsx) so
@@ -1183,11 +1183,13 @@ export class OrdersService {
     let dbCount: number;
 
     if (hasOrderFilter) {
-      // No .range() — fetch the full matching set so we can filter accurately
-      const { data, count, error } = await buildBaseQuery();
-      if (error) throw error;
-      profiles = data || [];
-      dbCount = count || 0;
+      // Fetch the full matching set so we can filter accurately. Paged via
+      // fetchAll: a bare select stops at PostgREST's 1000-row cap, which would
+      // silently drop customers from the filtered list.
+      profiles = await fetchAll<any>((a, b) =>
+        buildBaseQuery().order('id', { ascending: true }).range(a, b),
+      );
+      dbCount = profiles.length;
     } else {
       // DB-paginated fast path
       const from = (page - 1) * limit;
@@ -1225,43 +1227,40 @@ export class OrdersService {
     const inPersonSelect =
       'id, customer_email, customer_phone, total, created_at';
 
+    // Every `.in()` list here comes from the profile set, which can be the
+    // whole customer base under an order-count filter. `fetchAllIn` chunks the
+    // list so the request URL stays under the gateway limit.
     const byEmailAndPhone = (table: 'popup_orders' | 'walkin_orders', statuses: string[]) =>
       Promise.all([
-        emails.length > 0
-          ? fetchAll<InPersonOrder>((a, b) =>
-              db
-                .from(table)
-                .select(inPersonSelect)
-                .in('customer_email', emails)
-                .in('status', statuses)
-                .range(a, b),
-            )
-          : Promise.resolve([] as InPersonOrder[]),
-        phones.length > 0
-          ? fetchAll<InPersonOrder>((a, b) =>
-              db
-                .from(table)
-                .select(inPersonSelect)
-                .in('customer_phone', phones)
-                .in('status', statuses)
-                .range(a, b),
-            )
-          : Promise.resolve([] as InPersonOrder[]),
+        fetchAllIn<InPersonOrder>(emails, (chunk, a, b) =>
+          db
+            .from(table)
+            .select(inPersonSelect)
+            .in('customer_email', chunk)
+            .in('status', statuses)
+            .range(a, b),
+        ),
+        fetchAllIn<InPersonOrder>(phones, (chunk, a, b) =>
+          db
+            .from(table)
+            .select(inPersonSelect)
+            .in('customer_phone', chunk)
+            .in('status', statuses)
+            .range(a, b),
+        ),
       ]);
 
     const [allOnlineOrders, [popupByEmailData, popupByPhoneData], [walkinByEmailData, walkinByPhoneData]] =
       await Promise.all([
-        userIds.length > 0
-          ? fetchAll<any>((a, b) =>
-              db
-                .from('orders')
-                .select('user_id, total, created_at')
-                .in('user_id', userIds)
-                .is('deleted_at', null)
-                .in('status', ONLINE_REVENUE_STATUSES)
-                .range(a, b),
-            )
-          : Promise.resolve([] as any[]),
+        fetchAllIn<any>(userIds, (chunk, a, b) =>
+          db
+            .from('orders')
+            .select('user_id, total, created_at')
+            .in('user_id', chunk)
+            .is('deleted_at', null)
+            .in('status', ONLINE_REVENUE_STATUSES)
+            .range(a, b),
+        ),
         byEmailAndPhone('popup_orders', POPUP_REVENUE_STATUSES),
         byEmailAndPhone('walkin_orders', WALKIN_REVENUE_STATUSES),
       ]);
