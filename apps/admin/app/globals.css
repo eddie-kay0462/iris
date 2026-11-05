@@ -7,18 +7,12 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* Lets `dark:` utilities target the new-IRIS dark theme. */
-@custom-variant dark (&:where([data-ui="new"][data-theme="dark"], [data-ui="new"][data-theme="dark"] *));
-
-body {
-  background-color: #ffffff;
-  color: #171717;
-  font-family: Arial, Helvetica, sans-serif;
-}
+/* Lets `dark:` utilities target the IRIS dark theme. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /* iOS Safari zooms the page into any field under 16px when it's focused, and
    doesn't zoom back out. Phones get 16px fields; larger screens keep the
-   compact sizes the pages set. Both interfaces. */
+   compact sizes the pages set. */
 @media (max-width: 639px) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
   select,
@@ -27,14 +21,13 @@ body {
   }
 }
 
-/* ─── New IRIS ─────────────────────────────────────────────────────────────
- * The redesign (Figma "Dashboard UI Kit") is a skin over the same markup.
+/* ─── IRIS theme ───────────────────────────────────────────────────────────
+ * The design (Figma "Dashboard UI Kit") is applied as a skin over the markup.
  * Tailwind v4 utilities read colours and radii from CSS variables, so
  * remapping the slate ramp (which nearly every page is written in) onto the
- * kit's ink-based neutrals restyles the whole app at once. Everything here is
- * scoped to [data-ui="new"]; classic mode is untouched.
+ * kit's ink-based neutrals restyles the whole app at once.
  */
-html[data-ui="new"] {
+html {
   /* Kit tokens */
   --iris-ink: #1c1c1c;
   --iris-bg: #ffffff;
@@ -104,7 +97,7 @@ html[data-ui="new"] {
   --radius-2xl: 20px;
 }
 
-html[data-ui="new"] body {
+html body {
   background-color: var(--iris-bg);
   color: var(--iris-ink);
   font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
@@ -112,15 +105,15 @@ html[data-ui="new"] body {
 }
 
 /* Shadows are compiled inline (not via variables), so swap them per class. */
-html[data-ui="new"] .shadow-sm,
-html[data-ui="new"] .shadow {
+html .shadow-sm,
+html .shadow {
   --tw-shadow: var(--iris-card-shadow);
 }
-html[data-ui="new"] .shadow-md,
-html[data-ui="new"] .shadow-lg {
+html .shadow-md,
+html .shadow-lg {
   --tw-shadow: 6px 6px 40px rgba(0, 0, 0, 0.08);
 }
-html[data-ui="new"] .shadow-xl {
+html .shadow-xl {
   --tw-shadow: 0 24px 64px rgba(0, 0, 0, 0.14);
 }
 
@@ -130,14 +123,14 @@ html[data-ui="new"] .shadow-xl {
    ~180px each and the figures spill out. auto-fit drops a column instead,
    whenever a card would fall below 14rem — room for "GH₵9,900.00" at 24px.
    Unlayered, so it outranks the grid-cols utilities on the same element. */
-html[data-ui="new"] .iris-stat-grid {
+html .iris-stat-grid {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
 }
 
 /* Each card is a size container, so its figure scales with the card's own
    width (cqi = 1% of the card's content box): 22px at most, shrinking in
    narrow cards (down to 16px) rather than spilling over the edge. */
-html[data-ui="new"] .iris-stat-grid > * {
+html .iris-stat-grid > * {
   container-type: inline-size;
   min-width: 0;
 }
@@ -148,28 +141,28 @@ html[data-ui="new"] .iris-stat-grid > * {
    The bar only sits in the layout at xl+ (below that it's a drawer), and the
    sidebar only at md+, hence the media query. */
 @media (min-width: 1280px) {
-  html[data-ui="new"] .iris-shell[data-sidebar="open"][data-panel="open"] .iris-analytics .iris-stat-grid {
+  html .iris-shell[data-sidebar="open"][data-panel="open"] .iris-analytics .iris-stat-grid {
     grid-template-columns: repeat(auto-fit, minmax(max(min(100%, 14rem), calc((100% - 3rem) / 4)), 1fr));
   }
 }
 
-html[data-ui="new"] .iris-stat-grid :is(.text-2xl, .text-xl) {
+html .iris-stat-grid :is(.text-2xl, .text-xl) {
   font-size: clamp(1rem, 11cqi, 1.375rem);
   line-height: 1.4;
   letter-spacing: -0.01em;
 }
 
-html[data-ui="new"] ::selection {
+html ::selection {
   background: var(--iris-accent);
   color: var(--iris-ink);
 }
 
-/* ─── New IRIS · dark ──────────────────────────────────────────────────────
+/* ─── IRIS · dark ──────────────────────────────────────────────────────────
  * The ramp is inverted, and white (cards, inputs) becomes the dark surface.
  * Pairs like `bg-slate-900 text-white` invert together, so they keep their
  * contrast without per-page changes.
  */
-html[data-ui="new"][data-theme="dark"] {
+html[data-theme="dark"] {
   --iris-ink: #f4f4f4;
   --iris-bg: #141414;
   --iris-surface: #1c1c1c;
@@ -262,14 +255,14 @@ html[data-ui="new"][data-theme="dark"] {
   --color-purple-300: rgba(198, 199, 248, 0.4);
 }
 
-html[data-ui="new"][data-theme="dark"] .shadow-sm,
-html[data-ui="new"][data-theme="dark"] .shadow {
+html[data-theme="dark"] .shadow-sm,
+html[data-theme="dark"] .shadow {
   --tw-shadow: 0 0 0 transparent;
 }
 
 /* Native form controls (date pickers, selects) follow the theme. */
-html[data-ui="new"][data-theme="dark"] input,
-html[data-ui="new"][data-theme="dark"] select,
-html[data-ui="new"][data-theme="dark"] textarea {
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea {
   color-scheme: dark;
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useIsNewUi } from "@/lib/ui/UiModeContext";
 
 interface SearchInputProps {
   value: string;
@@ -14,7 +13,6 @@ export function SearchInput({
   onChange,
   placeholder = "Search...",
 }: SearchInputProps) {
-  const isNew = useIsNewUi();
   const [local, setLocal] = useState(value);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -48,11 +46,7 @@ export function SearchInput({
         value={local}
         onChange={(e) => handleChange(e.target.value)}
         placeholder={placeholder}
-        className={
-          isNew
-            ? "w-full rounded-lg border border-transparent bg-[var(--iris-hover)] py-2 pl-10 pr-4 text-sm text-slate-900 outline-none placeholder:text-[var(--iris-faint)] focus:border-[var(--iris-line)] focus:bg-white"
-            : "w-full rounded-lg border border-slate-200 py-2 pl-10 pr-4 text-sm outline-none focus:border-slate-400"
-        }
+        className="w-full rounded-lg border border-transparent bg-[var(--iris-hover)] py-2 pl-10 pr-4 text-sm text-slate-900 outline-none placeholder:text-[var(--iris-faint)] focus:border-[var(--iris-line)] focus:bg-white"
       />
     </div>
   );

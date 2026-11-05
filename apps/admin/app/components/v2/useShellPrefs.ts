@@ -32,7 +32,7 @@ function load(): Prefs {
 }
 
 /**
- * Per-browser layout preferences for the new IRIS shell. Reads after mount so
+ * Per-browser layout preferences for the IRIS shell. Reads after mount so
  * the server render (defaults) and first client render agree.
  */
 export function useShellPrefs() {

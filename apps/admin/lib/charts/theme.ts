@@ -4,7 +4,7 @@ import { useUiMode } from "@/lib/ui/UiModeContext";
  * Monochrome chart + metric design tokens.
  *
  * The admin uses shades of ink (slate-900 → slate-200) rather than bright
- * accent colors for a premium, Shopify-like look. Use `chart.primary` for the
+ * accent colors for a premium, Shopify-like look. Use `useChartTheme().primary` for the
  * main series, `chart.comparison` for previous-period overlays, and the
  * `donut` ramp for categorical splits.
  */
@@ -21,7 +21,7 @@ export type ChartPalette = {
   negative: string;
   areaTop: string;
   areaBottom: string;
-  /** Resting fill for bars (pale in new IRIS). */
+  /** Resting fill for bars. */
   bar: string;
   /** Card background, for gaps between donut slices and tooltips. */
   surface: string;
@@ -29,36 +29,11 @@ export type ChartPalette = {
   channels: readonly string[];
 };
 
-export const chart: ChartPalette = {
-  primary: "#0f172a", // slate-900 — main series
-  secondary: "#475569", // slate-600 — second series
-  tertiary: "#94a3b8", // slate-400 — third series
-  comparison: "#94a3b8", // dashed previous-period line
-  muted: "#cbd5e1", // slate-300
-  grid: "#e2e8f0", // slate-200
-  axis: "#94a3b8", // slate-400 tick labels
-  positive: "#0f172a", // deltas up — ink, not green
-  negative: "#9f1239", // deltas down — restrained rose
-  areaTop: "rgba(15, 23, 42, 0.08)",
-  areaBottom: "rgba(15, 23, 42, 0)",
-  bar: "#94a3b8",
-  surface: "#ffffff",
-  donut: ["#0f172a", "#475569", "#64748b", "#94a3b8", "#cbd5e1", "#e2e8f0"],
-  /**
-   * Sales channels are the one split that has to be readable at a glance, and
-   * adjacent steps of the ink ramp are too close to tell apart in a donut. These
-   * stay dark and desaturated so they still read as premium rather than as a
-   * default category palette, but they separate by hue as well as by value.
-   * Order matches SALES_CHANNELS: online, pop-up, walk-in, B2B.
-   */
-  channels: ["#0f172a", "#0e7490", "#b45309", "#6d28d9"],
-};
-
 /**
- * New IRIS palette (Figma "Dashboard UI Kit"): ink line, soft blue dashed
+ * Light palette (Figma "Dashboard UI Kit"): ink line, soft blue dashed
  * comparison, pale bars and a pastel categorical ramp.
  */
-export const chartNew: ChartPalette = {
+export const chartLight: ChartPalette = {
   primary: "#1c1c1c",
   secondary: "#a8c5da",
   tertiary: "#c6c7f8",
@@ -76,7 +51,7 @@ export const chartNew: ChartPalette = {
   channels: ["#1c1c1c", "#95a4fc", "#e2b77e", "#7fc8a9"],
 };
 
-export const chartNewDark: ChartPalette = {
+export const chartDark: ChartPalette = {
   primary: "#f4f4f4",
   secondary: "#a8c5da",
   tertiary: "#c6c7f8",
@@ -94,11 +69,10 @@ export const chartNewDark: ChartPalette = {
   channels: ["#f4f4f4", "#95a4fc", "#e2b77e", "#7fc8a9"],
 };
 
-/** The palette for the active interface: classic, new IRIS light or dark. */
+/** The palette for the active light / dark theme. */
 export function useChartTheme(): ChartPalette {
-  const { ui, resolvedTheme } = useUiMode();
-  if (ui !== "new") return chart;
-  return resolvedTheme === "dark" ? chartNewDark : chartNew;
+  const { resolvedTheme } = useUiMode();
+  return resolvedTheme === "dark" ? chartDark : chartLight;
 }
 
 export type MetricFormat = "currency" | "number" | "percent" | "text";

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useIsNewUi } from "@/lib/ui/UiModeContext";
 
 interface PaginationProps {
   page: number;
@@ -92,70 +91,36 @@ export function Pagination({
   framed = true,
   disabled = false,
 }: PaginationProps & PaginationOptions) {
-  const isNew = useIsNewUi();
   if (totalPages <= 1) return null;
 
-  if (isNew) {
-    return (
-      <div className={`flex items-center justify-between gap-3 text-sm ${framed ? "border-t border-[var(--iris-line)] px-4 py-3" : ""}`}>
-        <div className="text-[var(--iris-muted)]">
-          <PageJump
-            page={page}
-            totalPages={totalPages}
-            onPageChange={onPageChange}
-            summary={summary}
-            disabled={disabled}
-            inputClassName="h-7 rounded-lg border border-[var(--iris-line)] bg-[var(--iris-hover)] px-2 text-center tabular-nums text-slate-900 outline-none focus:border-slate-400 focus:bg-[var(--iris-bg)] pointer-coarse:h-9"
-          />
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => onPageChange(page - 1)}
-            disabled={disabled || page <= 1}
-            aria-label="Previous page"
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-900 hover:bg-[var(--iris-hover)] disabled:cursor-not-allowed disabled:opacity-30 pointer-coarse:h-9 pointer-coarse:w-9"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => onPageChange(page + 1)}
-            disabled={disabled || page >= totalPages}
-            aria-label="Next page"
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-900 hover:bg-[var(--iris-hover)] disabled:cursor-not-allowed disabled:opacity-30 pointer-coarse:h-9 pointer-coarse:w-9"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className={`flex items-center justify-between gap-3 text-sm ${framed ? "border-t border-slate-200 px-4 py-3" : ""}`}>
-      <div className="text-slate-500">
+    <div className={`flex items-center justify-between gap-3 text-sm ${framed ? "border-t border-[var(--iris-line)] px-4 py-3" : ""}`}>
+      <div className="text-[var(--iris-muted)]">
         <PageJump
           page={page}
           totalPages={totalPages}
           onPageChange={onPageChange}
           summary={summary}
           disabled={disabled}
-          inputClassName="rounded border border-slate-200 bg-white px-2 py-1 text-center tabular-nums text-slate-700 outline-none focus:border-slate-400"
+          inputClassName="h-7 rounded-lg border border-[var(--iris-line)] bg-[var(--iris-hover)] px-2 text-center tabular-nums text-slate-900 outline-none focus:border-slate-400 focus:bg-[var(--iris-bg)] pointer-coarse:h-9"
         />
       </div>
-      <div className="flex gap-2">
+      <div className="flex items-center gap-1">
         <button
           onClick={() => onPageChange(page - 1)}
           disabled={disabled || page <= 1}
-          className="rounded border border-slate-200 px-3 py-1 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          aria-label="Previous page"
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-900 hover:bg-[var(--iris-hover)] disabled:cursor-not-allowed disabled:opacity-30 pointer-coarse:h-9 pointer-coarse:w-9"
         >
-          Previous
+          <ChevronLeft className="h-4 w-4" />
         </button>
         <button
           onClick={() => onPageChange(page + 1)}
           disabled={disabled || page >= totalPages}
-          className="rounded border border-slate-200 px-3 py-1 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          aria-label="Next page"
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-900 hover:bg-[var(--iris-hover)] disabled:cursor-not-allowed disabled:opacity-30 pointer-coarse:h-9 pointer-coarse:w-9"
         >
-          Next
+          <ChevronRight className="h-4 w-4" />
         </button>
       </div>
     </div>

@@ -42,7 +42,7 @@ function humanize(s: string) {
 }
 
 /**
- * Data for the new IRIS notification bar. Each source is only fetched when the
+ * Data for the IRIS notification bar. Each source is only fetched when the
  * role can read it, so staff never trigger a 403. Queries poll every minute.
  */
 export function useNotifications(role: UserRole) {

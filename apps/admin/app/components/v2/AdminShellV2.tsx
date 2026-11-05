@@ -18,7 +18,7 @@ import { useNotifications } from "./useNotifications";
 const MD = "(min-width: 768px)";
 const XL = "(min-width: 1280px)";
 
-/** New IRIS layout: left nav · header + page · right notification bar. */
+/** IRIS layout: left nav · header + page · right notification bar. */
 export function AdminShellV2({ role, children }: { role: UserRole; children: ReactNode }) {
   const pathname = usePathname();
   const profile = useAdminProfile();
