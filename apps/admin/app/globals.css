@@ -146,6 +146,28 @@ html .iris-stat-grid > * {
   }
 }
 
+/* Rows of exactly four cards: wrap the grid in `.iris-stat-grid-4`. auto-fit
+   alone gives 3 + 1 when the row is a little under four cards wide (sidebar
+   and notification bar open), which reads as a mistake. This sizes off the
+   wrapper's own width instead: four across, two below 59rem (four 14rem cards
+   plus three 1rem gaps), one below 20rem. Outranks `html .iris-stat-grid`. */
+.iris-stat-grid-4 {
+  container-type: inline-size;
+}
+html .iris-stat-grid-4 > .iris-stat-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@container (max-width: 59rem) {
+  html .iris-stat-grid-4 > .iris-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container (max-width: 20rem) {
+  html .iris-stat-grid-4 > .iris-stat-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 html .iris-stat-grid :is(.text-2xl, .text-xl) {
   font-size: clamp(1rem, 11cqi, 1.375rem);
   line-height: 1.4;

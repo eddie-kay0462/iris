@@ -1,5 +1,6 @@
 "use client";
 
+import { paymentMethodLabel } from "@/lib/payment-methods";
 import { use, useMemo, useRef, useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, Mail, Phone, Calendar, MapPin, Tag, ShoppingBag, Store, Camera, DoorOpen } from "lucide-react";
@@ -150,7 +151,7 @@ function InPersonOrderList({
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-slate-500">
               <span>GH₵{Number(order.total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              {order.payment_method && <span className="capitalize">{order.payment_method.replace("_", " ")}</span>}
+              {order.payment_method && <span>{paymentMethodLabel(order.payment_method)}</span>}
               {eventName && (
                 <span className="flex items-center gap-1">
                   <Store className="h-3 w-3" /> {eventName}

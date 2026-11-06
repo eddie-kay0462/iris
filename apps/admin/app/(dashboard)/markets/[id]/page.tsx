@@ -1,5 +1,6 @@
 'use client'
 
+import { paymentMethodLabel } from '@/lib/payment-methods'
 import { use, useEffect, useState } from 'react'
 import { Pagination } from "../../../components/Pagination";
 import Link from 'next/link'
@@ -217,7 +218,7 @@ export default function AllyDetailPage({ params }: { params: Promise<{ id: strin
                       <tr key={s.id} className="border-b border-slate-50">
                         <td className="px-5 py-3 font-medium text-slate-900">{s.order_number}</td>
                         <td className="px-5 py-3 text-slate-500">{new Date(s.sale_date).toLocaleDateString()}</td>
-                        <td className="px-5 py-3 capitalize text-slate-600">{s.payment_method.replace('_', ' ')}</td>
+                        <td className="px-5 py-3 text-slate-600">{paymentMethodLabel(s.payment_method)}</td>
                         <td className="px-5 py-3 text-right tabular-nums text-slate-900">{money(Number(s.total))}</td>
                         <td className="px-5 py-3 text-right tabular-nums text-slate-600">{money(Number(s.commission_amount))}</td>
                         <td className="px-5 py-3">

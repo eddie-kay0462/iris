@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { ChevronDown } from "lucide-react";
 import { useUpdateOrderStatus, type Order } from "@/lib/api/orders";
 import {
   useUpdateWalkinOrder,
@@ -67,7 +68,7 @@ const WIDEST_STATUS_LABEL = [
   ...Object.values(PREORDER_STATUS_LABELS),
 ].reduce((widest, label) => (label.length > widest.length ? label : widest), "");
 
-/** Room for the widest label plus the horizontal padding and the native arrow. */
+/** Room for the widest label plus the horizontal padding and the chevron. */
 const STATUS_SELECT_MIN_WIDTH = `calc(${WIDEST_STATUS_LABEL.length}ch + 2.5rem)`;
 
 export function StatusSelect({
@@ -102,25 +103,40 @@ export function StatusSelect({
     }
   }
 
+  // The pill (tone colours, rounded ends, focus ring) is the wrapper; the select
+  // inside is transparent with its native arrow hidden, and a chevron sits
+  // inset from the rounded end. The native arrow otherwise sat flush against
+  // the curve, clipped and off-centre.
   return (
-    <select
-      value={value}
-      onChange={handleChange}
-      // DataTable rows are clickable, so the select must not bubble.
-      onClick={(e) => e.stopPropagation()}
-      disabled={pending || options.length === 0}
-      style={{ minWidth: STATUS_SELECT_MIN_WIDTH }}
-      className={`cursor-pointer rounded-full border-0 px-3 py-1 text-xs font-medium outline-none pointer-coarse:py-2 focus:ring-2 focus:ring-[var(--iris-line)] disabled:opacity-50 ${TONE_CLASSES[statusStyle(value).tone]}`}
+    <span
+      className={`relative inline-flex items-center rounded-full text-xs font-medium focus-within:ring-2 focus-within:ring-[var(--iris-line)] ${
+        pending || options.length === 0 ? "opacity-50" : ""
+      } ${TONE_CLASSES[statusStyle(value).tone]}`}
     >
-      {!isSettable && (
-        <option value={value}>{valueLabel ?? titleCase(value)}</option>
-      )}
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
+      <select
+        value={value}
+        onChange={handleChange}
+        // DataTable rows are clickable, so the select must not bubble.
+        onClick={(e) => e.stopPropagation()}
+        disabled={pending || options.length === 0}
+        style={{ minWidth: STATUS_SELECT_MIN_WIDTH }}
+        className="cursor-pointer appearance-none rounded-full border-0 bg-transparent py-1 pl-3 pr-7 text-inherit outline-none pointer-coarse:py-2 disabled:cursor-not-allowed"
+      >
+        {!isSettable && (
+          <option value={value}>{valueLabel ?? titleCase(value)}</option>
+        )}
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        aria-hidden
+        className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 opacity-70"
+        strokeWidth={2}
+      />
+    </span>
   );
 }
 

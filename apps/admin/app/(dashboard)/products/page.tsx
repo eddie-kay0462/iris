@@ -236,30 +236,32 @@ export default function AdminProductsPage() {
       </header>
 
       {/* Inventory stat cards */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 iris-stat-grid">
-        {statsLoading ? (
-          Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-20 animate-pulse rounded-lg bg-slate-100" />
-          ))
-        ) : (
-          <>
-            <StatsCard label="Total SKUs" value={stats?.totalSkus ?? 0} />
-            <StatsCard
-              label="Low Stock"
-              value={stats?.lowStock ?? 0}
-              color="text-yellow-600"
-            />
-            <StatsCard
-              label="Out of Stock"
-              value={stats?.outOfStock ?? 0}
-              color="text-red-600"
-            />
-            <StatsCard
-              label="Total Value"
-              value={`GH₵${(stats?.totalValue ?? 0).toLocaleString()}`}
-            />
-          </>
-        )}
+      <div className="iris-stat-grid-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4 iris-stat-grid">
+          {statsLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-20 animate-pulse rounded-lg bg-slate-100" />
+            ))
+          ) : (
+            <>
+              <StatsCard label="Total SKUs" value={stats?.totalSkus ?? 0} />
+              <StatsCard
+                label="Low Stock"
+                value={stats?.lowStock ?? 0}
+                color="text-yellow-600"
+              />
+              <StatsCard
+                label="Out of Stock"
+                value={stats?.outOfStock ?? 0}
+                color="text-red-600"
+              />
+              <StatsCard
+                label="Total Value"
+                value={`GH₵${(stats?.totalValue ?? 0).toLocaleString()}`}
+              />
+            </>
+          )}
+        </div>
       </div>
 
       <InfoBanner storageKey="products">

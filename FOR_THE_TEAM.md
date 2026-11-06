@@ -6525,3 +6525,82 @@ On the shop, the cart drawer and the cart page now show a small nudge above the 
 1. In **Settings → Promos**, create a **Volume discount (item count)** set to apply on its own, with two levels (e.g. 2 items → 10%, 4 items → 20%).
 2. On the shop, add one item to the cart. You should see "Add 1 more item to save 10%".
 3. Add another item, then go to checkout and check the 10% comes off.
+
+---
+
+## Classic IRIS retired: the new design is now the only admin look (November 2026)
+
+The admin used to have two looks: the original "classic" IRIS and the new IRIS design, with a switch between them and a pop-up after every sign-in asking which one you wanted. Classic is now gone. Everyone gets the new IRIS, and there's nothing to choose.
+
+Why: keeping two designs meant every change to the admin had to be built and checked twice. With one design, fixes and new features land faster and look the same for everyone.
+
+What's still there: the **light / dark / match my system** theme. It's on the sun/moon button in the header and under **Account settings → Appearance**. It now works for everyone, since it used to be a new-IRIS-only option. Nothing about your data, permissions or how pages work has changed. Only the old look and the switch were removed.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/admin/app/components/Header.tsx`, `Sidebar.tsx`, `NewIrisModal.tsx` | Deleted. The classic header and sidebar, and the "try the new IRIS?" pop-up after sign-in. |
+| `apps/admin/app/components/AdminShell.tsx`, `nav.ts` | The page frame always uses the new IRIS layout; the classic page list is gone. |
+| `apps/admin/lib/ui/mode.ts`, `UiModeContext.tsx`, `apps/admin/app/layout.tsx` | No longer remember a "classic or new" choice. Only the light/dark/system theme is saved. |
+| `apps/admin/app/globals.css` | The new look's colours and shapes now apply everywhere, instead of only when the new design was switched on. |
+| `apps/admin/app/(auth)/login/page.tsx` | Always the new login page, and no more interface pop-up after signing in. |
+| `apps/admin/app/(dashboard)/account/page.tsx`, `apps/admin/app/components/v2/HeaderV2.tsx` | Removed the Classic / New IRIS choice and the "Switch to classic IRIS" menu item. The theme buttons are always available. |
+| `apps/admin/app/(dashboard)/page.tsx`, `orders/page.tsx`, `products/page.tsx`, `customers/page.tsx`, `b2b/components/B2bStatusBadge.tsx` | Old classic layouts removed from the dashboard, Orders, Products and Customers pages and the B2B status badge. Each keeps only its new-IRIS version. |
+| `apps/admin/app/components/DataTable.tsx`, `Pagination.tsx`, `StatsCard.tsx`, `StatusBadge.tsx`, `StatusSelects.tsx`, `DeltaBadge.tsx`, `SearchInput.tsx`, `ThemedToaster.tsx`, `charts/ChartCard.tsx`, `charts/ComparisonLineChart.tsx`, `apps/admin/lib/charts/theme.ts` | Shared building blocks (tables, page numbers, cards, status pills, search, pop-up messages, charts) lose their classic versions. |
+| `apps/admin/app/components/v2/AdminShellV2.tsx`, `Modal.tsx`, `useNotifications.ts`, `useShellPrefs.ts` | Comment wording only, since there's no longer a "new" one to tell apart. |
+
+> **Heads-up:** nothing needs running. There's no database change and no new setting. If you were on classic, the admin will simply open in the new IRIS the next time you load it. If a page looks broken right after the update, do a hard refresh (⌘⇧R).
+
+### How to test
+
+1. Sign out and back in. There should be no pop-up asking which interface to use.
+2. Open the dashboard, Orders, Products and Customers. Each should look like the new IRIS.
+3. Open your profile menu (your photo, top right). There should be no "Switch to classic IRIS" item.
+4. Go to **Account settings → Appearance** and try Light, Dark and Match my system. There should be no Interface section.
+
+### Worth knowing
+
+- This was checked with a full build and a code check, not yet clicked through in a browser by a person, so please flag anything that looks off.
+- The accept-invite page (the one new staff land on from their invite email) still uses the old login photo. It was left as is on purpose and can be restyled separately.
+
+---
+
+## Walk-in sales tidy-up: clearer payments, status pills and sale details (November 2026)
+
+A batch of small fixes, mostly on the **Walk-in Sales** page, that make the admin read more cleanly. Most of these came from the AFH copy of IRIS, which found the same problems in code it inherited from us. Each fix was rebuilt for IRIS rather than copied over.
+
+- **Payment methods read properly everywhere.** You'll see "Bank Transfer" and "MoMo" instead of "Bank_transfer" and "Momo". This covers walk-ins, a customer's page, the activity log, market details and pop-up sales. The pop-up sales detail used to say "Cash" for any payment that wasn't MoMo or a bank transfer. That's fixed too.
+- **Status pills have a proper arrow.** The little dropdown arrow on the coloured status pills (Orders, Walk-ins, Pre-orders) used to be squashed against the pill's rounded edge. It now sits neatly inside.
+- **The walk-in list fits better.** Order numbers and dates no longer break across several lines. Items say "1 item" or "3 items" instead of "item(s)". On smaller screens the less important columns (Items, then Payment, then Date) tuck away.
+- **Stat cards line up.** The rows of four summary cards on Walk-ins, Orders, Products and Customers now show 4 across, then 2, then 1 as space shrinks. Before, they could drop to an awkward 3 + 1 when the sidebar and notification panel were both open.
+- **The New Walk-in Sale window behaves better on phones.** The close X stays next to the title, and the pre-order tick box moves to its own line. Before you search, the product area now says "Search by product name to add items." The page behind the window no longer scrolls while it's open.
+- **A proper walk-in sale view.** Clicking a walk-in sale opens a cleaner details window. It shows the date and time, sizes, payment reference, any discount, who served the customer, and notes, with the refund button at the bottom. It works in dark mode and closes with Esc. On the main **Orders** list, clicking a walk-in row now opens this same window right there. Before, it just dumped you on the walk-in list to find the sale again.
+
+### Files changed
+
+| File | What changed |
+| --- | --- |
+| `apps/admin/lib/payment-methods.ts` | New. Turns stored payment methods into readable names (Cash, MoMo, Bank Transfer). |
+| `apps/admin/app/components/WalkinOrderModal.tsx` | New. The walk-in sale details window, used on both the Walk-in Sales page and the Orders list. |
+| `apps/admin/app/(dashboard)/walkin-sales/page.tsx` | Tidier table, readable payment names, the New Walk-in Sale window fixes, and uses the new details window. |
+| `apps/admin/app/(dashboard)/orders/page.tsx` | Walk-in rows open the details window in place; stat cards use the new 4 → 2 → 1 layout. |
+| `apps/admin/app/components/StatusSelects.tsx` | The status pill dropdown with its arrow set inside the pill. |
+| `apps/admin/app/globals.css` | The new layout rule for rows of four stat cards. |
+| `apps/admin/app/(dashboard)/products/page.tsx`, `customers/page.tsx` | Stat cards use the new 4 → 2 → 1 layout. |
+| `apps/admin/app/(dashboard)/customers/[id]/page.tsx`, `activity/page.tsx`, `markets/[id]/page.tsx`, `popup-sales/page.tsx` | Readable payment method names. |
+| `apps/admin/lib/api/walkin-sales.ts` | A refund now also refreshes an open sale's details window. |
+
+> **Heads-up:** nothing needs running. There's no database change and no new setting. Seven other pages with rows of four stat cards (B2B, Markets, Payments, Pop-up Sales and a few more) still use the old layout. Moving each one over is a one-line change if it bothers anyone.
+
+### How to test
+
+1. Open **Walk-in Sales**. Payment should read "Bank Transfer" or "MoMo", and items should say "1 item" or "N items". Narrow the window and watch Items, then Payment, then Date tuck away.
+2. Click a walk-in sale. The details window should show the date, sizes and payment details. Press Esc to close it.
+3. Go to **Orders**, find a row marked Walk-in and click it. The same window should open without leaving the page.
+4. Change a status from its coloured pill on Orders. The arrow should sit inside the pill, in both light and dark mode.
+5. On your phone, tap **New Walk-in Sale**. The X should be next to the title, with the pre-order tick box on the line below.
+
+### Worth knowing
+
+- These were checked with a code check and a full build, but haven't been clicked through in a browser yet, so please flag anything that looks off.

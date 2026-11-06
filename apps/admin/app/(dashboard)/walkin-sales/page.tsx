@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -17,10 +18,11 @@ import {
   Package,
 } from "lucide-react";
 import { apiClient, isNetworkError } from "@/lib/api/client";
+import { paymentMethodLabel } from "@/lib/payment-methods";
 import PhoneInput from "@/app/components/PhoneInput";
 import { DataTable, type Column } from "@/app/components/DataTable";
+import { WalkinOrderModal } from "@/app/components/WalkinOrderModal";
 import { StatsCard } from "@/app/components/StatsCard";
-import { StatusBadge } from "@/app/components/StatusBadge";
 import { SearchInput } from "@/app/components/SearchInput";
 import { Pagination } from "@/app/components/Pagination";
 import DiscountPanel, { type DiscountPanelState } from "@/app/components/DiscountPanel";
@@ -29,7 +31,6 @@ import {
   useWalkinStats,
   useCreateWalkinOrder,
   useCreateWalkinPreorder,
-  useRefundWalkinOrder,
   useCreateWalkinCustomer,
   useChargeWalkinOrder,
   useSubmitWalkinOtp,
@@ -180,7 +181,7 @@ export default function WalkinSalesPage() {
       key: "order_number",
       header: "Order #",
       render: (o) => (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 whitespace-nowrap">
           <span className="font-medium">{o.order_number}</span>
           {o._kind === "preorder" && (
             <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
@@ -194,7 +195,7 @@ export default function WalkinSalesPage() {
       key: "customer",
       header: "Customer",
       render: (o) => (
-        <div>
+        <div className="whitespace-nowrap">
           <div>{o.customer_name || "Walk-in customer"}</div>
           <div className="text-xs text-slate-500">{o.customer_phone || o.customer_email || "—"}</div>
         </div>
@@ -203,15 +204,22 @@ export default function WalkinSalesPage() {
     {
       key: "items",
       header: "Items",
-      render: (o) =>
-        o._kind === "preorder"
-          ? `${o.item_count} item(s)`
-          : `${(o.walkin_order_items || []).reduce((s, i) => s + i.quantity, 0)} item(s)`,
+      hideBelow: "lg",
+      render: (o) => {
+        const n =
+          o._kind === "preorder"
+            ? o.item_count
+            : (o.walkin_order_items || []).reduce((s, i) => s + i.quantity, 0);
+        return <span className="whitespace-nowrap">{n === 1 ? "1 item" : `${n} items`}</span>;
+      },
     },
     {
       key: "payment",
       header: "Payment",
-      render: (o) => (o._kind === "preorder" ? "—" : <span className="capitalize">{o.payment_method || "—"}</span>),
+      hideBelow: "md",
+      render: (o) => (
+        <span className="whitespace-nowrap">{o._kind === "preorder" ? "—" : paymentMethodLabel(o.payment_method)}</span>
+      ),
     },
     {
       key: "status",
@@ -238,11 +246,16 @@ export default function WalkinSalesPage() {
           </div>
         ),
     },
-    { key: "total", header: "Total", render: (o) => GHS(o.total) },
+    { key: "total", header: "Total", render: (o) => <span className="whitespace-nowrap tabular-nums">{GHS(o.total)}</span> },
     {
       key: "date",
       header: "Date",
-      render: (o) => new Date(o.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+      hideBelow: "sm",
+      render: (o) => (
+        <span className="whitespace-nowrap">
+          {new Date(o.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+        </span>
+      ),
     },
   ];
 
@@ -265,11 +278,13 @@ export default function WalkinSalesPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 iris-stat-grid">
-        <StatsCard label="Today's Revenue" value={GHS(stats?.today_revenue ?? 0)} icon={Wallet} color="text-green-700" />
-        <StatsCard label="Orders Today" value={stats?.orders_today ?? 0} icon={ShoppingBag} />
-        <StatsCard label="Total Revenue" value={GHS(stats?.total_revenue ?? 0)} icon={Wallet} />
-        <StatsCard label="Orders Completed" value={stats?.orders_completed ?? 0} icon={Package} />
+      <div className="iris-stat-grid-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4 iris-stat-grid">
+          <StatsCard label="Today's Revenue" value={GHS(stats?.today_revenue ?? 0)} icon={Wallet} color="text-green-700" />
+          <StatsCard label="Orders Today" value={stats?.orders_today ?? 0} icon={ShoppingBag} />
+          <StatsCard label="Total Revenue" value={GHS(stats?.total_revenue ?? 0)} icon={Wallet} />
+          <StatsCard label="Orders Completed" value={stats?.orders_completed ?? 0} icon={Package} />
+        </div>
       </div>
 
       {/* Filters */}
@@ -301,7 +316,7 @@ export default function WalkinSalesPage() {
       <Pagination page={page} totalPages={data?.totalPages ?? 1} onPageChange={setPage} />
 
       {showModal && <NewWalkinModal onClose={() => setShowModal(false)} />}
-      {detailOrder && <OrderDetailModal order={detailOrder} onClose={() => setDetailOrder(null)} />}
+      <WalkinOrderModal orderId={detailOrder?.id ?? null} initial={detailOrder} onClose={() => setDetailOrder(null)} />
     </div>
   );
 }
@@ -620,7 +635,19 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
 
   const submitting = createOrder.isPending || createPreorder.isPending;
 
-  return (
+  // Lock the page behind the modal so a scroll inside it can't move the list.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  // Portalled to <body> so the scrim always covers the whole viewport, whatever
+  // the page's own wrappers do (a transformed ancestor would otherwise become
+  // the containing block for `position: fixed` and clip it to the content area).
+  return createPortal(
     <>
     {chargeOrder && (
       <WalkinMoMoChargeModal
@@ -632,15 +659,15 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
       <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-xl sm:max-h-[92dvh]">
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
-          <h2 className="text-lg font-semibold text-slate-900">New Walk-in Sale</h2>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <input type="checkbox" checked={isPreorderMode} onChange={(e) => setIsPreorderMode(e.target.checked)} />
-              Pre-order (out of stock)
-            </label>
-            <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-slate-400 hover:bg-slate-100 pointer-coarse:p-2"><X className="h-5 w-5" /></button>
-          </div>
+        {/* Title and close share the first row at every width; on phones the
+            pre-order toggle drops to its own row underneath. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
+          <h2 className="min-w-0 flex-1 text-lg font-semibold text-slate-900">New Walk-in Sale</h2>
+          <label className="flex items-center gap-2 text-sm text-slate-600 max-sm:order-last max-sm:basis-full">
+            <input type="checkbox" checked={isPreorderMode} onChange={(e) => setIsPreorderMode(e.target.checked)} />
+            Pre-order (out of stock)
+          </label>
+          <button onClick={onClose} aria-label="Close" className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 pointer-coarse:p-2"><X className="h-5 w-5" /></button>
         </div>
 
         <div className="grid flex-1 grid-cols-1 gap-0 overflow-y-auto md:grid-cols-5 md:overflow-hidden">
@@ -657,6 +684,9 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
             </div>
 
             <div className="mt-3 space-y-2">
+              {!productSearch && (
+                <p className="text-sm text-slate-400">Search by product name to add items.</p>
+              )}
               {searching && <p className="text-sm text-slate-400">Searching...</p>}
               {!searching && productSearch && results.length === 0 && (
                 <p className="text-sm text-slate-400">No products found.</p>
@@ -815,8 +845,8 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
               <h3 className="mb-2 text-sm font-semibold text-slate-700">Payment</h3>
               <div className="mb-2 flex gap-1">
                 {(["cash", "momo", "bank_transfer"] as WalkinPaymentMethod[]).map((m) => (
-                  <button key={m} onClick={() => setPaymentMethod(m)} className={`flex-1 rounded-md px-2 py-1.5 text-sm capitalize ${paymentMethod === m ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
-                    {m === "bank_transfer" ? "Bank" : m}
+                  <button key={m} onClick={() => setPaymentMethod(m)} className={`flex-1 whitespace-nowrap rounded-md px-2 py-1.5 text-sm ${paymentMethod === m ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+                    {paymentMethodLabel(m)}
                   </button>
                 ))}
               </div>
@@ -858,7 +888,8 @@ function NewWalkinModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
-    </>
+    </>,
+    document.body,
   );
 }
 
@@ -987,54 +1018,6 @@ function WalkinMoMoChargeModal({
             </form>
           )}
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Order Detail Modal ────────────────────────────────────────────────────────
-
-function OrderDetailModal({ order, onClose }: { order: WalkinOrder; onClose: () => void }) {
-  const refund = useRefundWalkinOrder();
-
-  async function handleRefund() {
-    if (!confirm(`Refund ${order.order_number} in full and restore stock?`)) return;
-    try {
-      await refund.mutateAsync({ id: order.id, dto: {} });
-      toast.success("Order refunded and stock restored.");
-      onClose();
-    } catch (e: any) {
-      toast.error(e.message || "Failed to refund.");
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{order.order_number}</h2>
-          <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-slate-400 hover:bg-slate-100 pointer-coarse:p-2"><X className="h-5 w-5" /></button>
-        </div>
-        <div className="mb-3 space-y-1 text-sm">
-          <div className="flex justify-between"><span className="text-slate-500">Customer</span><span>{order.customer_name || "Walk-in"}</span></div>
-          <div className="flex justify-between"><span className="text-slate-500">Contact</span><span>{order.customer_phone || order.customer_email || "—"}</span></div>
-          <div className="flex justify-between"><span className="text-slate-500">Payment</span><span className="capitalize">{order.payment_method || "—"}</span></div>
-          <div className="flex justify-between"><span className="text-slate-500">Status</span><StatusBadge status={order.status} /></div>
-        </div>
-        <div className="mb-3 rounded-md border border-slate-200">
-          {(order.walkin_order_items || []).map((i) => (
-            <div key={i.id} className="flex justify-between border-b border-slate-100 px-3 py-2 text-sm last:border-0">
-              <span>{i.product_name} <span className="text-slate-400">×{i.quantity}</span></span>
-              <span>{GHS(i.total_price)}</span>
-            </div>
-          ))}
-        </div>
-        <div className="mb-4 flex justify-between text-base font-semibold"><span>Total</span><span>{GHS(order.total)}</span></div>
-        {order.status === "completed" && (
-          <button onClick={handleRefund} disabled={refund.isPending} className="w-full rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50">
-            {refund.isPending ? "Processing..." : "Refund & Restore Stock"}
-          </button>
-        )}
       </div>
     </div>
   );

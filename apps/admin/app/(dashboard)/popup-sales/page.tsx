@@ -1,5 +1,6 @@
 "use client";
 
+import { paymentMethodLabel } from "@/lib/payment-methods";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Anton } from "next/font/google";
 import {
@@ -900,7 +901,7 @@ function RefundOrderModal({
                 {order.payment_method && (
                   <div className="flex justify-between">
                     <span className="text-slate-500">Payment method</span>
-                    <span className="font-medium capitalize">{order.payment_method === "momo" ? "MoMo" : order.payment_method === "bank_transfer" ? "Bank Transfer" : "Cash"}</span>
+                    <span className="font-medium">{paymentMethodLabel(order.payment_method)}</span>
                   </div>
                 )}
                 {reason.trim() && (
