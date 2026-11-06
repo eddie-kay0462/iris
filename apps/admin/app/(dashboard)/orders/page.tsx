@@ -10,6 +10,7 @@ import { Pagination } from "../../components/Pagination";
 import { StatsCard } from "../../components/StatsCard";
 import { Download, DollarSign, Clock, CreditCard, Package } from "lucide-react";
 import { getToken } from "@/lib/api/client";
+import { WalkinOrderModal } from "../../components/WalkinOrderModal";
 import { InfoBanner, OutlinePill, TabsUnderline } from "../../components/v2/primitives";
 import {
   PreorderStatusBadge,
@@ -34,6 +35,7 @@ export default function AdminOrdersPage() {
   const [status, setStatus] = useState("");
   const [preordersOnly, setPreordersOnly] = useState(false);
   const [page, setPage] = useState(1);
+  const [walkinId, setWalkinId] = useState<string | null>(null);
 
   const { data, isLoading } = useAdminOrders({
     search,
@@ -188,31 +190,33 @@ export default function AdminOrdersPage() {
       </header>
 
       {payStats && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 iris-stat-grid">
-          <StatsCard
-            label="Total Collected"
-            value={fmt(payStats.totalCollected)}
-            icon={DollarSign}
-            helperText="Successfully paid"
-          />
-          <StatsCard
-            label="Pending"
-            value={fmt(payStats.totalPending)}
-            icon={Clock}
-            helperText="Awaiting confirmation"
-          />
-          <StatsCard
-            label="Pre-orders Pending"
-            value={fmt(payStats.preordersPending)}
-            icon={Package}
-            helperText="Awaiting fulfillment"
-          />
-          <StatsCard
-            label="Transactions"
-            value={String(payStats.transactionCount)}
-            icon={CreditCard}
-            helperText="Total payment attempts"
-          />
+        <div className="iris-stat-grid-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 iris-stat-grid">
+            <StatsCard
+              label="Total Collected"
+              value={fmt(payStats.totalCollected)}
+              icon={DollarSign}
+              helperText="Successfully paid"
+            />
+            <StatsCard
+              label="Pending"
+              value={fmt(payStats.totalPending)}
+              icon={Clock}
+              helperText="Awaiting confirmation"
+            />
+            <StatsCard
+              label="Pre-orders Pending"
+              value={fmt(payStats.preordersPending)}
+              icon={Package}
+              helperText="Awaiting fulfillment"
+            />
+            <StatsCard
+              label="Transactions"
+              value={String(payStats.transactionCount)}
+              icon={CreditCard}
+              helperText="Total payment attempts"
+            />
+          </div>
         </div>
       )}
 
@@ -239,10 +243,13 @@ export default function AdminOrdersPage() {
         rows={data?.data || []}
         loading={isLoading}
         emptyMessage="No orders found."
+        // Walk-in sales open in place; they have no /orders/:id page.
         onRowClick={(row) =>
-          router.push(row.is_walkin ? `/walkin-sales` : `/orders/${row.id}`)
+          row.is_walkin ? setWalkinId(row.id) : router.push(`/orders/${row.id}`)
         }
       />
+
+      <WalkinOrderModal orderId={walkinId} onClose={() => setWalkinId(null)} />
 
       {data && (
         <Pagination

@@ -8,6 +8,7 @@ import { apiClient } from "./client";
 function invalidateWalkinViews(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["walkin-orders"] });
   qc.invalidateQueries({ queryKey: ["walkin-stats"] });
+  qc.invalidateQueries({ queryKey: ["walkin-order"] });
   qc.invalidateQueries({ queryKey: ["admin-orders"] });
   qc.invalidateQueries({ queryKey: ["admin-order"] });
   qc.invalidateQueries({ queryKey: ["payment-stats"] });

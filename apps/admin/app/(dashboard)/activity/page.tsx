@@ -1,5 +1,6 @@
 'use client'
 
+import { paymentMethodLabel } from '@/lib/payment-methods'
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, Activity, ShoppingBag, MessageSquare, Shield, ChevronDown, ChevronUp } from 'lucide-react'
 import {
@@ -138,7 +139,7 @@ function SaleRow({ entry }: { entry: SaleEntry }) {
           <span>Customer <span className="font-medium text-slate-700">{entry.customer_name || 'Walk-in'}</span></span>
           <span>Total <span className="font-semibold text-slate-800">{fmt(entry.total)}</span></span>
           <span>Commission <span className="font-semibold text-emerald-700">{fmt(entry.commission_amount)}</span></span>
-          <span className="capitalize">{entry.payment_method.replace('_', ' ')}</span>
+          <span>{paymentMethodLabel(entry.payment_method)}</span>
         </div>
         <p className="text-[10px] text-slate-400 mt-1 sm:hidden">{fmtDate(entry.sale_date)} · {timeAgo(entry.sale_date)}</p>
       </div>

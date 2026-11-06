@@ -110,36 +110,38 @@ export default function AdminCustomersPage() {
       </header>
 
       {/* Stats cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 iris-stat-grid">
-        <StatsCard
-          label="Total Customers"
-          value={String(stats?.totalCustomers ?? "—")}
-          icon={Users}
-        />
-        <StatsCard
-          label="New This Month"
-          value={String(stats?.newThisMonth ?? "—")}
-          icon={UserPlus}
-        />
-        <StatsCard
-          label="Avg Order Value"
-          value={
-            stats
-              ? `GH₵${stats.avgOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-              : "—"
-          }
-          icon={ShoppingCart}
-        />
-        <StatsCard
-          label="Top Spender"
-          value={stats?.topSpender?.name ?? "—"}
-          icon={Crown}
-          helperText={
-            stats?.topSpender
-              ? `GH₵${stats.topSpender.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-              : undefined
-          }
-        />
+      <div className="iris-stat-grid-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 iris-stat-grid">
+          <StatsCard
+            label="Total Customers"
+            value={String(stats?.totalCustomers ?? "—")}
+            icon={Users}
+          />
+          <StatsCard
+            label="New This Month"
+            value={String(stats?.newThisMonth ?? "—")}
+            icon={UserPlus}
+          />
+          <StatsCard
+            label="Avg Order Value"
+            value={
+              stats
+                ? `GH₵${stats.avgOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                : "—"
+            }
+            icon={ShoppingCart}
+          />
+          <StatsCard
+            label="Top Spender"
+            value={stats?.topSpender?.name ?? "—"}
+            icon={Crown}
+            helperText={
+              stats?.topSpender
+                ? `GH₵${stats.topSpender.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                : undefined
+            }
+          />
+        </div>
       </div>
 
       {/* Search */}
