@@ -14,7 +14,6 @@ import {
   Search,
   Star,
   Sun,
-  Undo2,
   UserCog,
 } from "lucide-react";
 import { Avatar } from "../Avatar";
@@ -163,7 +162,6 @@ function AccountMenu({
   loggingOut,
   onLogout,
 }: HeaderV2Props) {
-  const { setUi } = useUiMode();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -212,10 +210,6 @@ function AccountMenu({
           <MenuItem onClick={() => fileRef.current?.click()} disabled={avatarUploading}>
             <Camera className="h-4 w-4" />
             {avatarUploading ? "Uploading…" : "Change photo"}
-          </MenuItem>
-          <MenuItem onClick={() => setUi("classic")}>
-            <Undo2 className="h-4 w-4" />
-            Switch to classic IRIS
           </MenuItem>
           <MenuItem onClick={onLogout} disabled={loggingOut}>
             <LogOut className="h-4 w-4" />

@@ -12,7 +12,6 @@ import {
   YAxis,
 } from "recharts";
 import { useId } from "react";
-import { useIsNewUi } from "@/lib/ui/UiModeContext";
 import { useChartTheme, formatDateLabel, formatMetric, formatMetricShort, MetricFormat } from "@/lib/charts/theme";
 
 /**
@@ -50,7 +49,7 @@ export function ComparisonLineChart({
   showBrush?: boolean;
   color?: string;
   /**
-   * New IRIS only: the Figma kit's revenue-chart accent. A soft ink haze sits
+   * The Figma kit's revenue-chart accent. A soft ink haze sits
    * under the line (radial, strongest around the upper middle, fading toward
    * the edges and baseline) and the line fades in from the left. Meant for a
    * page's headline revenue chart.
@@ -58,7 +57,6 @@ export function ComparisonLineChart({
   glow?: boolean;
 }) {
   const chart = useChartTheme();
-  const isNew = useIsNewUi();
   const lineColor = color ?? chart.primary;
   // Unique per chart so several on one page don't share gradient defs.
   const uid = useId().replace(/:/g, "");
@@ -75,7 +73,6 @@ export function ComparisonLineChart({
     rows.flatMap((r) => [r.current, r.previous ?? 0]),
     format,
   );
-  const kitGlow = glow && isNew;
   // A gradient stroke on a perfectly flat line has a zero-height bounding box
   // and wouldn't paint, so flat series keep the solid colour.
   const flat = rows.every((r) => r.current === rows[0]?.current);
@@ -100,7 +97,7 @@ export function ComparisonLineChart({
               <stop offset="0%" stopColor={chart.areaTop} />
               <stop offset="100%" stopColor={chart.areaBottom} />
             </linearGradient>
-            {kitGlow && (
+            {glow && (
               <>
                 {/* Figma node 43:1497: ink at 0.6 under a radial 0.08 → 0 mask,
                     centred a quarter of the way down the plot. */}
@@ -165,9 +162,9 @@ export function ComparisonLineChart({
           <Area
             type="monotone"
             dataKey="current"
-            stroke={kitGlow && !flat ? `url(#${lineGradId})` : lineColor}
+            stroke={glow && !flat ? `url(#${lineGradId})` : lineColor}
             strokeWidth={2}
-            fill={kitGlow ? `url(#${glowId})` : "url(#inkArea)"}
+            fill={glow ? `url(#${glowId})` : "url(#inkArea)"}
             dot={false}
             activeDot={{ r: 3, fill: lineColor }}
             isAnimationActive={false}

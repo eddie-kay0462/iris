@@ -28,33 +28,13 @@ export type NavItem = {
   label: string;
   icon: LucideIcon;
   permission?: Permission;
-  /** Nested pages, shown under a chevron in the new IRIS sidebar. */
+  /** Nested pages, shown under a chevron in the sidebar. */
   children?: NavItem[];
 };
 
-/** Classic sidebar: one flat list. */
-export const navItems: NavItem[] = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/products", label: "Products", icon: Package, permission: "products:read" },
-  { href: "/orders", label: "Orders", icon: ShoppingCart, permission: "orders:read" },
-  { href: "/orders/abandoned", label: "Abandoned Checkouts", icon: ShoppingBasket, permission: "analytics:read" },
-  { href: "/popup-sales", label: "Pop-up Sales", icon: ShoppingBag, permission: "popup:read" },
-  { href: "/walkin-sales", label: "Walk-in Sales", icon: DoorOpen, permission: "orders:read" },
-  { href: "/b2b", label: "B2B", icon: Briefcase, permission: "b2b:read" },
-  { href: "/customers", label: "Customers", icon: Users, permission: "customers:read" },
-  { href: "/markets", label: "Markets", icon: Store, permission: "markets:read" },
-  { href: "/reviews", label: "Reviews", icon: Star, permission: "reviews:read" },
-  { href: "/analytics", label: "Analytics", icon: BarChart3, permission: "analytics:read" },
-  { href: "/analytics/reports", label: "Reports", icon: FileBarChart, permission: "analytics:read" },
-  { href: "/activity", label: "Activity", icon: Activity, permission: "settings:read" },
-  { href: "/settings", label: "Settings", icon: Settings, permission: "settings:read" },
-  { href: "/settings/general", label: "General", icon: Sliders, permission: "settings:read" },
-  { href: "/settings/communications", label: "Communications", icon: MessageSquare, permission: "settings:read" },
-];
-
 export type NavGroup = { label: string; items: NavItem[] };
 
-/** New IRIS sidebar: the same pages, grouped the way the kit groups them. */
+/** Sidebar navigation, grouped the way the design kit groups it. */
 export const navGroups: NavGroup[] = [
   {
     label: "Overview",
@@ -139,7 +119,7 @@ export function navGroupsForRole(role: UserRole): NavGroup[] {
     .filter((g) => g.items.length > 0);
 }
 
-/** Every page in the new IRIS nav, flattened — for search and breadcrumbs. */
+/** Every page in the nav, flattened — for search and breadcrumbs. */
 export function flattenNav(groups: NavGroup[]): NavItem[] {
   return groups.flatMap((g) => g.items.flatMap((i) => [i, ...(i.children ?? [])]));
 }

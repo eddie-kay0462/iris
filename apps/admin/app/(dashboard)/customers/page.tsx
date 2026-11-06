@@ -9,34 +9,25 @@ import { Pagination } from "../../components/Pagination";
 import { StatsCard } from "../../components/StatsCard";
 import { Avatar } from "../../components/Avatar";
 import { Users, UserPlus, ShoppingCart, Crown } from "lucide-react";
-import { useIsNewUi } from "@/lib/ui/UiModeContext";
 import { TabsUnderline } from "../../components/v2/primitives";
 
 type Segment = "all" | "new" | "returning";
 
-function buildColumns(isNew: boolean): Column<AdminCustomer>[] {
+function buildColumns(): Column<AdminCustomer>[] {
   return [
   {
     key: "name",
     header: "Customer",
     render: (row) => {
       const name = [row.first_name, row.last_name].filter(Boolean).join(" ");
-      if (isNew) {
-        // Kit row: avatar, bold name, grey secondary line.
-        return (
-          <div className="flex items-center gap-3">
-            <Avatar name={name || row.email} size={32} />
-            <div className="min-w-0 max-w-[11rem] sm:max-w-[14rem]">
-              <p className="truncate font-semibold text-slate-900" title={name || undefined}>{name || "—"}</p>
-              <p className="truncate text-[var(--iris-muted)]" title={row.email}>{row.email}</p>
-            </div>
-          </div>
-        );
-      }
+      // Avatar, bold name, grey secondary line.
       return (
-        <div className="max-w-[16rem]">
-          <p className="truncate font-medium text-slate-900" title={name || undefined}>{name || "—"}</p>
-          <p className="truncate text-xs text-slate-500" title={row.email}>{row.email}</p>
+        <div className="flex items-center gap-3">
+          <Avatar name={name || row.email} size={32} />
+          <div className="min-w-0 max-w-[11rem] sm:max-w-[14rem]">
+            <p className="truncate font-semibold text-slate-900" title={name || undefined}>{name || "—"}</p>
+            <p className="truncate text-[var(--iris-muted)]" title={row.email}>{row.email}</p>
+          </div>
         </div>
       );
     },
@@ -64,13 +55,13 @@ function buildColumns(isNew: boolean): Column<AdminCustomer>[] {
   {
     key: "created_at",
     header: "Joined",
-    hideBelow: isNew ? "xl" : "lg",
+    hideBelow: "xl",
     render: (row) => new Date(row.created_at).toLocaleDateString(),
   },
   {
     key: "last_login_at",
     header: "Last Seen",
-    hideBelow: isNew ? "xl" : "lg",
+    hideBelow: "xl",
     render: (row) =>
       row.last_login_at
         ? new Date(row.last_login_at).toLocaleDateString()
@@ -84,8 +75,7 @@ export default function AdminCustomersPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [segment, setSegment] = useState<Segment>("all");
-  const isNew = useIsNewUi();
-  const columns = buildColumns(isNew);
+  const columns = buildColumns();
 
   const segmentFilters =
     segment === "new"
@@ -105,29 +95,19 @@ export default function AdminCustomersPage() {
 
   return (
     <section className="space-y-6">
-      {isNew && (
-        <header className="flex flex-wrap items-end justify-between gap-4">
-          <TabsUnderline
-            tabs={segments.map((s) => ({ value: s.key, label: s.key === "all" ? "All Customers" : s.label }))}
-            value={segment}
-            onChange={(v) => {
-              setSegment(v);
-              setPage(1);
-            }}
-          />
-          <p className="pb-1.5 text-xs text-[var(--iris-muted)]">
-            {data ? `${data.total} registered customer${data.total !== 1 ? "s" : ""}` : ""}
-          </p>
-        </header>
-      )}
-      {!isNew && (
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Customers</h1>
-        <p className="text-sm text-slate-500">
-          {data ? `${data.total} registered customer${data.total !== 1 ? "s" : ""}` : "Manage customer profiles and engagement history."}
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <TabsUnderline
+          tabs={segments.map((s) => ({ value: s.key, label: s.key === "all" ? "All Customers" : s.label }))}
+          value={segment}
+          onChange={(v) => {
+            setSegment(v);
+            setPage(1);
+          }}
+        />
+        <p className="pb-1.5 text-xs text-[var(--iris-muted)]">
+          {data ? `${data.total} registered customer${data.total !== 1 ? "s" : ""}` : ""}
         </p>
       </header>
-      )}
 
       {/* Stats cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 iris-stat-grid">
@@ -162,29 +142,9 @@ export default function AdminCustomersPage() {
         />
       </div>
 
-      {/* Segment filter + search */}
+      {/* Search */}
       <div className="flex flex-wrap items-center gap-3">
-        {!isNew && (
-        <div className="flex rounded-lg border border-slate-200 overflow-hidden">
-          {segments.map((s) => (
-            <button
-              key={s.key}
-              onClick={() => {
-                setSegment(s.key);
-                setPage(1);
-              }}
-              className={`px-3 py-1.5 text-sm transition-colors ${
-                segment === s.key
-                  ? "bg-slate-900 text-white"
-                  : "bg-white text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-        )}
-        <div className={isNew ? "w-full sm:w-80" : "flex-1 min-w-[200px]"}>
+        <div className="w-full sm:w-80">
           <SearchInput
             value={search}
             onChange={(v) => {

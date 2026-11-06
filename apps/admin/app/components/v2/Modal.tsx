@@ -11,7 +11,7 @@ const FOCUSABLE =
   'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 /**
- * Dialog for the new IRIS (ported from the Gold Coast Tokota admin's UiModal):
+ * Dialog for IRIS (ported from the Gold Coast Tokota admin's UiModal):
  * scrim, Esc to close, focus kept inside, background scroll locked, focus
  * returned to whatever opened it. Centred in the viewport at every size,
  * with 16px of breathing room on phones. The body scrolls inside a height

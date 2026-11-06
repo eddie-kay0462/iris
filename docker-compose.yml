@@ -29,6 +29,15 @@ x-api-common: &api-common
     recommender:
       condition: service_started
   networks: [iris]
+  dns: &public-dns
+    # Docker's embedded DNS still answers service names (recommender, etc.) and
+    # forwards everything else here instead of to the host's resolvers.
+    # Contabo's resolvers intermittently fail lookups, which surfaced as
+    # `getaddrinfo EAI_AGAIN <project>.supabase.co` — every cron run and the
+    # occasional Road to HQ 500 died before reaching Supabase or Paystack.
+    - 1.1.1.1
+    - 8.8.8.8
+    - 1.0.0.1
   restart: unless-stopped
   # PID 1 in the container must forward SIGTERM to node, or graceful shutdown
   # never runs and in-flight requests are cut off on every deploy.
@@ -172,6 +181,9 @@ services:
     # ops to reach the proxy; iris because ops is internal and has no route
     # out to api.telegram.org.
     networks: [ops, iris]
+    # Same flaky-host-resolver problem as the API: a failed lookup of
+    # api.telegram.org would drop the very alert reporting the outage.
+    dns: *public-dns
     restart: unless-stopped
     mem_limit: 128m
     logging: *json-logs

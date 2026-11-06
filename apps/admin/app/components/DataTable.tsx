@@ -1,7 +1,5 @@
 "use client";
 
-import { useIsNewUi } from "@/lib/ui/UiModeContext";
-
 /** Breakpoint below which a low-priority column is hidden. */
 export type HideBelow = "sm" | "md" | "lg" | "xl";
 
@@ -36,13 +34,13 @@ interface DataTableProps<T> {
 const hideClass = (c: { hideBelow?: HideBelow }) => (c.hideBelow ? HIDE_BELOW[c.hideBelow] : "");
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function SkeletonRows<T>({ columns, count = 5, isNew }: { columns: Column<T>[]; count?: number; isNew: boolean }) {
+function SkeletonRows<T>({ columns, count = 5 }: { columns: Column<T>[]; count?: number }) {
   return (
     <>
       {Array.from({ length: count }).map((_, i) => (
-        <tr key={i} className={`animate-pulse border-t ${isNew ? "border-[var(--iris-line)]" : "border-slate-200"}`}>
+        <tr key={i} className="animate-pulse border-t border-[var(--iris-line)]">
           {columns.map((c) => (
-            <td key={c.key} className={`${isNew ? "px-4 py-5 sm:px-6" : "px-4 py-3"} ${hideClass(c)}`}>
+            <td key={c.key} className={`px-4 py-5 sm:px-6 ${hideClass(c)}`}>
               <div className="h-4 w-3/4 rounded bg-slate-200" />
             </td>
           ))}
@@ -60,28 +58,20 @@ export function DataTable<T extends Record<string, any>>({
   loading = false,
   onRowClick,
 }: DataTableProps<T>) {
-  const isNew = useIsNewUi();
-  // New IRIS: kit table — card container, no header fill, roomier rows
-  // (a little tighter on phones so more of the row fits).
-  const cell = isNew ? "px-4 py-4 sm:px-6" : "px-4 py-3";
-  const rowLine = isNew ? "border-[var(--iris-line)]" : "border-slate-200";
+  // Kit table: card container, no header fill, roomier rows (a little
+  // tighter on phones so more of the row fits).
+  const cell = "px-4 py-4 sm:px-6";
   return (
-    // Both interfaces scroll sideways when the remaining columns still don't
-    // fit, rather than clipping the right-hand ones out of reach.
-    <div
-      className={
-        isNew
-          ? "overflow-x-auto rounded-2xl border border-[var(--iris-line)] bg-white shadow-sm"
-          : "overflow-x-auto rounded-lg border border-slate-200"
-      }
-    >
+    // Scrolls sideways when the remaining columns still don't fit, rather
+    // than clipping the right-hand ones out of reach.
+    <div className="overflow-x-auto rounded-2xl border border-[var(--iris-line)] bg-white shadow-sm">
       <table className="w-full border-collapse text-sm">
-        <thead className={isNew ? "text-left text-slate-900" : "bg-slate-100 text-left text-slate-600"}>
+        <thead className="text-left text-slate-900">
           <tr>
             {columns.map((column) => (
               <th
                 key={column.key}
-                className={`${isNew ? "whitespace-nowrap px-4 py-5 font-semibold sm:px-6" : "px-4 py-3 font-medium"} ${hideClass(column)}`}
+                className={`whitespace-nowrap px-4 py-5 font-semibold sm:px-6 ${hideClass(column)}`}
               >
                 {column.header}
               </th>
@@ -90,12 +80,12 @@ export function DataTable<T extends Record<string, any>>({
         </thead>
         <tbody>
           {loading ? (
-            <SkeletonRows columns={columns} isNew={isNew} />
+            <SkeletonRows columns={columns} />
           ) : rows.length === 0 ? (
             <tr>
               <td
                 colSpan={columns.length}
-                className={`px-4 py-6 text-center ${isNew ? "border-t border-[var(--iris-line)] text-[var(--iris-muted)]" : "text-slate-500"}`}
+                className="border-t border-[var(--iris-line)] px-4 py-6 text-center text-[var(--iris-muted)]"
               >
                 {emptyMessage}
               </td>
@@ -104,8 +94,8 @@ export function DataTable<T extends Record<string, any>>({
             rows.map((row, index) => (
               <tr
                 key={index}
-                className={`border-t ${rowLine} ${
-                  onRowClick ? `cursor-pointer ${isNew ? "hover:bg-[var(--iris-hover)]" : "hover:bg-slate-50"}` : ""
+                className={`border-t border-[var(--iris-line)] ${
+                  onRowClick ? "cursor-pointer hover:bg-[var(--iris-hover)]" : ""
                 }`}
                 onClick={() => onRowClick?.(row)}
               >

@@ -86,8 +86,7 @@ export default function AccountPage() {
     useAdminProfile();
   const role = useRole();
   const canSeeRoles = useCan("settings:read");
-  const { ui, theme, resolvedTheme, setTheme, setUi } = useUiMode();
-  const isNew = ui === "new";
+  const { theme, resolvedTheme, setTheme } = useUiMode();
 
   // Profile form, filled once the profile loads.
   const [form, setForm] = useState({ first_name: "", last_name: "", phone_number: "" });
@@ -150,7 +149,7 @@ export default function AccountPage() {
   return (
     <section className="space-y-6">
       <header className="space-y-1">
-        <h1 className={isNew ? "text-xl font-semibold text-slate-900" : "text-2xl font-semibold"}>Account</h1>
+        <h1 className="text-xl font-semibold text-slate-900">Account</h1>
         <p className="text-sm text-slate-500">Your profile, preferences and session.</p>
       </header>
 
@@ -231,11 +230,7 @@ export default function AccountPage() {
         {/* Appearance */}
         <Section
           title="Appearance"
-          description={
-            isNew
-              ? `Currently rendering in ${resolvedTheme} mode.`
-              : "Light and dark mode are part of the new IRIS."
-          }
+          description={`Currently rendering in ${resolvedTheme} mode.`}
         >
           <p className="mb-2 text-xs font-medium text-slate-600">Theme</p>
           <div className="flex flex-wrap gap-2">
@@ -243,9 +238,8 @@ export default function AccountPage() {
               <button
                 key={o.value}
                 type="button"
-                disabled={!isNew}
                 onClick={() => setTheme(o.value)}
-                className={choiceClass(isNew && theme === o.value)}
+                className={choiceClass(theme === o.value)}
               >
                 {o.label}
               </button>
@@ -255,17 +249,6 @@ export default function AccountPage() {
             “Match my system” follows your operating system live, so the dashboard dims when your
             machine does.
           </p>
-
-          <p className="mb-2 mt-5 text-xs font-medium text-slate-600">Interface</p>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => setUi("new")} className={choiceClass(isNew)}>
-              New IRIS
-            </button>
-            <button type="button" onClick={() => setUi("classic")} className={choiceClass(!isNew)}>
-              Classic
-            </button>
-          </div>
-          <p className="mt-3 text-xs text-slate-500">Switching reloads the page. Same data either way.</p>
         </Section>
 
         {/* Session */}
