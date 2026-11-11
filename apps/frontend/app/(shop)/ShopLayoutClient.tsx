@@ -11,10 +11,10 @@ import { hasToken } from "@/lib/api/client";
 import { useProfile } from "@/lib/api/profile";
 import { useFavourites } from "@/lib/favourites";
 import { FavouritesDrawerProvider, useFavouritesDrawer } from "@/lib/favourites-drawer";
-import { LocaleProvider, useLocale } from "@/lib/locale/locale-provider";
+import { LocaleProvider, useLocale, CURRENCIES } from "@/lib/locale/locale-provider";
 import { useAnnouncementBanner, type AnnouncementBanner } from "@/lib/api/settings";
 import AnalyticsBeacon from "@/components/AnalyticsBeacon";
-import StorefrontSidebar, { currencyShortLabel } from "./components/StorefrontSidebar";
+import NavDrawer from "./components/NavDrawer";
 import CartDrawer from "./components/CartDrawer";
 import FavouritesDrawer from "./components/FavouritesDrawer";
 
@@ -359,31 +359,88 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
   );
 }
 
-// Currency short form ("GH / GHS") in the header's right cluster. No flag
-// emoji (brand rule). Clicking it opens the storefront sidebar, whose footer
-// holds the currency picker.
-function CurrencyLabelButton({
-  isTransparent = false,
-  expanded,
-  onClick,
-}: {
-  isTransparent?: boolean;
-  expanded: boolean;
-  onClick: () => void;
-}) {
-  const { currency } = useLocale();
+function LocaleSelectorButton({ isTransparent = false }: { isTransparent?: boolean }) {
+  const { region, currency, setCurrency } = useLocale();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const activeCurrency = CURRENCIES.find((c) => c.code === currency) ?? CURRENCIES[0];
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const textClass = isTransparent
+    ? "text-white/80 hover:text-white"
+    : "text-text-secondary hover:text-text";
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-expanded={expanded}
-      aria-label="Open menu to change currency"
-      className={`hidden md:inline-block p-1 text-xs font-medium uppercase tracking-widest transition ${
-        isTransparent ? "text-white/80 hover:text-white" : "text-text-secondary hover:text-text"
-      }`}
+    <div
+      ref={ref}
+      className="relative hidden md:flex"
+      style={{ fontFamily: 'Helvetica, "Helvetica Neue", Arial, sans-serif' }}
     >
-      {currencyShortLabel(currency)}
-    </button>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-1.5 text-[11px] uppercase tracking-[0.2em] transition ${textClass}`}
+      >
+        <span className="text-sm leading-none">{region.flag}</span>
+        <span>{region.countryCode}</span>
+        <span className="opacity-30">/</span>
+        <span>{activeCurrency.code}</span>
+        <ChevronDown
+          className={`h-3 w-3 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          strokeWidth={1.75}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-3 min-w-[240px] border border-line bg-surface shadow-2xl">
+          <p className="border-b border-line px-4 py-3 text-[9px] uppercase tracking-[0.28em] text-text-muted">
+            Currency
+          </p>
+          {CURRENCIES.map((cur) => {
+            const isActive = cur.code === currency;
+            return (
+              <button
+                key={cur.code}
+                onClick={() => { setCurrency(cur.code); setOpen(false); }}
+                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+                  isActive
+                    ? "bg-invert-bg text-invert-fg"
+                    : "text-text hover:bg-fill"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 shrink-0 ${
+                    isActive ? "bg-invert-fg" : "bg-transparent"
+                  }`}
+                />
+                <span className="text-[12px] font-bold tracking-[0.1em]">{cur.code}</span>
+                <span
+                  className={`text-[9px] uppercase tracking-[0.18em] ${
+                    isActive ? "text-invert-fg/60" : "text-text-muted"
+                  }`}
+                >
+                  {cur.name}
+                </span>
+                <span
+                  className={`ml-auto text-[12px] ${
+                    isActive ? "text-invert-fg/70" : "text-text-muted"
+                  }`}
+                >
+                  {cur.symbol}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -441,8 +498,6 @@ function ShopHeader({
   onMeasure?: (height: number) => void;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  // Stable reference: the sidebar's Escape listener depends on it.
-  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
   const barRef = useRef<HTMLDivElement>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   // Whether the nav bar is currently sitting over the home page's full-screen
@@ -560,10 +615,7 @@ function ShopHeader({
         {/* Left nav (desktop) */}
         <nav className="hidden items-center gap-6 md:flex">
           <button
-            type="button"
-            onClick={() => setDrawerOpen((o) => !o)}
-            aria-expanded={drawerOpen}
-            aria-haspopup="dialog"
+            onClick={() => setDrawerOpen(true)}
             data-open={drawerOpen}
             className={`group flex items-center gap-1.5 text-xs font-medium uppercase tracking-widest transition ${
               isTransparentWhite
@@ -598,10 +650,7 @@ function ShopHeader({
 
         {/* Mobile hamburger */}
         <button
-          type="button"
-          onClick={() => setDrawerOpen((o) => !o)}
-          aria-expanded={drawerOpen}
-          aria-haspopup="dialog"
+          onClick={() => setDrawerOpen(true)}
           className={`flex h-8 w-8 items-center justify-center md:hidden transition ${
             isTransparentWhite ? "text-white" : ""
           }`}
@@ -630,11 +679,7 @@ function ShopHeader({
 
         {/* Right icons */}
         <div className="flex items-center gap-2 md:gap-4">
-          <CurrencyLabelButton
-            isTransparent={isTransparentWhite}
-            expanded={drawerOpen}
-            onClick={() => setDrawerOpen((o) => !o)}
-          />
+          <LocaleSelectorButton isTransparent={isTransparentWhite} />
           <button
             onClick={() => setSearchOpen(true)}
             aria-label="Search"
@@ -653,7 +698,7 @@ function ShopHeader({
       </div>
       </div>
 
-      <StorefrontSidebar open={drawerOpen} onClose={closeDrawer} />
+      <NavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
       <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
