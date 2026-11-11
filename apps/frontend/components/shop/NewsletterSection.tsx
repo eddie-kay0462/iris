@@ -67,7 +67,7 @@ export function NewsletterSection() {
         >
           <motion.div
             variants={fadeUp}
-            className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-text-muted font-mono"
+            className="flex items-center gap-3 text-[11px] sm:text-[13px] font-medium uppercase tracking-[0.3em] text-text-muted font-mono"
           >
             <span>Newsletter</span>
             <span className="h-px w-8 bg-line-strong" />
