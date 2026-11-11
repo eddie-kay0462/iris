@@ -70,7 +70,7 @@ export function NewsletterSection() {
             className="flex items-center gap-3 text-[11px] sm:text-[13px] font-medium uppercase tracking-[0.3em] text-text-muted font-mono"
           >
             <span>Newsletter</span>
-            <span className="h-px w-8 bg-line-strong" />
+            <span className="h-1 w-1 rounded-full bg-neutral-500 dark:bg-neutral-400" aria-hidden="true" />
             <span>Stay close</span>
           </motion.div>
 
