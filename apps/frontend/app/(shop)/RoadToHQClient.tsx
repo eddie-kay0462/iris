@@ -7,7 +7,8 @@ import { prefetchImage } from "@/hooks/useImagePrefetch";
 // Static import: Next fingerprints the file (immutable cache), knows its
 // intrinsic size, and generates a tiny blur placeholder inlined in the HTML,
 // so the hero shows instantly as a blur instead of a blank dark box.
-import heroImage from "@/public/homepage/7.jpg";
+// Handoff hero: two models in the Intercessory Dept. camo long-sleeves.
+import heroImage from "@/public/homepage/1.jpeg";
 import { Caveat } from "next/font/google";
 import {
   motion,
@@ -16,6 +17,7 @@ import {
   useTransform,
 } from "framer-motion";
 import { NewsletterSection } from "@/components/shop/NewsletterSection";
+import { daysUntilDeadline } from "./road-to-hq-deadline";
 
 const caveat = Caveat({ subsets: ["latin"], weight: ["500", "700"] });
 
@@ -24,7 +26,6 @@ const caveat = Caveat({ subsets: ["latin"], weight: ["500", "700"] });
 // at request time). Real values come from GET /analytics/road-to-hq via props.
 const DEFAULT_TARGET_UNITS = 6000;
 const DEFAULT_UNITS_SOLD = 0;
-const DEADLINE = "2026-12-26";
 
 /* ── SVG Geometry ── */
 const CIRCLE = { cx: 400, cy: 400, r: 280 };
@@ -44,10 +45,18 @@ function arcPath(from: number, to: number) {
   return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${CIRCLE.r} ${CIRCLE.r} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
 }
 
+/* Point on a circle concentric with the road, `off` units outside (+) or inside (-) it. */
+function tickPt(deg: number, off: number) {
+  const rad = (deg * Math.PI) / 180, r = CIRCLE.r + off;
+  return { x: CIRCLE.cx + r * Math.sin(rad), y: CIRCLE.cy - r * Math.cos(rad) };
+}
+
 const FULL_LEN = ((ARC_SWEEP_DEG / 360) * 2 * Math.PI * CIRCLE.r).toFixed(2);
 const FULL_PATH = arcPath(ARC_START_DEG, ARC_END_DEG);
 const START_PT = ptOnArc(ARC_START_DEG);
 const END_PT = ptOnArc(ARC_END_DEG);
+const START_TICK = { a: tickPt(ARC_START_DEG, -36), b: tickPt(ARC_START_DEG, 36) };
+const END_TICK = { a: tickPt(ARC_END_DEG, -36), b: tickPt(ARC_END_DEG, 36) };
 const MS_POSITIONS_DEG = Array.from({ length: 6 }, (_, i) =>
   ARC_START_DEG + ARC_SWEEP_DEG * ((i + 1) / 6)
 );
@@ -56,40 +65,40 @@ const MS_POSITIONS_DEG = Array.from({ length: 6 }, (_, i) =>
 const MILESTONES = [
   {
     units: 1000, kicker: "Promise", title: "A day out with a customer",
-    body: "When we hit our first thousand units, we're showing up - in person - for one customer who's been with us. A whole day, on us. Coffee, the city, the wardrobe edit they didn't know they needed.",
+    body: "When we hit our first thousand units, we're showing up, in person, for one customer who's been with us. A whole day, on us. Coffee, the city, the wardrobe edit they didn't know they needed.",
     window: "Q2 · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/1nri-quarter-zip/black__shot-3__1770027218488.jpg",
     objectPos: "object-[center_30%]",
   },
   {
     units: 2000, kicker: "Promise", title: "Climb Mount Afadjato",
-    body: "Two thousand deep. The team climbs Mount Afadjato - Ghana's highest peak, 885 m. Full 1NRI kit, filmed start to summit. If we're asking you to back us, we should be willing to suffer a little too.",
+    body: "Two thousand deep. The team climbs Mount Afadjato, Ghana's highest peak, 885 m. Full 1NRI kit, filmed start to summit. If we're asking you to back us, we should be willing to suffer a little too.",
     window: "Q2 · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/genesis-basic-top/product__main__1774011630200.jpg",
   },
   {
-    units: 3000, kicker: "Promise", title: "Wildcard - a customer decides",
-    body: "Halfway there, we hand the wheel over. One customer gets to pick the milestone - whatever they want us to do, build, or attempt. No veto, no committee. Their call, our commitment. (Nothing too crazy tho🫠)",
+    units: 3000, kicker: "Promise", title: "Wildcard: a customer decides",
+    body: "Halfway there, we hand the wheel over. One customer gets to pick the milestone: whatever they want us to do, build, or attempt. No veto, no committee. Their call, our commitment. (Nothing too crazy tho🫠)",
     window: "Q3 · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/intercessory-dept-hoodie-real-tree/product__shot-4__1774018322078.jpg",
   },
   {
     units: 4000, kicker: "Promise", title: "Charity Donation",
-    body: "Four thousand units moved. We make a meaningful donation to a cause close to the community we're building in - chosen transparently, receipts shared. The road isn't just about us.",
+    body: "Four thousand units moved. We make a meaningful donation to a cause close to the community we're building in, chosen transparently, receipts shared. The road isn't just about us.",
     window: "Q3 · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/olive-grove/product__shot-4__1779112535448.jpg",
     objectPos: "object-[center_15%]",
   },
   {
     units: 5000, kicker: "Promise", title: "Street Interviews About Our Brand",
-    body: "Five thousand in and we go to the streets - camera rolling, no script. We ask real people what they think of 1NRI: the clothes, the price, the name, all of it. Uncut, unfiltered, published raw.",
+    body: "Five thousand in and we go to the streets, camera rolling, no script. We ask real people what they think of 1NRI: the clothes, the price, the name, all of it. Uncut, unfiltered, published raw.",
     window: "Q4 · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/sackcloth/product__shot-2__1774014162916.jpg",
     objectPos: "object-[center_10%]",
   },
   {
     units: 6000, kicker: "Goal", title: "HQ Tour & Party",
-    body: "We close the road and open the doors. The new Accra headquarters, live and in person. A tour of the studio, the fitting room, the lounge - then a party for every customer who helped us get here.",
+    body: "We close the road and open the doors. The new Accra headquarters, live and in person. A tour of the studio, the fitting room, the lounge, then a party for every customer who helped us get here.",
     window: "Dec · 2026",
     image: "https://krnnifoypyilajatsmva.supabase.co/storage/v1/object/public/product-images/originals/dusk-before-dawn-button-up/beige__main__1770027225978.jpg",
     objectPos: "object-[center_20%]",
@@ -223,27 +232,41 @@ const staggerFast = {
   visible: { transition: { staggerChildren: 0.06 } },
 };
 
+/* Chapter separator: N dots for chapter N. */
+function ChapterDots({ n }: { n: number }) {
+  return (
+    <span className="flex items-center gap-1.5" aria-hidden="true">
+      {Array.from({ length: n }, (_, i) => (
+        <span key={i} className="h-1 w-1 rounded-full bg-neutral-500 dark:bg-neutral-400" />
+      ))}
+    </span>
+  );
+}
+
 /* ── Page ── */
 export default function RoadToHQPage({
   unitsSold = DEFAULT_UNITS_SOLD,
   targetUnits = DEFAULT_TARGET_UNITS,
+  initialDaysLeft = daysUntilDeadline(),
 }: {
   unitsSold?: number;
   targetUnits?: number;
+  /** Computed by the server page so the first paint shows a real figure. */
+  initialDaysLeft?: number;
 } = {}) {
   const UNITS_SOLD = unitsSold;
   const TARGET_UNITS = targetUnits;
   const [active, setActive] = useState(0);
   const [displayUnits, setDisplayUnits] = useState(0);
-  const [daysLeft, setDaysLeft] = useState(0);
+  const [daysLeft, setDaysLeft] = useState(initialDaysLeft);
   const [heroLoaded, setHeroLoaded] = useState(false);
   const activeRef = useRef(0);
 
   /* Parallax refs */
   const heroRef = useRef<HTMLElement>(null);
   const ctaRef = useRef<HTMLElement>(null);
-  /* Scroll target for the timeline list — lands on the milestone card itself */
-  const cardRef = useRef<HTMLElement>(null);
+  /* Scroll target for the timeline list: the road SVG, centred in the viewport */
+  const roadRef = useRef<HTMLDivElement>(null);
 
   const { scrollYProgress: heroProgress } = useScroll({
     target: heroRef,
@@ -280,12 +303,13 @@ export default function RoadToHQPage({
     return () => cic(handle as never);
   }, [heroLoaded]);
 
+  // The server already rendered a real figure; re-derive it from the visitor's
+  // clock after mount and keep it current across midnight in long-open tabs.
   useEffect(() => {
-    const target = new Date(DEADLINE + "T00:00:00");
-    // Depends on the visitor's clock, so it has to land after mount — computing
-    // it during render would disagree with the server-rendered HTML.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDaysLeft(Math.max(0, Math.ceil((target.getTime() - Date.now()) / 86400000)));
+    const tick = () => setDaysLeft(daysUntilDeadline());
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -336,6 +360,7 @@ export default function RoadToHQPage({
   const m = MILESTONES[active];
   const mDone = m.units <= UNITS_SOLD;
 
+
   return (
     <>
       <style>{`
@@ -377,16 +402,17 @@ export default function RoadToHQPage({
       <section id="rthq-hero" ref={heroRef} className="relative h-screen min-h-[720px] overflow-hidden bg-neutral-900">
         {/* Parallax image */}
         <motion.div className="absolute inset-0 will-change-transform" style={{ y: heroImageY }}>
-          {/* One element, responsive crop. q75 is plenty under the dark
-              gradient + overlay, and noticeably smaller than q85 on phones. */}
+          {/* One element, responsive crop anchored near the top so both
+              faces stay in frame. q75 is plenty under the dark gradient +
+              overlay. */}
           <Image
             src={heroImage}
-            alt="1NRI model wearing streetwear in Accra, Ghana"
+            alt="Two models in Intercessory Dept. camo long-sleeves"
             fill
             sizes="100vw"
             quality={75}
             placeholder="blur"
-            className="object-cover object-[50%_25%] sm:object-[center_5%] scale-110"
+            className="object-cover object-[38%_0%] sm:object-[50%_0%] scale-110 origin-top"
             priority
             onLoad={() => setHeroLoaded(true)}
           />
@@ -401,7 +427,7 @@ export default function RoadToHQPage({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.15, ease }}
         >
-          <div className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-white/60">
+          <div className="flex items-center gap-3 text-[11px] sm:text-[13px] font-medium uppercase tracking-[0.3em] text-white/80">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-white/80" />
             <span><span className="text-green-400">Live</span> · Deadline</span>
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-white/80" />
@@ -427,19 +453,19 @@ export default function RoadToHQPage({
 
           <motion.div variants={fadeUp} className="mt-10 w-full max-w-xs sm:max-w-lg grid grid-cols-3 items-end sm:items-center gap-2 sm:gap-6 text-white">
             <div className="text-left">
-              <div className="text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.3em] text-white/50">Sold</div>
+              <div className="text-[11px] sm:text-[12px] font-medium uppercase tracking-[0.24em] text-white/75">Sold</div>
               <div className="mt-1 font-mono text-xl sm:text-3xl font-semibold tabular-nums md:text-4xl">{displayUnits.toLocaleString()}</div>
             </div>
             <div className="flex flex-col items-center">
               <div className="h-px w-16 sm:w-40 md:w-56 bg-white/20 overflow-hidden">
                 <div className="h-full bg-white" style={{ width: `${ratio * 100}%` }} />
               </div>
-              <div className="mt-2 text-[9px] sm:text-[13px] font-medium uppercase tracking-[0.15em] sm:tracking-[0.3em] text-white/80 font-mono">
+              <div className="mt-2 text-[15px] sm:text-[17px] font-medium uppercase tracking-[0.22em] text-white/70 font-mono">
                 {(ratio * 100).toFixed(1)}%
               </div>
             </div>
             <div className="text-right">
-              <div className="text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.3em] text-white/50">Target</div>
+              <div className="text-[11px] sm:text-[12px] font-medium uppercase tracking-[0.24em] text-white/75">Target</div>
               <div className="mt-1 font-mono text-xl sm:text-3xl font-semibold tabular-nums md:text-4xl">6,000</div>
             </div>
           </motion.div>
@@ -462,7 +488,7 @@ export default function RoadToHQPage({
           animate={{ opacity: 1 }}
           transition={{ delay: 1.2, duration: 0.8 }}
         >
-          <span className="text-[9px] font-medium uppercase tracking-[0.4em] font-mono">Keep scrolling</span>
+          <span className="text-[11px] font-medium uppercase tracking-[0.3em] font-mono">Keep scrolling</span>
           <svg className="h-4 w-4 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
           </svg>
@@ -478,9 +504,9 @@ export default function RoadToHQPage({
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
         >
-          <motion.div variants={fadeUp} className="flex items-center justify-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-text-muted font-mono">
+          <motion.div variants={fadeUp} className="flex items-center justify-center gap-3 text-[13px] sm:text-[15px] font-normal uppercase tracking-[0.26em] text-neutral-600 dark:text-neutral-300 font-mono">
             <span>Ch. 01</span>
-            <span className="h-px w-8 bg-line-strong" />
+            <ChapterDots n={1} />
             <span>The plan, plainly</span>
           </motion.div>
           <motion.h2 variants={fadeUp} className="display mt-6 text-center text-3xl sm:text-5xl lg:text-6xl font-bold uppercase tracking-tight">
@@ -490,7 +516,7 @@ export default function RoadToHQPage({
           </motion.h2>
           <motion.p variants={fadeUp} className="mt-8 mx-auto max-w-2xl text-center text-base sm:text-lg text-text-secondary leading-relaxed">
             1NRI is moving into its first permanent headquarters in Accra by{" "}
-            <span className="font-mono">26.12.2026</span>; a studio, a fitting room, and somewhere
+            <span className="font-mono">26.12.2026</span>: a studio, a fitting room, and somewhere
             our distributed production network in Northern Ghana can finally call home. The math is simple.
             The road is not.
           </motion.p>
@@ -498,12 +524,12 @@ export default function RoadToHQPage({
           <motion.div variants={staggerFast} className="mt-12 grid grid-cols-3 gap-6 text-center">
             {[
               { value: "6,000", label: "Units to sell" },
-              { value: daysLeft > 0 ? daysLeft.toLocaleString() : "-", label: "Days remaining", border: true },
+              { value: daysLeft.toLocaleString(), label: "Days remaining", border: true },
               { value: "06", label: "Milestones" },
             ].map((stat) => (
               <motion.div key={stat.label} variants={fadeUp} className={stat.border ? "border-x border-line" : ""}>
                 <div className="font-mono text-2xl sm:text-3xl md:text-4xl font-semibold tabular-nums">{stat.value}</div>
-                <div className="mt-2 text-[10px] font-medium uppercase tracking-[0.3em] text-text-muted font-mono">{stat.label}</div>
+                <div className="mt-2 text-[11px] sm:text-[13px] font-medium uppercase tracking-[0.22em] text-neutral-500 dark:text-neutral-400 font-mono">{stat.label}</div>
               </motion.div>
             ))}
           </motion.div>
@@ -519,9 +545,9 @@ export default function RoadToHQPage({
           whileInView="visible"
           viewport={{ once: true, margin: "-60px" }}
         >
-          <motion.div variants={fadeUp} className="flex items-center justify-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-text-muted font-mono">
+          <motion.div variants={fadeUp} className="flex items-center justify-center gap-3 text-[13px] sm:text-[15px] font-normal uppercase tracking-[0.26em] text-neutral-600 dark:text-neutral-300 font-mono">
             <span>Ch. 02</span>
-            <span className="h-px w-8 bg-line-strong" />
+            <ChapterDots n={2} />
             <span>The road, charted</span>
           </motion.div>
           <motion.h2 variants={fadeUp} className="display mt-6 text-center text-3xl sm:text-5xl font-bold uppercase tracking-tight">
@@ -534,6 +560,7 @@ export default function RoadToHQPage({
 
           {/* SVG Road */}
           <motion.div
+            ref={roadRef}
             className="relative"
             initial={{ opacity: 0, scale: 0.97 }}
             whileInView={{ opacity: 1, scale: 1 }}
@@ -554,15 +581,17 @@ export default function RoadToHQPage({
               {progressPath && (
                 <path d={progressPath} fill="none" className="stroke-text" strokeWidth={8} strokeLinecap="round" />
               )}
+              {/* Start / Finish: radial ticks spanning the 64px road band, labels
+                  above the band so they never sit on it. */}
               <g>
-                <line x1={START_PT.x} y1={START_PT.y - 22} x2={START_PT.x} y2={START_PT.y + 22} className="stroke-text" strokeWidth={2} />
-                <text x={START_PT.x - 14} y={START_PT.y - 30} textAnchor="end" className="fill-text-secondary font-mono" style={{ fontSize: 11, letterSpacing: ".32em", textTransform: "uppercase" }}>Start</text>
-                <text x={START_PT.x - 14} y={START_PT.y - 14} textAnchor="end" className="fill-text" style={{ fontSize: 14, fontWeight: 600 }}>0 sold</text>
+                <line x1={START_TICK.a.x} y1={START_TICK.a.y} x2={START_TICK.b.x} y2={START_TICK.b.y} className="stroke-text" strokeWidth={2} />
+                <text x={START_PT.x - 10} y={START_PT.y - 74} textAnchor="end" className="fill-text-secondary font-mono" style={{ fontSize: 13, letterSpacing: ".22em", textTransform: "uppercase" }}>Start</text>
+                <text x={START_PT.x - 10} y={START_PT.y - 54} textAnchor="end" className="fill-text" style={{ fontSize: 14, fontWeight: 600 }}>0 sold</text>
               </g>
               <g>
-                <line x1={END_PT.x} y1={END_PT.y - 22} x2={END_PT.x} y2={END_PT.y + 22} className="stroke-text" strokeWidth={2} />
-                <text x={END_PT.x + 14} y={END_PT.y - 30} className="fill-text-secondary font-mono" style={{ fontSize: 11, letterSpacing: ".32em", textTransform: "uppercase" }}>Finish</text>
-                <text x={END_PT.x + 14} y={END_PT.y - 14} className="fill-text" style={{ fontSize: 14, fontWeight: 600 }}>HQ open</text>
+                <line x1={END_TICK.a.x} y1={END_TICK.a.y} x2={END_TICK.b.x} y2={END_TICK.b.y} className="stroke-text" strokeWidth={2} />
+                <text x={END_PT.x + 10} y={END_PT.y - 74} className="fill-text-secondary font-mono" style={{ fontSize: 13, letterSpacing: ".22em", textTransform: "uppercase" }}>Finish</text>
+                <text x={END_PT.x + 10} y={END_PT.y - 54} className="fill-text" style={{ fontSize: 14, fontWeight: 600 }}>HQ open</text>
               </g>
               {MS_POSITIONS_DEG.map((deg, i) => {
                 const p = ptOnArc(deg);
@@ -593,7 +622,7 @@ export default function RoadToHQPage({
                     </text>
                     <text x={lx} y={ly + dy} textAnchor={anchor as "start" | "end" | "middle"}
                       className="fill-text-secondary font-mono"
-                      style={{ fontSize: 10, letterSpacing: ".32em", textTransform: "uppercase" }}>
+                      style={{ fontSize: 13, letterSpacing: ".2em", textTransform: "uppercase" }}>
                       {MILESTONES[i].units.toLocaleString()} units
                     </text>
                   </g>
@@ -606,19 +635,18 @@ export default function RoadToHQPage({
                 </div>
               </foreignObject>
               <g textAnchor="middle">
-                <text x={400} y={376} className="fill-text-muted font-mono" style={{ fontSize: 11, letterSpacing: ".32em", textTransform: "uppercase" }}>Goal</text>
+                <text x={400} y={360} className="fill-text-muted font-mono" style={{ fontSize: 13, letterSpacing: ".22em", textTransform: "uppercase" }}>Goal</text>
                 <text x={400} y={420} className="fill-text" style={{ fontSize: 72, fontWeight: 700, letterSpacing: "-0.02em" }}>HQ</text>
-                <text x={400} y={448} className="fill-text-secondary font-mono" style={{ fontSize: 11, letterSpacing: ".32em", textTransform: "uppercase" }}>Accra · 26.12.2026</text>
+                <text x={400} y={448} className="fill-text-secondary font-mono" style={{ fontSize: 13, letterSpacing: ".22em", textTransform: "uppercase" }}>Accra · 26.12.2026</text>
               </g>
             </svg>
-            <p className="mt-4 text-center text-[10px] font-medium uppercase tracking-[0.4em] text-text-muted font-mono">
+            <p className="mt-4 text-center text-[12px] font-medium uppercase tracking-[0.3em] text-text-muted font-mono">
               Click a milestone · ←/→ to cycle
             </p>
           </motion.div>
 
           {/* Milestone detail card — AnimatePresence swap */}
           <motion.aside
-            ref={cardRef}
             className="lg:sticky lg:top-28"
             initial={{ opacity: 0, x: 20 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -634,23 +662,23 @@ export default function RoadToHQPage({
                 transition={{ duration: 0.28, ease }}
                 className="border border-line bg-bg"
               >
-                <div className="flex items-center justify-between border-b border-line px-5 py-4 font-mono text-[10px] uppercase tracking-[0.3em] text-text-secondary">
+                <div className="flex items-center justify-between border-b border-line px-5 py-4 font-mono text-[12px] uppercase tracking-[0.3em] text-text-secondary">
                   <span>Milestone {String(active + 1).padStart(2, "0")} / 06</span>
                   <span>{m.units.toLocaleString()} units</span>
                 </div>
                 <div className="relative aspect-[4/3] bg-surface-subtle overflow-hidden">
                   <Image src={m.image} alt={m.title} fill sizes="(max-width: 768px) 100vw, 50vw" className={`object-cover ${m.objectPos ?? "object-center"}`} />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-                  <div className="absolute top-3 left-3 inline-flex items-center gap-2 bg-black/60 backdrop-blur-sm px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.3em] text-white font-mono">
+                  <div className="absolute top-3 left-3 inline-flex items-center gap-2 bg-black/60 backdrop-blur-sm px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.3em] text-white font-mono">
                     <span className={`h-1.5 w-1.5 rounded-full ${mDone ? "bg-emerald-400" : "bg-amber-300"}`} />
                     <span>{mDone ? "Reached" : "Upcoming"}</span>
                   </div>
                 </div>
                 <div className="px-5 py-6">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-text-muted">{m.kicker}</p>
+                  <p className="font-mono text-[12px] uppercase tracking-[0.3em] text-text-muted">{m.kicker}</p>
                   <h3 className="display mt-2 text-2xl sm:text-3xl font-bold uppercase tracking-tight">{m.title}</h3>
                   <p className="mt-3 text-sm text-text-secondary leading-relaxed">{m.body}</p>
-                  <div className="mt-5 grid grid-cols-2 gap-3 text-[11px] font-mono uppercase tracking-[0.2em] text-text-secondary border-t border-line pt-4">
+                  <div className="mt-5 grid grid-cols-2 gap-3 text-[12px] font-mono uppercase tracking-[0.18em] text-text-secondary border-t border-line pt-4">
                     <div>
                       <div className="text-text-muted">Trigger</div>
                       <div className="mt-1 text-text">{m.units.toLocaleString()} sold</div>
@@ -685,7 +713,7 @@ export default function RoadToHQPage({
               <Link href="/products" className="block w-full text-center bg-invert-bg text-invert-fg px-6 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] hover:opacity-90 transition">
                 Add one to the count
               </Link>
-              <p className="text-center text-[10px] font-mono uppercase tracking-[0.3em] text-text-muted">
+              <p className="text-center text-[12px] font-mono uppercase tracking-[0.3em] text-text-muted">
                 Every piece sold = one notch closer
               </p>
             </motion.div>
@@ -697,7 +725,7 @@ export default function RoadToHQPage({
           <div className="flex gap-4 min-w-max">
             {MILESTONES.map((ms, i) => (
               <button key={i} onClick={() => goTo(i)} className="w-64 shrink-0 text-left border border-line bg-bg p-4">
-                <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-text-muted">{String(i + 1).padStart(2, "0")} · {ms.units.toLocaleString()} units</div>
+                <div className="font-mono text-[12px] uppercase tracking-[0.3em] text-text-muted">{String(i + 1).padStart(2, "0")} · {ms.units.toLocaleString()} units</div>
                 <div className="mt-2 text-sm font-semibold uppercase tracking-tight">{ms.title}</div>
                 <div className="mt-2 text-xs text-text-secondary leading-snug">{ms.body.slice(0, 110)}…</div>
               </button>
@@ -729,9 +757,9 @@ export default function RoadToHQPage({
             whileInView="visible"
             viewport={{ once: true, margin: "-60px" }}
           >
-            <motion.div variants={fadeUp} className="flex items-center justify-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-text-muted font-mono">
+            <motion.div variants={fadeUp} className="flex items-center justify-center gap-3 text-[13px] sm:text-[15px] font-normal uppercase tracking-[0.26em] text-neutral-600 dark:text-neutral-300 font-mono">
               <span>Ch. 03</span>
-              <span className="h-px w-8 bg-line-strong" />
+              <ChapterDots n={3} />
               <span>The whole list</span>
             </motion.div>
             <motion.h2 variants={fadeUp} className="display mt-6 text-center text-3xl sm:text-5xl font-bold uppercase tracking-tight">
@@ -755,7 +783,7 @@ export default function RoadToHQPage({
                   className="grid grid-cols-[40px_1fr] sm:grid-cols-[60px_140px_1fr_180px] items-start sm:items-center gap-3 sm:gap-4 py-5 sm:py-6 px-2 cursor-pointer hover:bg-surface-subtle transition"
                   onClick={() => {
                     goTo(i);
-                    if (cardRef.current) smoothScrollTo(cardRef.current, { fitBottom: true });
+                    if (roadRef.current) smoothScrollTo(roadRef.current, { block: "center" });
                   }}
                 >
                   <div className="font-mono text-xl sm:text-2xl md:text-3xl font-semibold text-text-placeholder tabular-nums">{String(i + 1).padStart(2, "0")}</div>
@@ -765,10 +793,10 @@ export default function RoadToHQPage({
                     <div className="sm:hidden mt-0.5 text-[11px] font-mono text-text-muted uppercase tracking-[0.2em]">
                       {ms.units.toLocaleString()} units · {done ? "Reached" : ms.window}
                     </div>
-                    <div className="text-xs text-text-secondary mt-1 leading-snug max-w-xl">{ms.body}</div>
+                    <div className="text-sm text-neutral-600 dark:text-neutral-400 mt-1 leading-snug max-w-xl">{ms.body}</div>
                   </div>
                   <div className="text-right hidden sm:block">
-                    <span className={`inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.3em] ${done ? "text-emerald-600" : "text-text-secondary"}`}>
+                    <span className={`inline-flex items-center gap-2 font-mono text-[12px] uppercase tracking-[0.3em] ${done ? "text-emerald-600" : "text-text-secondary"}`}>
                       <span className={`h-1.5 w-1.5 rounded-full ${done ? "bg-emerald-500" : "bg-line-strong"}`} />
                       {done ? "Reached" : ms.window}
                     </span>
@@ -783,7 +811,7 @@ export default function RoadToHQPage({
       {/* ── 6. CLOSING CTA ── */}
       <section ref={ctaRef} className="relative h-[80vh] min-h-[560px] overflow-hidden">
         <motion.div className="absolute inset-0 will-change-transform" style={{ y: ctaImageY }}>
-          <Image src="/homepage/2.jpeg" alt="1NRI clothing collection - shop the drop" fill sizes="100vw" quality={85} className="object-cover object-top scale-110" />
+          <Image src="/homepage/3.png" alt="1NRI embroidered sweatpants in four colourways" fill sizes="100vw" quality={85} className="object-cover object-center scale-110" />
         </motion.div>
         <div className="absolute inset-0 bg-black/55" />
         <motion.div
@@ -793,7 +821,7 @@ export default function RoadToHQPage({
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
         >
-          <motion.p variants={fadeUp} className="text-[10px] font-medium uppercase tracking-[0.4em] text-white/60 font-mono">Be part of it</motion.p>
+          <motion.p variants={fadeUp} className="text-[11px] sm:text-[13px] font-medium uppercase tracking-[0.3em] text-white/80 font-mono">Be part of it</motion.p>
           <motion.h2 variants={fadeUp} className="display mt-4 text-4xl sm:text-6xl lg:text-7xl font-bold uppercase tracking-tight text-white">
             One unit at a time.
           </motion.h2>
