@@ -460,7 +460,7 @@ export default function RoadToHQPage({
               <div className="h-px w-16 sm:w-40 md:w-56 bg-white/20 overflow-hidden">
                 <div className="h-full bg-white" style={{ width: `${ratio * 100}%` }} />
               </div>
-              <div className="mt-2 text-[11px] sm:text-[12px] font-medium uppercase tracking-[0.22em] text-white/70 font-mono">
+              <div className="mt-2 text-[15px] sm:text-[17px] font-medium uppercase tracking-[0.22em] text-white/70 font-mono">
                 {(ratio * 100).toFixed(1)}%
               </div>
             </div>
