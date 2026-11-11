@@ -1,15 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Image, { getImageProps } from "next/image";
+import Image from "next/image";
 import Link from "next/link";
 import { prefetchImage } from "@/hooks/useImagePrefetch";
 // Static import: Next fingerprints the file (immutable cache), knows its
 // intrinsic size, and generates a tiny blur placeholder inlined in the HTML,
 // so the hero shows instantly as a blur instead of a blank dark box.
-import heroImage from "@/public/homepage/7.jpg";
-// Art-directed mobile crop (<640px): two models in the camo long-sleeves.
-import heroImageMobile from "@/public/homepage/1.jpeg";
+// Handoff hero: two models in the Intercessory Dept. camo long-sleeves.
+import heroImage from "@/public/homepage/1.jpeg";
 import { Caveat } from "next/font/google";
 import {
   motion,
@@ -357,9 +356,6 @@ export default function RoadToHQPage({
   const m = MILESTONES[active];
   const mDone = m.units <= UNITS_SOLD;
 
-  const heroCommon = { alt: "1NRI model wearing streetwear in Accra, Ghana", fill: true, sizes: "100vw", quality: 75, priority: true } as const;
-  const { props: heroDesktop } = getImageProps({ ...heroCommon, src: heroImage, placeholder: "blur" });
-  const { props: heroMobile } = getImageProps({ ...heroCommon, src: heroImageMobile });
 
   return (
     <>
@@ -402,18 +398,20 @@ export default function RoadToHQPage({
       <section id="rthq-hero" ref={heroRef} className="relative h-screen min-h-[720px] overflow-hidden bg-neutral-900">
         {/* Parallax image */}
         <motion.div className="absolute inset-0 will-change-transform" style={{ y: heroImageY }}>
-          {/* Art-directed: phones get the two-model crop, everything else the
-              desktop photo. One <img> so only the matching source downloads.
-              q75 is plenty under the dark gradient + overlay. */}
-          <picture>
-            <source media="(max-width: 639px)" srcSet={heroMobile.srcSet} sizes="100vw" />
-            {/* eslint-disable-next-line jsx-a11y/alt-text -- alt comes from the spread props */}
-            <img
-              {...heroDesktop}
-              className="object-cover object-[38%_20%] sm:object-[center_5%] scale-110"
-              onLoad={() => setHeroLoaded(true)}
-            />
-          </picture>
+          {/* One element, responsive crop anchored near the top so both
+              faces stay in frame. q75 is plenty under the dark gradient +
+              overlay. */}
+          <Image
+            src={heroImage}
+            alt="Two models in Intercessory Dept. camo long-sleeves"
+            fill
+            sizes="100vw"
+            quality={75}
+            placeholder="blur"
+            className="object-cover object-[38%_0%] sm:object-[50%_0%] scale-110 origin-top"
+            priority
+            onLoad={() => setHeroLoaded(true)}
+          />
         </motion.div>
         <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/30 to-black/70" />
         <div className="absolute inset-0 bg-black/20" />
