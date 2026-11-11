@@ -243,6 +243,17 @@ function ChapterDots({ n }: { n: number }) {
   );
 }
 
+/* Handoff: site type is Helvetica Neue throughout, including what used to be
+   mono. Scoped to this page by overriding the next/font variables that the
+   `font-sans` / `font-mono` utilities resolve to. The Caveat date keeps its
+   own class. */
+const HELVETICA = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+const HELVETICA_SCOPE = {
+  fontFamily: HELVETICA,
+  "--font-geist-sans": HELVETICA,
+  "--font-geist-mono": HELVETICA,
+} as React.CSSProperties;
+
 /* ── Page ── */
 export default function RoadToHQPage({
   unitsSold = DEFAULT_UNITS_SOLD,
@@ -362,7 +373,7 @@ export default function RoadToHQPage({
 
 
   return (
-    <>
+    <div style={HELVETICA_SCOPE}>
       <style>{`
         @keyframes marquee {
           from { transform: translateX(0); }
@@ -835,6 +846,6 @@ export default function RoadToHQPage({
       </section>
 
       <NewsletterSection />
-    </>
+    </div>
   );
 }
