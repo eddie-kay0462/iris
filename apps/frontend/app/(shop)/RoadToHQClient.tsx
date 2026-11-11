@@ -17,6 +17,7 @@ import {
   useTransform,
 } from "framer-motion";
 import { NewsletterSection } from "@/components/shop/NewsletterSection";
+import { daysUntilDeadline } from "./road-to-hq-deadline";
 
 const caveat = Caveat({ subsets: ["latin"], weight: ["500", "700"] });
 
@@ -25,7 +26,6 @@ const caveat = Caveat({ subsets: ["latin"], weight: ["500", "700"] });
 // at request time). Real values come from GET /analytics/road-to-hq via props.
 const DEFAULT_TARGET_UNITS = 6000;
 const DEFAULT_UNITS_SOLD = 0;
-const DEADLINE = "2026-12-26";
 
 /* ── SVG Geometry ── */
 const CIRCLE = { cx: 400, cy: 400, r: 280 };
@@ -247,15 +247,18 @@ function ChapterDots({ n }: { n: number }) {
 export default function RoadToHQPage({
   unitsSold = DEFAULT_UNITS_SOLD,
   targetUnits = DEFAULT_TARGET_UNITS,
+  initialDaysLeft = daysUntilDeadline(),
 }: {
   unitsSold?: number;
   targetUnits?: number;
+  /** Computed by the server page so the first paint shows a real figure. */
+  initialDaysLeft?: number;
 } = {}) {
   const UNITS_SOLD = unitsSold;
   const TARGET_UNITS = targetUnits;
   const [active, setActive] = useState(0);
   const [displayUnits, setDisplayUnits] = useState(0);
-  const [daysLeft, setDaysLeft] = useState(0);
+  const [daysLeft, setDaysLeft] = useState(initialDaysLeft);
   const [heroLoaded, setHeroLoaded] = useState(false);
   const activeRef = useRef(0);
 
@@ -300,12 +303,13 @@ export default function RoadToHQPage({
     return () => cic(handle as never);
   }, [heroLoaded]);
 
+  // The server already rendered a real figure; re-derive it from the visitor's
+  // clock after mount and keep it current across midnight in long-open tabs.
   useEffect(() => {
-    const target = new Date(DEADLINE + "T00:00:00");
-    // Depends on the visitor's clock, so it has to land after mount — computing
-    // it during render would disagree with the server-rendered HTML.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDaysLeft(Math.max(0, Math.ceil((target.getTime() - Date.now()) / 86400000)));
+    const tick = () => setDaysLeft(daysUntilDeadline());
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -520,7 +524,7 @@ export default function RoadToHQPage({
           <motion.div variants={staggerFast} className="mt-12 grid grid-cols-3 gap-6 text-center">
             {[
               { value: "6,000", label: "Units to sell" },
-              { value: daysLeft > 0 ? daysLeft.toLocaleString() : "-", label: "Days remaining", border: true },
+              { value: daysLeft.toLocaleString(), label: "Days remaining", border: true },
               { value: "06", label: "Milestones" },
             ].map((stat) => (
               <motion.div key={stat.label} variants={fadeUp} className={stat.border ? "border-x border-line" : ""}>

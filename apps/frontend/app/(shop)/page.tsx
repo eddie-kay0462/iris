@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import RoadToHQPage from "./RoadToHQClient";
+import { daysUntilDeadline } from "./road-to-hq-deadline";
 import NewsletterModal from "./components/NewsletterModal";
 import { getRoadToHQ } from "@/lib/api/road-to-hq.server";
 import { getNewsletterPopup } from "@/lib/api/settings.server";
@@ -31,6 +32,7 @@ export default async function Page() {
       <RoadToHQPage
         unitsSold={roadToHQ?.units ?? 0}
         targetUnits={roadToHQ?.target ?? 6000}
+        initialDaysLeft={daysUntilDeadline()}
       />
       <NewsletterModal enabled={newsletterPopup.enabled} />
     </>
