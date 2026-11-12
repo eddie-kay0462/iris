@@ -5,8 +5,6 @@ import { useProduct, useProducts, type ProductVariant } from "@/lib/api/products
 import { useBundleOfferFor } from "@/lib/api/promos";
 import { describeTiers } from "@/lib/bundles/tier-label";
 import { useCart } from "@/lib/cart";
-import { motion } from "framer-motion";
-import { prefetchImage } from "@/hooks/useImagePrefetch";
 import {
   findMatchingVariant,
   type OptionSlot,
@@ -18,8 +16,8 @@ import { ProductCard } from "../../components/ProductCard";
 import { useToggleFavourite } from "@/lib/favourites";
 import { useSearchParams } from "next/navigation";
 import { useLocale } from "@/lib/locale/locale-provider";
-import { useImagePrefetch } from "@/hooks/useImagePrefetch";
 import Image from "next/image";
+import { LoadingBar } from "@/components/shop/Loading";
 import Link from "next/link";
 import {
   Heart,
@@ -123,6 +121,13 @@ function isValueAvailable(
 
 // ─── PDPGallery ───────────────────────────────────────────────────────────────
 
+// Real rendered width of the main stage: the PDP grid is max 1400px with 32px
+// gutters, an 80px gap and a 460px info column, minus the 64px+16px thumb strip.
+// (A blanket 50vw over-fetched ~2x on wide screens.)
+const STAGE_SIZES = "(min-width: 1400px) 720px, (min-width: 1024px) calc(100vw - 680px), 100vw";
+// Max images per colour to preload during idle time.
+const IDLE_WARM_CAP = 6;
+
 interface GalleryImage {
   id: string;
   src: string;
@@ -170,28 +175,42 @@ function PDPGallery({
   );
 
   const [idx, setIdx] = useState(() => indexOfActive(sorted));
-  const [displaySrc, setDisplaySrc] = useState(() => sorted[indexOfActive(sorted)]?.src ?? "");
-  // Incoming image layered over the base while it loads.
-  const [pendingSrc, setPendingSrc] = useState<string | null>(null);
-  const [pendingReady, setPendingReady] = useState(false);
-  // Whether the incoming image was slow enough to warrant an animated fade.
-  const [shouldFade, setShouldFade] = useState(false);
-  const pendingStartRef = useRef(0);
-  // Guards markReady against the duplicate calls an inline ref callback makes.
-  const readyForRef = useRef<string | null>(null);
+  // The image painted underneath — stays visible while a newly selected one loads.
+  // Seeded with the first image so it is visible from the server render (LCP).
+  const [shownId, setShownId] = useState<string | null>(() => sorted[indexOfActive(sorted)]?.id ?? null);
+  const [initialId] = useState(shownId);
+  // Ids whose <img> has finished loading.
+  const [loaded, setLoaded] = useState<Set<string>>(() => new Set());
+  // Ids whose <img> errored — never left spinning forever.
+  const [failed, setFailed] = useState<Set<string>>(() => new Set());
+  // Ids mounted ahead of time (hover/focus intent and idle fill).
+  const [warmed, setWarmed] = useState<Set<string>>(() => new Set());
+  // The one image currently fading in because the customer waited on it.
+  const [fadeId, setFadeId] = useState<string | null>(null);
+  const loadedRef = useRef<Set<string>>(new Set());
+  const shownIdRef = useRef(shownId);
+  const targetIdRef = useRef<string | undefined>(undefined);
+  const targetSetAtRef = useRef(0);
   const touchStartX = useRef<number | null>(null);
 
-  useImagePrefetch(images, colorFilter ?? "", { maxPriority: 6, width: 1080, quality: 80 });
+  const targetId = sorted[idx]?.id;
+  // The selected image goes on top only once it has pixels; until then the
+  // previous picture stays up instead of flashing an empty box.
+  const topId = targetId && loaded.has(targetId) ? targetId : null;
+  const visibleId = topId ?? shownId;
+
+  useEffect(() => {
+    shownIdRef.current = shownId;
+  }, [shownId]);
+
+  useEffect(() => {
+    targetIdRef.current = targetId;
+    targetSetAtRef.current = performance.now();
+  }, [targetId]);
 
   // Colour change → hard-cut straight to the variant's main image in the new set.
   useEffect(() => {
-    const resolved = indexOfActive(sorted);
-    setIdx(resolved);
-    setDisplaySrc(sorted[resolved]?.src ?? "");
-    setPendingSrc(null);
-    setPendingReady(false);
-    setShouldFade(false);
-    readyForRef.current = null;
+    setIdx(indexOfActive(sorted));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colorFilter]);
 
@@ -203,43 +222,75 @@ function PDPGallery({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeImageId]);
 
-  // Begin a swap whenever the active image changes. Keyed on `idx` only: `sorted`
-  // is memoised and colour resets are driven by the effects above, so depending on
-  // `sorted` here would spuriously fire mid-colour-switch (when `sorted` is the new
-  // set but `idx` is still the old value) and crossfade to the wrong image.
-  // Readiness is detected on the real incoming <Image> below (ref + onLoad), so a
-  // cached image — whose load event can fire before React attaches the handler —
-  // never leaves the gallery stuck on the previous picture.
-  useEffect(() => {
-    const target = sorted[idx]?.src;
-    if (!target || target === displaySrc) return;
-    pendingStartRef.current = performance.now();
-    readyForRef.current = null;
-    setPendingSrc(target);
-    setPendingReady(false);
-    setShouldFade(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idx]);
-
-  // Mark the incoming image painted. Called from both a completeness ref check
-  // (covers cache hits) and onLoad (covers network loads); the ref guards against
-  // the duplicate invocations an inline ref callback makes across renders.
-  const markReady = useCallback((src: string) => {
-    if (readyForRef.current === src) return;
-    readyForRef.current = src;
-    // Effectively-instant loads (warm cache) hard-cut; real loads fade in.
-    setShouldFade(performance.now() - pendingStartRef.current > 80);
-    setPendingReady(true);
+  // Record a finished load. Called from both a completeness ref check (cache hits,
+  // whose load event can fire before React attaches onLoad) and onLoad; the ref
+  // set dedupes the repeat calls an inline ref callback makes on every render.
+  const markLoaded = useCallback((id: string) => {
+    if (loadedRef.current.has(id)) return;
+    loadedRef.current.add(id);
+    setLoaded(new Set(loadedRef.current));
+    // The customer is looking at the old picture waiting for this one: fade it in.
+    // Anything that arrives effectively instantly (or was preloaded) hard-cuts.
+    if (
+      id === targetIdRef.current &&
+      id !== shownIdRef.current &&
+      performance.now() - targetSetAtRef.current > 80
+    ) {
+      setFadeId(id);
+    }
   }, []);
 
-  // Eagerly warm adjacent images so the next click is a cache hit.
+  // Promote the selected image to the underlay once it is fully on screen. A
+  // fading image is promoted from onTransitionEnd instead, so the old picture
+  // stays behind it for the whole fade rather than dropping out mid-way.
   useEffect(() => {
-    if (sorted.length <= 1) return;
-    const prev = sorted[(idx - 1 + sorted.length) % sorted.length];
-    const next = sorted[(idx + 1) % sorted.length];
-    if (prev) prefetchImage(prev.src, 1080, 80);
-    if (next) prefetchImage(next.src, 1080, 80);
-  }, [idx, sorted]);
+    if (topId && topId !== shownId && topId !== fadeId) setShownId(topId);
+  }, [topId, shownId, fadeId]);
+
+  const warm = useCallback((id: string) => {
+    setWarmed((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+  }, []);
+
+  // Once the first picture is up, mount the rest of this colour's set during idle
+  // time so later clicks are instant. Mounting real <Image> layers (rather than
+  // guessing a /_next/image width) means the browser fetches exactly the srcset
+  // candidate it will display.
+  const hasLoadedAny = loaded.size > 0;
+  useEffect(() => {
+    if (!hasLoadedAny || sorted.length <= 1) return;
+    const run = () =>
+      setWarmed((prev) => {
+        const next = new Set(prev);
+        sorted.slice(0, IDLE_WARM_CAP).forEach((img) => next.add(img.id));
+        return next.size === prev.size ? prev : next;
+      });
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(run, { timeout: 2000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const t = setTimeout(run, 800);
+    return () => clearTimeout(t);
+  }, [hasLoadedAny, sorted]);
+
+  // Current image and its neighbours are always mounted, so arrows and swipes
+  // land on an already-loaded layer.
+  const neighbourIds = new Set<string>();
+  if (sorted.length > 0) {
+    for (const d of [-1, 0, 1]) {
+      const img = sorted[(idx + d + sorted.length) % sorted.length];
+      if (img) neighbourIds.add(img.id);
+    }
+  }
+  // Layers come from the full image list so the previous colour's picture can
+  // remain as the underlay while the new colour's image loads.
+  const layers = images.filter(
+    (img) => img.id === shownId || neighbourIds.has(img.id) || warmed.has(img.id),
+  );
+  const visibleAlt = images.find((img) => img.id === visibleId)?.alt_text || "Product image";
+  // Waiting on the selected picture (e.g. a colour switch to an uncached image):
+  // the old picture stays up under a veil + spinner until the new one lands.
+  const isLoadingTarget =
+    !!targetId && targetId !== shownId && !loaded.has(targetId) && !failed.has(targetId);
 
   if (sorted.length === 0) {
     return (
@@ -255,6 +306,9 @@ function PDPGallery({
           <button
             key={img.id}
             onClick={() => setIdx(i)}
+            onPointerEnter={() => warm(img.id)}
+            onPointerDown={() => warm(img.id)}
+            onFocus={() => warm(img.id)}
             className={`relative w-16 h-20 overflow-hidden border transition-all duration-200 ${
               i === idx ? "border-invert-bg opacity-100" : "border-transparent opacity-60 hover:opacity-100"
             }`}
@@ -286,56 +340,65 @@ function PDPGallery({
             touchStartX.current = null;
           }}
         >
-          {/* Base layer — stays visible while the next image loads */}
-          {displaySrc && (
-            <Image
-              src={displaySrc}
-              alt={sorted[idx]?.alt_text || "Product image"}
-              fill
-              priority
-              sizes="(min-width: 1024px) 50vw, 100vw"
-              quality={80}
-              className="object-cover"
-            />
-          )}
-          {/* Incoming layer — hard-cuts when cached, fades when slow to load */}
-          {pendingSrc && pendingSrc !== displaySrc && (
-            <motion.div
-              key={pendingSrc}
-              className="absolute inset-0"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: pendingReady ? 1 : 0 }}
-              transition={shouldFade ? { duration: 0.35, ease: [0.4, 0, 0.2, 1] } : { duration: 0 }}
-              onAnimationComplete={() => {
-                if (pendingReady) {
-                  setDisplaySrc(pendingSrc);
-                  setPendingSrc(null);
-                  setPendingReady(false);
-                  setShouldFade(false);
-                }
-              }}
-            >
+          {/* Stacked layers: the underlay (last shown) plus the selected image on
+              top once loaded; every other mounted layer is preloading invisibly. */}
+          {layers.map((img) => {
+            const isTop = img.id === topId;
+            const isVisible = isTop || img.id === shownId;
+            return (
               <Image
-                src={pendingSrc}
-                alt={sorted[idx]?.alt_text || "Product image"}
+                key={img.id}
+                src={img.src}
+                alt={img.id === visibleId ? visibleAlt : ""}
+                aria-hidden={img.id === visibleId ? undefined : true}
                 fill
-                sizes="(min-width: 1024px) 50vw, 100vw"
+                sizes={STAGE_SIZES}
                 quality={80}
-                ref={(el) => { if (el && el.complete && el.naturalWidth > 0) markReady(pendingSrc); }}
-                onLoad={() => markReady(pendingSrc)}
-                className="object-cover"
+                priority={img.id === initialId}
+                loading={img.id === initialId ? undefined : "eager"}
+                ref={(el) => { if (el && el.complete && el.naturalWidth > 0) markLoaded(img.id); }}
+                onLoad={() => markLoaded(img.id)}
+                onError={() =>
+                  setFailed((prev) => (prev.has(img.id) ? prev : new Set(prev).add(img.id)))
+                }
+                onTransitionEnd={(e) => {
+                  if (e.propertyName !== "opacity" || img.id !== fadeId) return;
+                  setFadeId(null);
+                  if (img.id === topId) setShownId(img.id);
+                }}
+                className={`object-cover ${isTop ? "z-[1]" : "z-0"} ${isVisible ? "opacity-100" : "opacity-0"} ${
+                  img.id === fadeId ? "transition-opacity duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]" : ""
+                }`}
               />
-            </motion.div>
+            );
+          })}
+
+          {/* Loading veil — dims the outgoing picture while the new one is pulled */}
+          {isLoadingTarget && (
+            <div
+              key={targetId}
+              role="status"
+              aria-live="polite"
+              className="animate-gallery-loading absolute inset-0 z-[2] bg-surface/30"
+            >
+              {/* Same frosted chip + tracked caps as the counter and PDP labels */}
+              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface/85 backdrop-blur-[4px] px-3 py-1.5 text-[10px] tracking-[0.22em] uppercase text-text">
+                Loading
+                <span className="sr-only"> image</span>
+              </span>
+              {/* Hairline indeterminate bar along the bottom edge */}
+              <LoadingBar className="absolute inset-x-0 bottom-0" />
+            </div>
           )}
 
           {/* Counter */}
-          <div className="absolute left-4 bottom-4 bg-surface/85 backdrop-blur-[4px] px-2.5 py-1 text-[13px] font-bold text-text">
+          <div className="absolute z-[3] left-4 bottom-4 bg-surface/85 backdrop-blur-[4px] px-2.5 py-1 text-[13px] font-bold text-text">
             {String(idx + 1).padStart(2, "0")} / {String(sorted.length).padStart(2, "0")}
           </div>
 
           {/* Navigation arrows */}
           {sorted.length > 1 && (
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-2">
+            <div className="absolute z-[3] right-4 top-1/2 -translate-y-1/2 flex flex-col gap-2">
               <button
                 onClick={() => setIdx((idx - 1 + sorted.length) % sorted.length)}
                 className="w-9 h-9 bg-surface/85 backdrop-blur-[4px] flex items-center justify-center text-text hover:bg-invert-bg hover:text-invert-fg transition-colors duration-200"
