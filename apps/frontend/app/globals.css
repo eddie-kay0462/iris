@@ -158,7 +158,34 @@ body {
   animation: cart-nudge 0.45s ease-out;
 }
 
+/* PDP gallery loading veil — held back briefly so fast (cached) swaps never flash it. */
+@keyframes gallery-loading-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-gallery-loading {
+  animation: gallery-loading-in 0.2s ease-out 0.15s both;
+}
+
+/* Indeterminate hairline: a 40%-wide segment sweeping left to right. */
+@keyframes gallery-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+
+.animate-gallery-progress {
+  animation: gallery-progress 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  /* Static, full-width bar instead of a sweep. */
+  .animate-gallery-progress {
+    width: 100%;
+    opacity: 0.4;
+  }
+  .animate-gallery-progress,
+  .animate-gallery-loading,
   .animate-cart-bump,
   .animate-cart-nudge {
     animation: none;
