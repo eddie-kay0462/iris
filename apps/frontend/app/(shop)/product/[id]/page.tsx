@@ -588,8 +588,8 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
     setPickedOptions((prev) => ({ ...prev, [optionName]: value }));
   }, [optionGroups, variants, selectedOptions]);
 
-  const { data: similarProducts } = useSimilarProducts(product?.handle ?? "", 6);
-  const { data: allProducts } = useProducts({ limit: 8, sort_by: "created_at", sort_order: "desc" });
+  const { data: similarProducts, isLoading: similarLoading } = useSimilarProducts(product?.handle ?? "", 6);
+  const { data: allProducts, isLoading: allProductsLoading } = useProducts({ limit: 8, sort_by: "created_at", sort_order: "desc" });
   const { items: recentlyViewed } = useRecentlyViewed(product?.id);
   // Automatic bundle deal on this product, if it's the anchor of one. Must stay
   // above the early returns below — it's a hook, and a cold load renders once
@@ -940,6 +940,31 @@ function ProductDetailBody({ id, initialColor }: { id: string; initialColor: str
           similarProducts && similarProducts.length > 0
             ? similarProducts
             : (allProducts?.data ?? []).filter((p) => p.id !== product.id);
+        // Hold the section's space while recommendations load, instead of the
+        // row popping in (and shoving Recently Viewed down) a moment later.
+        if (recs.length === 0 && (similarLoading || allProductsLoading)) {
+          return (
+            <section
+              aria-busy="true"
+              className="max-w-[1400px] mx-auto px-4 sm:px-8 py-14 border-t border-line"
+            >
+              <div className="mb-7 h-[14px] w-40 animate-pulse bg-fill" />
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  // One row at every breakpoint: 2 cols mobile, 3 sm, 5 lg.
+                  <div
+                    key={i}
+                    className={`space-y-3 ${i < 2 ? "" : i < 3 ? "hidden sm:block" : "hidden lg:block"}`}
+                  >
+                    <div className="aspect-[3/4] animate-pulse bg-fill" />
+                    <div className="h-3 w-3/4 animate-pulse bg-fill" />
+                    <div className="h-3 w-1/4 animate-pulse bg-fill" />
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        }
         if (recs.length === 0) return null;
         const shown = recs.slice(0, 5);
         return (

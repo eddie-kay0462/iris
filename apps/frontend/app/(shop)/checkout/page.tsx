@@ -1,14 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { PageLoading } from "@/components/shop/Loading";
 
 const CheckoutClient = dynamic(() => import("./CheckoutClient"), {
   ssr: false,
-  loading: () => (
-    <div className="flex min-h-[60vh] items-center justify-center text-text-muted">
-      Loading checkout...
-    </div>
-  ),
+  loading: () => <PageLoading label="Loading checkout" />,
 });
 
 export default function CheckoutPage() {

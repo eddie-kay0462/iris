@@ -8,6 +8,7 @@ import { useMyOrderByNumber, useGuestOrderByNumber } from "@/lib/api/orders";
 import { hasToken } from "@/lib/api/client";
 import { track } from "@/lib/analytics/tracker";
 import { fmt } from "../../account/atoms";
+import { PageLoading } from "@/components/shop/Loading";
 
 const sectionLabelCls =
   "text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted font-mono";
@@ -313,11 +314,7 @@ function ConfirmationContent() {
 export default function ConfirmationPage() {
   return (
     <Suspense
-      fallback={
-        <div className="mx-auto max-w-xl px-4 py-16 text-center text-[13px] font-mono uppercase tracking-[0.1em] text-text-muted">
-          Loading…
-        </div>
-      }
+      fallback={<PageLoading />}
     >
       <ConfirmationContent />
     </Suspense>

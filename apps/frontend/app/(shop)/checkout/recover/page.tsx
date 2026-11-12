@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { PageLoading } from "@/components/shop/Loading";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import { useCart, type CartItem } from "@/lib/cart";
@@ -87,23 +87,14 @@ function RecoverContent() {
   }
 
   return (
-    <div className="mx-auto flex max-w-lg flex-col items-center px-4 py-24 text-center">
-      <Loader2 className="h-6 w-6 animate-spin text-text-muted" />
-      <p className="mt-4 text-sm text-text-secondary">
-        Restoring your cart…
-      </p>
-    </div>
+    <PageLoading label="Restoring your cart" />
   );
 }
 
 export default function RecoverPage() {
   return (
     <Suspense
-      fallback={
-        <div className="mx-auto flex max-w-lg flex-col items-center px-4 py-24 text-center">
-          <Loader2 className="h-6 w-6 animate-spin text-text-muted" />
-        </div>
-      }
+      fallback={<PageLoading label="Restoring your cart" />}
     >
       <RecoverContent />
     </Suspense>

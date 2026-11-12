@@ -11,6 +11,7 @@ import {
   formatPickupDate,
 } from "@/lib/api/orders";
 import { StatusPip, EndLabel, fmt, fmtDate } from "../account/atoms";
+import { PageLoading } from "@/components/shop/Loading";
 
 const STATUS_STEPS: { key: string; label: string }[] = [
   { key: "pending", label: "Placed" },
@@ -453,11 +454,7 @@ function TrackContent() {
 export default function TrackPage() {
   return (
     <Suspense
-      fallback={
-        <div className="mx-auto max-w-xl px-4 py-16 text-center text-[13px] text-text-muted font-mono uppercase tracking-[0.1em]">
-          Loading…
-        </div>
-      }
+      fallback={<PageLoading />}
     >
       <TrackContent />
     </Suspense>

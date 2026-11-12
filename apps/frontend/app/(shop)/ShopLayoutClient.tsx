@@ -531,38 +531,59 @@ function ShopHeader({
   // stays solid from the top. Layout effect (not useEffect) + a synchronous
   // initial read so the first paint is already correct, with no flash.
   useIsomorphicLayoutEffect(() => {
-    const hero = document.getElementById("rthq-hero");
-    if (!hero) {
-      setOverHero(false);
-      return;
-    }
-    // Flip as the hero's bottom edge passes under the bar. Shrink the observer
-    // root from the top by the bar's real height so the swap lands right as the
-    // hero scrolls out from behind it (accounts for the announcement banner too).
-    const barH = barRef.current?.offsetHeight ?? 64;
-    const rootMargin = `-${barH}px 0px 0px 0px`;
-    const check = () => setOverHero(hero.getBoundingClientRect().bottom > barH);
-    // Synchronous first read (IntersectionObserver's initial callback is async).
-    check();
-    // The browser/router may still be settling scroll position (back/forward
-    // restoration, reload scroll-anchoring, router scroll-to-top) when this
-    // layout effect runs. Re-sample after the browser's own scroll/layout pass
-    // for this frame so a settled scrollY decides overHero, not a transient one.
-    let raf2 = 0;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(check);
-    });
-    const io = new IntersectionObserver(
-      ([entry]) => setOverHero(entry.isIntersecting),
-      { rootMargin, threshold: 0 }
-    );
-    io.observe(hero);
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-      io.disconnect();
+    const attach = (hero: HTMLElement) => {
+      // Flip as the hero's bottom edge passes under the bar. Shrink the observer
+      // root from the top by the bar's real height so the swap lands right as the
+      // hero scrolls out from behind it (accounts for the announcement banner too).
+      const barH = barRef.current?.offsetHeight ?? 64;
+      const rootMargin = `-${barH}px 0px 0px 0px`;
+      const check = () => setOverHero(hero.getBoundingClientRect().bottom > barH);
+      // Synchronous first read (IntersectionObserver's initial callback is async).
+      check();
+      // The browser/router may still be settling scroll position (back/forward
+      // restoration, reload scroll-anchoring, router scroll-to-top) when this
+      // layout effect runs. Re-sample after the browser's own scroll/layout pass
+      // for this frame so a settled scrollY decides overHero, not a transient one.
+      let raf2 = 0;
+      const raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(check);
+      });
+      const io = new IntersectionObserver(
+        ([entry]) => setOverHero(entry.isIntersecting),
+        { rootMargin, threshold: 0 }
+      );
+      io.observe(hero);
+      return () => {
+        cancelAnimationFrame(raf1);
+        cancelAnimationFrame(raf2);
+        io.disconnect();
+      };
     };
-  }, [pathname, bannerVisible, banner?.text]);
+
+    const hero = document.getElementById("rthq-hero");
+    if (hero) return attach(hero);
+
+    setOverHero(false);
+    if (!isHomeRoute) return;
+
+    // On the home route but the hero isn't in the DOM yet: the route's
+    // loading.tsx fallback (or a still-streaming boundary) is showing. The
+    // pathname has already committed, so this effect won't re-run when the page
+    // lands — wait for the hero to appear and attach then, or the bar would stay
+    // solid over the hero.
+    let detach: (() => void) | undefined;
+    const mo = new MutationObserver(() => {
+      const el = document.getElementById("rthq-hero");
+      if (!el) return;
+      mo.disconnect();
+      detach = attach(el);
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      mo.disconnect();
+      detach?.();
+    };
+  }, [pathname, isHomeRoute, bannerVisible, banner?.text]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

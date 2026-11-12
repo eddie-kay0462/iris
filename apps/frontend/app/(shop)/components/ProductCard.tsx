@@ -11,6 +11,7 @@ import { useCart } from "@/lib/cart";
 import { useBundleOfferFor } from "@/lib/api/promos";
 import { useLocale } from "@/lib/locale/locale-provider";
 import { prefetchImage } from "@/hooks/useImagePrefetch";
+import { LoadingBar } from "@/components/shop/Loading";
 import { isVariantInStock } from "@/lib/products/variants";
 import { extractSizes, findVariantByColorAndSize } from "@/lib/products/variants";
 import {
@@ -291,6 +292,12 @@ export function ProductCard({
                     className="object-cover object-top transition-transform duration-500 group-hover:scale-105"
                   />
                 </motion.div>
+              )}
+              {/* Colour swatch picked but its photo is still downloading */}
+              {pendingSrc && pendingSrc !== displaySrc && !pendingReady && (
+                <div className="animate-gallery-loading absolute inset-x-0 bottom-0 z-[11]">
+                  <LoadingBar />
+                </div>
               )}
             </>
           ) : (

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { hasToken } from "@/lib/api/client";
 import { useProfile } from "@/lib/api/profile";
 import AccountShell from "./AccountShell";
+import { PageLoading } from "@/components/shop/Loading";
 import "./account.css";
 
 export default function AccountPage() {
@@ -20,13 +21,7 @@ export default function AccountPage() {
   }, [isError, router]);
 
   if (isLoading || !profile) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-[11px] text-text-muted tracking-[0.1em] uppercase font-mono">
-          Loading…
-        </div>
-      </div>
-    );
+    return <PageLoading label="Loading account" />;
   }
 
   return <AccountShell profile={profile} />;
