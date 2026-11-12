@@ -102,7 +102,7 @@ export default function OrdersTab() {
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="h-[52px] border-b border-line-subtle bg-surface-subtle"
+              className="h-[52px] animate-pulse border-b border-line-subtle bg-surface-subtle"
             />
           ))}
         </div>

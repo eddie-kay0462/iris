@@ -5,6 +5,7 @@ import { useInView } from "react-intersection-observer";
 import { useEffect } from "react";
 import { ProductCard } from "./ProductCard";
 import { useInfiniteProducts } from "@/lib/api/products";
+import { LoadingStatus } from "@/components/shop/Loading";
 
 interface InfiniteProductGridProps {
     initialSearch?: string;
@@ -113,7 +114,7 @@ export function InfiniteProductGrid({
                     className="mt-10 flex flex-col items-center justify-center gap-2 py-4"
                 >
                     {isFetchingNextPage ? (
-                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-line-strong border-t-invert-bg" />
+                        <LoadingStatus label="Loading more" />
                     ) : (
                         <div className="h-6 w-6" /> // Spacer to ensure intersection happens
                     )}
