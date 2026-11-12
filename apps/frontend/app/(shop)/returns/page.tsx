@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { EYEBROW_CLASS, EyebrowDots, SideEyebrow } from "@/components/shop/SectionEyebrow";
 
 export const metadata: Metadata = {
   title: "Return Policy",
@@ -23,13 +24,13 @@ export default function ReturnsPage() {
       {/* ─── TITLE ─────────────────────────────────────────── */}
       <section className="border-b border-line px-6 pt-24 pb-16">
         <div className="mx-auto max-w-5xl">
-          <div className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-text-muted font-mono">
+          <div className={EYEBROW_CLASS}>
             <span>Policies</span>
-            <span className="h-px w-8 bg-line-strong"></span>
+            <EyebrowDots n={1} />
             <span>1NRI Worldwide Ltd.</span>
           </div>
 
-          <h1 className="display mt-8 text-4xl sm:text-6xl lg:text-7xl font-bold uppercase tracking-tight leading-[0.95]">
+          <h1 className="display mt-8 text-5xl sm:text-7xl lg:text-[5.5rem] font-bold uppercase tracking-tight leading-[0.95]">
             Returns &amp;<br />
             <span className="text-text-muted">Refunds.</span>
           </h1>
@@ -40,16 +41,16 @@ export default function ReturnsPage() {
 
           <div className="mt-12 grid grid-cols-2 sm:grid-cols-3 gap-y-6 gap-x-8 border-t border-line pt-8">
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-text-muted">Return window</div>
-              <div className="mt-2 text-sm font-medium">14 days from delivery</div>
+              <div className="font-mono text-[11px] sm:text-[13px] uppercase tracking-[0.22em] text-neutral-500 dark:text-neutral-400">Return window</div>
+              <div className="mt-2 text-sm sm:text-base font-medium">14 days from delivery</div>
             </div>
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-text-muted">Damaged items</div>
-              <div className="mt-2 text-sm font-medium">Replaced or refunded, free</div>
+              <div className="font-mono text-[11px] sm:text-[13px] uppercase tracking-[0.22em] text-neutral-500 dark:text-neutral-400">Damaged items</div>
+              <div className="mt-2 text-sm sm:text-base font-medium">Replaced or refunded, free</div>
             </div>
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-text-muted">Resale</div>
-              <div className="mt-2 text-sm font-medium">Items not eligible for resale</div>
+              <div className="font-mono text-[11px] sm:text-[13px] uppercase tracking-[0.22em] text-neutral-500 dark:text-neutral-400">Resale</div>
+              <div className="mt-2 text-sm sm:text-base font-medium">Items not eligible for resale</div>
             </div>
           </div>
         </div>
@@ -58,10 +59,7 @@ export default function ReturnsPage() {
       {/* ─── POLICY DETAILS ─── */}
       <section className="px-6 py-24 sm:py-32">
         <div className="mx-auto max-w-5xl grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-10 lg:gap-16">
-          <div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.4em] text-text-muted">01</div>
-            <div className="mt-2 text-xs uppercase tracking-widest text-text-secondary">Our Policy</div>
-          </div>
+          <SideEyebrow n={1} title="Our Policy" />
 
           <div className="space-y-6 text-base sm:text-lg leading-relaxed text-text-secondary">
             <p className="text-xl sm:text-2xl text-text">
@@ -80,9 +78,8 @@ export default function ReturnsPage() {
       {/* ─── POLICY GRID ─── */}
       <section className="border-t border-b border-line bg-surface-subtle px-6 py-24 sm:py-32">
         <div className="mx-auto max-w-5xl">
-          <div className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-text-muted font-mono">
-            <span>02</span>
-            <span className="h-px w-8 bg-line-strong"></span>
+          <div className={EYEBROW_CLASS} aria-label="Section 2: What to expect">
+            <EyebrowDots n={2} />
             <span>What to expect</span>
           </div>
 
@@ -90,7 +87,7 @@ export default function ReturnsPage() {
             <article className="bg-surface-subtle p-8">
               <div className="font-mono text-2xl font-semibold tabular-nums">01</div>
               <h3 className="mt-6 text-xl font-semibold uppercase tracking-tight">Refunds</h3>
-              <p className="mt-3 text-sm text-text-secondary leading-relaxed">
+              <p className="mt-3 text-sm sm:text-base text-text-secondary leading-relaxed">
                 Not the right fit? Items can be refunded within the 14-day window. Customers are responsible for return shipping costs.
               </p>
             </article>
@@ -98,7 +95,7 @@ export default function ReturnsPage() {
             <article className="bg-surface-subtle p-8">
               <div className="font-mono text-2xl font-semibold tabular-nums">02</div>
               <h3 className="mt-6 text-xl font-semibold uppercase tracking-tight">Damaged items</h3>
-              <p className="mt-3 text-sm text-text-secondary leading-relaxed">
+              <p className="mt-3 text-sm sm:text-base text-text-secondary leading-relaxed">
                 If your item arrives damaged, we&rsquo;ll replace it at no cost, or issue a full refund and cover the return shipping.
               </p>
             </article>
@@ -109,9 +106,8 @@ export default function ReturnsPage() {
       {/* ─── CONTACT ─── */}
       <section className="px-6 py-24 sm:py-32">
         <div className="mx-auto max-w-5xl">
-          <div className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.4em] text-text-muted font-mono">
-            <span>03</span>
-            <span className="h-px w-8 bg-line-strong"></span>
+          <div className={EYEBROW_CLASS} aria-label="Section 3: Start a return">
+            <EyebrowDots n={3} />
             <span>Start a return</span>
           </div>
 
@@ -124,7 +120,7 @@ export default function ReturnsPage() {
 
           <div className="mt-12 flex flex-col sm:flex-row sm:items-center gap-10 sm:gap-16 border-t border-line pt-8">
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-text-muted">
+              <div className="font-mono text-[11px] sm:text-[13px] uppercase tracking-[0.22em] text-neutral-500 dark:text-neutral-400">
                 For returns &amp; refunds
               </div>
               <a
@@ -135,7 +131,7 @@ export default function ReturnsPage() {
               </a>
             </div>
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-text-muted">
+              <div className="font-mono text-[11px] sm:text-[13px] uppercase tracking-[0.22em] text-neutral-500 dark:text-neutral-400">
                 Call or message us
               </div>
               <a
@@ -149,7 +145,7 @@ export default function ReturnsPage() {
 
           <div className="mt-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-line pt-8">
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-text-muted">
+              <div className="font-mono text-[11px] sm:text-[13px] uppercase tracking-[0.22em] text-neutral-500 dark:text-neutral-400">
                 General enquiries
               </div>
               <a

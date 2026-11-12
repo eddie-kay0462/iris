@@ -755,6 +755,11 @@ function ShopFooter() {
                   About
                 </Link>
               </li>
+              <li>
+                <Link href="/returns" className="text-[12px] text-text-secondary transition-colors hover:text-text">
+                  Returns
+                </Link>
+              </li>
               {/* <li>
                 <Link href="/lookbook" className="text-[12px] text-text-secondary transition-colors hover:text-text">
                   Lookbook
